@@ -4,15 +4,15 @@ project_name: World Reconstruction Engine
 phase: bootstrap
 milestone: M0
 lot: L0
-active_work_item: L0.1
-status: in_progress
-last_completed: []
-last_merged_pr: null
+active_work_item: L0.2
+status: ready
+last_completed: [L0.1]
+last_merged_pr: 1
 current_goal: >-
-  Establish the canonical repository structure, agent-resume protocol, machine-readable
-  roadmap and review gates before implementation begins.
+  Add the lightweight Python development toolchain and fast pull-request CI without
+  introducing reconstruction dependencies or heavy tests.
 next_action: >-
-  Complete L0.1, perform its PR review, then advance to L0.2 development tooling and fast CI.
+  Implement L0.2 from registry/work-items.yaml on a new short-lived branch after PR #1 merges.
 blockers: []
 reviews:
   lot_reviews:
