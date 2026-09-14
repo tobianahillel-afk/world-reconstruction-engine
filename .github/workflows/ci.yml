@@ -31,18 +31,12 @@ jobs:
           version: "0.12.13"
           python-version: "3.12"
           enable-cache: true
-          cache-dependency-glob: "pyproject.toml"
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
 
-      - name: Install development environment
-        run: uv sync --group dev
-
-      - name: Export generated lockfile
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: uv-lock-bootstrap
-          path: uv.lock
-          if-no-files-found: error
-          retention-days: 1
+      - name: Install locked development environment
+        run: uv sync --frozen --group dev
 
       - name: Validate repository metadata
         run: uv run python scripts/validate_repo.py
