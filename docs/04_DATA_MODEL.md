@@ -44,7 +44,7 @@ Video frame offsets use integer microseconds rather than floating-point seconds 
 Not part of the Observation model:
 
 - EXIF parsing or raw metadata extraction;
-- GPS parsing or georeferencing;
+- geographic metadata interpretation or georeferencing;
 - camera intrinsics, calibration or camera identity;
 - feature descriptors, matches, tracks or geometric verification;
 - camera-pose estimates, fragments or placements;
@@ -52,3 +52,34 @@ Not part of the Observation model:
 - reconstruction-run provenance.
 
 Those concepts remain in their owning later work items. A raw observation may eventually reference richer metadata/provenance objects, but L1.1 does not silently pull those later contracts forward.
+
+## L1.2 camera and metadata contract
+
+L1.2 adds solver-independent representation for camera identity and metadata that later ingest stages can populate. Representation is deliberately separate from parsing and inference.
+
+Implemented primitives:
+
+- `CameraId` — opaque typed identifier for a camera identity assigned by an explicit upstream policy.
+- `Camera` — optional descriptive manufacturer/model/serial fields attached to a `CameraId`.
+- `ImageDimensions` — positive integer width/height in pixels.
+- `RawMetadataEntry` — one namespaced, uninterpreted string metadata value preserved as supplied.
+- `ObservationMetadata` — immutable metadata associated with one `ObservationId`, optionally referencing a camera and image dimensions plus raw entries.
+
+A `CameraId` is not derived automatically from manufacturer/model/serial strings. Two devices can share those strings, serials can be absent or unreliable, and metadata can be edited. Any later identity-resolution policy must make its evidence explicit rather than hiding an entity merge inside this model.
+
+Raw metadata values are intentionally not normalized here. A local capture-time string can therefore be preserved verbatim even when its timezone semantics are unknown. Geographic or other device metadata likewise remains uninterpreted until the owning ingestion work item validates it.
+
+### Explicit L1.2 boundary
+
+Not implemented by this contract:
+
+- reading EXIF/XMP/container metadata from media bytes;
+- interpreting or normalizing geographic coordinates;
+- converting ambiguous local timestamps into instants;
+- inferring that two observations came from the same physical camera;
+- camera intrinsics, distortion or solver camera models;
+- calibration priors or pose priors;
+- persistence/database schemas;
+- `SpatialFragment` or estimated geometry.
+
+Those behaviors remain in later work items. This keeps raw observations and source metadata usable independently of reconstruction engines and prevents metadata convenience from becoming hidden geometric truth.
