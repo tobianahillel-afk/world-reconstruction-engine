@@ -7,9 +7,9 @@ components:
     status: implemented
   development_quality_gates:
     owner_lot: L0
-    implementation: []
-    tests: []
-    status: planned
+    implementation: [pyproject.toml, .github/workflows/ci.yml, tests/test_smoke.py]
+    tests: [tests/test_smoke.py]
+    status: implementing
   observation_core:
     owner_lot: L1
     implementation: []
