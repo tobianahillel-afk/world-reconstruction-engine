@@ -30,9 +30,7 @@ def _measure_tiny_points() -> dict[str, float]:
     for raw_point in raw_points:
         assert isinstance(raw_point, list)
         assert len(raw_point) == 3
-        points.append(
-            (float(raw_point[0]), float(raw_point[1]), float(raw_point[2]))
-        )
+        points.append((float(raw_point[0]), float(raw_point[1]), float(raw_point[2])))
 
     xs = sorted(point[0] for point in points)
     ys = [point[1] for point in points]
@@ -128,9 +126,7 @@ def test_fixture_inputs_cannot_escape_fixture_directory(tmp_path: Path) -> None:
 
 def test_contract_schemas_are_valid_json() -> None:
     fixture_schema = _load_mapping(ROOT / "registry" / "schemas" / "fixture.schema.json")
-    result_schema = _load_mapping(
-        ROOT / "registry" / "schemas" / "regression-result.schema.json"
-    )
+    result_schema = _load_mapping(ROOT / "registry" / "schemas" / "regression-result.schema.json")
 
     assert fixture_schema["title"] == "WRE Fixture Metadata"
     assert result_schema["title"] == "WRE Regression Result"
