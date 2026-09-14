@@ -143,14 +143,15 @@ work_items:
     lot: L4
     title: Reconstruction Strategy Router
     status: planned
-    objective: Select the cheapest deterministic FAST/STANDARD/ESCALATED route likely to reach the unchanged geometric acceptance threshold and record auditable reasons/escalation conditions.
+    objective: Select the cheapest deterministic FAST/STANDARD/ESCALATED route likely to reach the unchanged acceptance policy/evidence standard and record auditable reasons/escalation conditions.
     depends_on: [L4.5]
     read_before: [docs/12_ADAPTIVE_RECONSTRUCTION.md, docs/03_PIPELINE.md, docs/adr/0001-adaptive-routing-anchoring-temporal-world.md]
     reuse: [COLMAP candidate/matching mechanisms, cached WRE evidence]
-    out_of_scope: [lowering acceptance thresholds, implementing heavy hard-case algorithms, accepting learned matches without geometry]
+    out_of_scope: [weakening acceptance policy, implementing heavy hard-case algorithms, accepting learned matches without geometry]
     acceptance:
       - Route selection is deterministic for identical inputs/configuration.
-      - FAST/STANDARD/ESCALATED change attempted work but not truth/evidence requirements.
+      - FAST/STANDARD/ESCALATED change attempted work but not the final acceptance policy/evidence standard.
+      - Solver-specific intermediate thresholds may differ only when calibrated to equivalent semantics and documented.
       - Decision reasons, relevant inputs/configuration and escalation outcome are auditable.
       - Insufficient or contradictory evidence can remain unresolved.
       - L13 remains the owner of expensive hard-case algorithms.
@@ -216,7 +217,8 @@ work_items:
     acceptance:
       - A no-GPS fragment can receive world placement from later independent anchor evidence.
       - Relative placement evidence remains distinct from absolute anchor evidence.
-      - Anchor provenance/uncertainty/residuals are retained.
+      - The transform model used for anchoring is explicit; unresolved local scale may require a validated Sim3 rather than a hidden rigid transform.
+      - Anchor transform/scale uncertainty, provenance and residuals are retained.
     tests: [late-anchor synthetic test, conflicting-reference-anchor test]
   - {id: L9.7, lot: L9, title: Loop-closure factors, status: planned, depends_on: [L9.6]}
   - {id: L9.8, lot: L9, title: Incremental optimization, status: planned, depends_on: [L9.7]}
@@ -269,7 +271,21 @@ work_items:
       - No geometry is overwritten by epoch assignment.
     tests: [temporal-evidence and uncertain-epoch unit tests]
   - {id: L15.2, lot: L15, title: Observation-to-epoch association, status: planned, depends_on: [L15.1]}
-  - {id: L15.3, lot: L15, title: Cross-epoch geometry alignment, status: planned, depends_on: [L15.2]}
+  - id: L15.3
+    lot: L15
+    title: Cross-epoch geometry alignment
+    status: planned
+    objective: Align comparable epoch geometry with an explicit transform model and uncertainty before any metric physical-change interpretation.
+    depends_on: [L15.2]
+    read_before: [docs/13_TEMPORAL_WORLD.md, docs/12_ADAPTIVE_RECONSTRUCTION.md]
+    reuse: [existing validated fragment transforms, Open3D/TEASER++ where appropriate]
+    out_of_scope: [treating unresolved scale as metric, using changed regions as unquestioned alignment control]
+    acceptance:
+      - Alignment records source/target frames, transform model and uncertainty.
+      - Sim3 versus rigid/metric alignment is explicit and justified by available scale evidence.
+      - Metric change measurement is blocked when scale/frame uncertainty is insufficiently resolved.
+      - Stable control geometry can be distinguished from candidate changed regions during alignment.
+    tests: [known-transform cross-epoch test, unresolved-scale rejection test, misregistration-change guard test]
   - id: L15.4
     lot: L15
     title: py4dgeo adapter
@@ -318,11 +334,40 @@ work_items:
   - {id: L15.11, lot: L15, title: Reversible temporal transitions, status: planned, depends_on: [L15.10]}
   - {id: L16.1, lot: L16, title: Known-camera synthetic test, status: planned, depends_on: [L15.11]}
   - {id: L16.2, lot: L16, title: Known-geometry fixture, status: planned, depends_on: [L16.1]}
-  - {id: L16.3, lot: L16, title: GPS holdout, status: planned, depends_on: [L16.2]}
+  - id: L16.3
+    lot: L16
+    title: Absolute-anchor holdout (GPS/GCP/reference fragment)
+    status: planned
+    objective: Validate absolute-world anchoring independently of the observations/control evidence used to optimize the placement.
+    depends_on: [L16.2]
+    read_before: [docs/12_ADAPTIVE_RECONSTRUCTION.md, docs/06_TESTING.md, docs/09_FIXTURES.md]
+    reuse: [GPS/GCP/reference-fragment factors implemented by L9]
+    out_of_scope: [using optimization inputs as their own holdout, forcing a world placement when anchors conflict]
+    acceptance:
+      - GPS anchor accuracy can be evaluated against independent holdout evidence.
+      - A no-GPS fragment can be anchored and independently checked through GCP/known-landmark or georeferenced-reference evidence.
+      - Scale resolution is validated where the local reconstruction began in an arbitrary similarity frame.
+      - Conflicting/withheld anchors expose residual/error or unresolved placement rather than false certainty.
+    tests: [GPS holdout fixture, GCP holdout fixture, late reference-fragment anchor fixture, conflicting-anchor fixture]
   - {id: L16.4, lot: L16, title: Camera-pose holdout, status: planned, depends_on: [L16.3]}
   - {id: L16.5, lot: L16, title: Day-night fixture, status: planned, depends_on: [L16.4]}
   - {id: L16.6, lot: L16, title: Repeated-facade fixture, status: planned, depends_on: [L16.5]}
-  - {id: L16.7, lot: L16, title: Historical-change temporal-engine fixture, status: planned, depends_on: [L16.6]}
+  - id: L16.7
+    lot: L16
+    title: Historical-change temporal-engine fixture
+    status: planned
+    objective: Validate that L15 distinguishes supported physical change from unchanged geometry, misregistration, unresolved scale and contradictory dating.
+    depends_on: [L16.6]
+    read_before: [docs/13_TEMPORAL_WORLD.md, docs/06_TESTING.md, docs/09_FIXTURES.md]
+    reuse: [L15 temporal engine]
+    out_of_scope: [accepting change merely because two meshes differ]
+    acceptance:
+      - Unchanged cross-epoch geometry does not produce a false accepted change.
+      - Known synthetic/controlled change is recovered within declared spatial/temporal tolerance.
+      - Misregistration or unresolved metric scale blocks/invalidates physical-change acceptance.
+      - Uncertain dates produce interval-valued timing rather than invented exact timestamps.
+      - Contradictory dates/alignments can remain unresolved.
+    tests: [unchanged epoch fixture, true-change fixture, misregistration fixture, unresolved-scale fixture, contradictory-date fixture]
   - {id: L16.8, lot: L16, title: Video fixture, status: planned, depends_on: [L16.7]}
   - {id: L16.9, lot: L16, title: Regression benchmark, status: planned, depends_on: [L16.8]}
   - {id: L16.10, lot: L16, title: Performance benchmark, status: planned, depends_on: [L16.9]}
