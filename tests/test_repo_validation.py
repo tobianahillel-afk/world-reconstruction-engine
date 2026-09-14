@@ -190,3 +190,59 @@ def test_prior_lot_review_blocks_advancement(tmp_path: Path) -> None:
     errors = validate_repository(repo)
 
     assert any("prior lot review L1 is not passed" in error for error in errors)
+
+
+def test_prior_milestone_review_blocks_advancement(tmp_path: Path) -> None:
+    repo = _copy_repo(tmp_path)
+    roadmap_path = repo / "registry/work-items.yaml"
+    state_path = repo / "PROJECT_STATE.yaml"
+    reviews_path = repo / "registry/reviews.yaml"
+
+    roadmap = _load(roadmap_path)
+    completed_prefixes = ("L0.", "L1.", "L2.", "L3.")
+    for item in roadmap["work_items"]:
+        if not isinstance(item, dict):
+            continue
+        item_id = item.get("id")
+        if isinstance(item_id, str) and item_id.startswith(completed_prefixes):
+            item["status"] = "done"
+        elif item_id == "L4.1":
+            item["status"] = "ready"
+        else:
+            item["status"] = "planned"
+    _write(roadmap_path, roadmap)
+
+    state = _load(state_path)
+    done_ids = [
+        item["id"]
+        for item in roadmap["work_items"]
+        if isinstance(item, dict) and item.get("status") == "done"
+    ]
+    state.update(
+        {
+            "active_work_item": "L4.1",
+            "status": "ready",
+            "lot": "L4",
+            "milestone": "M2",
+            "last_completed": done_ids,
+        }
+    )
+    _write(state_path, state)
+
+    reviews = _load(reviews_path)
+    for lot_id in ("L0", "L1", "L2", "L3"):
+        reviews["lot_reviews"][lot_id] = {
+            "status": "passed",
+            "reviewed_at": "2026-09-14",
+            "evidence": ["test"],
+        }
+    reviews["milestone_reviews"]["M0"] = {
+        "status": "passed",
+        "reviewed_at": "2026-09-14",
+        "evidence": ["test"],
+    }
+    _write(reviews_path, reviews)
+
+    errors = validate_repository(repo)
+
+    assert any("prior milestone review M1 is not passed" in error for error in errors)
