@@ -109,31 +109,64 @@ Duplicate targeted GPS/time keys are treated as invalid evidence rather than las
 
 Repeated storage of the same canonical interpretation is idempotent. Reusing the same observation identity for a different interpretation is rejected as a persistence conflict instead of silently rewriting previously derived evidence.
 
+## L2.5 deterministic source-video ingestion
+
+L2.5 adds whole-video source ingestion without performing frame extraction. A video file is first represented as a raw `VideoObservation`; later L2.6 frame/keyframe extraction creates `VideoFrameObservation` records that retain the source video's `MediaAssetRef`.
+
+`VideoIngestRequest` mirrors the existing image boundary and accepts only explicit inputs:
+
+- `ObservationId`;
+- an already-addressed `MediaAssetRef`;
+- `SourceRef`;
+- timezone-aware `received_at`;
+- optional timezone-aware `captured_at`.
+
+`VideoIngestor` constructs and persists the `VideoObservation` through the same structural `ObservationSink` used by image ingestion. `SQLiteLocalStore` therefore needs no new table or schema migration; the observation codec gains only the new stable discriminator `video`.
+
+For local source files, `LocalVideoIngestor` reuses the L2.2 `hash_file_content` primitive and duplicate lookup. It resolves the path, streams the bytes through SHA-256, preserves an explicit asset URI/MIME type when supplied, reports prior exact-content observations and persists the new raw video observation.
+
+The duplicate semantics are intentionally identical to images: exact same bytes do not collapse distinct provenance events. A retry of the same observation ID/content is idempotent and excludes itself from duplicate reporting.
+
+### No decoding or container inference in L2.5
+
+L2.5 deliberately treats source-video bytes as opaque media. It does not:
+
+- invoke FFmpeg or ffprobe;
+- validate that the container can be decoded;
+- inspect codecs, stream count, duration, dimensions, frame rate or frame timestamps;
+- infer MIME type from the filename/container;
+- infer capture time from container metadata;
+- select or extract frames/keyframes;
+- create any `VideoFrameObservation`.
+
+This boundary is intentional. Source-byte identity and provenance can be stored deterministically before frame-selection policy exists. FFmpeg remains the planned reuse choice for video decode/extraction when L2.6 implements deterministic keyframe extraction; that work must review the exact binary/integration/license assumptions it adopts.
+
 ## Identity and retry behavior
 
-The image-ingestion path inherits L1 persistence semantics:
+The image/video-ingestion path inherits L1 persistence semantics:
 
 1. a new observation ID and payload are stored atomically;
 2. repeating the exact same observation, metadata or interpretation payload is idempotent;
 3. reusing a stable record identity with different content raises the persistence conflict instead of silently replacing previously recorded evidence.
 
-Hashing, duplicate reporting, EXIF extraction and semantic interpretation do not weaken or reinterpret those rules.
+Hashing, duplicate reporting, EXIF extraction, semantic interpretation and source-video ingestion do not weaken or reinterpret those rules.
 
 ## Explicitly deferred work
 
-Through L2.4, media ingestion does **not** implement:
+Through L2.5, media ingestion does **not** implement:
 
 - media discovery or directory crawling;
 - byte copying into a managed media object store;
 - image decoding or image-validity inference;
+- video decoding/container validation;
 - MIME-type inference;
 - XMP parsing;
 - MakerNote interpretation;
 - automatic CRS/georeferencing policy beyond deterministic EXIF coordinate interpretation;
 - guessing a timezone for ambiguous local timestamps;
 - camera identity resolution;
-- video ingestion or keyframe extraction;
+- deterministic keyframe/frame extraction;
 - feature extraction, matching or reconstruction;
 - automatic merge/deletion of observations merely because bytes are identical.
 
-Those behaviors remain in their owning work items. L2.5 next owns video ingestion; deterministic keyframe extraction remains L2.6.
+Those behaviors remain in their owning work items. L2.6 next owns deterministic keyframe extraction from the persisted source-video observation; later lots own tracking, motion, matching and reconstruction.
