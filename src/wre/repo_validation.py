@@ -215,7 +215,9 @@ def validate_repository(root: Path) -> list[str]:
     lot_reviews = reviews_doc.get("lot_reviews", {})
     milestone_reviews = reviews_doc.get("milestone_reviews", {})
     if not isinstance(lot_reviews, dict) or not isinstance(milestone_reviews, dict):
-        errors.append("registry/reviews.yaml must define lot_reviews and milestone_reviews mappings")
+        errors.append(
+            "registry/reviews.yaml must define lot_reviews and milestone_reviews mappings"
+        )
         lot_reviews = {}
         milestone_reviews = {}
 

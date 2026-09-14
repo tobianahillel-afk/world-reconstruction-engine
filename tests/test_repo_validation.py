@@ -107,7 +107,10 @@ def test_rejects_missing_pr_template_section(tmp_path: Path) -> None:
 
     errors = validate_repository(repo)
 
-    assert any("pull request template missing required section: ## Test evidence" in error for error in errors)
+    assert any(
+        "pull request template missing required section: ## Test evidence" in error
+        for error in errors
+    )
 
 
 def test_rejects_missing_component_implementation_path(tmp_path: Path) -> None:
