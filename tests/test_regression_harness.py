@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from itertools import pairwise
 from pathlib import Path
 from typing import Any
 
@@ -29,11 +30,13 @@ def _measure_tiny_points() -> dict[str, float]:
     for raw_point in raw_points:
         assert isinstance(raw_point, list)
         assert len(raw_point) == 3
-        points.append(tuple(float(value) for value in raw_point))  # type: ignore[arg-type]
+        points.append(
+            (float(raw_point[0]), float(raw_point[1]), float(raw_point[2]))
+        )
 
     xs = sorted(point[0] for point in points)
     ys = [point[1] for point in points]
-    spacings = [right - left for left, right in zip(xs, xs[1:], strict=False)]
+    spacings = [right - left for left, right in pairwise(xs)]
 
     return {
         "point_count": float(len(points)),
