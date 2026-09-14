@@ -12,9 +12,16 @@ current_goal: >-
   Implement deterministic video ingestion as raw media/observation handling without
   starting keyframe selection, tracking or reconstruction logic.
 next_action: >-
-  After PR #15 merges, implement L2.5 from registry/work-items.yaml in a new
-  short-lived branch without starting L2.6 deterministic keyframe extraction.
+  Implement L2.5 from registry/work-items.yaml in a new short-lived branch without
+  starting L2.6 deterministic keyframe extraction.
 blockers: []
+architecture:
+  latest_adr: docs/adr/0001-adaptive-routing-anchoring-temporal-world.md
+  roadmap_revision: '2026-09-15'
+  future_capabilities:
+    - L4 strategy routing
+    - L9 absolute anchoring with GCP and reference-fragment factors
+    - L15 temporal and 4D world
 reviews:
   lot_reviews:
     L0: passed
