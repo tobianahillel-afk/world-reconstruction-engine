@@ -60,3 +60,33 @@ components:
     implementation: []
     tests: []
     status: planned
+  video_motion:
+    owner_lot: L11
+    implementation: []
+    tests: []
+    status: planned
+  multi_solver_validation:
+    owner_lot: L12
+    implementation: []
+    tests: []
+    status: planned
+  hard_case_escalation:
+    owner_lot: L13
+    implementation: []
+    tests: []
+    status: planned
+  dense_reconstruction:
+    owner_lot: L14
+    implementation: []
+    tests: []
+    status: planned
+  validation_program:
+    owner_lot: L15
+    implementation: []
+    tests: []
+    status: planned
+  monde_boundary:
+    owner_lot: L16
+    implementation: []
+    tests: []
+    status: planned
