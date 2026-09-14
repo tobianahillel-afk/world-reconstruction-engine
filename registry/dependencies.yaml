@@ -30,7 +30,7 @@ dependencies:
     license_review: approved
   colmap:
     status: candidate_core
-    role: [features, matching, geometry, sfm, bundle_adjustment, mvs]
+    role: [features, matching, geometry, sfm, bundle_adjustment, mvs, candidate_retrieval]
     integration: adapter
     version_policy: pin_when_integrated
     license_review: pending
@@ -42,7 +42,7 @@ dependencies:
     license_review: pending
   gtsam:
     status: candidate_core
-    role: [factor_graph, incremental_optimization]
+    role: [factor_graph, incremental_optimization, absolute_anchor_factors]
     integration: adapter
     version_policy: pin_when_integrated
     license_review: pending
@@ -72,7 +72,7 @@ dependencies:
     license_review: pending
   opensfm:
     status: candidate_validation
-    role: [gps, gcp, rolling_shutter, alternative_reconstruction]
+    role: [gps, gcp, checkpoints, rolling_shutter, alternative_reconstruction]
     integration: optional_adapter
     version_policy: pin_when_integrated
     license_review: pending
@@ -94,3 +94,55 @@ dependencies:
     integration: adapter
     version_policy: pin_when_integrated
     license_review: pending
+  kimera_rpgo:
+    status: candidate_optional
+    role: [robust_pose_graph, loop_closure_outlier_rejection]
+    integration: optional_adapter
+    version_policy: pin_when_integrated
+    license: BSD-2-Clause
+    license_review: pending
+  basalt:
+    status: candidate_optional
+    role: [visual_odometry, visual_inertial_odometry, video_trajectory]
+    integration: optional_adapter
+    version_policy: pin_when_integrated
+    license: BSD-3-Clause
+    license_review: pending
+  kalibr:
+    status: candidate_optional
+    role: [multi_camera_calibration, camera_imu_calibration, rolling_shutter_calibration]
+    integration: optional_subprocess_or_adapter
+    version_policy: pin_when_integrated
+    license: BSD-4-Clause
+    license_review: pending
+  hloc:
+    status: candidate_optional
+    role: [difficult_visual_retrieval, visual_localization, mapping_proposals]
+    integration: optional_adapter
+    version_policy: pin_when_integrated
+    license: Apache-2.0
+    license_review: pending
+    notes: Framework license does not automatically cover every bundled model or feature extractor.
+  lightglue:
+    status: candidate_optional
+    role: [adaptive_learned_matching, difficult_pair_proposals]
+    integration: optional_adapter
+    version_policy: pin_when_integrated
+    license: Apache-2.0
+    license_review: pending
+    notes: LightGlue code/weights are Apache-2.0; selected upstream feature extractors and checkpoints require separate review.
+  py4dgeo:
+    status: candidate_core
+    role: [multi_epoch_point_cloud_change, m3c2, temporal_change_measurement]
+    integration: adapter
+    version_policy: pin_when_integrated
+    license: MIT
+    license_review: pending
+  nerfstudio:
+    status: candidate_visualization
+    role: [photorealistic_view_synthesis, nerf, gaussian_splat_visualization]
+    integration: optional_adapter_or_export
+    version_policy: pin_when_integrated
+    license: Apache-2.0
+    license_review: pending
+    notes: Visualization only; never canonical WRE world geometry.
