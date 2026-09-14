@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "fixture_id": "synthetic.tiny-smoke.v1",
+  "kind": "synthetic",
+  "lane": "fast",
+  "deterministic": true,
+  "seed": 0,
+  "input_files": [
+    "points.json"
+  ],
+  "expectations": [
+    {
+      "metric": "point_count",
+      "comparator": "eq",
+      "target": 4,
+      "abs_tolerance": 0,
+      "unit": "count"
+    },
+    {
+      "metric": "centroid_x",
+      "comparator": "eq",
+      "target": 1.5,
+      "abs_tolerance": 1e-12,
+      "unit": "arbitrary"
+    },
+    {
+      "metric": "max_abs_y",
+      "comparator": "lte",
+      "target": 0,
+      "abs_tolerance": 0,
+      "unit": "arbitrary"
+    },
+    {
+      "metric": "min_spacing_x",
+      "comparator": "gte",
+      "target": 1,
+      "abs_tolerance": 0,
+      "unit": "arbitrary"
+    }
+  ],
+  "provenance": {
+    "source": "repository-authored",
+    "purpose": "L0.5 harness smoke test"
+  }
+}
