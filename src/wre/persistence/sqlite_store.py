@@ -210,7 +210,9 @@ class SQLiteLocalStore:
                     f"observation:{record_id}"
                 )
             if not isinstance(record_id, str) or not isinstance(payload_json, str):
-                raise PersistenceError("observation duplicate index encountered invalid storage data")
+                raise PersistenceError(
+                    "observation duplicate index encountered invalid storage data"
+                )
             try:
                 observation = decode_observation(parse_json_object(payload_json))
             except (TypeError, ValueError) as exc:
