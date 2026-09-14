@@ -240,7 +240,13 @@ def validate_repository(root: Path) -> list[str]:
                 errors.append(f"passed {review_kind} review {target} must contain evidence")
 
     if active_item is not None:
-        active_lot = active_item.get("lot")
+        active_lot_value = active_item.get("lot")
+        if not isinstance(active_lot_value, str):
+            errors.append(f"active work item has invalid lot: {active_lot_value!r}")
+            active_lot = ""
+        else:
+            active_lot = active_lot_value
+
         if state.get("lot") != active_lot:
             errors.append(
                 f"PROJECT_STATE lot {state.get('lot')!r} does not match active lot {active_lot!r}"
