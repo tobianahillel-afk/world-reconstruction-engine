@@ -7,8 +7,14 @@ components:
     status: implemented
   development_quality_gates:
     owner_lot: L0
-    implementation: [pyproject.toml, .github/workflows/ci.yml, tests/test_smoke.py]
-    tests: [tests/test_smoke.py]
+    implementation:
+      - pyproject.toml
+      - .github/workflows/ci.yml
+      - scripts/validate_repo.py
+      - src/wre/repo_validation.py
+      - tests/test_smoke.py
+      - tests/test_repo_validation.py
+    tests: [tests/test_smoke.py, tests/test_repo_validation.py]
     status: implementing
   observation_core:
     owner_lot: L1
