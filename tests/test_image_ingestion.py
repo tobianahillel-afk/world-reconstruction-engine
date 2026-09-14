@@ -14,7 +14,7 @@ from wre.domain import (
     SourceId,
     SourceRef,
 )
-from wre.ingestion import ImageIngestRequest, ImageIngestor
+from wre.ingestion import ImageIngestor, ImageIngestRequest
 from wre.persistence import PersistenceConflictError, SQLiteLocalStore
 
 RECEIVED_AT = datetime(2026, 9, 14, 20, 0, tzinfo=UTC)
