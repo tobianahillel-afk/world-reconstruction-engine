@@ -58,8 +58,10 @@ components:
       - docs/11_MEDIA_INGESTION.md
       - src/wre/ingestion/__init__.py
       - src/wre/ingestion/images.py
+      - src/wre/ingestion/hashing.py
     tests:
       - tests/test_image_ingestion.py
+      - tests/test_hashing_duplicates.py
     status: implementing
   colmap_reconstruction:
     owner_lot: L3
