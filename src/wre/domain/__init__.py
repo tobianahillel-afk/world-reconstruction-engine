@@ -7,6 +7,7 @@ from wre.domain.cameras import (
     ObservationMetadata,
     RawMetadataEntry,
 )
+from wre.domain.fragments import LocalFrameId, SpatialFragment, SpatialFragmentId
 from wre.domain.observations import (
     ImageObservation,
     MediaAssetRef,
@@ -24,6 +25,7 @@ __all__ = [
     "CameraId",
     "ImageDimensions",
     "ImageObservation",
+    "LocalFrameId",
     "MediaAssetRef",
     "Observation",
     "ObservationId",
@@ -33,5 +35,7 @@ __all__ = [
     "Sha256Digest",
     "SourceId",
     "SourceRef",
+    "SpatialFragment",
+    "SpatialFragmentId",
     "VideoFrameObservation",
 ]
