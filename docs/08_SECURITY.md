@@ -23,6 +23,14 @@ Both run weekly and group related updates to reduce PR noise. Dependency-update 
 
 Dependency Review runs separately from `fast-ci` when dependency manifests, lockfiles or GitHub Actions change. It checks runtime, development and unknown scopes and fails on newly introduced vulnerabilities of **moderate severity or higher**.
 
+GitHub's Dependency Review action requires the repository **Dependency Graph**. The current connector cannot safely enable that repository setting. The workflow therefore performs a preflight against GitHub's dependency-graph SBOM endpoint:
+
+- HTTP `200`: the graph is available and strict Dependency Review runs normally;
+- HTTP `403` or `404`: the workflow records an explicit warning and skips only the unavailable review step;
+- any other API response is treated as an error and fails the job.
+
+This is a capability check, not a security bypass. Once Dependency Graph is enabled in GitHub repository settings, strict Dependency Review becomes active automatically without another repository change. Until then, do not claim Dependency Review itself is active.
+
 Keeping this separate means normal source-only PRs do not pay the dependency-review cost.
 
 ## Code scanning
