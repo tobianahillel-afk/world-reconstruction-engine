@@ -4,17 +4,17 @@ project_name: World Reconstruction Engine
 phase: implementation
 milestone: M1
 lot: L1
-active_work_item: L1.4
+active_work_item: L1.5
 status: ready
-last_completed: [L0.1, L0.2, L0.3, L0.4, L0.5, L0.R, L1.1, L1.2, L1.3]
-last_merged_pr: 9
+last_completed: [L0.1, L0.2, L0.3, L0.4, L0.5, L0.R, L1.1, L1.2, L1.3, L1.4]
+last_merged_pr: 10
 current_goal: >-
-  Define solver-independent ReconstructionRun and provenance models so derived
-  artifacts can identify their inputs and producing implementation/version without
-  introducing persistence or reconstruction orchestration.
+  Implement a local persistence boundary for the L1 core domain with explicit
+  serialization/versioning and deterministic round trips, without starting media
+  ingestion or reconstruction-engine integration.
 next_action: >-
-  After PR #9 merges, implement L1.4 from registry/work-items.yaml in a new
-  short-lived branch without starting local persistence work.
+  After PR #10 merges, implement L1.5 from registry/work-items.yaml in a new
+  short-lived branch without starting L2 media ingestion.
 blockers: []
 reviews:
   lot_reviews:
