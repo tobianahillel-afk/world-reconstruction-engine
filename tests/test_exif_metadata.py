@@ -10,8 +10,8 @@ from wre.domain import ObservationId, SourceId, SourceRef
 from wre.ingestion import (
     ExifMetadataIngestor,
     ExifMetadataIngestRequest,
-    LocalImageIngestRequest,
     LocalImageIngestor,
+    LocalImageIngestRequest,
     extract_exif_entries,
 )
 from wre.persistence import PersistenceConflictError, SQLiteLocalStore
