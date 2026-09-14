@@ -54,9 +54,13 @@ components:
     status: implemented
   media_ingestion:
     owner_lot: L2
-    implementation: []
-    tests: []
-    status: planned
+    implementation:
+      - docs/11_MEDIA_INGESTION.md
+      - src/wre/ingestion/__init__.py
+      - src/wre/ingestion/images.py
+    tests:
+      - tests/test_image_ingestion.py
+    status: implementing
   colmap_reconstruction:
     owner_lot: L3
     implementation: []
