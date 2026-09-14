@@ -36,6 +36,9 @@ jobs:
       - name: Install development environment
         run: uv sync --group dev
 
+      - name: Validate repository metadata
+        run: uv run python scripts/validate_repo.py
+
       - name: Ruff lint
         run: uv run ruff check .
 

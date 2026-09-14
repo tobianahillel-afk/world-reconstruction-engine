@@ -38,6 +38,8 @@ Three review levels are required:
 - **Lot review:** after the final item of a lot. Verify all promised capabilities exist, are tested, documented and not accidentally omitted.
 - **Milestone review:** end-to-end validation before advancing the milestone.
 
+Review gates are blocking state transitions. Unless a dedicated review work item exists, the PR that completes the final work item in a lot performs the lot review before `PROJECT_STATE.yaml` advances to a later lot. At a milestone boundary, that same handoff must also complete the milestone review before the next milestone becomes active. A passed review must record evidence in `registry/reviews.yaml`. The repository validator enforces these transitions.
+
 A lot cannot be marked complete until its lot review passes. A milestone cannot be marked complete until its milestone review passes.
 
 ## Tests and regression discipline
@@ -47,6 +49,7 @@ A lot cannot be marked complete until its lot review passes. A milestone cannot 
 - Geometry comparisons use explicit tolerances; never rely on accidental exact floating-point equality.
 - Performance checks are informative by default unless a stable benchmark gate explicitly says otherwise.
 - Heavy reconstruction/GPU tests belong outside the fast PR lane unless the active item specifically requires them.
+- Run `uv run python scripts/validate_repo.py` before merge whenever repository state, roadmap, components, reviews or agent instructions change.
 
 ## Git discipline
 
