@@ -149,11 +149,11 @@ def test_video_frame_rejects_negative_coordinates_in_source_video(
 
 
 def test_media_asset_requires_stable_reference_and_non_negative_size() -> None:
-    with pytest.raises(ValueError, match="asset.uri"):
+    with pytest.raises(ValueError, match=r"asset\.uri"):
         _asset(uri=" ")
 
     with pytest.raises(ValueError, match="byte_length"):
         _asset(byte_length=-1)
 
-    with pytest.raises(ValueError, match="asset.mime_type"):
+    with pytest.raises(ValueError, match=r"asset\.mime_type"):
         _asset(mime_type=" ")
