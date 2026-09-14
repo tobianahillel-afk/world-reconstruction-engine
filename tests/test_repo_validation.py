@@ -191,6 +191,11 @@ def test_prior_lot_review_blocks_advancement(tmp_path: Path) -> None:
         "reviewed_at": "2026-09-14",
         "evidence": ["test"],
     }
+    reviews["lot_reviews"]["L1"] = {
+        "status": "pending",
+        "reviewed_at": None,
+        "evidence": [],
+    }
     reviews["milestone_reviews"]["M0"] = {
         "status": "passed",
         "reviewed_at": "2026-09-14",
