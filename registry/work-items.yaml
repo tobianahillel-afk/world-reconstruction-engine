@@ -115,8 +115,8 @@ work_items:
       - No product/reconstruction algorithm was prematurely implemented.
       - L0 review is marked passed in registry/reviews.yaml.
     tests: [full L0 review checklist]
-  - {id: L1.1, lot: L1, title: Observation models, status: ready, depends_on: [L0.R]}
-  - {id: L1.2, lot: L1, title: Camera and metadata models, status: planned, depends_on: [L1.1]}
+  - {id: L1.1, lot: L1, title: Observation models, status: done, depends_on: [L0.R]}
+  - {id: L1.2, lot: L1, title: Camera and metadata models, status: ready, depends_on: [L1.1]}
   - {id: L1.3, lot: L1, title: SpatialFragment model, status: planned, depends_on: [L1.2]}
   - {id: L1.4, lot: L1, title: ReconstructionRun and provenance, status: planned, depends_on: [L1.3]}
   - {id: L1.5, lot: L1, title: Local persistence layer, status: planned, depends_on: [L1.4]}

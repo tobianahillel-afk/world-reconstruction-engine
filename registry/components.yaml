@@ -34,9 +34,13 @@ components:
     status: implemented
   observation_core:
     owner_lot: L1
-    implementation: []
-    tests: []
-    status: planned
+    implementation:
+      - docs/04_DATA_MODEL.md
+      - src/wre/domain/__init__.py
+      - src/wre/domain/observations.py
+    tests:
+      - tests/test_observations.py
+    status: implementing
   media_ingestion:
     owner_lot: L2
     implementation: []
