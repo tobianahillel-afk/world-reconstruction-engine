@@ -25,6 +25,7 @@ from wre.domain.observations import (
     SourceId,
     SourceRef,
     VideoFrameObservation,
+    VideoObservation,
 )
 from wre.domain.runs import (
     DerivedArtifactProvenance,
@@ -60,4 +61,5 @@ __all__ = [
     "SpatialFragment",
     "SpatialFragmentId",
     "VideoFrameObservation",
+    "VideoObservation",
 ]

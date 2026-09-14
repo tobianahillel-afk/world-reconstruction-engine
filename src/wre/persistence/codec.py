@@ -30,6 +30,7 @@ from wre.domain.observations import (
     SourceId,
     SourceRef,
     VideoFrameObservation,
+    VideoObservation,
 )
 from wre.domain.runs import (
     DerivedArtifactProvenance,
@@ -199,6 +200,14 @@ def decode_observation(payload: Mapping[str, object]) -> Observation:
     )
     if kind == ObservationKind.IMAGE.value:
         return ImageObservation(
+            observation_id=observation_id,
+            asset=asset,
+            source=source,
+            received_at=received_at,
+            captured_at=captured_at,
+        )
+    if kind == ObservationKind.VIDEO.value:
+        return VideoObservation(
             observation_id=observation_id,
             asset=asset,
             source=source,

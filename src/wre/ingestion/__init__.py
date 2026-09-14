@@ -14,6 +14,9 @@ from wre.ingestion.hashing import (
     LocalImageIngestor,
     LocalImageIngestRequest,
     LocalImageIngestResult,
+    LocalVideoIngestor,
+    LocalVideoIngestRequest,
+    LocalVideoIngestResult,
     hash_file_content,
 )
 from wre.ingestion.images import ImageIngestor, ImageIngestRequest, ObservationSink
@@ -22,6 +25,7 @@ from wre.ingestion.metadata_interpretation import (
     MetadataInterpreter,
     interpret_observation_metadata,
 )
+from wre.ingestion.videos import VideoIngestor, VideoIngestRequest
 
 __all__ = [
     "DEFAULT_HASH_CHUNK_SIZE",
@@ -35,10 +39,15 @@ __all__ = [
     "LocalImageIngestRequest",
     "LocalImageIngestResult",
     "LocalImageIngestor",
+    "LocalVideoIngestRequest",
+    "LocalVideoIngestResult",
+    "LocalVideoIngestor",
     "MetadataInterpretationSink",
     "MetadataInterpreter",
     "ObservationMetadataSink",
     "ObservationSink",
+    "VideoIngestRequest",
+    "VideoIngestor",
     "extract_exif_entries",
     "hash_file_content",
     "interpret_observation_metadata",

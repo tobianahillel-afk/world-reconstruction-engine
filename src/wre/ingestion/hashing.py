@@ -12,8 +12,10 @@ from wre.domain.observations import (
     ObservationId,
     Sha256Digest,
     SourceRef,
+    VideoObservation,
 )
 from wre.ingestion.images import ImageIngestor, ImageIngestRequest, ObservationSink
+from wre.ingestion.videos import VideoIngestor, VideoIngestRequest
 
 DEFAULT_HASH_CHUNK_SIZE = 1024 * 1024
 
@@ -39,7 +41,7 @@ class DuplicateObservationLookup(Protocol):
         ...
 
 
-class _HashingImageStore(ObservationSink, DuplicateObservationLookup, Protocol):
+class _HashingObservationStore(ObservationSink, DuplicateObservationLookup, Protocol):
     pass
 
 
@@ -59,6 +61,29 @@ class LocalImageIngestRequest:
 @dataclass(frozen=True, slots=True)
 class LocalImageIngestResult:
     observation: ImageObservation
+    duplicate_observation_ids: tuple[ObservationId, ...]
+
+    @property
+    def has_duplicate_content(self) -> bool:
+        return bool(self.duplicate_observation_ids)
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class LocalVideoIngestRequest:
+    """Explicit local-file input for hashing one source video without decoding it."""
+
+    path: Path
+    observation_id: ObservationId
+    source: SourceRef
+    received_at: datetime
+    captured_at: datetime | None = None
+    asset_uri: str | None = None
+    mime_type: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class LocalVideoIngestResult:
+    observation: VideoObservation
     duplicate_observation_ids: tuple[ObservationId, ...]
 
     @property
@@ -111,7 +136,7 @@ class LocalImageIngestor:
 
     def __init__(
         self,
-        store: _HashingImageStore,
+        store: _HashingObservationStore,
         *,
         chunk_size: int = DEFAULT_HASH_CHUNK_SIZE,
     ) -> None:
@@ -147,6 +172,52 @@ class LocalImageIngestor:
             )
         )
         return LocalImageIngestResult(
+            observation=observation,
+            duplicate_observation_ids=duplicate_ids,
+        )
+
+
+class LocalVideoIngestor:
+    """Hash and persist a source video without decoding frames or probing metadata."""
+
+    def __init__(
+        self,
+        store: _HashingObservationStore,
+        *,
+        chunk_size: int = DEFAULT_HASH_CHUNK_SIZE,
+    ) -> None:
+        _validate_chunk_size(chunk_size)
+        self._store = store
+        self._chunk_size = chunk_size
+        self._video_ingestor = VideoIngestor(store)
+
+    def ingest(self, request: LocalVideoIngestRequest) -> LocalVideoIngestResult:
+        resolved_path = request.path.expanduser().resolve(strict=True)
+        content_hash = hash_file_content(resolved_path, chunk_size=self._chunk_size)
+        asset = MediaAssetRef(
+            uri=request.asset_uri or resolved_path.as_uri(),
+            sha256=content_hash.sha256,
+            byte_length=content_hash.byte_length,
+            mime_type=request.mime_type,
+        )
+        duplicate_ids = self._store.find_observation_ids_by_content(
+            sha256=content_hash.sha256,
+            byte_length=content_hash.byte_length,
+        )
+        duplicate_ids = _canonical_duplicate_ids(
+            duplicate_ids,
+            exclude=request.observation_id,
+        )
+        observation = self._video_ingestor.ingest(
+            VideoIngestRequest(
+                observation_id=request.observation_id,
+                asset=asset,
+                source=request.source,
+                received_at=request.received_at,
+                captured_at=request.captured_at,
+            )
+        )
+        return LocalVideoIngestResult(
             observation=observation,
             duplicate_observation_ids=duplicate_ids,
         )
