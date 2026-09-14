@@ -99,50 +99,61 @@ dependencies:
     role: [robust_pose_graph, loop_closure_outlier_rejection]
     integration: optional_adapter
     version_policy: pin_when_integrated
+    upstream_repository: MIT-SPARK/Kimera-RPGO
     license: BSD-2-Clause
     license_review: pending
+    notes: Top-level LICENSE.BSD verified on 2026-09-15; full integration and transitive-dependency review remains pending.
   basalt:
     status: candidate_optional
     role: [visual_odometry, visual_inertial_odometry, video_trajectory]
     integration: optional_adapter
     version_policy: pin_when_integrated
+    upstream_repository: VladyslavUsenko/basalt
     license: BSD-3-Clause
     license_review: pending
+    notes: Top-level LICENSE verified on 2026-09-15; bundled/transitive components still require integration review.
   kalibr:
     status: candidate_optional
     role: [multi_camera_calibration, camera_imu_calibration, rolling_shutter_calibration]
     integration: optional_subprocess_or_adapter
     version_policy: pin_when_integrated
+    upstream_repository: ethz-asl/kalibr
     license: BSD-4-Clause
     license_review: pending
+    notes: Top-level four-clause BSD-style LICENSE verified on 2026-09-15; bundled packages require separate review when integrated.
   hloc:
     status: candidate_optional
     role: [difficult_visual_retrieval, visual_localization, mapping_proposals]
     integration: optional_adapter
     version_policy: pin_when_integrated
+    upstream_repository: cvg/Hierarchical-Localization
     license: Apache-2.0
     license_review: pending
-    notes: Framework license does not automatically cover every bundled model or feature extractor.
+    notes: Framework license verified on 2026-09-15; it does not automatically cover every selected feature extractor/model/checkpoint.
   lightglue:
     status: candidate_optional
     role: [adaptive_learned_matching, difficult_pair_proposals]
     integration: optional_adapter
     version_policy: pin_when_integrated
+    upstream_repository: cvg/LightGlue
     license: Apache-2.0
     license_review: pending
-    notes: LightGlue code/weights are Apache-2.0; selected upstream feature extractors and checkpoints require separate review.
+    notes: LightGlue code and pretrained LightGlue weights are Apache-2.0; upstream feature extractors/checkpoints can differ (notably SuperPoint) and require separate review.
   py4dgeo:
     status: candidate_core
     role: [multi_epoch_point_cloud_change, m3c2, temporal_change_measurement]
     integration: adapter
     version_policy: pin_when_integrated
+    upstream_repository: 3dgeo-heidelberg/py4dgeo
     license: MIT
     license_review: pending
+    notes: Core/top-level license verified on 2026-09-15. Upstream COPYING documents a PSF-licensed source file and CC-BY-SA-4.0 test data; WRE must not assume bundled test/data artifacts share the MIT terms.
   nerfstudio:
     status: candidate_visualization
     role: [photorealistic_view_synthesis, nerf, gaussian_splat_visualization]
     integration: optional_adapter_or_export
     version_policy: pin_when_integrated
+    upstream_repository: nerfstudio-project/nerfstudio
     license: Apache-2.0
     license_review: pending
-    notes: Visualization only; never canonical WRE world geometry.
+    notes: Top-level code license verified on 2026-09-15. Visualization only; never canonical WRE world geometry, and concrete models/plugins/assets require their own review.
