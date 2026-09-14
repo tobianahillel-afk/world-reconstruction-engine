@@ -4,15 +4,16 @@ project_name: World Reconstruction Engine
 phase: bootstrap
 milestone: M0
 lot: L0
-active_work_item: L0.5
+active_work_item: L0.R
 status: ready
-last_completed: [L0.1, L0.2, L0.3, L0.4]
-last_merged_pr: 4
+last_completed: [L0.1, L0.2, L0.3, L0.4, L0.5]
+last_merged_pr: 5
 current_goal: >-
-  Create deterministic fixture conventions and a regression metric schema without
-  introducing heavy geometry engines.
+  Review the complete L0 bootstrap end to end and verify it is fast, coherent,
+  resumable and ready for the first product-domain work.
 next_action: >-
-  Implement L0.5 from registry/work-items.yaml on a new short-lived branch after PR #4 merges.
+  After PR #5 merges, perform L0.R from registry/work-items.yaml and record both
+  L0 lot-review and M0 milestone-review evidence before advancing to M1.
 blockers: []
 reviews:
   lot_reviews:

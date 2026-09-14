@@ -18,6 +18,15 @@ Target: seconds to a few minutes. Intended checks once L0 tooling is installed:
 
 Runs manually, on schedule and at milestone-sensitive changes. It will eventually include real COLMAP/LIMAP fixtures, fragment merge tests, geometry regression datasets and performance reports.
 
+## Fixture harness
+
+Fixture layout, determinism rules, metric comparators and result conventions are defined in [`09_FIXTURES.md`](09_FIXTURES.md). The machine-readable contracts live at:
+
+- `registry/schemas/fixture.schema.json`
+- `registry/schemas/regression-result.schema.json`
+
+Tiny deterministic synthetic fixtures belong in the fast lane. Heavy captured/reconstruction fixtures remain outside ordinary PR CI until their owning lots introduce them deliberately.
+
 ## Foundational geometry fixtures
 
 Planned early fixtures:

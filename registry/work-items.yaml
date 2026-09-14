@@ -88,7 +88,7 @@ work_items:
   - id: L0.5
     lot: L0
     title: Fixture and regression harness skeleton
-    status: ready
+    status: done
     objective: Create deterministic fixture conventions and regression metric schema without adding heavy geometry engines.
     depends_on: [L0.4]
     read_before: [docs/06_TESTING.md]
@@ -102,7 +102,7 @@ work_items:
   - id: L0.R
     lot: L0
     title: L0 lot review
-    status: planned
+    status: ready
     objective: Verify the bootstrap is complete, fast and resumable before product code begins.
     depends_on: [L0.1, L0.2, L0.3, L0.4, L0.5]
     read_before: [AGENTS.md, docs/06_TESTING.md, registry/components.yaml, registry/reviews.yaml]
