@@ -18,6 +18,11 @@ Planned core concepts:
 - `MergeHypothesis`
 - `SpatialConstraint`
 - `ReconstructionRun`
+- `RouteDecision` (planned L4)
+- absolute-anchor/GCP constraint types (planned L9)
+- `TemporalEpoch` / temporal evidence (planned L15)
+- `GeometryChangeHypothesis` (planned L15)
+- `GeometryState` (planned L15)
 
 Every derived object must be able to identify its source observations/evidence and producing run/version. IDs from different domains must not be casually interchangeable.
 
@@ -143,3 +148,35 @@ Not implemented by this contract:
 - local persistence or repository/database adapters.
 
 Those behaviors remain in later work items. The core contract only guarantees reproducible identity and provenance links that later evidence/geometry models can embed without depending on a specific reconstruction engine.
+
+## Planned L4 route-decision contract
+
+The Strategy Router will eventually produce a solver-independent route decision such as FAST, STANDARD or ESCALATED. That decision is **derived orchestration evidence**, not geometry and not acceptance. It should be able to retain the considered signals, route reason, configuration/threshold identity and escalation outcome.
+
+No route class may encode a lower truth/evidence threshold.
+
+## Planned L9 absolute-anchor contracts
+
+GPS, GCP/known-landmark and reference-fragment anchoring will be represented as world-graph constraints with provenance and uncertainty. A fragment remains valid in a local frame even when no absolute anchor exists.
+
+Absolute anchors must not mutate a fragment into a world coordinate silently; the relation between local geometry and world frame remains an estimated constraint/placement with residuals.
+
+## Planned L15 temporal / 4D contracts
+
+The temporal layer will introduce concepts along these semantic lines (exact implementation fields belong to their work items):
+
+### TemporalEpoch / temporal evidence
+
+A period/grouping of observations or geometry used for cross-epoch analysis. Epoch membership can be uncertain; publication/upload time must not be silently treated as capture time.
+
+### GeometryChangeHypothesis
+
+An evidence-bearing hypothesis that geometry differs between epochs/states. It should retain compared geometry/state references, measured change evidence, candidate transition interval, residuals/uncertainty, supporting/contradicting observations, producer/version/configuration and status.
+
+### GeometryState
+
+A time-valid estimated-geometry state. It should be able to retain a stable state identity, spatial lineage/object/fragment reference, geometry product reference, validity interval (possibly uncertain), supporting evidence/provenance, uncertainty/confidence and transition/supersession relationships.
+
+Historical geometry is never destructively overwritten merely because a later state is accepted. Multiple states can coexist when their validity intervals and evidence support physical change.
+
+See [`13_TEMPORAL_WORLD.md`](13_TEMPORAL_WORLD.md) for the complete architectural contract.
