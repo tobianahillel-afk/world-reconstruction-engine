@@ -128,9 +128,7 @@ class CaptureTimeInterpretation:
 
         if self.status is CaptureTimeInterpretationStatus.LOCAL_AMBIGUOUS:
             if self.raw_datetime is None or self.raw_offset is not None or self.instant is not None:
-                raise ValueError(
-                    "local-ambiguous capture time requires only a raw local datetime"
-                )
+                raise ValueError("local-ambiguous capture time requires only a raw local datetime")
             if not self.evidence_keys or self.issue is not None:
                 raise ValueError("local-ambiguous capture time requires evidence and no issue")
             return
