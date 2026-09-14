@@ -89,14 +89,25 @@ def test_rejects_missing_read_before_path(tmp_path: Path) -> None:
 
 def test_rejects_unfinished_active_dependency(tmp_path: Path) -> None:
     repo = _copy_repo(tmp_path)
+    state = _load(repo / "PROJECT_STATE.yaml")
     roadmap_path = repo / "registry/work-items.yaml"
     roadmap = _load(roadmap_path)
-    _item(roadmap, "L0.3")["status"] = "ready"
+
+    active_id = state["active_work_item"]
+    assert isinstance(active_id, str)
+    active_item = _item(roadmap, active_id)
+    dependencies = active_item["depends_on"]
+    assert isinstance(dependencies, list)
+    assert dependencies
+    dependency_id = dependencies[0]
+    assert isinstance(dependency_id, str)
+
+    _item(roadmap, dependency_id)["status"] = "ready"
     _write(roadmap_path, roadmap)
 
     errors = validate_repository(repo)
 
-    assert any("depends on unfinished L0.3" in error for error in errors)
+    assert any(f"depends on unfinished {dependency_id}" in error for error in errors)
 
 
 def test_rejects_missing_pr_template_section(tmp_path: Path) -> None:
