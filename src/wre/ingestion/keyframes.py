@@ -115,7 +115,11 @@ def select_keyframes(
         previous_index = frame.frame_index
         previous_time = frame.frame_time_us
 
-        if last_selected_time is None or frame.frame_time_us - last_selected_time >= policy.min_interval_us:
+        enough_spacing = (
+            last_selected_time is None
+            or frame.frame_time_us - last_selected_time >= policy.min_interval_us
+        )
+        if enough_spacing:
             selected.append(frame)
             last_selected_time = frame.frame_time_us
 
