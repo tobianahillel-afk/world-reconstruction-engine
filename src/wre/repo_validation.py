@@ -25,9 +25,7 @@ def _load_mapping(path: Path) -> dict[str, Any]:
     return data
 
 
-def _append_missing_path(
-    errors: list[str], root: Path, path_value: object, context: str
-) -> None:
+def _append_missing_path(errors: list[str], root: Path, path_value: object, context: str) -> None:
     if not isinstance(path_value, str):
         errors.append(f"{context} path must be a string: {path_value!r}")
         return
@@ -81,8 +79,10 @@ def validate_repository(root: Path) -> list[str]:
     lots = roadmap.get("lots", {})
     work_items = roadmap.get("work_items", [])
 
-    if not isinstance(milestones, dict) or not isinstance(lots, dict) or not isinstance(
-        work_items, list
+    if (
+        not isinstance(milestones, dict)
+        or not isinstance(lots, dict)
+        or not isinstance(work_items, list)
     ):
         return ["registry/work-items.yaml has invalid top-level structure"]
 
@@ -176,9 +176,7 @@ def validate_repository(root: Path) -> list[str]:
                 )
 
     active_candidates = [
-        item_id
-        for item_id, item in items_by_id.items()
-        if item.get("status") in ACTIVE_STATUSES
+        item_id for item_id, item in items_by_id.items() if item.get("status") in ACTIVE_STATUSES
     ]
     if active_id in items_by_id and active_candidates != [active_id]:
         errors.append(
