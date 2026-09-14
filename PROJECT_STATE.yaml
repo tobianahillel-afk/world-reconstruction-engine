@@ -4,17 +4,17 @@ project_name: World Reconstruction Engine
 phase: implementation
 milestone: M1
 lot: L2
-active_work_item: L2.1
+active_work_item: L2.2
 status: ready
-last_completed: [L0.1, L0.2, L0.3, L0.4, L0.5, L0.R, L1.1, L1.2, L1.3, L1.4, L1.5]
-last_merged_pr: 11
+last_completed: [L0.1, L0.2, L0.3, L0.4, L0.5, L0.R, L1.1, L1.2, L1.3, L1.4, L1.5, L2.1]
+last_merged_pr: 12
 current_goal: >-
-  Implement deterministic image ingestion into the existing Observation and local
-  persistence contracts without starting duplicate detection, EXIF parsing or
-  reconstruction-engine integration.
+  Implement deterministic SHA-256 hashing and duplicate detection for image media,
+  producing verified content identity for the existing L2.1 ingestion boundary
+  without starting EXIF parsing, GPS/time extraction or reconstruction integration.
 next_action: >-
-  After PR #11 merges, implement L2.1 from registry/work-items.yaml in a new
-  short-lived branch without starting L2.2 hashing or L2.3 metadata extraction.
+  After PR #12 merges, implement L2.2 from registry/work-items.yaml in a new
+  short-lived branch without starting L2.3 EXIF metadata extraction.
 blockers: []
 reviews:
   lot_reviews:
