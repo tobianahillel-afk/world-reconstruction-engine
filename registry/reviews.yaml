@@ -1,0 +1,29 @@
+schema_version: 1
+policy:
+  pr_review_required: true
+  lot_review_required: true
+  milestone_review_required: true
+lot_reviews:
+  L0: {status: pending, reviewed_at: null, evidence: []}
+  L1: {status: pending, reviewed_at: null, evidence: []}
+  L2: {status: pending, reviewed_at: null, evidence: []}
+  L3: {status: pending, reviewed_at: null, evidence: []}
+  L4: {status: pending, reviewed_at: null, evidence: []}
+  L5: {status: pending, reviewed_at: null, evidence: []}
+  L6: {status: pending, reviewed_at: null, evidence: []}
+  L7: {status: pending, reviewed_at: null, evidence: []}
+  L8: {status: pending, reviewed_at: null, evidence: []}
+  L9: {status: pending, reviewed_at: null, evidence: []}
+  L10: {status: pending, reviewed_at: null, evidence: []}
+  L11: {status: pending, reviewed_at: null, evidence: []}
+  L12: {status: pending, reviewed_at: null, evidence: []}
+  L13: {status: pending, reviewed_at: null, evidence: []}
+  L14: {status: pending, reviewed_at: null, evidence: []}
+  L15: {status: pending, reviewed_at: null, evidence: []}
+  L16: {status: pending, reviewed_at: null, evidence: []}
+milestone_reviews:
+  M0: {status: pending, reviewed_at: null, evidence: []}
+  M1: {status: pending, reviewed_at: null, evidence: []}
+  M2: {status: pending, reviewed_at: null, evidence: []}
+  M3: {status: pending, reviewed_at: null, evidence: []}
+  M4: {status: pending, reviewed_at: null, evidence: []}

@@ -1,0 +1,27 @@
+schema_version: 1
+project: world-reconstruction-engine
+project_name: World Reconstruction Engine
+phase: bootstrap
+milestone: M0
+lot: L0
+active_work_item: L0.2
+status: ready
+last_completed: [L0.1]
+last_merged_pr: 1
+current_goal: >-
+  Add the lightweight Python development toolchain and fast pull-request CI without
+  introducing reconstruction dependencies or heavy tests.
+next_action: >-
+  Implement L0.2 from registry/work-items.yaml on a new short-lived branch after PR #1 merges.
+blockers: []
+reviews:
+  lot_reviews:
+    L0: pending
+  milestone_reviews:
+    M0: pending
+quality:
+  fast_ci: not_configured
+  full_ci: not_configured
+  known_regressions: 0
+  latest_regression_run: null
+updated_at: '2026-09-14'
