@@ -168,9 +168,7 @@ def test_invalid_capture_time_offset_is_explicit() -> None:
 
 
 def test_offset_without_original_datetime_is_invalid() -> None:
-    result = interpret_observation_metadata(
-        _metadata(("EXIF OffsetTimeOriginal", "+02:00"))
-    )
+    result = interpret_observation_metadata(_metadata(("EXIF OffsetTimeOriginal", "+02:00")))
 
     assert result.capture_time.status is CaptureTimeInterpretationStatus.INVALID
     assert result.capture_time.instant is None
