@@ -16,10 +16,10 @@ from wre.domain import (
     VideoObservation,
 )
 from wre.ingestion import (
-    LocalVideoIngestRequest,
     LocalVideoIngestor,
-    VideoIngestRequest,
+    LocalVideoIngestRequest,
     VideoIngestor,
+    VideoIngestRequest,
 )
 from wre.persistence import SQLiteLocalStore
 
