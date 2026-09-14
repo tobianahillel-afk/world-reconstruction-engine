@@ -7,7 +7,7 @@ from typing import TypeVar
 
 from wre.domain.cameras import Camera, CameraId, ObservationMetadata
 from wre.domain.fragments import SpatialFragment, SpatialFragmentId
-from wre.domain.observations import Observation, ObservationId
+from wre.domain.observations import Observation, ObservationId, Sha256Digest
 from wre.domain.runs import ReconstructionRun, ReconstructionRunId
 from wre.persistence.codec import (
     JsonObject,
@@ -182,6 +182,51 @@ class SQLiteLocalStore:
 
     def get_observation(self, observation_id: ObservationId) -> Observation | None:
         return self._get("observation", observation_id.value, decode_observation)
+
+    def find_observation_ids_by_content(
+        self,
+        *,
+        sha256: Sha256Digest,
+        byte_length: int,
+    ) -> tuple[ObservationId, ...]:
+        if isinstance(byte_length, bool) or not isinstance(byte_length, int) or byte_length < 0:
+            raise ValueError("byte_length must be a non-negative integer")
+
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT record_id, schema_version, payload_json
+                FROM wre_records
+                WHERE record_type = 'observation'
+                ORDER BY record_id
+                """
+            ).fetchall()
+
+        matches: list[ObservationId] = []
+        for record_id, schema_version, payload_json in rows:
+            if schema_version != RECORD_SCHEMA_VERSION:
+                raise UnsupportedSchemaVersionError(
+                    f"record schema version {schema_version} is unsupported for "
+                    f"observation:{record_id}"
+                )
+            if not isinstance(record_id, str) or not isinstance(payload_json, str):
+                raise PersistenceError(
+                    "observation duplicate index encountered invalid storage data"
+                )
+            try:
+                observation = decode_observation(parse_json_object(payload_json))
+            except (TypeError, ValueError) as exc:
+                raise PersistenceError(
+                    f"record payload cannot be decoded for observation:{record_id}"
+                ) from exc
+            if observation.observation_id.value != record_id:
+                raise PersistenceError(
+                    f"record identity observation:{record_id} does not match its payload"
+                )
+            if observation.asset.sha256 == sha256 and observation.asset.byte_length == byte_length:
+                matches.append(observation.observation_id)
+
+        return tuple(matches)
 
     def put_camera(self, camera: Camera) -> None:
         self._put("camera", camera.camera_id.value, encode_camera(camera))
