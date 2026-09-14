@@ -223,10 +223,7 @@ class SQLiteLocalStore:
                 raise PersistenceError(
                     f"record identity observation:{record_id} does not match its payload"
                 )
-            if (
-                observation.asset.sha256 == sha256
-                and observation.asset.byte_length == byte_length
-            ):
+            if observation.asset.sha256 == sha256 and observation.asset.byte_length == byte_length:
                 matches.append(observation.observation_id)
 
         return tuple(matches)
