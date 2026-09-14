@@ -6,7 +6,6 @@ from pathlib import Path
 import pytest
 
 from wre.domain import (
-    ImageObservation,
     MediaAssetRef,
     ObservationId,
     Sha256Digest,
@@ -16,8 +15,8 @@ from wre.domain import (
 from wre.ingestion import ImageIngestor, ImageIngestRequest
 from wre.ingestion.hashing import (
     FileContentHash,
-    LocalImageIngestRequest,
     LocalImageIngestor,
+    LocalImageIngestRequest,
     hash_file_content,
 )
 from wre.persistence import SQLiteLocalStore
