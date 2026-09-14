@@ -119,8 +119,8 @@ work_items:
   - {id: L1.2, lot: L1, title: Camera and metadata models, status: done, depends_on: [L1.1]}
   - {id: L1.3, lot: L1, title: SpatialFragment model, status: done, depends_on: [L1.2]}
   - {id: L1.4, lot: L1, title: ReconstructionRun and provenance, status: done, depends_on: [L1.3]}
-  - {id: L1.5, lot: L1, title: Local persistence layer, status: ready, depends_on: [L1.4]}
-  - {id: L2.1, lot: L2, title: Image ingestion, status: planned, depends_on: [L1.5]}
+  - {id: L1.5, lot: L1, title: Local persistence layer, status: done, depends_on: [L1.4]}
+  - {id: L2.1, lot: L2, title: Image ingestion, status: ready, depends_on: [L1.5]}
   - {id: L2.2, lot: L2, title: Hashing and duplicate detection, status: planned, depends_on: [L2.1]}
   - {id: L2.3, lot: L2, title: EXIF metadata, status: planned, depends_on: [L2.2]}
   - {id: L2.4, lot: L2, title: GPS and time extraction, status: planned, depends_on: [L2.3]}
