@@ -29,6 +29,7 @@ def _require_aware_datetime(value: datetime, context: str) -> None:
 
 class ObservationKind(StrEnum):
     IMAGE = "image"
+    VIDEO = "video"
     VIDEO_FRAME = "video_frame"
 
 
@@ -117,6 +118,15 @@ class ImageObservation(Observation):
     @property
     def kind(self) -> ObservationKind:
         return ObservationKind.IMAGE
+
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class VideoObservation(Observation):
+    """Raw source-video observation before any frame/keyframe extraction."""
+
+    @property
+    def kind(self) -> ObservationKind:
+        return ObservationKind.VIDEO
 
 
 @dataclass(frozen=True, slots=True, kw_only=True)
