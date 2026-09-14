@@ -15,12 +15,22 @@ components:
       - .github/workflows/codeql.yml
       - .github/workflows/dependency-review.yml
       - docs/08_SECURITY.md
+      - docs/09_FIXTURES.md
       - registry/dependencies.yaml
+      - registry/schemas/fixture.schema.json
+      - registry/schemas/regression-result.schema.json
       - scripts/validate_repo.py
       - src/wre/repo_validation.py
+      - src/wre/regression.py
+      - tests/fixtures/synthetic/tiny-smoke/fixture.json
+      - tests/fixtures/synthetic/tiny-smoke/points.json
       - tests/test_smoke.py
       - tests/test_repo_validation.py
-    tests: [tests/test_smoke.py, tests/test_repo_validation.py]
+      - tests/test_regression_harness.py
+    tests:
+      - tests/test_smoke.py
+      - tests/test_repo_validation.py
+      - tests/test_regression_harness.py
     status: implementing
   observation_core:
     owner_lot: L1
