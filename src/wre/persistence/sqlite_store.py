@@ -157,7 +157,9 @@ class SQLiteLocalStore:
         try:
             return parse_json_object(payload_json)
         except ValueError as exc:
-            raise PersistenceError(f"record payload is invalid for {record_type}:{record_id}") from exc
+            raise PersistenceError(
+                f"record payload is invalid for {record_type}:{record_id}"
+            ) from exc
 
     def _get(
         self,
