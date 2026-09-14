@@ -22,33 +22,60 @@ No wall clock is consulted. If capture time is unknown, it remains `None`; L2.1 
 
 The L1 observation contract deliberately requires media content identity (`Sha256Digest`), byte length and URI as part of `MediaAssetRef`. L2.1 does not fabricate or calculate that digest because the roadmap assigns file hashing and duplicate detection to L2.2.
 
-This means L2.1 is the deterministic ingestion core for media that is already content-addressed by an upstream source or test fixture. L2.2 will add the workflow that reads raw media bytes, computes/verifies SHA-256 and performs duplicate detection before invoking this same ingestion boundary.
+This means L2.1 is the deterministic ingestion core for media that is already content-addressed by an upstream source or test fixture. L2.2 adds the workflow that reads raw media bytes, computes SHA-256 and performs duplicate detection before invoking this same ingestion boundary.
 
-A supplied digest is therefore an input contract at L2.1, not evidence that WRE itself has independently verified the bytes. Code that needs WRE-calculated content identity must use the later L2.2 path once implemented.
+A supplied digest is therefore an input contract at L2.1, not evidence that WRE itself has independently verified the bytes. Code that needs WRE-calculated content identity uses the L2.2 local-file path.
+
+## L2.2 hashing and duplicate detection
+
+`hash_file_content` reads a local file in bounded chunks using Python's standard-library SHA-256 implementation. The digest and exact byte length are produced from the same read, so the resulting `MediaAssetRef` is grounded in the bytes WRE actually consumed rather than caller-supplied metadata.
+
+`LocalImageIngestor` composes four existing boundaries instead of replacing them:
+
+1. resolve the requested local file and fail before persistence if it does not exist;
+2. stream the bytes through SHA-256 while counting their exact length;
+3. ask a `DuplicateObservationLookup` for already-persisted observations with the same digest and byte length;
+4. build a verified `MediaAssetRef` and delegate persistence to the L2.1 `ImageIngestor`.
+
+The default chunk size is one MiB and can be overridden with a positive integer. The implementation never needs to load the whole media asset into memory.
+
+### Duplicate semantics
+
+A content duplicate means **same SHA-256 and same byte length**. Duplicate observation IDs are returned deterministically in canonical ID order.
+
+Duplicate detection is not observation deduplication. Two observations may contain identical bytes while carrying different source, receipt-time or later metadata evidence. L2.2 therefore reports prior exact-content matches but still stores the new observation when its `ObservationId` is distinct. A retry of the same observation excludes its own ID from the duplicate list and remains idempotent through the L1 persistence contract.
+
+This distinction preserves provenance: equal bytes do not silently erase distinct observation events.
+
+### Local duplicate lookup baseline
+
+`SQLiteLocalStore.find_observation_ids_by_content` currently performs a deterministic scan of persisted observation records and validates record/payload integrity while looking for matches. L2.2 intentionally does not migrate the database or introduce a separate content index yet. This is a simple correctness-first local baseline; a future scaling work item may add an index without changing the duplicate semantics or the `DuplicateObservationLookup` interface.
+
+An explicit `asset_uri` or MIME type supplied to local ingestion is preserved verbatim. L2.2 does not infer MIME type from a filename and does not interpret media metadata.
 
 ## Identity and retry behavior
 
-L2.1 inherits L1 persistence semantics:
+The image-ingestion path inherits L1 persistence semantics:
 
 1. a new observation ID and payload are stored atomically;
 2. repeating the exact same observation is idempotent;
 3. reusing the same observation ID with different content raises the persistence conflict instead of silently replacing the raw observation.
 
-The ingestor does not weaken or reinterpret those rules.
+Hashing and duplicate reporting do not weaken or reinterpret those rules.
 
 ## Explicitly deferred work
 
-L2.1 does **not** implement:
+Through L2.2, media ingestion does **not** implement:
 
-- reading a local file to calculate SHA-256;
-- hash indexes or duplicate detection;
 - media discovery or directory crawling;
 - byte copying into a managed media object store;
 - image decoding or image-validity inference;
+- MIME-type inference;
 - EXIF/XMP parsing;
 - GPS or capture-time interpretation;
 - camera identity resolution;
 - video ingestion or keyframe extraction;
-- feature extraction, matching or reconstruction.
+- feature extraction, matching or reconstruction;
+- automatic merge/deletion of observations merely because bytes are identical.
 
-Those behaviors remain in their owning L2/L3 work items. L2.1 only creates a raw image observation from explicit already-addressed inputs and persists it through the established domain boundary.
+Those behaviors remain in their owning L2/L3 work items. L2.3 next owns raw EXIF metadata extraction; semantic GPS/time interpretation remains separate in L2.4.
