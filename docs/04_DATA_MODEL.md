@@ -6,6 +6,7 @@ Planned core concepts:
 
 - `Observation`
 - `ImageObservation`
+- `VideoObservation`
 - `VideoFrameObservation`
 - `Camera`
 - `FeatureSet`
@@ -38,11 +39,14 @@ Implemented observation primitives:
 - `MediaAssetRef` — immutable reference to bytes by URI, SHA-256 digest, byte length and optional MIME type.
 - `Observation` — abstract raw-observation base carrying an asset, source, receipt time and optional capture instant.
 - `ImageObservation` — still-image observation.
+- `VideoObservation` — whole source-video observation before any frame or keyframe extraction.
 - `VideoFrameObservation` — image-like frame observation that additionally retains the parent video asset, deterministic frame index and integer microsecond offset.
 
 `received_at` and `captured_at`, when present, are timezone-aware instants. An ambiguous local capture timestamp must not be coerced into an instant merely to populate the model; later metadata ingestion may retain the raw value until its time semantics are known.
 
 Video frame offsets use integer microseconds rather than floating-point seconds so frame identity and ordering do not depend on accidental floating-point equality.
+
+L2.5 makes the whole source video a first-class raw observation. That preserves source identity/provenance before any frame selection occurs. It does not imply that the bytes have been decoded or that container metadata, frame count, duration, codec, MIME type or capture time have been inferred. L2.6 later owns deterministic frame/keyframe extraction and creates `VideoFrameObservation` records that retain their parent `video_asset`.
 
 ### Explicit L1.1 boundary
 
