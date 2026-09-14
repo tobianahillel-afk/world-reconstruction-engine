@@ -123,8 +123,8 @@ work_items:
   - {id: L2.1, lot: L2, title: Image ingestion, status: done, depends_on: [L1.5]}
   - {id: L2.2, lot: L2, title: Hashing and duplicate detection, status: done, depends_on: [L2.1]}
   - {id: L2.3, lot: L2, title: EXIF metadata, status: done, depends_on: [L2.2]}
-  - {id: L2.4, lot: L2, title: GPS and time extraction, status: ready, depends_on: [L2.3]}
-  - {id: L2.5, lot: L2, title: Video ingestion, status: planned, depends_on: [L2.4]}
+  - {id: L2.4, lot: L2, title: GPS and time extraction, status: done, depends_on: [L2.3]}
+  - {id: L2.5, lot: L2, title: Video ingestion, status: ready, depends_on: [L2.4]}
   - {id: L2.6, lot: L2, title: Deterministic keyframe extraction, status: planned, depends_on: [L2.5]}
   - {id: L3.1, lot: L3, title: COLMAP environment adapter, status: planned, depends_on: [L2.6]}
   - {id: L3.2, lot: L3, title: COLMAP feature extraction, status: planned, depends_on: [L3.1]}
