@@ -91,12 +91,12 @@ def test_rejects_unfinished_active_dependency(tmp_path: Path) -> None:
     repo = _copy_repo(tmp_path)
     roadmap_path = repo / "registry/work-items.yaml"
     roadmap = _load(roadmap_path)
-    _item(roadmap, "L0.2")["status"] = "ready"
+    _item(roadmap, "L0.3")["status"] = "ready"
     _write(roadmap_path, roadmap)
 
     errors = validate_repository(repo)
 
-    assert any("depends on unfinished L0.2" in error for error in errors)
+    assert any("depends on unfinished L0.3" in error for error in errors)
 
 
 def test_rejects_missing_pr_template_section(tmp_path: Path) -> None:
