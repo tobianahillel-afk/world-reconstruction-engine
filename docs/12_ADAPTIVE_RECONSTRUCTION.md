@@ -4,7 +4,7 @@ This document defines the future contracts for L4 strategy routing and L9 absolu
 
 ## Why route work adaptively
 
-WRE should spend only the computation needed to reach the normal evidence threshold. Some observations arrive with strong sequence, GPS, graph-neighbour or cached-feature context; others are visually ambiguous, historically changed or far from existing viewpoints.
+WRE should spend only the computation needed to reach the normal evidence standard. Some observations arrive with strong sequence, GPS, graph-neighbour or cached-feature context; others are visually ambiguous, historically changed or far from existing viewpoints.
 
 The route must therefore control **cost**, never truth criteria.
 
@@ -48,7 +48,7 @@ The router emits a route decision with auditable reasons and configuration/versi
 
 ### FAST
 
-FAST is appropriate when a small targeted candidate set can plausibly reach the normal acceptance threshold. It may reuse cached features, restrict pair candidates or try incremental registration first.
+FAST is appropriate when a small targeted candidate set can plausibly reach the normal acceptance standard. It may reuse cached features, restrict pair candidates or try incremental registration first.
 
 FAST is **not** permission to skip required geometric checks.
 
@@ -62,13 +62,7 @@ ESCALATED asks later hard-case machinery for broader or more expensive processin
 
 ### Required safety invariant
 
-For every route:
-
-```text
-acceptance threshold(FAST)
-= acceptance threshold(STANDARD)
-= acceptance threshold(ESCALATED)
-```
+FAST, STANDARD and ESCALATED must satisfy the **same acceptance policy and evidence standard** for an accepted claim. They may use different solver-specific thresholds or intermediate measurements when those are calibrated to equivalent semantics and documented; a cheaper route must never weaken the final proof required for acceptance.
 
 The route changes how evidence is sought, not what counts as sufficient evidence.
 
@@ -126,6 +120,8 @@ L9.5 will model correspondences between reconstructed/local geometry and known w
 ## Reference-fragment anchors
 
 L9.6 will allow a fragment with an established world placement to constrain another fragment through validated relative geometry. This is especially important when the newly arriving collection has no native GPS.
+
+The local fragment may still have unresolved metric scale. The reference relationship must therefore retain the actual transform model used (for example a validated Sim(3) when scale is unknown, or a rigid/metric transform when scale is independently established), together with scale/transform uncertainty and residual evidence.
 
 A reference anchor must not become a hidden merge. Relative placement evidence and the absolute anchor remain separately traceable.
 
