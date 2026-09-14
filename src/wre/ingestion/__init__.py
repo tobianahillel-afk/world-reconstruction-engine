@@ -17,6 +17,11 @@ from wre.ingestion.hashing import (
     hash_file_content,
 )
 from wre.ingestion.images import ImageIngestor, ImageIngestRequest, ObservationSink
+from wre.ingestion.metadata_interpretation import (
+    MetadataInterpretationSink,
+    MetadataInterpreter,
+    interpret_observation_metadata,
+)
 
 __all__ = [
     "DEFAULT_HASH_CHUNK_SIZE",
@@ -30,8 +35,11 @@ __all__ = [
     "LocalImageIngestRequest",
     "LocalImageIngestResult",
     "LocalImageIngestor",
+    "MetadataInterpretationSink",
+    "MetadataInterpreter",
     "ObservationMetadataSink",
     "ObservationSink",
     "extract_exif_entries",
     "hash_file_content",
+    "interpret_observation_metadata",
 ]

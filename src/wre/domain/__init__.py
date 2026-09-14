@@ -8,6 +8,13 @@ from wre.domain.cameras import (
     RawMetadataEntry,
 )
 from wre.domain.fragments import LocalFrameId, SpatialFragment, SpatialFragmentId
+from wre.domain.metadata import (
+    CaptureTimeInterpretation,
+    CaptureTimeInterpretationStatus,
+    GpsInterpretationStatus,
+    GpsMetadataInterpretation,
+    ObservationMetadataInterpretation,
+)
 from wre.domain.observations import (
     ImageObservation,
     MediaAssetRef,
@@ -29,7 +36,11 @@ from wre.domain.runs import (
 __all__ = [
     "Camera",
     "CameraId",
+    "CaptureTimeInterpretation",
+    "CaptureTimeInterpretationStatus",
     "DerivedArtifactProvenance",
+    "GpsInterpretationStatus",
+    "GpsMetadataInterpretation",
     "ImageDimensions",
     "ImageObservation",
     "LocalFrameId",
@@ -38,6 +49,7 @@ __all__ = [
     "ObservationId",
     "ObservationKind",
     "ObservationMetadata",
+    "ObservationMetadataInterpretation",
     "ProducerRef",
     "RawMetadataEntry",
     "ReconstructionRun",

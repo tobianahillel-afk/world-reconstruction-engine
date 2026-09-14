@@ -13,6 +13,13 @@ from wre.domain.cameras import (
     RawMetadataEntry,
 )
 from wre.domain.fragments import LocalFrameId, SpatialFragment, SpatialFragmentId
+from wre.domain.metadata import (
+    CaptureTimeInterpretation,
+    CaptureTimeInterpretationStatus,
+    GpsInterpretationStatus,
+    GpsMetadataInterpretation,
+    ObservationMetadataInterpretation,
+)
 from wre.domain.observations import (
     ImageObservation,
     MediaAssetRef,
@@ -75,6 +82,18 @@ def _int(value: object, context: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int):
         raise ValueError(f"{context} must be an integer")
     return value
+
+
+def _float(value: object, context: str) -> float:
+    if isinstance(value, bool) or not isinstance(value, int | float):
+        raise ValueError(f"{context} must be a number")
+    return float(value)
+
+
+def _optional_float(value: object, context: str) -> float | None:
+    if value is None:
+        return None
+    return _float(value, context)
 
 
 def _optional_object(value: object, context: str) -> JsonObject | None:
@@ -260,6 +279,69 @@ def decode_observation_metadata(payload: Mapping[str, object]) -> ObservationMet
         camera_id=CameraId(camera_id_value) if camera_id_value is not None else None,
         dimensions=dimensions,
         raw_entries=raw_entries,
+    )
+
+
+def encode_metadata_interpretation(
+    interpretation: ObservationMetadataInterpretation,
+) -> JsonObject:
+    instant = interpretation.capture_time.instant
+    return {
+        "capture_time": {
+            "evidence_keys": list(interpretation.capture_time.evidence_keys),
+            "instant": _encode_datetime(instant) if instant is not None else None,
+            "issue": interpretation.capture_time.issue,
+            "raw_datetime": interpretation.capture_time.raw_datetime,
+            "raw_offset": interpretation.capture_time.raw_offset,
+            "status": interpretation.capture_time.status.value,
+        },
+        "gps": {
+            "evidence_keys": list(interpretation.gps.evidence_keys),
+            "issue": interpretation.gps.issue,
+            "latitude_deg": interpretation.gps.latitude_deg,
+            "longitude_deg": interpretation.gps.longitude_deg,
+            "map_datum": interpretation.gps.map_datum,
+            "status": interpretation.gps.status.value,
+        },
+        "observation_id": interpretation.observation_id.value,
+    }
+
+
+def decode_metadata_interpretation(
+    payload: Mapping[str, object],
+) -> ObservationMetadataInterpretation:
+    data = dict(payload)
+    gps_data = _object(data.get("gps"), "gps")
+    capture_data = _object(data.get("capture_time"), "capture_time")
+    instant_value = capture_data.get("instant")
+    return ObservationMetadataInterpretation(
+        observation_id=ObservationId(_string(data.get("observation_id"), "observation_id")),
+        gps=GpsMetadataInterpretation(
+            status=GpsInterpretationStatus(_string(gps_data.get("status"), "gps.status")),
+            latitude_deg=_optional_float(gps_data.get("latitude_deg"), "gps.latitude_deg"),
+            longitude_deg=_optional_float(gps_data.get("longitude_deg"), "gps.longitude_deg"),
+            map_datum=_optional_string(gps_data.get("map_datum"), "gps.map_datum"),
+            evidence_keys=tuple(_string_list(gps_data.get("evidence_keys"), "gps.evidence_keys")),
+            issue=_optional_string(gps_data.get("issue"), "gps.issue"),
+        ),
+        capture_time=CaptureTimeInterpretation(
+            status=CaptureTimeInterpretationStatus(
+                _string(capture_data.get("status"), "capture_time.status")
+            ),
+            raw_datetime=_optional_string(
+                capture_data.get("raw_datetime"), "capture_time.raw_datetime"
+            ),
+            raw_offset=_optional_string(capture_data.get("raw_offset"), "capture_time.raw_offset"),
+            instant=(
+                _decode_datetime(instant_value, "capture_time.instant")
+                if instant_value is not None
+                else None
+            ),
+            evidence_keys=tuple(
+                _string_list(capture_data.get("evidence_keys"), "capture_time.evidence_keys")
+            ),
+            issue=_optional_string(capture_data.get("issue"), "capture_time.issue"),
+        ),
     )
 
 

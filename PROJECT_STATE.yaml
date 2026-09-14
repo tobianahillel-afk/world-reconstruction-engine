@@ -4,17 +4,16 @@ project_name: World Reconstruction Engine
 phase: implementation
 milestone: M1
 lot: L2
-active_work_item: L2.4
+active_work_item: L2.5
 status: ready
-last_completed: [L0.1, L0.2, L0.3, L0.4, L0.5, L0.R, L1.1, L1.2, L1.3, L1.4, L1.5, L2.1, L2.2, L2.3]
-last_merged_pr: 14
+last_completed: [L0.1, L0.2, L0.3, L0.4, L0.5, L0.R, L1.1, L1.2, L1.3, L1.4, L1.5, L2.1, L2.2, L2.3, L2.4]
+last_merged_pr: 15
 current_goal: >-
-  Interpret GPS and capture-time information from the raw EXIF entries produced by
-  L2.3 while preserving ambiguity and source evidence, without starting video
-  ingestion or reconstruction integration.
+  Implement deterministic video ingestion as raw media/observation handling without
+  starting keyframe selection, tracking or reconstruction logic.
 next_action: >-
-  After PR #14 merges, implement L2.4 from registry/work-items.yaml in a new
-  short-lived branch without starting L2.5 video ingestion.
+  After PR #15 merges, implement L2.5 from registry/work-items.yaml in a new
+  short-lived branch without starting L2.6 deterministic keyframe extraction.
 blockers: []
 reviews:
   lot_reviews:
@@ -27,4 +26,4 @@ quality:
   full_ci: not_configured
   known_regressions: 0
   latest_regression_run: null
-updated_at: '2026-09-14'
+updated_at: '2026-09-15'
