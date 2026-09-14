@@ -59,9 +59,11 @@ components:
       - src/wre/ingestion/__init__.py
       - src/wre/ingestion/images.py
       - src/wre/ingestion/hashing.py
+      - src/wre/ingestion/exif.py
     tests:
       - tests/test_image_ingestion.py
       - tests/test_hashing_duplicates.py
+      - tests/test_exif_metadata.py
     status: implementing
   colmap_reconstruction:
     owner_lot: L3
