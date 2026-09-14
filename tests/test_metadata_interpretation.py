@@ -104,6 +104,7 @@ def test_incomplete_gps_never_exposes_partial_coordinates() -> None:
     assert result.gps.latitude_deg is None
     assert result.gps.longitude_deg is None
     assert result.gps.map_datum == "WGS-84"
+    assert result.gps.issue is not None
     assert "GPS GPSLongitude" in result.gps.issue
     assert "GPS GPSLongitudeRef" in result.gps.issue
 
@@ -121,6 +122,7 @@ def test_invalid_gps_is_explicit_and_never_exposes_coordinates() -> None:
     assert result.gps.status is GpsInterpretationStatus.INVALID
     assert result.gps.latitude_deg is None
     assert result.gps.longitude_deg is None
+    assert result.gps.issue is not None
     assert "below 60" in result.gps.issue
 
 
@@ -140,6 +142,7 @@ def test_duplicate_coordinate_key_is_invalid_instead_of_last_write_wins() -> Non
 
     assert result.gps.status is GpsInterpretationStatus.INVALID
     assert result.gps.latitude_deg is None
+    assert result.gps.issue is not None
     assert "duplicate GPS metadata keys" in result.gps.issue
 
 
@@ -164,6 +167,7 @@ def test_invalid_capture_time_offset_is_explicit() -> None:
 
     assert result.capture_time.status is CaptureTimeInterpretationStatus.INVALID
     assert result.capture_time.instant is None
+    assert result.capture_time.issue is not None
     assert "UTC offset range" in result.capture_time.issue
 
 
@@ -172,6 +176,7 @@ def test_offset_without_original_datetime_is_invalid() -> None:
 
     assert result.capture_time.status is CaptureTimeInterpretationStatus.INVALID
     assert result.capture_time.instant is None
+    assert result.capture_time.issue is not None
     assert "without EXIF DateTimeOriginal" in result.capture_time.issue
 
 
