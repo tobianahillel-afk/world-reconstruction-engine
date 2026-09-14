@@ -38,8 +38,10 @@ components:
       - docs/04_DATA_MODEL.md
       - src/wre/domain/__init__.py
       - src/wre/domain/observations.py
+      - src/wre/domain/cameras.py
     tests:
       - tests/test_observations.py
+      - tests/test_cameras.py
     status: implementing
   media_ingestion:
     owner_lot: L2
