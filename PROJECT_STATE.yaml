@@ -4,17 +4,17 @@ project_name: World Reconstruction Engine
 phase: implementation
 milestone: M1
 lot: L2
-active_work_item: L2.3
+active_work_item: L2.4
 status: ready
-last_completed: [L0.1, L0.2, L0.3, L0.4, L0.5, L0.R, L1.1, L1.2, L1.3, L1.4, L1.5, L2.1, L2.2]
-last_merged_pr: 13
+last_completed: [L0.1, L0.2, L0.3, L0.4, L0.5, L0.R, L1.1, L1.2, L1.3, L1.4, L1.5, L2.1, L2.2, L2.3]
+last_merged_pr: 14
 current_goal: >-
-  Extract raw EXIF metadata from image media into the existing ObservationMetadata
-  representation without interpreting GPS coordinates, capture-time semantics or
-  camera identity beyond explicit metadata fields.
+  Interpret GPS and capture-time information from the raw EXIF entries produced by
+  L2.3 while preserving ambiguity and source evidence, without starting video
+  ingestion or reconstruction integration.
 next_action: >-
-  After PR #13 merges, implement L2.3 from registry/work-items.yaml in a new
-  short-lived branch without starting L2.4 GPS/time interpretation.
+  After PR #14 merges, implement L2.4 from registry/work-items.yaml in a new
+  short-lived branch without starting L2.5 video ingestion.
 blockers: []
 reviews:
   lot_reviews:

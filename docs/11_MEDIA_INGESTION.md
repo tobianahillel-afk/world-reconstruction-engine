@@ -53,29 +53,57 @@ This distinction preserves provenance: equal bytes do not silently erase distinc
 
 An explicit `asset_uri` or MIME type supplied to local ingestion is preserved verbatim. L2.2 does not infer MIME type from a filename and does not interpret media metadata.
 
+## L2.3 raw EXIF metadata
+
+L2.3 reuses ExifRead `3.5.1` behind a small WRE adapter rather than implementing TIFF/EXIF parsing. The runtime dependency is exactly pinned in `pyproject.toml` and `uv.lock`; the BSD-3-Clause license decision is recorded in `registry/dependencies.yaml`.
+
+`extract_exif_entries` opens the local media file and asks ExifRead for standard metadata with `strict=True`, `details=False` and thumbnail extraction disabled. Each returned standard tag is stored as one immutable `RawMetadataEntry` with:
+
+- namespace `exif`;
+- the complete ExifRead key, including its IFD prefix such as `Image`, `EXIF` or `GPS`;
+- a deterministic string representation of the parser's raw `values` payload.
+
+Entries are sorted by their complete tag key before they enter `ObservationMetadata`, so persistence equality does not depend on parser dictionary iteration order. ExifRead pseudo-entries for filenames and thumbnails are not metadata records and are excluded.
+
+`details=False` deliberately excludes MakerNote decoding from the L2.3 baseline. MakerNotes are vendor-specific and can require fragile proprietary interpretation; L2.3 needs the stable Image/EXIF/GPS fields that feed later deterministic processing, not camera-vendor heuristics.
+
+### Raw means uninterpreted
+
+L2.3 does not promote metadata text into semantic facts. In particular:
+
+- `EXIF DateTimeOriginal` remains its source string and is not converted into `ImageObservation.captured_at`;
+- GPS reference/rational tags remain raw entries and are not converted to decimal latitude/longitude;
+- `Image Make` and `Image Model` do not create or resolve a `CameraId`;
+- image dimensions are not populated by this EXIF stage;
+- an image with no standard EXIF produces an `ObservationMetadata` record with an empty raw-entry tuple.
+
+This matters because raw observations and their persistence identity are immutable. A later interpretation stage must not rewrite an observed record merely because new semantics were derived from its metadata. L2.4 therefore consumes L2.3 raw entries and owns GPS/time validation and interpretation while preserving ambiguity and source evidence.
+
 ## Identity and retry behavior
 
 The image-ingestion path inherits L1 persistence semantics:
 
 1. a new observation ID and payload are stored atomically;
-2. repeating the exact same observation is idempotent;
-3. reusing the same observation ID with different content raises the persistence conflict instead of silently replacing the raw observation.
+2. repeating the exact same observation or metadata payload is idempotent;
+3. reusing a stable record identity with different content raises the persistence conflict instead of silently replacing previously recorded evidence.
 
-Hashing and duplicate reporting do not weaken or reinterpret those rules.
+Hashing, duplicate reporting and EXIF extraction do not weaken or reinterpret those rules.
 
 ## Explicitly deferred work
 
-Through L2.2, media ingestion does **not** implement:
+Through L2.3, media ingestion does **not** implement:
 
 - media discovery or directory crawling;
 - byte copying into a managed media object store;
 - image decoding or image-validity inference;
 - MIME-type inference;
-- EXIF/XMP parsing;
-- GPS or capture-time interpretation;
+- XMP parsing;
+- MakerNote interpretation;
+- GPS coordinate normalization or georeferencing;
+- conversion of ambiguous local EXIF timestamps into instants;
 - camera identity resolution;
 - video ingestion or keyframe extraction;
 - feature extraction, matching or reconstruction;
 - automatic merge/deletion of observations merely because bytes are identical.
 
-Those behaviors remain in their owning L2/L3 work items. L2.3 next owns raw EXIF metadata extraction; semantic GPS/time interpretation remains separate in L2.4.
+Those behaviors remain in their owning work items. L2.4 next owns deterministic GPS/time extraction from the raw metadata preserved here; video ingestion remains L2.5.

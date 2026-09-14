@@ -20,6 +20,14 @@ development_supply_chain:
   push_protection_setting: manual_verification_required
   main_ruleset_setting: manual_verification_required
 dependencies:
+  exifread:
+    status: core
+    role: [raw_exif_metadata]
+    integration: library_adapter
+    version_policy: pin_exact
+    pinned_version: 3.5.1
+    license: BSD-3-Clause
+    license_review: approved
   colmap:
     status: candidate_core
     role: [features, matching, geometry, sfm, bundle_adjustment, mvs]

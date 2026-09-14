@@ -8,7 +8,9 @@ version = "0.0.0"
 description = "Deterministic, evidence-driven spatial reconstruction engine"
 readme = "README.md"
 requires-python = ">=3.12,<3.14"
-dependencies = []
+dependencies = [
+  "exifread==3.5.1",
+]
 
 [dependency-groups]
 dev = [
