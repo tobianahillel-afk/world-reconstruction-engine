@@ -1,8 +1,8 @@
 # World Reconstruction Engine (WRE)
 
-WRE is a deterministic, evidence-driven engine for reconstructing and incrementally connecting places from images, video and spatial metadata.
+WRE is a deterministic, evidence-driven engine for reconstructing and incrementally connecting places from images, video and spatial metadata, while preserving uncertainty and time-valid geometry when the physical world changes.
 
-The project composes proven geometry/reconstruction libraries instead of reimplementing them. Derived geometry remains auditable: observations, evidence and estimated geometry are kept distinct; uncertain placements and fragment merges may remain unresolved rather than being guessed.
+The project composes proven geometry/reconstruction libraries instead of reimplementing them. Observations, derived evidence and estimated geometry remain distinct; uncertain placements, fragment merges, absolute anchors and temporal changes may remain unresolved rather than being guessed. Local fragments may exist without Earth coordinates and acquire absolute placement later from GPS, ground-control points, known landmarks or validated reference fragments.
 
 ## Start here
 

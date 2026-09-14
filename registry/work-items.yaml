@@ -5,25 +5,26 @@ milestones:
   M1: {title: Reconstruct a place, lots: [L1, L2, L3]}
   M2: {title: Build incrementally, lots: [L4, L5, L6]}
   M3: {title: High-accuracy world engine, lots: [L7, L8, L9, L10]}
-  M4: {title: Advanced and research, lots: [L11, L12, L13, L14, L15, L16]}
+  M4: {title: Advanced temporal and integration, lots: [L11, L12, L13, L14, L15, L16, L17]}
 lots:
   L0: {title: Bootstrap and development system, review_required: true}
   L1: {title: Core domain, review_required: true}
   L2: {title: Media ingestion, review_required: true}
   L3: {title: COLMAP baseline, review_required: true}
-  L4: {title: Candidate retrieval, review_required: true}
+  L4: {title: Candidate retrieval and strategy routing, review_required: true}
   L5: {title: Evidence geometry, review_required: true}
   L6: {title: Fragment engine, review_required: true}
   L7: {title: LIMAP structural geometry, review_required: true}
   L8: {title: Fragment merging, review_required: true}
-  L9: {title: World graph, review_required: true}
+  L9: {title: World graph and absolute anchoring, review_required: true}
   L10: {title: Hypotheses and uncertainty, review_required: true}
   L11: {title: Video and motion, review_required: true}
   L12: {title: Multi-solver validation, review_required: true}
   L13: {title: Hard-case escalation, review_required: true}
   L14: {title: Dense reconstruction, review_required: true}
-  L15: {title: Validation program, review_required: true}
-  L16: {title: MONDE boundary, review_required: true}
+  L15: {title: Temporal and 4D world, review_required: true}
+  L16: {title: Validation program, review_required: true}
+  L17: {title: MONDE boundary, review_required: true}
 work_items:
   - id: L0.1
     lot: L0
@@ -138,8 +139,25 @@ work_items:
   - {id: L4.3, lot: L4, title: Visual vocabulary retrieval, status: planned, depends_on: [L4.2]}
   - {id: L4.4, lot: L4, title: Graph-neighbour candidates, status: planned, depends_on: [L4.3]}
   - {id: L4.5, lot: L4, title: Candidate ranking, status: planned, depends_on: [L4.4]}
-  - {id: L4.6, lot: L4, title: Retrieval benchmark, status: planned, depends_on: [L4.5]}
-  - {id: L5.1, lot: L5, title: PairHypothesis model, status: planned, depends_on: [L4.6]}
+  - id: L4.6
+    lot: L4
+    title: Reconstruction Strategy Router
+    status: planned
+    objective: Select the cheapest deterministic FAST/STANDARD/ESCALATED route likely to reach the unchanged acceptance policy/evidence standard and record auditable reasons/escalation conditions.
+    depends_on: [L4.5]
+    read_before: [docs/12_ADAPTIVE_RECONSTRUCTION.md, docs/03_PIPELINE.md, docs/adr/0001-adaptive-routing-anchoring-temporal-world.md]
+    reuse: [COLMAP candidate/matching mechanisms, cached WRE evidence]
+    out_of_scope: [weakening acceptance policy, implementing heavy hard-case algorithms, accepting learned matches without geometry]
+    acceptance:
+      - Route selection is deterministic for identical inputs/configuration.
+      - FAST/STANDARD/ESCALATED change attempted work but not the final acceptance policy/evidence standard.
+      - Solver-specific intermediate thresholds may differ only when calibrated to equivalent semantics and documented.
+      - Decision reasons, relevant inputs/configuration and escalation outcome are auditable.
+      - Insufficient or contradictory evidence can remain unresolved.
+      - L13 remains the owner of expensive hard-case algorithms.
+    tests: [router decision unit tests, route-equivalence acceptance tests]
+  - {id: L4.7, lot: L4, title: Retrieval and strategy-router benchmark, status: planned, depends_on: [L4.6]}
+  - {id: L5.1, lot: L5, title: PairHypothesis model, status: planned, depends_on: [L4.7]}
   - {id: L5.2, lot: L5, title: Residual storage, status: planned, depends_on: [L5.1]}
   - {id: L5.3, lot: L5, title: Competing F E H models, status: planned, depends_on: [L5.2]}
   - {id: L5.4, lot: L5, title: DEGENSAC configuration, status: planned, depends_on: [L5.3]}
@@ -173,10 +191,39 @@ work_items:
   - {id: L9.2, lot: L9, title: GTSAM adapter, status: planned, depends_on: [L9.1]}
   - {id: L9.3, lot: L9, title: Fragment-to-fragment factors, status: planned, depends_on: [L9.2]}
   - {id: L9.4, lot: L9, title: GPS factors, status: planned, depends_on: [L9.3]}
-  - {id: L9.5, lot: L9, title: Loop-closure factors, status: planned, depends_on: [L9.4]}
-  - {id: L9.6, lot: L9, title: Incremental optimization, status: planned, depends_on: [L9.5]}
-  - {id: L9.7, lot: L9, title: Covariance propagation, status: planned, depends_on: [L9.6]}
-  - {id: L10.1, lot: L10, title: Competing placements, status: planned, depends_on: [L9.7]}
+  - id: L9.5
+    lot: L9
+    title: GCP and known-landmark factors
+    status: planned
+    objective: Represent surveyed/known world-point anchors as provenance-bearing uncertain factors without destructively rewriting local fragment geometry.
+    depends_on: [L9.4]
+    read_before: [docs/12_ADAPTIVE_RECONSTRUCTION.md, docs/02_ARCHITECTURE.md, docs/adr/0001-adaptive-routing-anchoring-temporal-world.md]
+    reuse: [GTSAM, OpenSfM GCP/checkpoint patterns, PROJ, GeographicLib]
+    out_of_scope: [assuming anchors are infallible, hidden fragment merges]
+    acceptance:
+      - GCP/known-landmark constraints preserve source, world-frame/CRS identity and uncertainty where available.
+      - Optimization residuals remain inspectable.
+      - Conflicting anchors can remain contradictory/unresolved rather than being silently averaged.
+    tests: [known-control-point synthetic factor tests, conflicting-anchor tests]
+  - id: L9.6
+    lot: L9
+    title: Reference-fragment and absolute anchor factors
+    status: planned
+    objective: Allow an already-georeferenced fragment/world reference to anchor a locally reconstructed fragment through explicit validated constraints.
+    depends_on: [L9.5]
+    read_before: [docs/12_ADAPTIVE_RECONSTRUCTION.md, docs/02_ARCHITECTURE.md]
+    reuse: [GTSAM, validated fragment transforms]
+    out_of_scope: [destructive coordinate rewrite, implicit merge]
+    acceptance:
+      - A no-GPS fragment can receive world placement from later independent anchor evidence.
+      - Relative placement evidence remains distinct from absolute anchor evidence.
+      - The transform model used for anchoring is explicit; unresolved local scale may require a validated Sim3 rather than a hidden rigid transform.
+      - Anchor transform/scale uncertainty, provenance and residuals are retained.
+    tests: [late-anchor synthetic test, conflicting-reference-anchor test]
+  - {id: L9.7, lot: L9, title: Loop-closure factors, status: planned, depends_on: [L9.6]}
+  - {id: L9.8, lot: L9, title: Incremental optimization, status: planned, depends_on: [L9.7]}
+  - {id: L9.9, lot: L9, title: Covariance propagation, status: planned, depends_on: [L9.8]}
+  - {id: L10.1, lot: L10, title: Competing placements, status: planned, depends_on: [L9.9]}
   - {id: L10.2, lot: L10, title: Observation covariance, status: planned, depends_on: [L10.1]}
   - {id: L10.3, lot: L10, title: Camera-pose covariance, status: planned, depends_on: [L10.2]}
   - {id: L10.4, lot: L10, title: Merge covariance, status: planned, depends_on: [L10.3]}
@@ -209,18 +256,123 @@ work_items:
   - {id: L14.4, lot: L14, title: Dense fusion, status: planned, depends_on: [L14.3]}
   - {id: L14.5, lot: L14, title: Mesh, status: planned, depends_on: [L14.4]}
   - {id: L14.6, lot: L14, title: Texture, status: planned, depends_on: [L14.5]}
-  - {id: L15.1, lot: L15, title: Known-camera synthetic test, status: planned, depends_on: [L14.6]}
-  - {id: L15.2, lot: L15, title: Known-geometry fixture, status: planned, depends_on: [L15.1]}
-  - {id: L15.3, lot: L15, title: GPS holdout, status: planned, depends_on: [L15.2]}
-  - {id: L15.4, lot: L15, title: Camera-pose holdout, status: planned, depends_on: [L15.3]}
-  - {id: L15.5, lot: L15, title: Day-night fixture, status: planned, depends_on: [L15.4]}
-  - {id: L15.6, lot: L15, title: Repeated-facade fixture, status: planned, depends_on: [L15.5]}
-  - {id: L15.7, lot: L15, title: Historical-change fixture, status: planned, depends_on: [L15.6]}
-  - {id: L15.8, lot: L15, title: Video fixture, status: planned, depends_on: [L15.7]}
-  - {id: L15.9, lot: L15, title: Regression benchmark, status: planned, depends_on: [L15.8]}
-  - {id: L15.10, lot: L15, title: Performance benchmark, status: planned, depends_on: [L15.9]}
-  - {id: L16.1, lot: L16, title: Observation export contract, status: planned, depends_on: [L15.10]}
-  - {id: L16.2, lot: L16, title: Spatial evidence contract, status: planned, depends_on: [L16.1]}
-  - {id: L16.3, lot: L16, title: Estimated geometry contract, status: planned, depends_on: [L16.2]}
-  - {id: L16.4, lot: L16, title: Provenance contract, status: planned, depends_on: [L16.3]}
-  - {id: L16.5, lot: L16, title: Temporal geometry contract, status: planned, depends_on: [L16.4]}
+  - id: L15.1
+    lot: L15
+    title: Temporal evidence and epoch model
+    status: planned
+    objective: Define solver-independent temporal evidence/epoch contracts that preserve uncertain dates and source semantics without equating publication time with capture time.
+    depends_on: [L14.6]
+    read_before: [docs/13_TEMPORAL_WORLD.md, docs/04_DATA_MODEL.md, docs/adr/0001-adaptive-routing-anchoring-temporal-world.md]
+    reuse: []
+    out_of_scope: [change detection, exact-date guessing]
+    acceptance:
+      - Epoch membership retains temporal evidence/provenance and can represent uncertain intervals.
+      - Publication/upload time remains distinct from capture time.
+      - No geometry is overwritten by epoch assignment.
+    tests: [temporal-evidence and uncertain-epoch unit tests]
+  - {id: L15.2, lot: L15, title: Observation-to-epoch association, status: planned, depends_on: [L15.1]}
+  - id: L15.3
+    lot: L15
+    title: Cross-epoch geometry alignment
+    status: planned
+    objective: Align comparable epoch geometry with an explicit transform model and uncertainty before any metric physical-change interpretation.
+    depends_on: [L15.2]
+    read_before: [docs/13_TEMPORAL_WORLD.md, docs/12_ADAPTIVE_RECONSTRUCTION.md]
+    reuse: [existing validated fragment transforms, Open3D/TEASER++ where appropriate]
+    out_of_scope: [treating unresolved scale as metric, using changed regions as unquestioned alignment control]
+    acceptance:
+      - Alignment records source/target frames, transform model and uncertainty.
+      - Sim3 versus rigid/metric alignment is explicit and justified by available scale evidence.
+      - Metric change measurement is blocked when scale/frame uncertainty is insufficiently resolved.
+      - Stable control geometry can be distinguished from candidate changed regions during alignment.
+    tests: [known-transform cross-epoch test, unresolved-scale rejection test, misregistration-change guard test]
+  - id: L15.4
+    lot: L15
+    title: py4dgeo adapter
+    status: planned
+    objective: Reuse py4dgeo multi-epoch point-cloud change algorithms behind a provenance-preserving adapter rather than implementing foundational change measurement in WRE.
+    depends_on: [L15.3]
+    read_before: [docs/13_TEMPORAL_WORLD.md, docs/05_REUSE.md, registry/dependencies.yaml]
+    reuse: [py4dgeo]
+    out_of_scope: [custom M3C2 implementation, semantic state acceptance]
+    acceptance:
+      - Exact py4dgeo version/license/integration mode are reviewed and pinned when integrated.
+      - Measurements retain input epoch/geometry and producer/configuration provenance.
+      - Adapter outputs remain derived evidence rather than accepted GeometryState.
+    tests: [known-change adapter fixture, unchanged-geometry fixture]
+  - {id: L15.5, lot: L15, title: 3D change measurement ingestion, status: planned, depends_on: [L15.4]}
+  - id: L15.6
+    lot: L15
+    title: GeometryChangeHypothesis model
+    status: planned
+    objective: Represent competing evidence-backed physical-change hypotheses without treating every cross-epoch disagreement as an outlier.
+    depends_on: [L15.5]
+    read_before: [docs/13_TEMPORAL_WORLD.md, docs/04_DATA_MODEL.md]
+    reuse: []
+    out_of_scope: [destructive state replacement]
+    acceptance:
+      - Hypotheses retain compared geometry/epochs, measurements, temporal interval, residuals/uncertainty and provenance.
+      - Candidate/rejected/unresolved/accepted outcomes remain auditable.
+    tests: [change-hypothesis invariant tests]
+  - {id: L15.7, lot: L15, title: Change-point inference, status: planned, depends_on: [L15.6]}
+  - id: L15.8
+    lot: L15
+    title: GeometryState validity intervals
+    status: planned
+    objective: Represent time-valid estimated geometry states without overwriting previously supported historical geometry.
+    depends_on: [L15.7]
+    read_before: [docs/13_TEMPORAL_WORLD.md, docs/04_DATA_MODEL.md]
+    reuse: []
+    out_of_scope: [continuous dynamic-object reconstruction]
+    acceptance:
+      - States can express validity intervals and uncertain boundaries.
+      - State geometry/support/provenance remain traceable.
+      - Multiple historical states can coexist for one spatial lineage.
+    tests: [state-validity and non-overwrite tests]
+  - {id: L15.9, lot: L15, title: Contradictory temporal evidence handling, status: planned, depends_on: [L15.8]}
+  - {id: L15.10, lot: L15, title: Temporal-state validation, status: planned, depends_on: [L15.9]}
+  - {id: L15.11, lot: L15, title: Reversible temporal transitions, status: planned, depends_on: [L15.10]}
+  - {id: L16.1, lot: L16, title: Known-camera synthetic test, status: planned, depends_on: [L15.11]}
+  - {id: L16.2, lot: L16, title: Known-geometry fixture, status: planned, depends_on: [L16.1]}
+  - id: L16.3
+    lot: L16
+    title: Absolute-anchor holdout (GPS/GCP/reference fragment)
+    status: planned
+    objective: Validate absolute-world anchoring independently of the observations/control evidence used to optimize the placement.
+    depends_on: [L16.2]
+    read_before: [docs/12_ADAPTIVE_RECONSTRUCTION.md, docs/06_TESTING.md, docs/09_FIXTURES.md]
+    reuse: [GPS/GCP/reference-fragment factors implemented by L9]
+    out_of_scope: [using optimization inputs as their own holdout, forcing a world placement when anchors conflict]
+    acceptance:
+      - GPS anchor accuracy can be evaluated against independent holdout evidence.
+      - A no-GPS fragment can be anchored and independently checked through GCP/known-landmark or georeferenced-reference evidence.
+      - Scale resolution is validated where the local reconstruction began in an arbitrary similarity frame.
+      - Conflicting/withheld anchors expose residual/error or unresolved placement rather than false certainty.
+    tests: [GPS holdout fixture, GCP holdout fixture, late reference-fragment anchor fixture, conflicting-anchor fixture]
+  - {id: L16.4, lot: L16, title: Camera-pose holdout, status: planned, depends_on: [L16.3]}
+  - {id: L16.5, lot: L16, title: Day-night fixture, status: planned, depends_on: [L16.4]}
+  - {id: L16.6, lot: L16, title: Repeated-facade fixture, status: planned, depends_on: [L16.5]}
+  - id: L16.7
+    lot: L16
+    title: Historical-change temporal-engine fixture
+    status: planned
+    objective: Validate that L15 distinguishes supported physical change from unchanged geometry, misregistration, unresolved scale and contradictory dating.
+    depends_on: [L16.6]
+    read_before: [docs/13_TEMPORAL_WORLD.md, docs/06_TESTING.md, docs/09_FIXTURES.md]
+    reuse: [L15 temporal engine]
+    out_of_scope: [accepting change merely because two meshes differ]
+    acceptance:
+      - Unchanged cross-epoch geometry does not produce a false accepted change.
+      - Known synthetic/controlled change is recovered within declared spatial/temporal tolerance.
+      - Misregistration or unresolved metric scale blocks/invalidates physical-change acceptance.
+      - Uncertain dates produce interval-valued timing rather than invented exact timestamps.
+      - Contradictory dates/alignments can remain unresolved.
+    tests: [unchanged epoch fixture, true-change fixture, misregistration fixture, unresolved-scale fixture, contradictory-date fixture]
+  - {id: L16.8, lot: L16, title: Video fixture, status: planned, depends_on: [L16.7]}
+  - {id: L16.9, lot: L16, title: Regression benchmark, status: planned, depends_on: [L16.8]}
+  - {id: L16.10, lot: L16, title: Performance benchmark, status: planned, depends_on: [L16.9]}
+  - {id: L17.1, lot: L17, title: Observation export contract, status: planned, depends_on: [L16.10]}
+  - {id: L17.2, lot: L17, title: Spatial evidence contract, status: planned, depends_on: [L17.1]}
+  - {id: L17.3, lot: L17, title: Estimated geometry contract, status: planned, depends_on: [L17.2]}
+  - {id: L17.4, lot: L17, title: Provenance contract, status: planned, depends_on: [L17.3]}
+  - {id: L17.5, lot: L17, title: Temporal geometry contract, status: planned, depends_on: [L17.4]}

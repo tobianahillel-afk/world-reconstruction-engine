@@ -34,6 +34,7 @@ lot_reviews:
   L14: {status: pending, reviewed_at: null, evidence: []}
   L15: {status: pending, reviewed_at: null, evidence: []}
   L16: {status: pending, reviewed_at: null, evidence: []}
+  L17: {status: pending, reviewed_at: null, evidence: []}
 milestone_reviews:
   M0:
     status: passed

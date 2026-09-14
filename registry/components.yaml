@@ -78,6 +78,11 @@ components:
     implementation: []
     tests: []
     status: planned
+  strategy_routing:
+    owner_lot: L4
+    implementation: []
+    tests: []
+    status: planned
   evidence_geometry:
     owner_lot: L5
     implementation: []
@@ -99,6 +104,11 @@ components:
     tests: []
     status: planned
   world_graph:
+    owner_lot: L9
+    implementation: []
+    tests: []
+    status: planned
+  absolute_anchoring:
     owner_lot: L9
     implementation: []
     tests: []
@@ -128,13 +138,18 @@ components:
     implementation: []
     tests: []
     status: planned
-  validation_program:
+  temporal_world:
     owner_lot: L15
     implementation: []
     tests: []
     status: planned
-  monde_boundary:
+  validation_program:
     owner_lot: L16
+    implementation: []
+    tests: []
+    status: planned
+  monde_boundary:
+    owner_lot: L17
     implementation: []
     tests: []
     status: planned

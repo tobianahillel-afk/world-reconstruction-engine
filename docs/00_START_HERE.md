@@ -20,8 +20,8 @@ If repository state and conversation history disagree, the repository is authori
 
 ## Product in one paragraph
 
-WRE reconstructs local spatial fragments from media, incrementally places new observations into existing fragments when geometric evidence supports it, keeps disconnected/unknown fragments when it does not, and later merges fragments when independent evidence creates a reliable bridge. The engine is intended to remain usable independently and expose clean evidence/geometry contracts for a future MONDE integration.
+WRE reconstructs local spatial fragments from media, incrementally places new observations into existing fragments when geometric evidence supports it, keeps disconnected/unknown fragments when it does not, and later merges or absolutely anchors fragments when independent evidence creates a reliable bridge. A valid fragment may remain in a local frame until GPS, ground-control points, known landmarks or a georeferenced reference fragment support world placement. When independently supported geometry differs across time, WRE preserves time-valid geometry states/change hypotheses instead of overwriting history or treating every disagreement as an outlier. The engine remains usable independently and exposes clean observation/evidence/geometry/temporal contracts for future MONDE integration.
 
 ## Development principle
 
-Adapters and orchestration are WRE's default. Proven external solvers remain behind explicit interfaces. WRE's novel value is the evidence graph, uncertainty/hypothesis handling, fragment lifecycle, validation, incremental world graph and robust composition of existing geometry engines.
+Adapters and orchestration are WRE's default. Proven external solvers remain behind explicit interfaces. WRE's novel value is the evidence graph, deterministic compute routing, uncertainty/hypothesis handling, fragment lifecycle, absolute-anchor constraints, temporal state/history semantics, validation, incremental world graph and robust composition of existing geometry engines.

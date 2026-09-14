@@ -59,6 +59,17 @@ The current connector does not expose a safe ruleset/branch-protection write act
 
 L0.4 does not choose WRE's final project license and does not promote any native reconstruction candidate to a mandatory dependency. Every future mandatory dependency still requires the license review recorded in `registry/dependencies.yaml`.
 
+A top-level repository license is not sufficient evidence for every artifact shipped or consumed by a dependency. Integration review must separately consider, when applicable:
+
+- library/source-code license;
+- bundled native components or vendored files with distinct notices;
+- model/checkpoint/weight licenses;
+- test/example datasets and their redistribution terms;
+- subprocess/container distribution implications;
+- attribution/NOTICE requirements.
+
+Candidate status means "worth evaluating", not "cleared for redistribution". Any selected model, checkpoint, test dataset or bundled subcomponent must be reviewed before becoming part of a required WRE distribution.
+
 ## Response to findings
 
 - Do not weaken a security gate merely to make a PR green.

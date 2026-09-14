@@ -19,12 +19,18 @@ This repository is designed to be resumed by an AI coding agent with no conversa
 ## Core rules
 
 - **Reuse before implementation.** Do not reimplement a maintained, suitable algorithm merely to own the code.
-- Do not implement custom SIFT, SfM, bundle adjustment, RANSAC, ICP, pose-graph optimization or equivalent foundational solvers unless an accepted ADR explicitly authorizes it.
+- Do not implement custom SIFT, SfM, bundle adjustment, RANSAC, ICP, pose-graph optimization, M3C2/change measurement or equivalent foundational solvers unless an accepted ADR explicitly authorizes it.
 - Learned methods may propose candidates only when explicitly allowed by architecture; authoritative acceptance must remain backed by measurable geometric evidence.
 - Raw observations, derived evidence and estimated geometry are different data classes and must not be silently conflated.
 - Never force a placement or merge when evidence is insufficient. `UNKNOWN` / `UNRESOLVED` is valid.
 - Fragment and entity merges must be reversible and retain provenance.
 - Preserve competing hypotheses when architecture requires them; do not silently delete alternatives.
+- **Adaptive routing changes cost, not truth criteria.** A FAST route may perform less work than STANDARD/ESCALATED, but it must satisfy the same acceptance/evidence requirements before WRE accepts a result.
+- Routing decisions must be deterministic/auditable enough to explain route, inputs, configuration/thresholds, reasons and escalation outcome.
+- Absolute anchors (GPS, GCPs, known landmarks, reference fragments) enter as provenance-bearing constraints with uncertainty; they do not destructively rewrite local geometry or bypass residual checks.
+- Historical geometric disagreement is not automatically an outlier. When independently supported across time, preserve time-valid geometry states/change hypotheses rather than overwriting earlier geometry.
+- Temporal transitions/state changes must retain source evidence and remain reversible/auditable.
+- Photorealistic learned/neural rendering products may be used for visualization only when architecture permits them; they are not canonical WRE world geometry.
 - A completed work item must have objective acceptance evidence and relevant tests.
 - One coherent work item should normally equal one PR.
 - Avoid unrelated refactors inside feature PRs.
@@ -49,6 +55,8 @@ A lot cannot be marked complete until its lot review passes. A milestone cannot 
 - Geometry comparisons use explicit tolerances; never rely on accidental exact floating-point equality.
 - Performance checks are informative by default unless a stable benchmark gate explicitly says otherwise.
 - Heavy reconstruction/GPU tests belong outside the fast PR lane unless the active item specifically requires them.
+- Router benchmarks must test quality/non-regression as well as compute saved; faster routing may not hide increased false acceptance.
+- Temporal-change tests must distinguish true physical change from registration error, occlusion and contradictory dating.
 - Run `uv run python scripts/validate_repo.py` before merge whenever repository state, roadmap, components, reviews or agent instructions change.
 
 ## Git discipline

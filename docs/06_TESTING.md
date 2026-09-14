@@ -16,7 +16,7 @@ Target: seconds to a few minutes. Intended checks once L0 tooling is installed:
 
 ### Full/regression lane
 
-Runs manually, on schedule and at milestone-sensitive changes. It will eventually include real COLMAP/LIMAP fixtures, fragment merge tests, geometry regression datasets and performance reports.
+Runs manually, on schedule and at milestone-sensitive changes. It will eventually include real COLMAP/LIMAP fixtures, fragment merge tests, absolute-anchor/GCP tests, route-equivalence benchmarks, temporal/change fixtures, geometry regression datasets and performance reports.
 
 ## Fixture harness
 
@@ -29,16 +29,19 @@ Tiny deterministic synthetic fixtures belong in the fast lane. Heavy captured/re
 
 ## Foundational geometry fixtures
 
-Planned early fixtures:
+Planned fixtures include:
 
-1. one small place with known/consistent reconstruction
-2. two unrelated places -> exactly two fragments, no merge
-3. two initially disconnected sets plus bridge observations -> validated merge
-4. deliberately similar but distinct facades -> false merge rejection
-5. known camera/geometry synthetic fixture for numeric error measurement
+1. one small place with known/consistent reconstruction;
+2. two unrelated places -> exactly two fragments, no merge;
+3. two initially disconnected sets plus bridge observations -> validated merge;
+4. deliberately similar but distinct facades -> false merge rejection;
+5. known camera/geometry synthetic fixture for numeric error measurement;
+6. a locally valid no-GPS fragment that receives correct absolute placement from later GCP/reference evidence, plus a conflicting-anchor case;
+7. route-equivalence cases proving FAST/STANDARD/ESCALATED do not weaken acceptance policy;
+8. multi-epoch unchanged, true-change, misregistration and contradictory-date cases for the temporal engine.
 
 ## Review gates
 
 Every PR receives a focused review. Every lot receives a lot review before advancing. Every milestone receives an end-to-end review.
 
-Correctness regressions may block merging. Performance regressions are initially reported rather than blocked unless a stable benchmark threshold is explicitly adopted.
+Correctness regressions may block merging. Performance regressions are initially reported rather than blocked unless a stable benchmark threshold is explicitly adopted. Compute savings from adaptive routing never compensate for a higher false-acceptance rate, and temporal-change acceptance must be tested against registration error and uncertainty.
