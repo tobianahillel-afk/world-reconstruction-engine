@@ -19,10 +19,17 @@ from wre.domain.observations import (
     SourceRef,
     VideoFrameObservation,
 )
+from wre.domain.runs import (
+    DerivedArtifactProvenance,
+    ProducerRef,
+    ReconstructionRun,
+    ReconstructionRunId,
+)
 
 __all__ = [
     "Camera",
     "CameraId",
+    "DerivedArtifactProvenance",
     "ImageDimensions",
     "ImageObservation",
     "LocalFrameId",
@@ -31,7 +38,10 @@ __all__ = [
     "ObservationId",
     "ObservationKind",
     "ObservationMetadata",
+    "ProducerRef",
     "RawMetadataEntry",
+    "ReconstructionRun",
+    "ReconstructionRunId",
     "Sha256Digest",
     "SourceId",
     "SourceRef",
