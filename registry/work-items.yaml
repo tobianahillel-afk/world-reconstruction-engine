@@ -59,7 +59,7 @@ work_items:
   - id: L0.3
     lot: L0
     title: Repository state validator
-    status: ready
+    status: done
     objective: Automatically detect inconsistent work-item, state, component and review metadata and validate the existing PR evidence contract.
     depends_on: [L0.2]
     read_before: [AGENTS.md, PROJECT_STATE.yaml, registry/work-items.yaml, .github/PULL_REQUEST_TEMPLATE.md]
@@ -74,7 +74,7 @@ work_items:
   - id: L0.4
     lot: L0
     title: Dependency and supply-chain baseline
-    status: planned
+    status: ready
     objective: Pin development dependencies and configure low-friction dependency/security automation where repository permissions allow it.
     depends_on: [L0.3]
     read_before: [docs/05_REUSE.md, registry/dependencies.yaml]
