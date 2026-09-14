@@ -77,21 +77,51 @@ L2.3 does not promote metadata text into semantic facts. In particular:
 - image dimensions are not populated by this EXIF stage;
 - an image with no standard EXIF produces an `ObservationMetadata` record with an empty raw-entry tuple.
 
-This matters because raw observations and their persistence identity are immutable. A later interpretation stage must not rewrite an observed record merely because new semantics were derived from its metadata. L2.4 therefore consumes L2.3 raw entries and owns GPS/time validation and interpretation while preserving ambiguity and source evidence.
+This matters because raw observations and their persistence identity are immutable. A later interpretation stage must not rewrite an observed record merely because new semantics were derived from its metadata.
+
+## L2.4 deterministic GPS and capture-time interpretation
+
+L2.4 consumes the immutable raw EXIF entries from L2.3 and creates a separate `ObservationMetadataInterpretation` record. It does **not** mutate `ObservationMetadata` or populate `ImageObservation.captured_at` retroactively.
+
+GPS interpretation has four explicit states:
+
+- `absent` — no relevant EXIF GPS evidence exists;
+- `incomplete` — some required coordinate evidence exists but the four latitude/longitude DMS + reference tags are not all present;
+- `invalid` — relevant evidence exists but is contradictory, duplicated, malformed or out of range;
+- `resolved` — complete validated DMS/reference evidence deterministically yields decimal latitude/longitude.
+
+DMS components are parsed with exact rational arithmetic using `Fraction` before the final float conversion. N/S/E/W references control signs explicitly. Incomplete and invalid states never expose partial usable coordinates. `GPSMapDatum`, when present, is retained as evidence; absence of a datum is not silently replaced by an assumed CRS.
+
+Capture-time interpretation likewise has explicit states:
+
+- `absent` — no targeted capture-time evidence exists;
+- `local_ambiguous` — `EXIF DateTimeOriginal` is syntactically valid but has no explicit offset, so no global instant is asserted;
+- `invalid` — the source date/offset pair is malformed, duplicated or internally inconsistent;
+- `resolved` — `DateTimeOriginal` plus a valid `OffsetTimeOriginal` yields a timezone-aware instant normalized to UTC.
+
+A local time without an offset remains local evidence. WRE does not guess a timezone from GPS, machine locale, source website or current timezone during L2.4.
+
+Duplicate targeted GPS/time keys are treated as invalid evidence rather than last-write-wins. Each interpretation records the EXIF keys that support the result and, for incomplete/invalid states, an explicit issue string.
+
+### Interpretation persistence
+
+`MetadataInterpreter` is storage-agnostic and writes through `MetadataInterpretationSink`. `SQLiteLocalStore` stores the derived interpretation as a separate immutable `metadata_interpretation` record in the existing generic table, so no SQLite schema migration is required.
+
+Repeated storage of the same canonical interpretation is idempotent. Reusing the same observation identity for a different interpretation is rejected as a persistence conflict instead of silently rewriting previously derived evidence.
 
 ## Identity and retry behavior
 
 The image-ingestion path inherits L1 persistence semantics:
 
 1. a new observation ID and payload are stored atomically;
-2. repeating the exact same observation or metadata payload is idempotent;
+2. repeating the exact same observation, metadata or interpretation payload is idempotent;
 3. reusing a stable record identity with different content raises the persistence conflict instead of silently replacing previously recorded evidence.
 
-Hashing, duplicate reporting and EXIF extraction do not weaken or reinterpret those rules.
+Hashing, duplicate reporting, EXIF extraction and semantic interpretation do not weaken or reinterpret those rules.
 
 ## Explicitly deferred work
 
-Through L2.3, media ingestion does **not** implement:
+Through L2.4, media ingestion does **not** implement:
 
 - media discovery or directory crawling;
 - byte copying into a managed media object store;
@@ -99,11 +129,11 @@ Through L2.3, media ingestion does **not** implement:
 - MIME-type inference;
 - XMP parsing;
 - MakerNote interpretation;
-- GPS coordinate normalization or georeferencing;
-- conversion of ambiguous local EXIF timestamps into instants;
+- automatic CRS/georeferencing policy beyond deterministic EXIF coordinate interpretation;
+- guessing a timezone for ambiguous local timestamps;
 - camera identity resolution;
 - video ingestion or keyframe extraction;
 - feature extraction, matching or reconstruction;
 - automatic merge/deletion of observations merely because bytes are identical.
 
-Those behaviors remain in their owning work items. L2.4 next owns deterministic GPS/time extraction from the raw metadata preserved here; video ingestion remains L2.5.
+Those behaviors remain in their owning work items. L2.5 next owns video ingestion; deterministic keyframe extraction remains L2.6.
