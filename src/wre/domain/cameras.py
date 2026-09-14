@@ -52,7 +52,11 @@ class ImageDimensions:
     height_px: int
 
     def __post_init__(self) -> None:
-        if isinstance(self.width_px, bool) or not isinstance(self.width_px, int) or self.width_px <= 0:
+        if (
+            isinstance(self.width_px, bool)
+            or not isinstance(self.width_px, int)
+            or self.width_px <= 0
+        ):
             raise ValueError("width_px must be a positive integer")
         if (
             isinstance(self.height_px, bool)
