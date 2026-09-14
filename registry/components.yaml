@@ -39,9 +39,11 @@ components:
       - src/wre/domain/__init__.py
       - src/wre/domain/observations.py
       - src/wre/domain/cameras.py
+      - src/wre/domain/fragments.py
     tests:
       - tests/test_observations.py
       - tests/test_cameras.py
+      - tests/test_fragments.py
     status: implementing
   media_ingestion:
     owner_lot: L2
