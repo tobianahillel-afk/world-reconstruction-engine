@@ -20,8 +20,8 @@ from wre.ingestion.images import ImageIngestor, ImageIngestRequest, ObservationS
 
 __all__ = [
     "DEFAULT_HASH_CHUNK_SIZE",
-    "DuplicateObservationLookup",
     "EXIF_NAMESPACE",
+    "DuplicateObservationLookup",
     "ExifMetadataIngestRequest",
     "ExifMetadataIngestor",
     "FileContentHash",
