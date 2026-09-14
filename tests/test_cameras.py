@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import FrozenInstanceError
-from typing import cast
+from typing import Any, cast
 
 import pytest
 
@@ -108,5 +108,6 @@ def test_observation_metadata_entries_are_immutable() -> None:
         )
 
     metadata = ObservationMetadata(observation_id=ObservationId("obs:image:frozen"))
+    unsafe_metadata = cast(Any, metadata)
     with pytest.raises(FrozenInstanceError):
-        setattr(metadata, "camera_id", CameraId("camera:other"))
+        unsafe_metadata.camera_id = CameraId("camera:other")
