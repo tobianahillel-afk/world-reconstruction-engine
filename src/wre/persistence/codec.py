@@ -331,9 +331,7 @@ def decode_metadata_interpretation(
             raw_datetime=_optional_string(
                 capture_data.get("raw_datetime"), "capture_time.raw_datetime"
             ),
-            raw_offset=_optional_string(
-                capture_data.get("raw_offset"), "capture_time.raw_offset"
-            ),
+            raw_offset=_optional_string(capture_data.get("raw_offset"), "capture_time.raw_offset"),
             instant=(
                 _decode_datetime(instant_value, "capture_time.instant")
                 if instant_value is not None
