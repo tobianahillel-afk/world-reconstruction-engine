@@ -4,16 +4,16 @@ project_name: World Reconstruction Engine
 phase: implementation
 milestone: M1
 lot: L1
-active_work_item: L1.2
+active_work_item: L1.3
 status: ready
-last_completed: [L0.1, L0.2, L0.3, L0.4, L0.5, L0.R, L1.1]
-last_merged_pr: 7
+last_completed: [L0.1, L0.2, L0.3, L0.4, L0.5, L0.R, L1.1, L1.2]
+last_merged_pr: 8
 current_goal: >-
-  Define camera identity and metadata domain models without coupling the core to
-  EXIF parsing, ingestion IO or solver-specific camera representations.
+  Define the solver-independent SpatialFragment domain model and its local-frame
+  membership semantics without implementing reconstruction, persistence or merging.
 next_action: >-
-  After PR #7 merges, implement L1.2 from registry/work-items.yaml in a new
-  short-lived branch without starting SpatialFragment or persistence work.
+  After PR #8 merges, implement L1.3 from registry/work-items.yaml in a new
+  short-lived branch without starting ReconstructionRun or persistence work.
 blockers: []
 reviews:
   lot_reviews:
