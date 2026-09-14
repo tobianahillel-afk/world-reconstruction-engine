@@ -121,8 +121,8 @@ work_items:
   - {id: L1.4, lot: L1, title: ReconstructionRun and provenance, status: done, depends_on: [L1.3]}
   - {id: L1.5, lot: L1, title: Local persistence layer, status: done, depends_on: [L1.4]}
   - {id: L2.1, lot: L2, title: Image ingestion, status: done, depends_on: [L1.5]}
-  - {id: L2.2, lot: L2, title: Hashing and duplicate detection, status: ready, depends_on: [L2.1]}
-  - {id: L2.3, lot: L2, title: EXIF metadata, status: planned, depends_on: [L2.2]}
+  - {id: L2.2, lot: L2, title: Hashing and duplicate detection, status: done, depends_on: [L2.1]}
+  - {id: L2.3, lot: L2, title: EXIF metadata, status: ready, depends_on: [L2.2]}
   - {id: L2.4, lot: L2, title: GPS and time extraction, status: planned, depends_on: [L2.3]}
   - {id: L2.5, lot: L2, title: Video ingestion, status: planned, depends_on: [L2.4]}
   - {id: L2.6, lot: L2, title: Deterministic keyframe extraction, status: planned, depends_on: [L2.5]}
