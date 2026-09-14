@@ -10,7 +10,7 @@ WRE must ingest heterogeneous photos and videos, including unordered Internet im
 
 Three gaps need to be explicit before implementation continues far into reconstruction:
 
-1. easy observations should not pay the cost of every available solver path when a cheaper path can reach the same evidence threshold;
+1. easy observations should not pay the cost of every available solver path when a cheaper path can reach the same evidence standard;
 2. reconstructions without native GPS need a first-class way to become absolutely anchored later through ground-control points, known landmarks or already-georeferenced fragments;
 3. historical imagery needs more than a validation fixture: WRE needs first-class time-valid geometry states and change hypotheses so real physical change is not misclassified as bad evidence.
 
@@ -28,7 +28,7 @@ The exact names remain an implementation detail until L4.6, but the semantics ar
 
 ### Invariant
 
-A cheaper route may reduce the **number or cost of operations**, but it must never reduce the evidence/acceptance threshold required to accept a placement, correspondence, reconstruction or merge.
+A cheaper route may reduce the **number or cost of operations**, but it must never weaken the acceptance policy or evidence standard required to accept a placement, correspondence, reconstruction or merge. Solver-specific intermediate thresholds may differ when they are calibrated to equivalent semantics and remain documented; route selection itself cannot relax the final proof requirement.
 
 Routing decisions must be deterministic and auditable. Persist or expose enough information to explain:
 
@@ -53,7 +53,7 @@ In addition to GPS factors, L9 will explicitly support:
 
 This allows a collection reconstructed entirely without GPS to remain locally valid and later acquire absolute world placement when independent evidence becomes available.
 
-Absolute anchoring must preserve provenance, uncertainty and residuals. An anchor is evidence, not unquestionable truth.
+Absolute anchoring must preserve provenance, uncertainty and residuals. An anchor is evidence, not unquestionable truth. When a local fragment has unresolved scale, an anchoring relation may need a validated similarity transform (for example Sim(3)); if metric scale is already independently known, a rigid/metric transform can be used. The transform model and scale uncertainty must remain explicit.
 
 ## Decision 3 — Add a Temporal / 4D World lot
 
@@ -70,6 +70,8 @@ The temporal layer will distinguish:
 - reversible state transitions.
 
 Historical disagreement is not automatically an outlier. If independent observations support incompatible geometry at different times, WRE should be able to represent multiple geometry states with validity intervals instead of overwriting history.
+
+Metric change measurement requires compatible coordinate frames and sufficiently resolved scale. Alignment model/uncertainty therefore belongs to temporal evidence and can block a change claim when registration or scale uncertainty is too large.
 
 ## Decision 4 — Reuse py4dgeo for 3D/4D change measurement
 
