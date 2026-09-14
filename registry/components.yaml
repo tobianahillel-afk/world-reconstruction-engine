@@ -1,0 +1,62 @@
+schema_version: 1
+components:
+  agent_resume_protocol:
+    owner_lot: L0
+    implementation: [AGENTS.md, docs/00_START_HERE.md, PROJECT_STATE.yaml]
+    tests: []
+    status: implementing
+  development_quality_gates:
+    owner_lot: L0
+    implementation: []
+    tests: []
+    status: planned
+  observation_core:
+    owner_lot: L1
+    implementation: []
+    tests: []
+    status: planned
+  media_ingestion:
+    owner_lot: L2
+    implementation: []
+    tests: []
+    status: planned
+  colmap_reconstruction:
+    owner_lot: L3
+    implementation: []
+    tests: []
+    status: planned
+  candidate_retrieval:
+    owner_lot: L4
+    implementation: []
+    tests: []
+    status: planned
+  evidence_geometry:
+    owner_lot: L5
+    implementation: []
+    tests: []
+    status: planned
+  fragment_engine:
+    owner_lot: L6
+    implementation: []
+    tests: []
+    status: planned
+  structural_geometry:
+    owner_lot: L7
+    implementation: []
+    tests: []
+    status: planned
+  fragment_merging:
+    owner_lot: L8
+    implementation: []
+    tests: []
+    status: planned
+  world_graph:
+    owner_lot: L9
+    implementation: []
+    tests: []
+    status: planned
+  uncertainty_hypotheses:
+    owner_lot: L10
+    implementation: []
+    tests: []
+    status: planned

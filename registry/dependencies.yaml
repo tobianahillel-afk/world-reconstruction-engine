@@ -1,0 +1,67 @@
+schema_version: 1
+project_license: undecided
+policy:
+  reuse_before_implement: true
+  custom_foundational_algorithm_requires_adr: true
+  mandatory_dependency_requires_license_review: true
+dependencies:
+  colmap:
+    status: candidate_core
+    role: [features, matching, geometry, sfm, bundle_adjustment, mvs]
+    integration: adapter
+    version_policy: pin_when_integrated
+    license_review: pending
+  limap:
+    status: candidate_core
+    role: [lines, structural_sfm, planes, vanishing_points, wireframe]
+    integration: adapter
+    version_policy: pin_when_integrated
+    license_review: pending
+  gtsam:
+    status: candidate_core
+    role: [factor_graph, incremental_optimization]
+    integration: adapter
+    version_policy: pin_when_integrated
+    license_review: pending
+  teaserpp:
+    status: candidate_optional
+    role: [robust_fragment_registration]
+    integration: adapter
+    version_policy: pin_when_integrated
+    license_review: pending
+  open3d:
+    status: candidate_optional
+    role: [icp, gicp, geometry_refinement]
+    integration: adapter
+    version_policy: pin_when_integrated
+    license_review: pending
+  openmvg:
+    status: candidate_validation
+    role: [ac_ransac, global_geometry_validation]
+    integration: optional_adapter
+    version_policy: pin_when_integrated
+    license_review: pending
+  alicevision:
+    status: candidate_validation
+    role: [matching_validation, alternative_reconstruction]
+    integration: optional_adapter
+    version_policy: pin_when_integrated
+    license_review: pending
+  opensfm:
+    status: candidate_validation
+    role: [gps, gcp, rolling_shutter, alternative_reconstruction]
+    integration: optional_adapter
+    version_policy: pin_when_integrated
+    license_review: pending
+  ffmpeg:
+    status: candidate_core
+    role: [video_io]
+    integration: subprocess_or_library_adapter
+    version_policy: pin_when_integrated
+    license_review: pending
+  proj:
+    status: candidate_core
+    role: [coordinate_reference_systems]
+    integration: adapter
+    version_policy: pin_when_integrated
+    license_review: pending

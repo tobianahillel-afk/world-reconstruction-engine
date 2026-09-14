@@ -1,0 +1,225 @@
+schema_version: 1
+status_values: [planned, ready, in_progress, in_review, done, blocked]
+milestones:
+  M0: {title: Repo ready, lots: [L0]}
+  M1: {title: Reconstruct a place, lots: [L1, L2, L3]}
+  M2: {title: Build incrementally, lots: [L4, L5, L6]}
+  M3: {title: High-accuracy world engine, lots: [L7, L8, L9, L10]}
+  M4: {title: Advanced and research, lots: [L11, L12, L13, L14, L15, L16]}
+lots:
+  L0: {title: Bootstrap and development system, review_required: true}
+  L1: {title: Core domain, review_required: true}
+  L2: {title: Media ingestion, review_required: true}
+  L3: {title: COLMAP baseline, review_required: true}
+  L4: {title: Candidate retrieval, review_required: true}
+  L5: {title: Evidence geometry, review_required: true}
+  L6: {title: Fragment engine, review_required: true}
+  L7: {title: LIMAP structural geometry, review_required: true}
+  L8: {title: Fragment merging, review_required: true}
+  L9: {title: World graph, review_required: true}
+  L10: {title: Hypotheses and uncertainty, review_required: true}
+  L11: {title: Video and motion, review_required: true}
+  L12: {title: Multi-solver validation, review_required: true}
+  L13: {title: Hard-case escalation, review_required: true}
+  L14: {title: Dense reconstruction, review_required: true}
+  L15: {title: Validation program, review_required: true}
+  L16: {title: MONDE boundary, review_required: true}
+work_items:
+  - id: L0.1
+    lot: L0
+    title: Repository bootstrap and agent protocol
+    status: in_progress
+    objective: Establish canonical docs, project state, machine-readable roadmap and review gates.
+    depends_on: []
+    read_before: [docs/00_START_HERE.md, AGENTS.md]
+    reuse: []
+    out_of_scope: [Python tooling, GitHub Actions CI, reconstruction code]
+    acceptance:
+      - New agent can identify the active work item without conversation history.
+      - Work roadmap and review gates are machine-readable.
+      - Reuse-before-implementation and epistemic separation rules are explicit.
+      - Lot and milestone reviews are represented in repository state.
+    tests: [manual repository-structure review]
+  - id: L0.2
+    lot: L0
+    title: Python tooling and fast CI
+    status: planned
+    objective: Add uv, Ruff, type checking, pytest, actionlint-aware workflow and a fast PR CI lane.
+    depends_on: [L0.1]
+    read_before: [docs/06_TESTING.md, AGENTS.md]
+    reuse: [uv, ruff, pyright, pytest, actionlint]
+    out_of_scope: [COLMAP, LIMAP, GPU tests]
+    acceptance:
+      - Fresh checkout has one documented bootstrap command path.
+      - Fast CI runs lint, format, types, unit tests and repository validation.
+      - Obsolete CI runs are cancelled by concurrency policy.
+      - CI is suitable as a required merge check.
+    tests: [fast CI workflow]
+  - id: L0.3
+    lot: L0
+    title: Repository state validator and PR template
+    status: planned
+    objective: Automatically detect inconsistent work-item/state/component/review metadata and standardize PR evidence.
+    depends_on: [L0.2]
+    read_before: [AGENTS.md, PROJECT_STATE.yaml, registry/work-items.yaml]
+    reuse: [pyyaml]
+    out_of_scope: [geometry validation]
+    acceptance:
+      - Validator catches unknown active work item and invalid dependencies/statuses.
+      - Validator checks referenced read_before paths exist.
+      - PR template captures work item, acceptance, tests, reuse and known limitations.
+      - Validator runs in fast CI.
+    tests: [unit tests for validator, fast CI]
+  - id: L0.4
+    lot: L0
+    title: Dependency and supply-chain baseline
+    status: planned
+    objective: Pin development dependencies and configure low-friction dependency/security automation where repository permissions allow it.
+    depends_on: [L0.3]
+    read_before: [docs/05_REUSE.md, registry/dependencies.yaml]
+    reuse: [Dependabot, GitHub dependency review, CodeQL, secret scanning]
+    out_of_scope: [choosing the final WRE license, native geometry dependencies]
+    acceptance:
+      - Development dependencies are locked.
+      - Dependency update policy is documented/configured.
+      - Security automation decisions are recorded, including any GitHub-setting steps not writable by the agent.
+    tests: [configuration review]
+  - id: L0.5
+    lot: L0
+    title: Fixture and regression harness skeleton
+    status: planned
+    objective: Create deterministic fixture conventions and regression metric schema without adding heavy geometry engines.
+    depends_on: [L0.4]
+    read_before: [docs/06_TESTING.md]
+    reuse: [pytest]
+    out_of_scope: [real COLMAP reconstruction fixtures]
+    acceptance:
+      - Fixture directories and metadata convention exist.
+      - Regression result schema exists.
+      - Tiny synthetic smoke fixture runs in fast CI.
+    tests: [fixture harness tests]
+  - id: L0.R
+    lot: L0
+    title: L0 lot review
+    status: planned
+    objective: Verify the bootstrap is complete, fast and resumable before product code begins.
+    depends_on: [L0.1, L0.2, L0.3, L0.4, L0.5]
+    read_before: [AGENTS.md, docs/06_TESTING.md, registry/components.yaml, registry/reviews.yaml]
+    reuse: []
+    out_of_scope: [feature implementation]
+    acceptance:
+      - Every promised L0 capability exists and has appropriate tests/evidence.
+      - Fresh-agent resume path is coherent.
+      - Fast CI is green and intentionally small.
+      - No product/reconstruction algorithm was prematurely implemented.
+      - L0 review is marked passed in registry/reviews.yaml.
+    tests: [full L0 review checklist]
+  - {id: L1.1, lot: L1, title: Observation models, status: planned, depends_on: [L0.R]}
+  - {id: L1.2, lot: L1, title: Camera and metadata models, status: planned, depends_on: [L1.1]}
+  - {id: L1.3, lot: L1, title: SpatialFragment model, status: planned, depends_on: [L1.2]}
+  - {id: L1.4, lot: L1, title: ReconstructionRun and provenance, status: planned, depends_on: [L1.3]}
+  - {id: L1.5, lot: L1, title: Local persistence layer, status: planned, depends_on: [L1.4]}
+  - {id: L2.1, lot: L2, title: Image ingestion, status: planned, depends_on: [L1.5]}
+  - {id: L2.2, lot: L2, title: Hashing and duplicate detection, status: planned, depends_on: [L2.1]}
+  - {id: L2.3, lot: L2, title: EXIF metadata, status: planned, depends_on: [L2.2]}
+  - {id: L2.4, lot: L2, title: GPS and time extraction, status: planned, depends_on: [L2.3]}
+  - {id: L2.5, lot: L2, title: Video ingestion, status: planned, depends_on: [L2.4]}
+  - {id: L2.6, lot: L2, title: Deterministic keyframe extraction, status: planned, depends_on: [L2.5]}
+  - {id: L3.1, lot: L3, title: COLMAP environment adapter, status: planned, depends_on: [L2.6]}
+  - {id: L3.2, lot: L3, title: COLMAP feature extraction, status: planned, depends_on: [L3.1]}
+  - {id: L3.3, lot: L3, title: COLMAP pair matching, status: planned, depends_on: [L3.2]}
+  - {id: L3.4, lot: L3, title: COLMAP geometric verification, status: planned, depends_on: [L3.3]}
+  - {id: L3.5, lot: L3, title: Incremental reconstruction, status: planned, depends_on: [L3.4]}
+  - {id: L3.6, lot: L3, title: Reconstruction importer, status: planned, depends_on: [L3.5]}
+  - {id: L3.7, lot: L3, title: COLMAP end-to-end fixture, status: planned, depends_on: [L3.6]}
+  - {id: L4.1, lot: L4, title: Sequential pairing, status: planned, depends_on: [L3.7]}
+  - {id: L4.2, lot: L4, title: GPS pairing, status: planned, depends_on: [L4.1]}
+  - {id: L4.3, lot: L4, title: Visual vocabulary retrieval, status: planned, depends_on: [L4.2]}
+  - {id: L4.4, lot: L4, title: Graph-neighbour candidates, status: planned, depends_on: [L4.3]}
+  - {id: L4.5, lot: L4, title: Candidate ranking, status: planned, depends_on: [L4.4]}
+  - {id: L4.6, lot: L4, title: Retrieval benchmark, status: planned, depends_on: [L4.5]}
+  - {id: L5.1, lot: L5, title: PairHypothesis model, status: planned, depends_on: [L4.6]}
+  - {id: L5.2, lot: L5, title: Residual storage, status: planned, depends_on: [L5.1]}
+  - {id: L5.3, lot: L5, title: Competing F E H models, status: planned, depends_on: [L5.2]}
+  - {id: L5.4, lot: L5, title: DEGENSAC configuration, status: planned, depends_on: [L5.3]}
+  - {id: L5.5, lot: L5, title: AC-RANSAC adapter, status: planned, depends_on: [L5.4]}
+  - {id: L5.6, lot: L5, title: Triplet consistency, status: planned, depends_on: [L5.5]}
+  - {id: L5.7, lot: L5, title: Cycle consistency, status: planned, depends_on: [L5.6]}
+  - {id: L5.8, lot: L5, title: Negative geometry tests, status: planned, depends_on: [L5.7]}
+  - {id: L6.1, lot: L6, title: Fragment creation, status: planned, depends_on: [L5.8]}
+  - {id: L6.2, lot: L6, title: Add image to existing fragment, status: planned, depends_on: [L6.1]}
+  - {id: L6.3, lot: L6, title: Unknown fragment handling, status: planned, depends_on: [L6.2]}
+  - {id: L6.4, lot: L6, title: Disconnected components, status: planned, depends_on: [L6.3]}
+  - {id: L6.5, lot: L6, title: Fragment lifecycle, status: planned, depends_on: [L6.4]}
+  - {id: L6.6, lot: L6, title: Incremental local bundle adjustment, status: planned, depends_on: [L6.5]}
+  - {id: L7.1, lot: L7, title: LIMAP adapter, status: planned, depends_on: [L6.6]}
+  - {id: L7.2, lot: L7, title: Line extraction, status: planned, depends_on: [L7.1]}
+  - {id: L7.3, lot: L7, title: Line matching, status: planned, depends_on: [L7.2]}
+  - {id: L7.4, lot: L7, title: Hybrid point-line registration, status: planned, depends_on: [L7.3]}
+  - {id: L7.5, lot: L7, title: Line triangulation, status: planned, depends_on: [L7.4]}
+  - {id: L7.6, lot: L7, title: Vanishing points, status: planned, depends_on: [L7.5]}
+  - {id: L7.7, lot: L7, title: Planes, status: planned, depends_on: [L7.6]}
+  - {id: L7.8, lot: L7, title: Holistic bundle adjustment, status: planned, depends_on: [L7.7]}
+  - {id: L8.1, lot: L8, title: Merge candidate generation, status: planned, depends_on: [L7.8]}
+  - {id: L8.2, lot: L8, title: 3D correspondence extraction, status: planned, depends_on: [L8.1]}
+  - {id: L8.3, lot: L8, title: Sim3 estimation, status: planned, depends_on: [L8.2]}
+  - {id: L8.4, lot: L8, title: TEASER++ adapter, status: planned, depends_on: [L8.3]}
+  - {id: L8.5, lot: L8, title: Open3D GICP refinement, status: planned, depends_on: [L8.4]}
+  - {id: L8.6, lot: L8, title: Merge evidence, status: planned, depends_on: [L8.5]}
+  - {id: L8.7, lot: L8, title: Reversible merge, status: planned, depends_on: [L8.6]}
+  - {id: L8.8, lot: L8, title: False-merge tests, status: planned, depends_on: [L8.7]}
+  - {id: L9.1, lot: L9, title: SpatialConstraint model, status: planned, depends_on: [L8.8]}
+  - {id: L9.2, lot: L9, title: GTSAM adapter, status: planned, depends_on: [L9.1]}
+  - {id: L9.3, lot: L9, title: Fragment-to-fragment factors, status: planned, depends_on: [L9.2]}
+  - {id: L9.4, lot: L9, title: GPS factors, status: planned, depends_on: [L9.3]}
+  - {id: L9.5, lot: L9, title: Loop-closure factors, status: planned, depends_on: [L9.4]}
+  - {id: L9.6, lot: L9, title: Incremental optimization, status: planned, depends_on: [L9.5]}
+  - {id: L9.7, lot: L9, title: Covariance propagation, status: planned, depends_on: [L9.6]}
+  - {id: L10.1, lot: L10, title: Competing placements, status: planned, depends_on: [L9.7]}
+  - {id: L10.2, lot: L10, title: Observation covariance, status: planned, depends_on: [L10.1]}
+  - {id: L10.3, lot: L10, title: Camera-pose covariance, status: planned, depends_on: [L10.2]}
+  - {id: L10.4, lot: L10, title: Merge covariance, status: planned, depends_on: [L10.3]}
+  - {id: L10.5, lot: L10, title: Evidence scoring, status: planned, depends_on: [L10.4]}
+  - {id: L10.6, lot: L10, title: Unresolved-state handling, status: planned, depends_on: [L10.5]}
+  - {id: L10.7, lot: L10, title: Hypothesis invalidation, status: planned, depends_on: [L10.6]}
+  - {id: L11.1, lot: L11, title: Temporal frame graph, status: planned, depends_on: [L10.7]}
+  - {id: L11.2, lot: L11, title: Sequential tracking, status: planned, depends_on: [L11.1]}
+  - {id: L11.3, lot: L11, title: Loop closures for video, status: planned, depends_on: [L11.2]}
+  - {id: L11.4, lot: L11, title: Camera rigs, status: planned, depends_on: [L11.3]}
+  - {id: L11.5, lot: L11, title: Rolling-shutter metadata, status: planned, depends_on: [L11.4]}
+  - {id: L11.6, lot: L11, title: IMU interface, status: planned, depends_on: [L11.5]}
+  - {id: L11.7, lot: L11, title: Trajectory prior, status: planned, depends_on: [L11.6]}
+  - {id: L12.1, lot: L12, title: COLMAP incremental validation adapter, status: planned, depends_on: [L11.7]}
+  - {id: L12.2, lot: L12, title: COLMAP global validation adapter, status: planned, depends_on: [L12.1]}
+  - {id: L12.3, lot: L12, title: COLMAP hierarchical validation adapter, status: planned, depends_on: [L12.2]}
+  - {id: L12.4, lot: L12, title: OpenSfM adapter, status: planned, depends_on: [L12.3]}
+  - {id: L12.5, lot: L12, title: OpenMVG validation adapter, status: planned, depends_on: [L12.4]}
+  - {id: L12.6, lot: L12, title: Solution comparison, status: planned, depends_on: [L12.5]}
+  - {id: L12.7, lot: L12, title: Disagreement detection, status: planned, depends_on: [L12.6]}
+  - {id: L12.8, lot: L12, title: Consensus policy, status: planned, depends_on: [L12.7]}
+  - {id: L13.1, lot: L13, title: Affine-SIFT escalation, status: planned, depends_on: [L12.8]}
+  - {id: L13.2, lot: L13, title: DSP-SIFT escalation, status: planned, depends_on: [L13.1]}
+  - {id: L13.3, lot: L13, title: MODS-style view synthesis, status: planned, depends_on: [L13.2]}
+  - {id: L13.4, lot: L13, title: Aggressive geometric verification, status: planned, depends_on: [L13.3]}
+  - {id: L13.5, lot: L13, title: Escalation controller, status: planned, depends_on: [L13.4]}
+  - {id: L14.1, lot: L14, title: COLMAP PatchMatch adapter, status: planned, depends_on: [L13.5]}
+  - {id: L14.2, lot: L14, title: Depth-map store, status: planned, depends_on: [L14.1]}
+  - {id: L14.3, lot: L14, title: Depth confidence, status: planned, depends_on: [L14.2]}
+  - {id: L14.4, lot: L14, title: Dense fusion, status: planned, depends_on: [L14.3]}
+  - {id: L14.5, lot: L14, title: Mesh, status: planned, depends_on: [L14.4]}
+  - {id: L14.6, lot: L14, title: Texture, status: planned, depends_on: [L14.5]}
+  - {id: L15.1, lot: L15, title: Known-camera synthetic test, status: planned, depends_on: [L14.6]}
+  - {id: L15.2, lot: L15, title: Known-geometry fixture, status: planned, depends_on: [L15.1]}
+  - {id: L15.3, lot: L15, title: GPS holdout, status: planned, depends_on: [L15.2]}
+  - {id: L15.4, lot: L15, title: Camera-pose holdout, status: planned, depends_on: [L15.3]}
+  - {id: L15.5, lot: L15, title: Day-night fixture, status: planned, depends_on: [L15.4]}
+  - {id: L15.6, lot: L15, title: Repeated-facade fixture, status: planned, depends_on: [L15.5]}
+  - {id: L15.7, lot: L15, title: Historical-change fixture, status: planned, depends_on: [L15.6]}
+  - {id: L15.8, lot: L15, title: Video fixture, status: planned, depends_on: [L15.7]}
+  - {id: L15.9, lot: L15, title: Regression benchmark, status: planned, depends_on: [L15.8]}
+  - {id: L15.10, lot: L15, title: Performance benchmark, status: planned, depends_on: [L15.9]}
+  - {id: L16.1, lot: L16, title: Observation export contract, status: planned, depends_on: [L15.10]}
+  - {id: L16.2, lot: L16, title: Spatial evidence contract, status: planned, depends_on: [L16.1]}
+  - {id: L16.3, lot: L16, title: Estimated geometry contract, status: planned, depends_on: [L16.2]}
+  - {id: L16.4, lot: L16, title: Provenance contract, status: planned, depends_on: [L16.3]}
+  - {id: L16.5, lot: L16, title: Temporal geometry contract, status: planned, depends_on: [L16.4]}
