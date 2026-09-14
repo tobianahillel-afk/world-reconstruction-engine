@@ -59,6 +59,7 @@ components:
       - src/wre/domain/metadata.py
       - src/wre/ingestion/__init__.py
       - src/wre/ingestion/images.py
+      - src/wre/ingestion/videos.py
       - src/wre/ingestion/hashing.py
       - src/wre/ingestion/exif.py
       - src/wre/ingestion/metadata_interpretation.py
@@ -67,6 +68,7 @@ components:
       - tests/test_hashing_duplicates.py
       - tests/test_exif_metadata.py
       - tests/test_metadata_interpretation.py
+      - tests/test_video_ingestion.py
     status: implementing
   colmap_reconstruction:
     owner_lot: L3
