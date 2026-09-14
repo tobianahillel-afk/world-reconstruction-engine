@@ -65,3 +65,9 @@ dependencies:
     integration: adapter
     version_policy: pin_when_integrated
     license_review: pending
+  geographiclib:
+    status: candidate_optional
+    role: [geodesy, geodesic_distance]
+    integration: adapter
+    version_policy: pin_when_integrated
+    license_review: pending
