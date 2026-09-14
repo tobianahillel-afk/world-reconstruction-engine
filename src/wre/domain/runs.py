@@ -81,9 +81,7 @@ class ReconstructionRun:
     configuration_sha256: Sha256Digest | None = None
 
     def __post_init__(self) -> None:
-        canonical = _canonical_observation_ids(
-            self.input_observation_ids, "input_observation_ids"
-        )
+        canonical = _canonical_observation_ids(self.input_observation_ids, "input_observation_ids")
         object.__setattr__(self, "input_observation_ids", canonical)
 
         _require_aware_datetime(self.started_at, "started_at")
