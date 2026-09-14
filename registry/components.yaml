@@ -31,7 +31,7 @@ components:
       - tests/test_smoke.py
       - tests/test_repo_validation.py
       - tests/test_regression_harness.py
-    status: implementing
+    status: implemented
   observation_core:
     owner_lot: L1
     implementation: []

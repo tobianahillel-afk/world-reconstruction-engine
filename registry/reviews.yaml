@@ -4,7 +4,13 @@ policy:
   lot_review_required: true
   milestone_review_required: true
 lot_reviews:
-  L0: {status: pending, reviewed_at: null, evidence: []}
+  L0:
+    status: passed
+    reviewed_at: '2026-09-14'
+    evidence:
+      - docs/reviews/L0-M0-bootstrap-review.md
+      - PRs #1 through #5 merged with acceptance evidence
+      - main fast-ci run 34882936749 passed
   L1: {status: pending, reviewed_at: null, evidence: []}
   L2: {status: pending, reviewed_at: null, evidence: []}
   L3: {status: pending, reviewed_at: null, evidence: []}
@@ -22,7 +28,13 @@ lot_reviews:
   L15: {status: pending, reviewed_at: null, evidence: []}
   L16: {status: pending, reviewed_at: null, evidence: []}
 milestone_reviews:
-  M0: {status: pending, reviewed_at: null, evidence: []}
+  M0:
+    status: passed
+    reviewed_at: '2026-09-14'
+    evidence:
+      - docs/reviews/L0-M0-bootstrap-review.md
+      - L0 lot review passed
+      - main fast-ci run 34882936749 passed
   M1: {status: pending, reviewed_at: null, evidence: []}
   M2: {status: pending, reviewed_at: null, evidence: []}
   M3: {status: pending, reviewed_at: null, evidence: []}
