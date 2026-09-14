@@ -94,9 +94,7 @@ def test_regression_result_serialization_is_stable(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize("escape_path", ["../outside.json", "..\\outside.json"])
-def test_fixture_inputs_cannot_escape_fixture_directory(
-    tmp_path: Path, escape_path: str
-) -> None:
+def test_fixture_inputs_cannot_escape_fixture_directory(tmp_path: Path, escape_path: str) -> None:
     outside = tmp_path / "outside.json"
     outside.write_text("{}\n", encoding="utf-8")
     fixture_dir = tmp_path / "fixture"
