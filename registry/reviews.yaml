@@ -11,7 +11,14 @@ lot_reviews:
       - docs/reviews/L0-M0-bootstrap-review.md
       - PRs #1 through #5 merged with acceptance evidence
       - main fast-ci run 34882936749 passed
-  L1: {status: pending, reviewed_at: null, evidence: []}
+  L1:
+    status: passed
+    reviewed_at: '2026-09-14'
+    evidence:
+      - docs/reviews/L1-core-domain-review.md
+      - PRs #7 through #10 merged; PR #11 carries final L1.5 and lot-review acceptance evidence
+      - L1.5 implementation fast-ci run 34889364989 passed
+      - L1.5 implementation CodeQL run 34889364874 passed
   L2: {status: pending, reviewed_at: null, evidence: []}
   L3: {status: pending, reviewed_at: null, evidence: []}
   L4: {status: pending, reviewed_at: null, evidence: []}
