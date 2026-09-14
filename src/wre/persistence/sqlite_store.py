@@ -7,17 +7,20 @@ from typing import TypeVar
 
 from wre.domain.cameras import Camera, CameraId, ObservationMetadata
 from wre.domain.fragments import SpatialFragment, SpatialFragmentId
+from wre.domain.metadata import ObservationMetadataInterpretation
 from wre.domain.observations import Observation, ObservationId, Sha256Digest
 from wre.domain.runs import ReconstructionRun, ReconstructionRunId
 from wre.persistence.codec import (
     JsonObject,
     canonical_json,
     decode_camera,
+    decode_metadata_interpretation,
     decode_observation,
     decode_observation_metadata,
     decode_reconstruction_run,
     decode_spatial_fragment,
     encode_camera,
+    encode_metadata_interpretation,
     encode_observation,
     encode_observation_metadata,
     encode_reconstruction_run,
@@ -44,7 +47,7 @@ class PersistenceConflictError(PersistenceError):
 
 
 class SQLiteLocalStore:
-    """Small transactional local store for immutable L1 domain records."""
+    """Small transactional local store for immutable solver-independent domain records."""
 
     def __init__(self, path: str | Path) -> None:
         self.path = Path(path)
@@ -149,8 +152,7 @@ class SQLiteLocalStore:
         schema_version, payload_json = row
         if schema_version != RECORD_SCHEMA_VERSION:
             raise UnsupportedSchemaVersionError(
-                f"record schema version {schema_version} is unsupported for "
-                f"{record_type}:{record_id}"
+                f"record schema version {schema_version} is unsupported for {record_type}:{record_id}"
             )
         if not isinstance(payload_json, str):
             raise PersistenceError(f"record payload is not text for {record_type}:{record_id}")
@@ -246,6 +248,26 @@ class SQLiteLocalStore:
             "observation_metadata",
             observation_id.value,
             decode_observation_metadata,
+        )
+
+    def put_metadata_interpretation(
+        self,
+        interpretation: ObservationMetadataInterpretation,
+    ) -> None:
+        self._put(
+            "metadata_interpretation",
+            interpretation.observation_id.value,
+            encode_metadata_interpretation(interpretation),
+        )
+
+    def get_metadata_interpretation(
+        self,
+        observation_id: ObservationId,
+    ) -> ObservationMetadataInterpretation | None:
+        return self._get(
+            "metadata_interpretation",
+            observation_id.value,
+            decode_metadata_interpretation,
         )
 
     def put_spatial_fragment(self, fragment: SpatialFragment) -> None:
