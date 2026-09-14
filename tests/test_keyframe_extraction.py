@@ -3,8 +3,9 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from urllib.parse import unquote, urlparse
 
 import pytest
 
@@ -88,16 +89,15 @@ def test_parse_ffprobe_frames_rejects_non_monotone_usable_timestamps() -> None:
 def test_source_bytes_must_match_persisted_video_before_toolchain_execution(tmp_path: Path) -> None:
     source = tmp_path / "source.mkv"
     source.write_bytes(b"actual bytes")
+    source_hash = hash_file_content(source)
     store = SQLiteLocalStore(tmp_path / "state.sqlite3")
-    expected = hash_file_content(tmp_path / "expected.bin") if False else None
-    assert expected is None
 
     video = VideoObservation(
         observation_id=ObservationId("video:mismatch"),
         asset=MediaAssetRef(
             uri="file:///recorded/source.mkv",
-            sha256=hash_file_content(source).sha256,
-            byte_length=len(b"actual bytes") + 1,
+            sha256=source_hash.sha256,
+            byte_length=source_hash.byte_length + 1,
         ),
         source=SourceRef(source_id=SourceId("camera:1")),
         received_at=NOW,
@@ -173,6 +173,12 @@ def _make_synthetic_video(tmp_path: Path, ffmpeg: str) -> Path:
     return video_path
 
 
+def _file_uri_path(uri: str) -> Path:
+    parsed = urlparse(uri)
+    assert parsed.scheme == "file"
+    return Path(unquote(parsed.path))
+
+
 def test_real_ffmpeg_keyframe_extraction_is_deterministic_and_idempotent(tmp_path: Path) -> None:
     ffmpeg, ffprobe = _require_ffmpeg_for_integration()
     video_path = _make_synthetic_video(tmp_path, ffmpeg)
@@ -222,12 +228,12 @@ def test_real_ffmpeg_keyframe_extraction_is_deterministic_and_idempotent(tmp_pat
     )
     assert tuple(frame.captured_at for frame in first.frames) == (
         NOW,
-        NOW.replace(microsecond=500_000),
+        NOW + timedelta(microseconds=500_000),
         NOW + timedelta(seconds=1),
         NOW + timedelta(seconds=1, microseconds=500_000),
     )
     for frame in first.frames:
         assert frame.video_asset == video.asset
         assert frame.asset.mime_type == "image/png"
-        assert Path(frame.asset.uri.removeprefix("file://")).exists()
+        assert _file_uri_path(frame.asset.uri).exists()
         assert store.get_observation(frame.observation_id) == frame
