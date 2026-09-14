@@ -39,6 +39,7 @@ work_items:
       - Work roadmap and review gates are machine-readable.
       - Reuse-before-implementation and epistemic separation rules are explicit.
       - Lot and milestone reviews are represented in repository state.
+      - Pull request review evidence has a standard template.
     tests: [manual repository-structure review]
   - id: L0.2
     lot: L0
@@ -57,17 +58,17 @@ work_items:
     tests: [fast CI workflow]
   - id: L0.3
     lot: L0
-    title: Repository state validator and PR template
+    title: Repository state validator
     status: planned
-    objective: Automatically detect inconsistent work-item/state/component/review metadata and standardize PR evidence.
+    objective: Automatically detect inconsistent work-item, state, component and review metadata and validate the existing PR evidence contract.
     depends_on: [L0.2]
-    read_before: [AGENTS.md, PROJECT_STATE.yaml, registry/work-items.yaml]
+    read_before: [AGENTS.md, PROJECT_STATE.yaml, registry/work-items.yaml, .github/PULL_REQUEST_TEMPLATE.md]
     reuse: [pyyaml]
-    out_of_scope: [geometry validation]
+    out_of_scope: [geometry validation, redesigning the PR workflow]
     acceptance:
       - Validator catches unknown active work item and invalid dependencies/statuses.
       - Validator checks referenced read_before paths exist.
-      - PR template captures work item, acceptance, tests, reuse and known limitations.
+      - Validator checks core PR-template sections remain present.
       - Validator runs in fast CI.
     tests: [unit tests for validator, fast CI]
   - id: L0.4
