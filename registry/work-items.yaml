@@ -74,7 +74,7 @@ work_items:
   - id: L0.4
     lot: L0
     title: Dependency and supply-chain baseline
-    status: ready
+    status: done
     objective: Pin development dependencies and configure low-friction dependency/security automation where repository permissions allow it.
     depends_on: [L0.3]
     read_before: [docs/05_REUSE.md, registry/dependencies.yaml]
@@ -84,11 +84,11 @@ work_items:
       - Development dependencies are locked.
       - Dependency update policy is documented/configured.
       - Security automation decisions are recorded, including any GitHub-setting steps not writable by the agent.
-    tests: [configuration review]
+    tests: [configuration review, fast CI, CodeQL, dependency review capability preflight]
   - id: L0.5
     lot: L0
     title: Fixture and regression harness skeleton
-    status: planned
+    status: ready
     objective: Create deterministic fixture conventions and regression metric schema without adding heavy geometry engines.
     depends_on: [L0.4]
     read_before: [docs/06_TESTING.md]
