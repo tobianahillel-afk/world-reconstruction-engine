@@ -36,6 +36,7 @@ class DuplicateObservationLookup(Protocol):
         byte_length: int,
     ) -> tuple[ObservationId, ...]:
         """Return observations with the same content digest and byte length."""
+        ...
 
 
 class _HashingImageStore(ObservationSink, DuplicateObservationLookup, Protocol):
