@@ -23,6 +23,12 @@ Before implementing an algorithm:
 
 No candidate becomes a core dependency until its lot decides exact version, license status and integration mode.
 
+## Development dependencies
+
+Development tooling is reproducible through the committed `uv.lock`. CI must use frozen sync rather than silently resolving a new environment. Dependabot updates the native `uv` ecosystem and GitHub Actions on a grouped weekly cadence so maintenance remains visible without generating excessive PR noise.
+
+Supply-chain controls and settings that are deliberately outside the fast lane are documented in [`08_SECURITY.md`](08_SECURITY.md).
+
 ## Licensing
 
 The repository's final project license has not yet been selected. Until it is, do not make a copyleft dependency mandatory/core without an explicit architecture/license decision. Optional subprocess adapters must still be reviewed for distribution implications.

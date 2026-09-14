@@ -4,6 +4,21 @@ policy:
   reuse_before_implement: true
   custom_foundational_algorithm_requires_adr: true
   mandatory_dependency_requires_license_review: true
+  github_actions_pin_full_sha: true
+  dependency_updates_require_ci_review: true
+development_supply_chain:
+  package_manager: uv
+  package_manager_version: 0.12.13
+  lockfile: uv.lock
+  ci_install_mode: frozen
+  dependabot_ecosystems: [uv, github-actions]
+  update_schedule: weekly_grouped
+  dependency_review_severity: moderate
+  dependency_review_scopes: [runtime, development, unknown]
+  code_scanning: codeql_separate_lane
+  secret_scanning_setting: manual_verification_required
+  push_protection_setting: manual_verification_required
+  main_ruleset_setting: manual_verification_required
 dependencies:
   colmap:
     status: candidate_core

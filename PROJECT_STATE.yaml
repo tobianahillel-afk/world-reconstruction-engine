@@ -4,15 +4,15 @@ project_name: World Reconstruction Engine
 phase: bootstrap
 milestone: M0
 lot: L0
-active_work_item: L0.4
+active_work_item: L0.5
 status: ready
-last_completed: [L0.1, L0.2, L0.3]
-last_merged_pr: 3
+last_completed: [L0.1, L0.2, L0.3, L0.4]
+last_merged_pr: 4
 current_goal: >-
-  Lock the lightweight development environment and configure low-friction dependency
-  and supply-chain protections without introducing native reconstruction dependencies.
+  Create deterministic fixture conventions and a regression metric schema without
+  introducing heavy geometry engines.
 next_action: >-
-  Implement L0.4 from registry/work-items.yaml on a new short-lived branch after PR #3 merges.
+  Implement L0.5 from registry/work-items.yaml on a new short-lived branch after PR #4 merges.
 blockers: []
 reviews:
   lot_reviews:

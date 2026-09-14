@@ -9,7 +9,13 @@ components:
     owner_lot: L0
     implementation:
       - pyproject.toml
+      - uv.lock
+      - .github/dependabot.yml
       - .github/workflows/ci.yml
+      - .github/workflows/codeql.yml
+      - .github/workflows/dependency-review.yml
+      - docs/08_SECURITY.md
+      - registry/dependencies.yaml
       - scripts/validate_repo.py
       - src/wre/repo_validation.py
       - tests/test_smoke.py
