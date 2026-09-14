@@ -185,7 +185,11 @@ def _interpret_capture_time(
     values: dict[str, str],
     duplicates: frozenset[str],
 ) -> CaptureTimeInterpretation:
-    evidence_keys = tuple(sorted(key for key in _EXIF_CAPTURE_TIME_KEYS if key in values or key in duplicates))
+    evidence_keys = tuple(
+        sorted(
+            key for key in _EXIF_CAPTURE_TIME_KEYS if key in values or key in duplicates
+        )
+    )
     if not evidence_keys:
         return CaptureTimeInterpretation(status=CaptureTimeInterpretationStatus.ABSENT)
 
