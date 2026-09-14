@@ -4,9 +4,9 @@ from wre.ingestion.hashing import (
     DEFAULT_HASH_CHUNK_SIZE,
     DuplicateObservationLookup,
     FileContentHash,
+    LocalImageIngestor,
     LocalImageIngestRequest,
     LocalImageIngestResult,
-    LocalImageIngestor,
     hash_file_content,
 )
 from wre.ingestion.images import ImageIngestor, ImageIngestRequest, ObservationSink
