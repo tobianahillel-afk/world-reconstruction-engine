@@ -28,7 +28,7 @@ work_items:
   - id: L0.1
     lot: L0
     title: Repository bootstrap and agent protocol
-    status: in_progress
+    status: done
     objective: Establish canonical docs, project state, machine-readable roadmap and review gates.
     depends_on: []
     read_before: [docs/00_START_HERE.md, AGENTS.md]
@@ -44,7 +44,7 @@ work_items:
   - id: L0.2
     lot: L0
     title: Python tooling and fast CI
-    status: planned
+    status: ready
     objective: Add uv, Ruff, type checking, pytest, actionlint-aware workflow and a fast PR CI lane.
     depends_on: [L0.1]
     read_before: [docs/06_TESTING.md, AGENTS.md]
