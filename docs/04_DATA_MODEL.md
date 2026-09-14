@@ -112,3 +112,34 @@ Not implemented by this contract:
 - reconstruction-run provenance.
 
 Those behaviors remain in their owning work items. A fragment may therefore exist as an internally named local component without any claim about where that component belongs in the global world.
+
+## L1.4 ReconstructionRun and provenance contract
+
+A `ReconstructionRun` records the immutable provenance envelope for one reconstruction computation. It describes who produced the computation, which raw observations were inputs, when it ran and, when available, the digest of the exact configuration representation used by the producer. It does not execute or schedule the computation.
+
+Implemented primitives:
+
+- `ReconstructionRunId` — opaque typed identity for one computation run.
+- `ProducerRef` — implementation name plus required version and optional revision/build identity.
+- `ReconstructionRun` — immutable run identity, producer, canonical raw-input membership, timezone-aware timing and optional configuration SHA-256.
+- `DerivedArtifactProvenance` — composable reference from a derived artifact to its producing run and raw source observations.
+
+Run input and provenance observation membership use set semantics: they are non-empty, duplicate-free and stored in canonical `ObservationId` order. `completed_at`, when present, cannot precede `started_at`.
+
+`configuration_sha256` is a content digest only. L1.4 does not define configuration serialization or infer meaning from configuration bytes; the producer that supplies the digest must define the canonical representation being hashed.
+
+`DerivedArtifactProvenance` records traceability, not truth. Referencing a run says which computation produced an artifact and which observations it ultimately depends on; it does not assert that the artifact is correct, accepted or promoted into a higher epistemic layer.
+
+### Explicit L1.4 boundary
+
+Not implemented by this contract:
+
+- launching, scheduling or retrying reconstruction jobs;
+- solver command lines or solver-private run objects;
+- persistence/database schemas;
+- artifact storage locations;
+- run status machines or orchestration state;
+- automatic acceptance of derived evidence or estimated geometry;
+- local persistence or repository/database adapters.
+
+Those behaviors remain in later work items. The core contract only guarantees reproducible identity and provenance links that later evidence/geometry models can embed without depending on a specific reconstruction engine.
