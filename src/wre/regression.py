@@ -120,7 +120,7 @@ def _non_negative_number(value: object, context: str) -> float:
 def _safe_relative_path(value: object, context: str) -> str:
     text = _string(value, context)
     path = PurePosixPath(text)
-    if path.is_absolute() or ".." in path.parts:
+    if path.is_absolute() or ".." in path.parts or "\\" in text:
         raise ValueError(f"{context} must stay inside the fixture directory")
     return text
 
