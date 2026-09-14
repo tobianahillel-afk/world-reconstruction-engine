@@ -83,3 +83,32 @@ Not implemented by this contract:
 - `SpatialFragment` or estimated geometry.
 
 Those behaviors remain in later work items. This keeps raw observations and source metadata usable independently of reconstruction engines and prevents metadata convenience from becoming hidden geometric truth.
+
+## L1.3 SpatialFragment contract
+
+A `SpatialFragment` is the solver-independent identity of one local spatial component and the set of raw observations that belong to it. It deliberately does not claim a world placement.
+
+Implemented primitives:
+
+- `SpatialFragmentId` — opaque typed fragment identity.
+- `LocalFrameId` — opaque typed identity for the fragment's local coordinate frame.
+- `SpatialFragment` — immutable fragment identity, local-frame identity and observation membership.
+
+Observation membership has set semantics: it must be non-empty and duplicate-free. The stored tuple is sorted canonically by `ObservationId` so equality and later serialization do not depend on insertion order.
+
+`LocalFrameId` names a local coordinate frame only. L1.3 does not claim that the frame is metric, Earth-aligned, georeferenced or compatible with another fragment's frame. Those properties require later evidence and transforms.
+
+### Explicit L1.3 boundary
+
+Not implemented by this contract:
+
+- camera poses or 3D points inside the fragment;
+- reconstruction solver output/import;
+- global/Earth placement or geographic anchors;
+- scale resolution between independent local frames;
+- fragment lifecycle or automatic membership changes;
+- fragment merge candidates or merge transforms;
+- persistence/database representation;
+- reconstruction-run provenance.
+
+Those behaviors remain in their owning work items. A fragment may therefore exist as an internally named local component without any claim about where that component belongs in the global world.
