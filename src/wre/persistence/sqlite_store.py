@@ -152,7 +152,8 @@ class SQLiteLocalStore:
         schema_version, payload_json = row
         if schema_version != RECORD_SCHEMA_VERSION:
             raise UnsupportedSchemaVersionError(
-                f"record schema version {schema_version} is unsupported for {record_type}:{record_id}"
+                f"record schema version {schema_version} is unsupported for "
+                f"{record_type}:{record_id}"
             )
         if not isinstance(payload_json, str):
             raise PersistenceError(f"record payload is not text for {record_type}:{record_id}")
