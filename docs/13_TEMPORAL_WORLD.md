@@ -100,7 +100,9 @@ No custom M3C2 implementation should be added without an ADR.
 
 Change measurement is only meaningful after comparable geometry is placed in compatible frames. L15.3 therefore owns explicit cross-epoch alignment policy and uncertainty before the py4dgeo adapter is treated as valid evidence.
 
-Alignment must distinguish true physical change from registration error. Stable areas/control geometry may be used to estimate alignment, while changed regions must not dominate that estimate.
+Alignment must explicitly account for **coordinate frame, orientation, translation and scale**. A monocular/local SfM fragment whose scale is unresolved cannot be interpreted with metric 3D-change distances until scale has been independently established or jointly estimated with sufficient evidence. The transform model used for alignment (for example Sim(3) versus rigid/metric) and its uncertainty must remain traceable.
+
+Alignment must distinguish true physical change from registration error. Stable areas/control geometry may be used to estimate alignment, while changed regions must not dominate that estimate. Change measurements whose alignment uncertainty is too large relative to the measured effect remain unresolved.
 
 ## Change-point inference
 
@@ -135,7 +137,7 @@ The shifted L16 Validation Program must include a historical-change fixture that
 - unchanged structure across epochs;
 - known synthetic change;
 - uncertain/interval-only dating;
-- false apparent change from misregistration;
+- false apparent change from misregistration or unresolved scale;
 - contradictory dates;
 - repeated facade/ambiguous geometry across time.
 
