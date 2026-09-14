@@ -11,3 +11,17 @@ The project composes proven geometry/reconstruction libraries instead of reimple
 Canonical project state lives in [`PROJECT_STATE.yaml`](PROJECT_STATE.yaml). Planned work and acceptance criteria live in [`registry/work-items.yaml`](registry/work-items.yaml).
 
 No reconstruction implementation should be started before the bootstrap and development-quality gates in L0 are complete.
+
+## Development bootstrap
+
+WRE uses Python 3.12 and `uv` for the lightweight development environment.
+
+```bash
+uv sync --group dev
+uv run ruff check .
+uv run ruff format --check .
+uv run pyright
+uv run pytest
+```
+
+Pull requests run the same fast checks automatically. Heavy reconstruction/GPU tests are intentionally excluded from the fast lane.
