@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
-from enum import StrEnum
 import json
 import math
+from collections.abc import Mapping
+from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path, PurePosixPath
-from typing import Any, Mapping
+from typing import Any
 
 
 class Comparator(StrEnum):
