@@ -164,19 +164,11 @@ class SequentialPairingResult:
                 raise ValueError("candidate sequence_index1 is outside the supplied sequence")
             if candidate.sequence_index2 >= len(self.ordered_observation_ids):
                 raise ValueError("candidate sequence_index2 is outside the supplied sequence")
-            if (
-                self.ordered_observation_ids[candidate.sequence_index1]
-                != candidate.observation_id1
-            ):
+            if self.ordered_observation_ids[candidate.sequence_index1] != candidate.observation_id1:
                 raise ValueError("candidate observation_id1 does not match its sequence index")
-            if (
-                self.ordered_observation_ids[candidate.sequence_index2]
-                != candidate.observation_id2
-            ):
+            if self.ordered_observation_ids[candidate.sequence_index2] != candidate.observation_id2:
                 raise ValueError("candidate observation_id2 does not match its sequence index")
-            pair_keys.append(
-                (candidate.observation_id1.value, candidate.observation_id2.value)
-            )
+            pair_keys.append((candidate.observation_id1.value, candidate.observation_id2.value))
             ordering_keys.append(
                 (
                     min(candidate.sequence_index1, candidate.sequence_index2),
