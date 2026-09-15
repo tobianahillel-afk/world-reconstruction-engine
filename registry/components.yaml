@@ -92,6 +92,7 @@ components:
       - tests/test_colmap_features.py
       - tests/test_colmap_matching.py
       - tests/test_colmap_geometric_verification.py
+      - tests/test_colmap_verification_safety.py
     status: implementing
   candidate_retrieval:
     owner_lot: L4
