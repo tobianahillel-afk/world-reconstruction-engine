@@ -9,6 +9,7 @@ on:
       - "demo/real_world_preview/sources.json"
       - "demo/real_world_preview/download_inputs.py"
       - "demo/real_world_preview/run_demo.py"
+      - "src/wre/reconstruction/colmap_import.py"
 
 permissions:
   contents: write
