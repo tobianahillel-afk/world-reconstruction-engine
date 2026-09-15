@@ -5,6 +5,9 @@ from collections.abc import Mapping
 from datetime import UTC, datetime
 from typing import cast
 
+from wre.domain.artifact_keys import ArtifactKey
+from wre.domain.artifact_metadata import ArtifactMetadata
+from wre.domain.artifacts import ArtifactId, ArtifactKind, ArtifactRef
 from wre.domain.cameras import (
     Camera,
     CameraId,
@@ -32,6 +35,14 @@ from wre.domain.observations import (
     VideoFrameObservation,
     VideoObservation,
 )
+from wre.domain.producer_identity import (
+    ArtifactProducerIdentity,
+    CheckpointIdentity,
+    ConfigurationIdentity,
+    ModelIdentity,
+)
+from wre.domain.projects import SceneProject, SceneProjectId
+from wre.domain.provenance import ProvenanceClass
 from wre.domain.runs import (
     DerivedArtifactProvenance,
     ProducerRef,
@@ -435,5 +446,132 @@ def decode_derived_artifact_provenance(
         source_observation_ids=tuple(
             ObservationId(value)
             for value in _string_list(data.get("source_observation_ids"), "source_observation_ids")
+        ),
+    )
+
+
+def encode_scene_project(project: SceneProject) -> JsonObject:
+    return {"project_id": project.project_id.value}
+
+
+def decode_scene_project(payload: Mapping[str, object]) -> SceneProject:
+    data = dict(payload)
+    return SceneProject(
+        project_id=SceneProjectId(_string(data.get("project_id"), "project_id"))
+    )
+
+
+def _encode_artifact_producer_identity(identity: ArtifactProducerIdentity) -> JsonObject:
+    model: JsonObject | None = None
+    if identity.model is not None:
+        model = {
+            "name": identity.model.name,
+            "revision": identity.model.revision,
+            "version": identity.model.version,
+        }
+
+    checkpoint: JsonObject | None = None
+    if identity.checkpoint is not None:
+        checkpoint = {
+            "identifier": identity.checkpoint.identifier,
+            "sha256": identity.checkpoint.sha256.value,
+        }
+
+    return {
+        "checkpoint": checkpoint,
+        "configuration_sha256": identity.configuration.sha256.value,
+        "model": model,
+        "producer": {
+            "implementation": identity.producer.implementation,
+            "revision": identity.producer.revision,
+            "version": identity.producer.version,
+        },
+    }
+
+
+def _decode_artifact_producer_identity(
+    payload: object,
+    context: str,
+) -> ArtifactProducerIdentity:
+    data = _object(payload, context)
+    producer_data = _object(data.get("producer"), f"{context}.producer")
+    model_data = _optional_object(data.get("model"), f"{context}.model")
+    checkpoint_data = _optional_object(data.get("checkpoint"), f"{context}.checkpoint")
+
+    model = None
+    if model_data is not None:
+        model = ModelIdentity(
+            name=_string(model_data.get("name"), f"{context}.model.name"),
+            version=_string(model_data.get("version"), f"{context}.model.version"),
+            revision=_optional_string(
+                model_data.get("revision"), f"{context}.model.revision"
+            ),
+        )
+
+    checkpoint = None
+    if checkpoint_data is not None:
+        checkpoint = CheckpointIdentity(
+            identifier=_string(
+                checkpoint_data.get("identifier"), f"{context}.checkpoint.identifier"
+            ),
+            sha256=Sha256Digest(
+                _string(checkpoint_data.get("sha256"), f"{context}.checkpoint.sha256")
+            ),
+        )
+
+    return ArtifactProducerIdentity(
+        producer=ProducerRef(
+            implementation=_string(
+                producer_data.get("implementation"), f"{context}.producer.implementation"
+            ),
+            version=_string(producer_data.get("version"), f"{context}.producer.version"),
+            revision=_optional_string(
+                producer_data.get("revision"), f"{context}.producer.revision"
+            ),
+        ),
+        configuration=ConfigurationIdentity(
+            sha256=Sha256Digest(
+                _string(data.get("configuration_sha256"), f"{context}.configuration_sha256")
+            )
+        ),
+        model=model,
+        checkpoint=checkpoint,
+    )
+
+
+def encode_artifact_metadata(metadata: ArtifactMetadata) -> JsonObject:
+    return {
+        "artifact_key_sha256": metadata.artifact_key.sha256.value,
+        "artifact_ref": {
+            "artifact_id": metadata.artifact_ref.artifact_id.value,
+            "artifact_kind": metadata.artifact_ref.artifact_kind.value,
+        },
+        "producer": _encode_artifact_producer_identity(metadata.producer),
+        "project_id": metadata.project_id.value,
+        "provenance_class": metadata.provenance_class.value,
+    }
+
+
+def decode_artifact_metadata(payload: Mapping[str, object]) -> ArtifactMetadata:
+    data = dict(payload)
+    artifact_ref_data = _object(data.get("artifact_ref"), "artifact_ref")
+    return ArtifactMetadata(
+        project_id=SceneProjectId(_string(data.get("project_id"), "project_id")),
+        artifact_ref=ArtifactRef(
+            artifact_id=ArtifactId(
+                _string(artifact_ref_data.get("artifact_id"), "artifact_ref.artifact_id")
+            ),
+            artifact_kind=ArtifactKind(
+                _string(artifact_ref_data.get("artifact_kind"), "artifact_ref.artifact_kind")
+            ),
+        ),
+        artifact_key=ArtifactKey(
+            sha256=Sha256Digest(
+                _string(data.get("artifact_key_sha256"), "artifact_key_sha256")
+            )
+        ),
+        producer=_decode_artifact_producer_identity(data.get("producer"), "producer"),
+        provenance_class=ProvenanceClass(
+            _string(data.get("provenance_class"), "provenance_class")
         ),
     )
