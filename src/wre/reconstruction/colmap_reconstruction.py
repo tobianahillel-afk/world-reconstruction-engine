@@ -422,11 +422,7 @@ def _audit_reconstructions(
             raise ColmapIncrementalReconstructionError(
                 "COLMAP num_reg_images must be a non-negative integer"
             )
-        if (
-            isinstance(num_points3d, bool)
-            or not isinstance(num_points3d, int)
-            or num_points3d < 0
-        ):
+        if isinstance(num_points3d, bool) or not isinstance(num_points3d, int) or num_points3d < 0:
             raise ColmapIncrementalReconstructionError(
                 "COLMAP num_points3D must be a non-negative integer"
             )
