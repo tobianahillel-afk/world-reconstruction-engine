@@ -180,9 +180,7 @@ def _run_command(args: list[str], *, timeout_seconds: int) -> subprocess.Complet
         stderr = completed.stderr.strip()
         if len(stderr) > 2_000:
             stderr = stderr[-2_000:]
-        raise FFmpegExecutionError(
-            f"{args[0]!r} exited with code {completed.returncode}: {stderr}"
-        )
+        raise FFmpegExecutionError(f"{args[0]!r} exited with code {completed.returncode}: {stderr}")
     return completed
 
 
