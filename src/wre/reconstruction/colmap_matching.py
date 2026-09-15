@@ -333,9 +333,7 @@ def _read_match_database(
         )
 
     summaries.sort(key=lambda item: (item.observation_id1.value, item.observation_id2.value))
-    pair_keys = [
-        (item.observation_id1.value, item.observation_id2.value) for item in summaries
-    ]
+    pair_keys = [(item.observation_id1.value, item.observation_id2.value) for item in summaries]
     if len(pair_keys) != len(set(pair_keys)):
         raise ColmapPairMatchingError(
             "COLMAP matching database contains duplicate observation pairs"
@@ -397,9 +395,7 @@ def match_colmap_pairs(
             pairing_options=pairing_options,
             device=pycolmap.Device.cpu,
         )
-        pairs, placeholder_count = _read_match_database(
-            database_path, request.features, pycolmap
-        )
+        pairs, placeholder_count = _read_match_database(database_path, request.features, pycolmap)
         database_hash = hash_file_content(database_path)
     except Exception:
         database_path.unlink(missing_ok=True)
