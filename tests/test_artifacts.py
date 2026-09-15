@@ -5,8 +5,7 @@ from typing import Any, cast
 
 import pytest
 
-from wre.domain import ObservationId, SceneProjectId
-from wre.domain.artifacts import ArtifactId, ArtifactKind, ArtifactRef
+from wre.domain import ArtifactId, ArtifactKind, ArtifactRef, ObservationId, SceneProjectId
 
 
 def test_artifact_id_is_distinct_typed_identity() -> None:
