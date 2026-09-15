@@ -102,6 +102,7 @@ components:
       - tests/test_colmap_reconstruction_safety.py
       - tests/test_estimated_geometry.py
       - tests/test_colmap_reconstruction_import.py
+      - tests/test_colmap_import_safety.py
     status: implementing
   candidate_retrieval:
     owner_lot: L4
