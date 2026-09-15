@@ -153,6 +153,44 @@ Not implemented by this contract:
 
 Those behaviors remain in later work items. The core contract only guarantees reproducible identity and provenance links that later evidence/geometry models can embed without depending on a specific reconstruction engine.
 
+## L3.6 estimated-geometry import contract
+
+L3.6 introduces the first explicit solver-independent **estimated geometry** representation. These models are imported from audited solver-native reconstruction output, but they are not fragment acceptance and they are not world state.
+
+Implemented primitives:
+
+- `SparseReconstructionEstimateId` — typed identity for one imported local sparse-model estimate.
+- `CameraCalibrationEstimateId` — typed identity for one estimated calibration inside a reconstruction.
+- `EstimatedPoint3DId` — typed identity for one estimated sparse 3D point.
+- `LocalScaleStatus` — explicit `UNRESOLVED` or `METRIC` scale semantics for a local frame.
+- `CameraCalibrationEstimate` — producer-labelled projection model, image dimensions and numeric parameter vector plus provenance. This is not a physical `CameraId` assertion.
+- `CameraPoseEstimate` — one observation's rigid camera-from-local-frame transform plus calibration reference and provenance.
+- `EstimatedTrackElement` — one observation/feature-index support element for an estimated 3D point.
+- `Point3DEstimate` — local 3D position, optional reprojection error, observation track and provenance.
+- `SparseReconstructionEstimate` — one local frame containing calibration estimates, registered camera poses and sparse points.
+
+The `LocalFrameId` used by an imported sparse model names only that solver-estimated local coordinate system. Reusing the frame identifier type does **not** create a `SpatialFragment`; fragment identity/membership remains a later acceptance/lifecycle concern.
+
+For the L3 COLMAP baseline, imported scale is always `LocalScaleStatus.UNRESOLVED`. No GPS/GCP/reference anchor is consumed by L3.5, so numerical coordinates must not be described as metric, Earth-aligned or globally compatible merely because COLMAP produced them.
+
+Camera pose semantics are explicitly camera-from-local-frame. COLMAP names the corresponding solver accessor `cam_from_world()`, but L3.6 maps its source frame to WRE's local reconstruction frame rather than promoting the word “world” into a global-world claim.
+
+Every imported calibration, pose, point and sparse model carries `DerivedArtifactProvenance`. Point provenance is required to match its observation track; pose provenance is required to contain exactly its observation; model provenance is required to match the set of registered camera-pose observations.
+
+### Explicit L3.6 boundary
+
+L3.6 does not:
+
+- create or accept a `SpatialFragment`;
+- merge disconnected/competing solver sub-models;
+- resolve metric scale or world coordinates;
+- infer physical camera identity from a solver calibration object;
+- add covariance or uncertainty models owned by L10;
+- perform absolute anchoring owned by L9;
+- perform L3.7's end-to-end baseline fixture.
+
+See [`19_COLMAP_RECONSTRUCTION_IMPORT.md`](19_COLMAP_RECONSTRUCTION_IMPORT.md) for the adapter and native-artifact contract.
+
 ## Planned L4 route-decision contract
 
 The Strategy Router will eventually produce a solver-independent route decision such as FAST, STANDARD or ESCALATED. That decision is **derived orchestration evidence**, not geometry and not acceptance. It should be able to retain the considered signals, route reason, configuration/threshold identity and escalation outcome.
