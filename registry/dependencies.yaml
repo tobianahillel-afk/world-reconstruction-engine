@@ -41,13 +41,15 @@ dependencies:
     license_review: approved
     notes: >-
       L3 uses the official PyCOLMAP 4.2.0 binding as its reference COLMAP environment.
-      L3.1 keeps it outside WRE's normal runtime lock because this work item only inspects
-      solver identity and executes no reconstruction capability. A dedicated CI lane installs
-      exact pycolmap==4.2.0 with numpy==2.5.3 and validates the real wheel. Upstream COPYING
-      states that COLMAP itself is BSD-3-Clause but separately licensed dependencies can affect
-      a concrete build/distribution. L3.2 must decide whether to promote PyCOLMAP into WRE's
-      runtime dependency/lock contract before using the feature-extraction API. Any alternate
-      COLMAP build, bundled redistribution, or integration mode requires a fresh dependency review.
+      L3.2 deliberately retains PyCOLMAP as an exact external solver environment rather than a
+      mandatory core WRE runtime dependency: WRE ingestion, persistence and evidence inspection
+      remain usable without installing the native reconstruction engine, while every solver-backed
+      operation lazily validates the exact PyCOLMAP/COLMAP identity before use. The dedicated CI
+      lane installs exact pycolmap==4.2.0 with numpy==2.5.3 and now exercises real CPU SIFT feature
+      extraction as well as environment inspection. Upstream COPYING states that COLMAP itself is
+      BSD-3-Clause but separately licensed dependencies can affect a concrete build/distribution.
+      Any alternate COLMAP build, bundled redistribution, mandatory-runtime packaging, or other
+      integration mode requires a fresh dependency and license review.
   limap:
     status: candidate_core
     role: [lines, structural_sfm, planes, vanishing_points, wireframe]
