@@ -146,6 +146,7 @@ class _FakePycolmap:
         self.calls.append(
             {
                 "database_path": Path(database_path),
+                "database_bytes": Path(database_path).read_bytes(),
                 "image_path": Path(image_path),
                 "output_path": Path(output_path),
                 "options": options,
@@ -347,6 +348,9 @@ def test_incremental_reconstruction_preserves_parent_and_audits_output(tmp_path:
     assert options.random_seed == 0
     assert options.ba_use_gpu is False
     assert options.use_prior_position is False
+    assert call["database_path"] != database_path
+    assert call["database_bytes"] == before
+    assert not Path(call["database_path"]).exists()
     assert call["staged"] == {
         "000000-a.png": b"image-a",
         "000001-b.png": b"image-b",
@@ -408,15 +412,15 @@ def test_solver_failure_cleans_only_owned_output_and_preserves_parent(tmp_path: 
     assert not request.output_path.exists()
 
 
-def test_database_mutation_is_detected_and_output_is_removed(tmp_path: Path) -> None:
+def test_private_database_mutation_is_detected_without_touching_parent(tmp_path: Path) -> None:
     request, database_path, _ = _request(tmp_path)
     before = database_path.read_bytes()
-    with pytest.raises(ColmapIncrementalReconstructionError, match="mutated the immutable"):
+    with pytest.raises(ColmapIncrementalReconstructionError, match="private L3.4 database copy"):
         reconstruct_colmap_incrementally(
             request,
             module=_FakePycolmap(mutate_database=True),
         )
-    assert database_path.read_bytes() != before
+    assert database_path.read_bytes() == before
     assert not request.output_path.exists()
 
 
