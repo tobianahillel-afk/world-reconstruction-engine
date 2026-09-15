@@ -1,61 +1,379 @@
-# Architecture
+# Architecture blueprint
 
-## Epistemic layers
+## Architectural objective
 
-WRE separates three layers:
+WRE is a modular reconstruction platform, not a fixed sequence of algorithms. Its architecture separates responsibilities, representations and quality criteria so the best available specialist can be selected for each dataset without coupling the product to one research method.
 
-1. **Observation** — raw media and source metadata (bytes/hash, timestamps, EXIF/GPS, camera metadata, provenance).
-2. **Derived evidence** — features, matches, verified two-view geometry, tracks, residuals, priors, change measurements and routing/validation evidence.
-3. **Estimated geometry** — camera poses, local geometry, fragments, placements, transforms, merge assertions and time-valid geometry states.
+The organizing rule is:
 
-Derived data must point back to its inputs and producing run/version.
+> stable contracts and artifacts in the core; replaceable solvers and models behind adapters.
 
-## Module boundaries
+The core owns orchestration, artifact lifecycle, routing, metrics, provenance classes, quality gates, temporal organization, runtime compilation and user-visible project state. Specialist libraries own their algorithms.
 
-Planned package domains:
+## System layers
 
-- `ingest` — image/video and metadata ingestion
-- `features` — feature-engine adapters
-- `retrieval` — candidate pair generation
-- `routing` — deterministic FAST/STANDARD/ESCALATED strategy decisions and escalation reasons
-- `matching` — pair matching adapters/orchestration
-- `geometry` — robust geometric verification and evidence
-- `reconstruction` — COLMAP/LIMAP/other reconstruction adapters
-- `fragments` — local fragment lifecycle
-- `registration` — incremental image placement
-- `merging` — fragment alignment and reversible merge assertions
-- `graph` — world-level constraints/optimization, including absolute anchors
-- `uncertainty` — covariance/confidence representation
-- `temporal` — epochs, cross-epoch change evidence, GeometryState and temporal transitions
-- `validation` — holdouts, consistency and regression metrics
-- `dense` — optional dense depth/mesh/texturing
-- `visualization` — optional non-canonical photorealistic rendering/view-synthesis products
-- `cli` — thin user/developer interface
+WRE is divided into six conceptual layers.
 
-External engines remain behind adapters. Core domain models must not depend on a particular solver's private representation.
+### 1. Observation layer
 
-## Global spatial strategy
+Stores original media and directly extracted facts:
 
-Never construct one monolithic world reconstruction. Maintain local fragments/submaps and optimize world-level transforms/constraints. Open/re-optimize local geometry only when required.
+- photos and videos;
+- decoded frames;
+- EXIF, timestamps and available calibration metadata;
+- audio tracks for synchronization;
+- source hashes and provenance;
+- image-quality measurements.
 
-A fragment is allowed to exist without absolute world coordinates. GPS, ground-control points, known landmarks and already-georeferenced reference fragments later enter the world graph as provenance-bearing constraints with uncertainty rather than destructively rewriting fragment geometry.
+Observation data is immutable. Derived artifacts never silently replace original evidence.
 
-## Adaptive compute strategy
+### 2. Organization and evidence layer
 
-WRE chooses the cheapest route likely to reach the normal evidence threshold, then escalates when needed. A FAST route may reduce candidates or reuse cached products, but it does not lower geometric acceptance requirements. Routing decisions must remain deterministic/auditable enough to explain what was tried and why.
+Builds relationships between observations:
 
-See [`12_ADAPTIVE_RECONSTRUCTION.md`](12_ADAPTIVE_RECONSTRUCTION.md) and ADR 0001.
+- visual retrieval and same-scene hypotheses;
+- local feature matches;
+- dense tracks and optical flow;
+- temporal synchronization hypotheses;
+- scene/epoch clustering;
+- dynamic/static masks;
+- camera and depth priors;
+- specialist data-profile classification.
 
-## Temporal / 4D strategy
+This layer answers “what likely belongs together?” before committing to one reconstruction.
 
-Canonical world geometry is time-aware when evidence supports physical change. Historical disagreement is not automatically an outlier: WRE may represent multiple `GeometryState` records with validity intervals and reversible change hypotheses.
+### 3. Geometry layer
 
-Mature 3D/4D change-measurement algorithms should be reused behind adapters; WRE owns provenance, temporal state, contradiction handling and acceptance policy. The first temporal target is historical/static-world change, not arbitrary continuous dynamic-object reconstruction.
+Represents where things are:
 
-See [`13_TEMPORAL_WORLD.md`](13_TEMPORAL_WORLD.md) and ADR 0001.
+- camera solutions and calibration;
+- point maps and sparse landmarks;
+- depth fields;
+- static spatial geometry;
+- local/global transforms;
+- dense reconstructions;
+- confidence and residual metrics.
 
-## Optional learned and rendering components
+Geometry may come from feed-forward models, SfM/MVS, SLAM, learned matching, hybrid global solvers or consensus between methods. Core contracts must not depend on solver-private structures.
 
-Learned retrieval/matching systems may propose candidates when an owning work item explicitly integrates them. Their outputs remain derived evidence and must pass geometric verification before acceptance.
+### 4. Scene representation layer
 
-Photorealistic neural/Gaussian-splat-style rendering is optional visualization. It must never replace canonical WRE geometry, uncertainty or provenance.
+Stores complementary world representations rather than collapsing everything into one asset:
+
+- explicit surface: mesh, SDF, surfels or equivalent;
+- photorealistic appearance: Gaussian/radiance/neural representation;
+- physical materials: albedo, roughness, metallic, normals when recovered;
+- environment: sky, horizon and distant illumination;
+- persistent dynamic objects;
+- motion/deformation fields;
+- temporal states and change events;
+- uncertainty fields;
+- optional generative completion.
+
+Each representation has a declared use. For example, splats may drive appearance while a mesh drives collision and measurement.
+
+### 5. Production/orchestration layer
+
+Turns research components into a reliable product:
+
+- project manifests;
+- artifact DAG and content-addressed cache;
+- adapter/model registry;
+- routing and fallback graph;
+- resource estimation and scheduling;
+- checkpoint/resume;
+- benchmark registry;
+- quality gates;
+- failure classification;
+- scene versioning;
+- human-review state;
+- reproducibility manifests.
+
+### 6. Runtime layer
+
+Compiles master scenes into device-oriented assets:
+
+- spatial chunks;
+- temporal chunks;
+- LOD hierarchies;
+- compressed splats/textures/meshes;
+- collision geometry/navmesh;
+- streaming metadata;
+- camera paths and timeline controls;
+- web/game/XR/offline-render packages.
+
+The runtime does not need to carry every master artifact.
+
+## Canonical domain contracts
+
+The exact implementation may evolve, but the architecture requires equivalents of the following concepts.
+
+### Project and media
+
+- `SceneProject` — user/project boundary and retained configuration.
+- `MediaAsset` — immutable source image/video.
+- `FrameObservation` — selected video frame with timing and source link.
+- `MediaProfile` — quality, camera class, 360/drone/blur/dynamic indicators.
+
+### Organization
+
+- `SceneCluster` — observations hypothesized to depict one connected scene.
+- `TemporalGroup` — same event, epoch or temporally related observations.
+- `PairCandidate` — proposed relationship between observations.
+- `CorrespondenceSet` — sparse or dense matches/tracks with producer metadata.
+- `SyncHypothesis` — offset/clock relationship between videos.
+
+### Geometry
+
+- `CameraSolution` — intrinsics, extrinsics, coordinate frame, uncertainty and metrics.
+- `DepthField` — per-pixel depth plus confidence/validity.
+- `PointMap` — dense or sparse 3D point predictions.
+- `GeometrySolution` — one coherent reconstruction hypothesis.
+- `SurfaceModel` — explicit physical surface.
+
+### Appearance and environment
+
+- `AppearanceModel` — photorealistic radiance/splat representation.
+- `MaterialModel` — optional physical material decomposition.
+- `EnvironmentModel` — sky/environment lighting representation.
+
+### Dynamics and history
+
+- `DynamicEntity` — persistent moving/deforming object.
+- `Trajectory` — object/camera path through time.
+- `MotionField` — continuous or sampled motion/deformation.
+- `TemporalState` — long-term scene state valid for an interval or epoch.
+- `ChangeEvent` — supported structural/semantic transition between states.
+
+### Confidence and generation
+
+- `ConfidenceField` — spatial/temporal quality or uncertainty.
+- `CompletionArtifact` — generated or inferred visual completion with explicit provenance class.
+
+### Runtime
+
+- `MasterScene` — highest-fidelity retained scene assembly.
+- `RuntimeScene` — compiled target-specific representation.
+- `LODChunk` — spatial/temporal streamable unit.
+
+## Provenance classes
+
+Every artifact or visible element that can be confused with reality must declare one of three top-level provenance classes:
+
+- `OBSERVED_RECONSTRUCTED` — directly supported by observations plus reconstruction;
+- `INFERRED` — model-derived estimate with confidence/uncertainty;
+- `GENERATED` — synthesis used for visual completion or cinematic output.
+
+This classification is orthogonal to quality. A beautiful generated view is still generated.
+
+## Artifact DAG
+
+All expensive work is represented as a directed acyclic graph of immutable/versioned artifacts.
+
+```text
+MediaAsset
+  -> FrameSet
+  -> MediaProfile
+  -> RetrievalIndex / SceneGraph
+  -> CorrespondenceArtifacts
+  -> CameraSolution / DepthSolution
+  -> GeometrySolution
+  -> SurfaceModel
+  -> AppearanceModel / MaterialModel / EnvironmentModel
+  -> TemporalSolution
+  -> MasterScene
+  -> RuntimeScene
+```
+
+An artifact key should include content hashes, configuration, adapter/model/checkpoint identity and producer version. Identical keys are reusable. Heavy stages should expose checkpoints where the underlying engine permits resume.
+
+## Adapter architecture
+
+External engines are integrated through capability-oriented adapters rather than through product-wide dependencies on their data structures.
+
+Examples of adapter families:
+
+- retrieval adapters;
+- feature/matcher adapters;
+- dense tracker adapters;
+- camera/depth foundation-model adapters;
+- SfM/SLAM/global mapper adapters;
+- MVS/depth-fusion adapters;
+- static/dynamic surface adapters;
+- Gaussian/radiance adapters;
+- 4D reconstruction adapters;
+- relighting/material adapters;
+- temporal-change adapters;
+- compression/LOD/runtime adapters.
+
+An adapter declares:
+
+- supported input contract;
+- produced output contract;
+- hardware requirements;
+- license/model provenance metadata;
+- deterministic/reproducibility guarantees where applicable;
+- metrics it can expose;
+- failure classes;
+- resumability semantics.
+
+## Router architecture
+
+Routing is based on data profile, requested quality, hardware budget, existing artifacts and quality-gate outcomes.
+
+The router can distinguish scenarios such as:
+
+- unordered static photo collections;
+- sparse-view static scenes;
+- very large Internet collections;
+- short monocular dynamic video;
+- long streaming video;
+- multi-video synchronized events;
+- 360/equirectangular capture;
+- drone capture;
+- historical multi-epoch media;
+- high-blur/HDR/fisheye/rolling-shutter specialist cases.
+
+A route is a graph, not necessarily a simple chain. Competing methods can run in parallel for high-quality modes and be compared or fused.
+
+## Quality modes and routing policy
+
+- `PREVIEW` prioritizes latency and dataset diagnosis.
+- `FAST` targets useful interactive output with bounded resource use.
+- `QUALITY` increases refinement, specialist use and holdout validation.
+- `MASTER` may run multiple solvers, dense/surface refinement, advanced appearance, temporal checks and expensive quality gates.
+
+The quality mode is not a truth label. Generated completion remains generated in all modes.
+
+## Automatic quality gates
+
+Each major stage should publish metrics and a gate decision.
+
+### Camera/geometry gates
+
+Candidate metrics:
+
+- registered-view ratio;
+- reprojection error;
+- pose consistency;
+- track length/distribution;
+- baseline/coverage distribution;
+- cycle consistency;
+- depth multi-view consistency;
+- scale/drift metrics where meaningful.
+
+### Surface gates
+
+Candidate metrics:
+
+- Chamfer/point-to-surface error on fixtures;
+- normal consistency;
+- watertightness where required;
+- hole/coverage measures;
+- collision usability.
+
+### Appearance gates
+
+Candidate metrics:
+
+- holdout PSNR/SSIM/LPIPS;
+- perceptual quality;
+- floater/ghosting indicators;
+- disagreement with explicit geometry;
+- temporal flicker for dynamic scenes.
+
+### Dynamic/temporal gates
+
+Candidate metrics:
+
+- dense tracking error;
+- trajectory consistency;
+- temporal geometry consistency;
+- object persistence through occlusion;
+- change-vs-registration confidence;
+- state-boundary uncertainty.
+
+Gate outcomes can be `PASS`, `ACCEPT_WITH_WARNINGS`, `RETRY`, `ESCALATE` or `UNRESOLVED`.
+
+## Static versus dynamic decomposition
+
+The architecture distinguishes:
+
+- stable background/structure;
+- semi-static elements such as vegetation, scaffolding and signs;
+- dynamic rigid objects;
+- articulated/deformable objects;
+- environment/sky;
+- transient distractors that should not contaminate static reconstruction.
+
+This classification can be uncertain and revised as more observations arrive.
+
+## Temporal architecture
+
+### Event-time 4D
+
+Short/continuous events use synchronized time, tracks, motion/deformation and persistent object identities. Output may include dynamic surfaces and photorealistic dynamic appearance.
+
+### Chronological time
+
+Long-term changes use `TemporalState` plus `ChangeEvent`. States may overlap in uncertainty or have approximate validity intervals. Structural changes are not forced into smooth deformation.
+
+### Mixed time
+
+A historical state may itself contain a short dynamic event. Temporal representation is therefore hierarchical rather than one global scalar animation curve.
+
+## Geometry versus appearance
+
+WRE explicitly supports dual representation:
+
+```text
+MasterScene
+  |- Physical representation
+  |    |- depth / point maps
+  |    |- surface / mesh / SDF
+  |    `- collision / navigation
+  |
+  `- Visual representation
+       |- Gaussian/radiance appearance
+       |- materials
+       `- environment / lighting
+```
+
+The renderer can combine these layers while the evaluator measures them separately.
+
+## Human-in-the-loop architecture
+
+The project state supports three interaction levels:
+
+- `AUTO` — router and quality gates decide automatically;
+- `ASSISTED` — user can correct clusters, masks, cameras, temporal assignments and regions;
+- `EXPERT` — artifact graph, adapter selection and specialist parameters are inspectable/overrideable.
+
+Manual edits become versioned artifacts rather than destructive hidden state.
+
+## Runtime compiler
+
+A dedicated compiler converts `MasterScene` to target-specific `RuntimeScene` assets. It may perform:
+
+- mesh simplification and collision generation;
+- texture/material baking;
+- splat compression;
+- spatial chunking;
+- temporal chunking/compression;
+- LOD generation;
+- occlusion/culling metadata;
+- navmesh generation;
+- platform/device budgets;
+- packaging for web, desktop, game engines or XR.
+
+Master quality and runtime performance are therefore independent optimization targets.
+
+## Technology selection policy
+
+The architecture never hard-codes “the best model” into the product definition. Current candidates live in a technology landscape/benchmark registry. A new method can become preferred when it wins the relevant internal benchmark and passes license, reproducibility and integration criteria.
+
+A candidate is evaluated per responsibility rather than by one overall leaderboard score.
+
+## Boundary with MONDE
+
+WRE must remain independently useful. If a future MONDE integration exists, it consumes explicit scene/observation/temporal outputs through optional contracts. MONDE-specific identity, belief-state or planetary world-model semantics do not define WRE's internal product architecture.

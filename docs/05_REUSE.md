@@ -2,75 +2,114 @@
 
 ## Decision rule
 
-Before implementing an algorithm:
+Before implementing an algorithm or integrating a model:
 
-1. Search `registry/dependencies.yaml`.
-2. Inspect maintained upstream implementations and current APIs.
-3. Check license, model/weight license where applicable, platform support, maintenance and reproducibility.
-4. Prefer an adapter around a proven implementation.
-5. If custom implementation is still justified, write an ADR before coding it.
+1. identify the WRE capability contract being satisfied;
+2. search `registry/dependencies.yaml` and `docs/14_TECHNOLOGY_SELECTION.md`;
+3. inspect maintained upstream implementations and current APIs;
+4. check code license, model/checkpoint license, transitive/native components, platform support, maintenance and reproducibility;
+5. prefer an adapter around a proven implementation;
+6. benchmark candidates behind the same WRE contract;
+7. if custom foundational implementation is still justified, write an ADR before coding it.
 
-## Current candidate stack
+A research paper being newer or better on one benchmark is not by itself a reason to replace a stable default. Promotion is data-profile-specific and must account for quality, reliability, resources, integration cost and licensing.
 
-### Canonical geometry / reconstruction
+## Ownership boundary
 
-- **COLMAP** — point features/matching, two-view geometry, incremental/global/hierarchical SfM, bundle adjustment, MVS, sequential/spatial/vocabulary/transitive candidate workflows and incremental image registration.
-- **LIMAP** — structural point+line/plane/vanishing-point/wireframe reconstruction.
-- **GTSAM** — world factor graph and incremental optimization.
-- **TEASER++** — robust 3D/Sim3 fragment registration where applicable.
-- **Open3D** — ICP/GICP refinement and geometry utilities.
-- **OpenMVG / AliceVision / OpenSfM** — selective validation/adapters when they provide a distinct capability; OpenSfM patterns are particularly relevant to GPS/GCP/checkpoint handling.
+WRE should own:
+
+- stable domain contracts;
+- artifact identity/provenance;
+- orchestration and routing;
+- normalization across solvers/models;
+- quality metrics and gates;
+- failure taxonomy and fallback policy;
+- benchmark fixtures/results;
+- project/master/runtime state;
+- compatibility and export/import boundaries.
+
+WRE should normally reuse external implementations for mature foundational algorithms such as feature extraction, matching, SfM/BA, MVS, tracking, rasterization, codecs, robust registration and specialized learned reconstruction.
+
+## Candidate roles
+
+Dependency status and algorithm role are separate concepts. A technology may be:
+
+- `baseline` — stable reference/compatibility path;
+- `primary_candidate` — current preferred method to evaluate for a capability/profile;
+- `specialist` — route used only for specific data/failure conditions;
+- `research_watch` — promising but not yet ready/licensed/reproducible;
+- `runtime_tooling` — production/runtime infrastructure;
+- `benchmark_only` — useful for comparison but not approved for shipping.
+
+No candidate becomes a default merely by appearing in documentation.
+
+## Current reusable families
+
+### Classical/precision geometry baseline
+
+- **COLMAP** — point features/matching, two-view geometry, incremental/global/hierarchical SfM, bundle adjustment, MVS and several candidate-pairing mechanisms.
+- **LIMAP** — structural point+line/plane/vanishing-point/wireframe reconstruction when benchmark evidence justifies it.
+- **OpenMVG / AliceVision / OpenSfM** — selective alternative geometry/validation paths where they provide distinct value.
+- **GTSAM / TEASER++ / Open3D** — factor-graph, robust registration and refinement capabilities when those contracts become active.
+
+COLMAP remains a retained baseline/compatibility adapter in v2; it is not the entire architecture.
 
 ### Media / coordinates
 
-- **FFmpeg** — video demux/decode and media probing; keyframe policy remains WRE orchestration.
+- **FFmpeg** — mature video demux/decode/audio extraction; WRE owns selection/profile/orchestration policy.
 - **PROJ / GeographicLib** — coordinate-reference-system and geodesy utilities when needed.
 
-### Robust world-graph / video specialists
+### Retrieval / matching
 
-- **Kimera-RPGO** — optional robust pose-graph consistency/outlier rejection; it complements rather than replaces GTSAM's primary world graph.
-- **Basalt** — optional visual/visual-inertial odometry and trajectory path for video/IMU work.
-- **Kalibr** — optional multi-camera, camera-IMU and rolling-shutter calibration.
+Potential reusable families include:
 
-### Difficult visual matching / localization
+- COLMAP sequential/spatial/vocabulary mechanisms;
+- SALAD and modern visual-place-retrieval embeddings;
+- DINO-family global/semantic descriptors;
+- hloc-style retrieval/local verification;
+- LightGlue with appropriate feature extractors;
+- MASt3R-family matching/3D correspondence methods;
+- RoMa/LoFTR-class difficult-view matchers.
 
-Prefer capabilities already available through the chosen COLMAP version before adding another stack. When a genuinely difficult Internet/archive-image case requires more, candidates include:
+**Important v2 rule:** retrieval similarity is proposal evidence, but a learned matching or geometry model is not globally restricted to “proposal only.” Its authority depends on the owning capability contract and quality policy. Scene-identity fusion still requires the evidence prescribed by the scene-organization contract, and repeated/symmetric structures require explicit disambiguation.
 
-- **hloc (Hierarchical-Localization)** — optional retrieval/localization/mapping orchestration;
-- **LightGlue** — optional adaptive learned matching for candidate correspondences.
+### Feed-forward / stateful geometry
 
-These learned tools propose evidence; they do not bypass WRE geometric verification. Their framework/code licenses do not automatically cover every bundled extractor/model weight. Any concrete configuration must receive a per-model license review before becoming mandatory.
+Candidates include DA3-family systems, VGGT-Ω, Pi3/Pi3X, MapAnything-class systems, CUT3R, LongStream, ZipMap, Scal3R, SLAM3R and future equivalents.
 
-### Temporal / 4D change
+These may serve as previews, priors, specialist paths **or primary `GeometrySolution` producers** when the relevant benchmark/quality contract supports that use. The core architecture must not assume every learned geometry result is merely a proposal to COLMAP.
 
-- **py4dgeo** — planned L15 adapter for multi-epoch 3D/4D point-cloud change measurement (including M3C2-family workflows). WRE consumes its measurements as derived evidence and owns temporal hypotheses/state validity.
+### Surface / appearance
 
-Do not reimplement mature 3D/4D change-measurement algorithms merely to own the code.
+- mature MVS/fusion/mesh systems for explicit physical surface;
+- gsplat and compatible Gaussian backends for appearance;
+- Nerfstudio/Splatfacto as reusable appearance integration/reference tooling;
+- OMeGa/SurfaceSplat/MeshSplatting-class hybrids as benchmark candidates;
+- robust in-the-wild appearance systems where released/licensed.
 
-### Optional visualization
+**Appearance is a first-class WRE representation.** A NeRF/Gaussian system may produce a canonical `AppearanceModel` for a master scene when its contract/quality criteria are satisfied. It does **not** become collision/measurement geometry automatically.
 
-- **Nerfstudio** — optional photorealistic NeRF/Gaussian-splat-style visualization/view synthesis. It may consume WRE/COLMAP geometry, but its render representation is never canonical WRE world geometry.
+### Dynamic / 4D
 
-## Reuse matrix
+Candidates include dense trackers such as AllTracker/CoTracker-family methods; fast 4D preview methods such as MoVieS/MoRe/D4RT-class systems; quality dynamic methods such as MotionScale/Shape-of-Motion/MoSca/ProDyG/MOSAIC-GS-class systems; and persistent-object/dynamic-surface research families.
 
-| Capability | Preferred existing project | WRE responsibility |
-|---|---|---|
-| point features / SfM / BA / MVS | COLMAP | adapter, provenance, orchestration, evidence policy |
-| structural points+lines/planes/VP | LIMAP | adapter and solver-independent import |
-| video decode/probe | FFmpeg | deterministic ingest/keyframe orchestration |
-| candidate retrieval | COLMAP mechanisms + WRE graph/time/GPS signals | deterministic candidate/routing policy |
-| difficult learned proposals | COLMAP integrated options first; optional hloc/LightGlue | proposal only, geometric verification required |
-| robust Sim3 fragment registration | TEASER++ | candidate generation, evidence, acceptance/reversibility |
-| ICP/GICP refinement | Open3D | orchestration and acceptance evidence |
-| world factor graph | GTSAM | factor contracts, provenance, uncertainty |
-| robust graph outlier rejection | optional Kimera-RPGO | audit/adapter, not hidden authority |
-| GPS/GCP/checkpoints | GTSAM/OpenSfM patterns + PROJ/GeographicLib | solver-independent anchor constraints |
-| VIO/trajectory | optional Basalt | adapter and evidence import |
-| camera/IMU/rolling-shutter calibration | optional Kalibr | adapter and provenance |
-| multi-epoch change measurement | py4dgeo | temporal evidence import, hypotheses/states |
-| photorealistic visualization | optional Nerfstudio | display/export only; never canonical geometry |
+WRE owns the stable dynamic contracts, temporal quality policy, provenance, orchestration and runtime composition. It does not hard-code one paper as “the 4D architecture.”
 
-No candidate becomes a core dependency until its owning work item decides exact version, license status, integration mode and acceptance tests.
+### Historical chronology
+
+- py4dgeo for mature multi-epoch point-cloud change measurement where applicable;
+- Neural Scene Chronology/Cross-Temporal-3DGS/LTGS/GaME/real-time change-detection families as conceptual or implementation candidates depending on release/license maturity.
+
+WRE owns `TemporalState` / `ChangeEvent` semantics and long-term chronology regardless of which renderer/change detector is used.
+
+### Runtime / LOD / viewers
+
+- SuperSplat/PlayCanvas as strong web-runtime/viewer references and potential integrations;
+- glTF/GLB and mature mesh tooling for explicit geometry exchange;
+- SPZ/SOG-class compact splat formats where compatible;
+- Unreal/Unity integrations through explicit runtime contracts.
+
+Do not write a custom renderer, codec or compression format before measuring that maintained alternatives are inadequate for the target contract.
 
 ## Development dependencies
 
@@ -78,8 +117,38 @@ Development tooling is reproducible through the committed `uv.lock`. CI must use
 
 Supply-chain controls and settings that are deliberately outside the fast lane are documented in [`08_SECURITY.md`](08_SECURITY.md).
 
+## Learned-model registry requirements
+
+Before a learned model/checkpoint can become a production default, its registry entry must include at least:
+
+- canonical source repository/project;
+- exact code version/commit;
+- checkpoint/model identity and hash when available;
+- code and checkpoint licenses reviewed separately;
+- supported hardware/runtime;
+- required preprocessing/postprocessing;
+- artifact contract produced;
+- reproducibility/determinism notes;
+- benchmark status by relevant data profile;
+- shipping status.
+
+Floating `latest` checkpoints are forbidden in reproducible paths.
+
 ## Licensing
 
 The repository's final project license has not yet been selected. Until it is, do not make a copyleft dependency mandatory/core without an explicit architecture/license decision. Optional subprocess adapters must still be reviewed for distribution implications.
 
-For learned computer-vision components, review code, model weights and any upstream feature extractor separately. A framework being Apache/BSD/MIT does not prove every bundled checkpoint is safe for the intended distribution.
+For learned components, review code, model weights, upstream extractors, datasets and bundled assets separately. A framework being Apache/BSD/MIT does not prove every checkpoint or dependency is safe for the intended distribution.
+
+## Replacement rule
+
+A maintained candidate can replace a current default for a particular profile/quality mode only after:
+
+1. integration behind the same WRE contract;
+2. exact version/license/reproducibility review;
+3. representative benchmark evidence;
+4. failure-class inspection, not aggregate score only;
+5. no regression in required provenance/invariant behavior;
+6. routing/registry update with an explicit fallback.
+
+A replacement should normally require changing adapter/registry/router policy, not redesigning core scene semantics.
