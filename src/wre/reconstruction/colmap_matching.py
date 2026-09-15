@@ -128,7 +128,9 @@ class ColmapPairMatchingRequest:
         if len(self.features.images) < 2:
             raise ValueError("pair matching requires at least two feature-bearing images")
         if self.run.input_observation_ids != self.features.provenance.source_observation_ids:
-            raise ValueError("ReconstructionRun inputs must exactly match the L3.2 feature artifact")
+            raise ValueError(
+                "ReconstructionRun inputs must exactly match the L3.2 feature artifact"
+            )
         if self.run.producer.implementation != _MATCH_PRODUCER:
             raise ValueError(f"ReconstructionRun producer must be {_MATCH_PRODUCER!r}")
         if self.run.producer.version != SUPPORTED_PYCOLMAP_VERSION:
@@ -140,7 +142,9 @@ class ColmapPairMatchingRequest:
                 "ReconstructionRun configuration SHA-256 must match the canonical matching config"
             )
         if self.features.environment.pycolmap_version != SUPPORTED_PYCOLMAP_VERSION:
-            raise ValueError("L3.2 feature artifact was produced by an unsupported PyCOLMAP version")
+            raise ValueError(
+                "L3.2 feature artifact was produced by an unsupported PyCOLMAP version"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -190,7 +194,9 @@ class ColmapPairMatchingResult:
             raise ValueError("stored match pairs cannot exceed attempted exhaustive pairs")
         if self.unverified_two_view_placeholder_count > self.attempted_pair_count:
             raise ValueError("unverified two-view placeholders cannot exceed attempted pairs")
-        pair_ids = tuple((item.observation_id1.value, item.observation_id2.value) for item in self.pairs)
+        pair_ids = tuple(
+            (item.observation_id1.value, item.observation_id2.value) for item in self.pairs
+        )
         if pair_ids != tuple(sorted(pair_ids)) or len(pair_ids) != len(set(pair_ids)):
             raise ValueError("pair summaries must be unique and canonically ordered")
 
@@ -235,12 +241,15 @@ def _read_match_database(
         raise ColmapPairMatchingError("cannot open COLMAP matching database") from exc
 
     try:
-        image_rows = connection.execute("SELECT image_id, name FROM images ORDER BY image_id").fetchall()
+        image_rows = connection.execute(
+            "SELECT image_id, name FROM images ORDER BY image_id"
+        ).fetchall()
         match_rows = connection.execute(
             "SELECT pair_id, rows, cols FROM matches ORDER BY pair_id"
         ).fetchall()
         geometry_rows = connection.execute(
-            "SELECT pair_id, config FROM two_view_geometries ORDER BY pair_id"
+            "SELECT pair_id, rows, cols, data, config, F, E, H, qvec, tvec, camera1, camera2 "
+            "FROM two_view_geometries ORDER BY pair_id"
         ).fetchall()
     except sqlite3.Error as exc:
         raise ColmapPairMatchingError("COLMAP matching database has an invalid schema") from exc
@@ -254,14 +263,46 @@ def _read_match_database(
         )
 
     match_pair_ids = {int(pair_id) for pair_id, _, _ in match_rows}
-    for pair_id, config in geometry_rows:
-        if int(config) != _UNDEFINED_TWO_VIEW_CONFIG:
-            raise ColmapPairMatchingError(
-                "L3.3 produced a geometrically classified two-view row; verification belongs to L3.4"
-            )
+    for geometry_row in geometry_rows:
+        (
+            pair_id,
+            rows,
+            cols,
+            data,
+            config,
+            fundamental,
+            essential,
+            homography,
+            qvec,
+            tvec,
+            camera1,
+            camera2,
+        ) = geometry_row
         if int(pair_id) not in match_pair_ids:
             raise ColmapPairMatchingError(
                 "COLMAP wrote an unverified two-view placeholder without a raw match row"
+            )
+        if int(config) != _UNDEFINED_TWO_VIEW_CONFIG:
+            raise ColmapPairMatchingError(
+                "L3.3 produced geometrically classified two-view content; verification belongs "
+                "to L3.4"
+            )
+        if int(rows) != 0 or int(cols) != 2 or data not in (None, b""):
+            raise ColmapPairMatchingError(
+                "L3.3 produced two-view inlier content; geometric verification belongs to L3.4"
+            )
+        geometric_payloads = (
+            fundamental,
+            essential,
+            homography,
+            qvec,
+            tvec,
+            camera1,
+            camera2,
+        )
+        if any(payload is not None for payload in geometric_payloads):
+            raise ColmapPairMatchingError(
+                "L3.3 produced geometric two-view payloads; verification belongs to L3.4"
             )
 
     summaries: list[ColmapPairMatchSummary] = []
@@ -292,9 +333,13 @@ def _read_match_database(
         )
 
     summaries.sort(key=lambda item: (item.observation_id1.value, item.observation_id2.value))
-    pair_keys = [(item.observation_id1.value, item.observation_id2.value) for item in summaries]
+    pair_keys = [
+        (item.observation_id1.value, item.observation_id2.value) for item in summaries
+    ]
     if len(pair_keys) != len(set(pair_keys)):
-        raise ColmapPairMatchingError("COLMAP matching database contains duplicate observation pairs")
+        raise ColmapPairMatchingError(
+            "COLMAP matching database contains duplicate observation pairs"
+        )
     return tuple(summaries), len(geometry_rows)
 
 
@@ -340,7 +385,9 @@ def match_colmap_pairs(
         shutil.copyfile(source_database_path, database_path)
         copied_hash = hash_file_content(database_path)
         if copied_hash != source_hash:
-            raise ColmapPairMatchingError("copied feature database does not match its parent artifact")
+            raise ColmapPairMatchingError(
+                "copied feature database does not match its parent artifact"
+            )
 
         matching_options, pairing_options = _configure_pycolmap(pycolmap, request.config)
         pycolmap.set_random_seed(request.config.random_seed)
