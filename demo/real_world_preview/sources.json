@@ -3,8 +3,8 @@
   "description": "Real photographs of the west facade of Notre-Dame de Paris selected from Wikimedia Commons for a WRE sparse-reconstruction preview.",
   "download_policy": {
     "provider": "Wikimedia Commons MediaWiki API",
-    "thumbnail_width_px": 2000,
-    "note": "The committed demo inputs are Wikimedia-generated resized derivatives of the source photographs. Source pages and license metadata are retained in resolved_sources.json."
+    "thumbnail_width_px": 1280,
+    "note": "The committed demo inputs are Wikimedia-generated resized derivatives at a standard cached thumbnail width. Source pages and license metadata are retained in resolved_sources.json."
   },
   "files": [
     "2017-07-29 France, Paris DSC 2672 DxO.jpg",
