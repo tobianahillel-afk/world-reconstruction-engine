@@ -58,7 +58,7 @@ work_items:
   - id: V2L0.3
     lot: V2L0
     title: Retained baseline compatibility review
-    status: in_review
+    status: done
     objective: Prove that the v2 governance migration preserved the retained v1 implementation, tests and external integration behavior, close the V2L0 migration lot, and prepare the first implementation item without adding product functionality.
     allowed_scope:
       - compatibility and migration review evidence under docs/reviews
@@ -102,7 +102,51 @@ work_items:
       - retained PyCOLMAP integration workflow
       - source-tree migration diff audit
       - V2L0 lot review checklist
-  - {id: V2L1.1, lot: V2L1, title: SceneProject contract, status: planned, depends_on: [V2L0.3]}
+  - id: V2L1.1
+    lot: V2L1
+    title: SceneProject contract
+    status: ready
+    objective: Define the minimal immutable SceneProjectId and SceneProject root contract that establishes a distinct project identity boundary for all later V2 project and artifact metadata without pulling later manifest responsibilities forward.
+    allowed_scope:
+      - src/wre/domain/projects.py
+      - focused public-domain exports only if required for the new contract
+      - tests/test_scene_projects.py
+    out_of_scope:
+      - ArtifactId artifact kinds or exact input-artifact references owned by V2L1.2
+      - producer model checkpoint or configuration identity owned by V2L1.3
+      - provenance classes owned by V2L1.4
+      - canonical artifact keys or content addressing owned by V2L1.5
+      - codec database or metadata persistence owned by V2L1.6
+      - source-media collections coordinate frames quality modes user overrides scene clusters temporal groups artifact roots master-scene versions runtime exports or warnings
+      - generic placeholder dictionaries strings or lists standing in for later typed manifest responsibilities
+      - ingestion reconstruction retrieval routing solver runtime or external-dependency behavior changes
+      - refactoring existing ObservationId or SourceId behavior merely to share implementation code
+    depends_on: [V2L0.3]
+    read_before:
+      - docs/02_ARCHITECTURE.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - src/wre/domain/observations.py
+      - tests/test_observations.py
+    reuse:
+      - existing frozen dataclass and slots value-object conventions in the domain layer
+      - existing opaque identifier lexical semantics used by ObservationId and SourceId
+      - existing deterministic ValueError-based validation and unit-test style
+    acceptance:
+      - SceneProjectId is a distinct identity type and is not an alias of observation source camera scene or temporal identity.
+      - SceneProjectId uses the established WRE opaque-ID lexical contract and rejects empty whitespace invalid-character and overlength values.
+      - Project identity is caller supplied; the contract does not generate random hidden identity.
+      - SceneProject is immutable and carries exactly the project identity in this work item, with no mutable catch-all configuration or placeholder future-manifest fields.
+      - Equality and hashing are deterministic from the typed immutable project identity.
+      - No I/O persistence artifact DAG routing solver media processing or runtime behavior is introduced.
+      - Existing domain behavior and tests remain unchanged.
+    tests:
+      - focused positive construction equality hashing and string/identity tests for SceneProjectId and SceneProject
+      - negative tests for invalid IDs and immutability
+      - regression tests confirming no existing observation/source identity behavior changes
+      - full fast CI
   - {id: V2L1.2, lot: V2L1, title: Artifact identity and exact input references, status: planned, depends_on: [V2L1.1]}
   - {id: V2L1.3, lot: V2L1, title: Producer model checkpoint configuration identity, status: planned, depends_on: [V2L1.2]}
   - {id: V2L1.4, lot: V2L1, title: Provenance class contract, status: planned, depends_on: [V2L1.3]}
