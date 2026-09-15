@@ -16,6 +16,14 @@ from wre.reconstruction.colmap_features import (
     ColmapImageFeatureSummary,
     extract_colmap_features,
 )
+from wre.reconstruction.colmap_matching import (
+    ColmapPairMatchingConfig,
+    ColmapPairMatchingError,
+    ColmapPairMatchingRequest,
+    ColmapPairMatchingResult,
+    ColmapPairMatchSummary,
+    match_colmap_pairs,
+)
 
 __all__ = [
     "SUPPORTED_COLMAP_VERSION",
@@ -28,6 +36,12 @@ __all__ = [
     "ColmapFeatureExtractionResult",
     "ColmapFeatureInput",
     "ColmapImageFeatureSummary",
+    "ColmapPairMatchSummary",
+    "ColmapPairMatchingConfig",
+    "ColmapPairMatchingError",
+    "ColmapPairMatchingRequest",
+    "ColmapPairMatchingResult",
     "extract_colmap_features",
     "inspect_colmap_environment",
+    "match_colmap_pairs",
 ]
