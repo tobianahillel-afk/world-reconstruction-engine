@@ -1,0 +1,25 @@
+schema_version: 1
+milestone: V2M5
+work_items:
+  - {id: V2L31.1, lot: V2L31, title: Capture date evidence with uncertain intervals, status: planned, depends_on: [V2L30.5]}
+  - {id: V2L31.2, lot: V2L31, title: TemporalEpoch grouping hypothesis, status: planned, depends_on: [V2L31.1]}
+  - {id: V2L31.3, lot: V2L31, title: Contradictory unknown date handling, status: planned, depends_on: [V2L31.2]}
+  - {id: V2L31.4, lot: V2L31, title: Epoch grouping fixture, status: planned, depends_on: [V2L31.3]}
+  - {id: V2L32.1, lot: V2L32, title: Cross epoch frame scale alignment contract, status: planned, depends_on: [V2L31.4]}
+  - {id: V2L32.2, lot: V2L32, title: Robust cross epoch registration baseline, status: planned, depends_on: [V2L32.1]}
+  - {id: V2L32.3, lot: V2L32, title: Mature point surface change measurement adapter, status: planned, depends_on: [V2L32.2]}
+  - {id: V2L32.4, lot: V2L32, title: Registration error occlusion confidence outputs, status: planned, depends_on: [V2L32.3]}
+  - {id: V2L32.5, lot: V2L32, title: Unchanged true change misregistration fixture, status: planned, depends_on: [V2L32.4]}
+  - {id: V2L33.1, lot: V2L33, title: TemporalState immutable validity support contract, status: planned, depends_on: [V2L32.5]}
+  - {id: V2L33.2, lot: V2L33, title: ChangeEvent evidence interval confidence contract, status: planned, depends_on: [V2L33.1]}
+  - {id: V2L33.3, lot: V2L33, title: Change versus registration quality gate, status: planned, depends_on: [V2L33.2]}
+  - {id: V2L33.4, lot: V2L33, title: Reversible temporal state transitions, status: planned, depends_on: [V2L33.3]}
+  - {id: V2L33.5, lot: V2L33, title: Temporal contradiction change point fixture, status: planned, depends_on: [V2L33.4]}
+  - {id: V2L34.1, lot: V2L34, title: Sparse epoch support transfer contract, status: planned, depends_on: [V2L33.5]}
+  - {id: V2L34.2, lot: V2L34, title: First approved cross temporal reconstruction candidate, status: planned, depends_on: [V2L34.1]}
+  - {id: V2L34.3, lot: V2L34, title: State specific geometry appearance ownership, status: planned, depends_on: [V2L34.2]}
+  - {id: V2L34.4, lot: V2L34, title: Cross temporal transfer safeguards, status: planned, depends_on: [V2L34.3]}
+  - {id: V2L35.1, lot: V2L35, title: Master timeline and state index contract, status: planned, depends_on: [V2L34.4]}
+  - {id: V2L35.2, lot: V2L35, title: Runtime epoch switching historical chunk selection, status: planned, depends_on: [V2L35.1]}
+  - {id: V2L35.3, lot: V2L35, title: Uncertain interval provenance visualization, status: planned, depends_on: [V2L35.2]}
+  - {id: V2L35.4, lot: V2L35, title: Historical runtime benchmark fixture, status: planned, depends_on: [V2L35.3]}

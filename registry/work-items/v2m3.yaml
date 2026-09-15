@@ -1,0 +1,41 @@
+schema_version: 1
+milestone: V2M3
+work_items:
+  - {id: V2L17.1, lot: V2L17, title: Source color exposure metadata contract, status: planned, depends_on: [V2L16.6]}
+  - {id: V2L17.2, lot: V2L17, title: Decode working output color convention layer, status: planned, depends_on: [V2L17.1]}
+  - {id: V2L17.3, lot: V2L17, title: Exposure white balance normalization artifact, status: planned, depends_on: [V2L17.2]}
+  - {id: V2L17.4, lot: V2L17, title: Clipping saturation incompatible camera handling, status: planned, depends_on: [V2L17.3]}
+  - {id: V2L17.5, lot: V2L17, title: Photometric regression fixture, status: planned, depends_on: [V2L17.4]}
+  - {id: V2L18.1, lot: V2L18, title: Canonical AppearanceModel contract, status: planned, depends_on: [V2L17.5]}
+  - {id: V2L18.2, lot: V2L18, title: Gaussian radiance adapter capability contract, status: planned, depends_on: [V2L18.1]}
+  - {id: V2L18.3, lot: V2L18, title: First approved static appearance baseline, status: planned, depends_on: [V2L18.2]}
+  - {id: V2L18.4, lot: V2L18, title: Held out render and geometry disagreement metrics, status: planned, depends_on: [V2L18.3]}
+  - {id: V2L18.5, lot: V2L18, title: In the wild appearance specialist boundary, status: planned, depends_on: [V2L18.4]}
+  - {id: V2L18.6, lot: V2L18, title: Appearance benchmark and default candidate review, status: planned, depends_on: [V2L18.5]}
+  - {id: V2L19.1, lot: V2L19, title: EnvironmentModel sky horizon contract, status: planned, depends_on: [V2L18.6]}
+  - {id: V2L19.2, lot: V2L19, title: Baseline environment representation, status: planned, depends_on: [V2L19.1]}
+  - {id: V2L19.3, lot: V2L19, title: MaterialModel contract, status: planned, depends_on: [V2L19.2]}
+  - {id: V2L19.4, lot: V2L19, title: Inverse rendering material adapter boundary, status: planned, depends_on: [V2L19.3]}
+  - {id: V2L19.5, lot: V2L19, title: Material provenance negative tests, status: planned, depends_on: [V2L19.4]}
+  - {id: V2L20.1, lot: V2L20, title: MasterScene immutable assembly contract, status: planned, depends_on: [V2L19.5]}
+  - {id: V2L20.2, lot: V2L20, title: Master scene version reason parent semantics, status: planned, depends_on: [V2L20.1]}
+  - {id: V2L20.3, lot: V2L20, title: Component coordinate color time provenance compatibility, status: planned, depends_on: [V2L20.2]}
+  - {id: V2L20.4, lot: V2L20, title: Incremental new media master version creation, status: planned, depends_on: [V2L20.3]}
+  - {id: V2L20.5, lot: V2L20, title: Competing component selection evidence retention, status: planned, depends_on: [V2L20.4]}
+  - {id: V2L20.6, lot: V2L20, title: Master scene versioning fixture, status: planned, depends_on: [V2L20.5]}
+  - {id: V2L21.1, lot: V2L21, title: RuntimeTargetProfile and RuntimeScene contracts, status: planned, depends_on: [V2L20.6]}
+  - {id: V2L21.2, lot: V2L21, title: Geometry simplification collision output boundary, status: planned, depends_on: [V2L21.1]}
+  - {id: V2L21.3, lot: V2L21, title: Appearance packaging compression boundary, status: planned, depends_on: [V2L21.2]}
+  - {id: V2L21.4, lot: V2L21, title: Spatial chunk and LOD manifest, status: planned, depends_on: [V2L21.3]}
+  - {id: V2L21.5, lot: V2L21, title: Runtime memory download FPS budget validation, status: planned, depends_on: [V2L21.4]}
+  - {id: V2L21.6, lot: V2L21, title: Runtime provenance and master link regression, status: planned, depends_on: [V2L21.5]}
+  - {id: V2L22.1, lot: V2L22, title: Reference viewer integration selection, status: planned, depends_on: [V2L21.6]}
+  - {id: V2L22.2, lot: V2L22, title: Orbit and first person walk with collision surface, status: planned, depends_on: [V2L22.1]}
+  - {id: V2L22.3, lot: V2L22, title: Free fly drone camera and saved paths, status: planned, depends_on: [V2L22.2]}
+  - {id: V2L22.4, lot: V2L22, title: Appearance and environment viewer integration, status: planned, depends_on: [V2L22.3]}
+  - {id: V2L22.5, lot: V2L22, title: Provenance confidence expert overlay, status: planned, depends_on: [V2L22.4]}
+  - {id: V2L22.6, lot: V2L22, title: Viewer load FPS memory fixture, status: planned, depends_on: [V2L22.5]}
+  - {id: V2L23.1, lot: V2L23, title: Static media to runtime end to end fixture, status: planned, depends_on: [V2L22.6]}
+  - {id: V2L23.2, lot: V2L23, title: PREVIEW FAST QUALITY static route comparison, status: planned, depends_on: [V2L23.1]}
+  - {id: V2L23.3, lot: V2L23, title: Static failure holes unresolved fixture, status: planned, depends_on: [V2L23.2]}
+  - {id: V2L23.4, lot: V2L23, title: Retained static vertical slice benchmark, status: planned, depends_on: [V2L23.3]}

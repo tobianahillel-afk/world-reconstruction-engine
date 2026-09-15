@@ -5,23 +5,24 @@ This repository is designed to be resumed by an AI coding agent with no conversa
 ## Mandatory startup sequence
 
 1. Read `docs/00_START_HERE.md`.
-2. Read the canonical blueprint documents referenced there: `docs/01_PRODUCT.md`, `docs/02_ARCHITECTURE.md`, `docs/03_PIPELINE.md`, `docs/14_TECHNOLOGY_SELECTION.md`, `docs/15_PRODUCTION_RUNTIME.md`, `docs/23_ENGINEERING_EXECUTION.md`, and `docs/24_SYSTEM_INVARIANTS.md`.
+2. Read the canonical blueprint documents referenced there: `docs/01_PRODUCT.md`, `docs/02_ARCHITECTURE.md`, `docs/03_PIPELINE.md`, `docs/14_TECHNOLOGY_SELECTION.md`, `docs/15_PRODUCTION_RUNTIME.md`, `docs/23_ENGINEERING_EXECUTION.md`, `docs/24_SYSTEM_INVARIANTS.md`, and `docs/25_V2_ROADMAP.md`.
 3. Read `PROJECT_STATE.yaml`.
-4. Read the active item in `registry/work-items.yaml`.
-5. Read only that item's `read_before` files plus directly relevant source/tests.
-6. Inspect declared reusable dependencies before implementing anything new.
-7. Run the baseline checks declared by the active item.
-8. Implement only the active work item.
-9. Run its acceptance tests.
-10. Review the diff against objective, acceptance criteria, out-of-scope, architecture, system invariants and regression risk.
-11. Update project state and registries before merge.
-12. Do not start the next work item in the same PR unless the registry explicitly says so.
+4. Read the roadmap index `registry/work-items.yaml`, follow its `work_item_files`, and locate the exact `active_work_item` in the corresponding milestone file under `registry/work-items/`.
+5. Verify the active item has a complete executable contract: objective, allowed scope, out-of-scope, dependencies, read-before, reuse, acceptance and tests.
+6. Read only that item's `read_before` files plus directly relevant source/tests.
+7. Inspect declared reusable dependencies before implementing anything new.
+8. Run the baseline checks declared by the active item.
+9. Implement only the active work item.
+10. Run its acceptance tests.
+11. Review the diff against objective, allowed scope, acceptance criteria, out-of-scope, architecture, system invariants and regression risk.
+12. Update project state and registries before merge.
+13. Do not start the next work item in the same PR unless the registry explicitly says so.
 
-If the blueprint has advanced beyond the machine-readable roadmap, follow the transition rule in `docs/00_START_HERE.md`: do not opportunistically reinterpret old work items. A dedicated roadmap/state migration must reconcile the implementation sequence.
+If the blueprint advances beyond the machine-readable roadmap, follow the transition rule in `docs/00_START_HERE.md`: do not opportunistically reinterpret old work items. A dedicated roadmap/state migration must reconcile the implementation sequence.
 
 ## Scope is deny-by-default
 
-A work item is an allowlist. Implement only behavior required by its objective, acceptance criteria, necessary supporting tests/docs, and already-accepted invariants that it must touch. The absence of an explicit prohibition is not permission.
+A work item is an allowlist. Implement only behavior required by its objective, explicit `allowed_scope`, acceptance criteria, necessary supporting tests/docs, and already-accepted invariants that it must touch. The absence of an explicit prohibition is not permission.
 
 - Do not pull adjacent features forward because they are convenient.
 - Do not add speculative extension points, options or generic abstractions for hypothetical future callers.
@@ -31,11 +32,13 @@ A work item is an allowlist. Implement only behavior required by its objective, 
 
 Prefer positive-domain logic: encode the valid states directly with explicit types/enums/invariants rather than accepting arbitrary combinations and rejecting them later.
 
-## Work-item sizing
+## Work-item activation and sizing
+
+Planned future work may remain concise. Before any item becomes `ready`, `in_progress`, `in_review`, `blocked` or `done`, it must have the complete executable contract enforced by the repository validator.
 
 A work item must be small enough for one agent to understand, implement, test and review in one development run. It should normally contain one primary responsibility, one independently testable output contract and at most one major external integration decision.
 
-Split before coding when an item combines independent failure domains such as contract + several adapters, candidate generation + truth acceptance, geometry + appearance, master representation + runtime optimization, short-event dynamics + long-term chronology, or implementation + a benchmark/default-promotion program that does not yet exist.
+The v2 roadmap policy limits lots to at most six work items. Split before coding when an item combines independent failure domains such as contract + several adapters, candidate generation + truth acceptance, geometry + appearance, master representation + runtime optimization, short-event dynamics + long-term chronology, or implementation + a benchmark/default-promotion program that does not yet exist.
 
 Prefer more small lots over deep administrative nesting. One coherent work item should normally equal one PR.
 

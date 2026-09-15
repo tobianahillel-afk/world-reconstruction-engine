@@ -1,77 +1,76 @@
-schema_version: 1
+schema_version: 2
 policy:
   pr_review_required: true
   lot_review_required: true
   milestone_review_required: true
+  lot_review_verifies_composition_not_status_count: true
+  milestone_review_requires_end_to_end_capability: true
+history:
+  v1_source_commit: 415f28d8f2a157d3227b2c73e139150901608df2
+  passed_reviews:
+    - docs/reviews/L0-M0-bootstrap-review.md
+    - docs/reviews/L1-core-domain-review.md
+    - docs/reviews/L2-media-ingestion-review.md
+    - docs/reviews/L3-M1-colmap-baseline-review.md
 lot_reviews:
-  L0:
-    status: passed
-    reviewed_at: '2026-09-14'
-    evidence:
-      - docs/reviews/L0-M0-bootstrap-review.md
-      - PRs #1 through #5 merged with acceptance evidence
-      - main fast-ci run 34882936749 passed
-  L1:
-    status: passed
-    reviewed_at: '2026-09-14'
-    evidence:
-      - docs/reviews/L1-core-domain-review.md
-      - PRs #7 through #10 merged; PR #11 carries final L1.5 and lot-review acceptance evidence
-      - L1.5 implementation fast-ci run 34889364989 passed
-      - L1.5 implementation CodeQL run 34889364874 passed
-  L2:
-    status: passed
-    reviewed_at: '2026-09-15'
-    evidence:
-      - docs/reviews/L2-media-ingestion-review.md
-      - PRs #12 through #15 and #17 merged; PR #18 carries final L2.6 and lot-review evidence
-      - L2.6 implementation fast-ci run 34912604396 passed with pinned FFmpeg integration
-      - L2.6 implementation CodeQL run 34912604416 passed
-      - L2.6 dependency-review run 34912604439 passed
-  L3:
-    status: passed
-    reviewed_at: '2026-09-15'
-    evidence:
-      - docs/reviews/L3-M1-colmap-baseline-review.md
-      - PRs #19 through #24 merged; PR #25 carries L3.7 and lot-review acceptance evidence
-      - L3.7 implementation fast-ci run 34978343545 passed
-      - L3.7 exact PyCOLMAP integration run 34978343630 passed with 60 tests
-      - L3.7 CodeQL run 34978343694 passed
-      - L3.7 dependency-review run 34978343746 passed
-  L4: {status: pending, reviewed_at: null, evidence: []}
-  L5: {status: pending, reviewed_at: null, evidence: []}
-  L6: {status: pending, reviewed_at: null, evidence: []}
-  L7: {status: pending, reviewed_at: null, evidence: []}
-  L8: {status: pending, reviewed_at: null, evidence: []}
-  L9: {status: pending, reviewed_at: null, evidence: []}
-  L10: {status: pending, reviewed_at: null, evidence: []}
-  L11: {status: pending, reviewed_at: null, evidence: []}
-  L12: {status: pending, reviewed_at: null, evidence: []}
-  L13: {status: pending, reviewed_at: null, evidence: []}
-  L14: {status: pending, reviewed_at: null, evidence: []}
-  L15: {status: pending, reviewed_at: null, evidence: []}
-  L16: {status: pending, reviewed_at: null, evidence: []}
-  L17: {status: pending, reviewed_at: null, evidence: []}
+  V2L0: {status: pending, reviewed_at: null, evidence: []}
+  V2L1: {status: pending, reviewed_at: null, evidence: []}
+  V2L2: {status: pending, reviewed_at: null, evidence: []}
+  V2L3: {status: pending, reviewed_at: null, evidence: []}
+  V2L4: {status: pending, reviewed_at: null, evidence: []}
+  V2L5: {status: pending, reviewed_at: null, evidence: []}
+  V2L6: {status: pending, reviewed_at: null, evidence: []}
+  V2L7: {status: pending, reviewed_at: null, evidence: []}
+  V2L8: {status: pending, reviewed_at: null, evidence: []}
+  V2L9: {status: pending, reviewed_at: null, evidence: []}
+  V2L10: {status: pending, reviewed_at: null, evidence: []}
+  V2L11: {status: pending, reviewed_at: null, evidence: []}
+  V2L12: {status: pending, reviewed_at: null, evidence: []}
+  V2L13: {status: pending, reviewed_at: null, evidence: []}
+  V2L14: {status: pending, reviewed_at: null, evidence: []}
+  V2L15: {status: pending, reviewed_at: null, evidence: []}
+  V2L16: {status: pending, reviewed_at: null, evidence: []}
+  V2L17: {status: pending, reviewed_at: null, evidence: []}
+  V2L18: {status: pending, reviewed_at: null, evidence: []}
+  V2L19: {status: pending, reviewed_at: null, evidence: []}
+  V2L20: {status: pending, reviewed_at: null, evidence: []}
+  V2L21: {status: pending, reviewed_at: null, evidence: []}
+  V2L22: {status: pending, reviewed_at: null, evidence: []}
+  V2L23: {status: pending, reviewed_at: null, evidence: []}
+  V2L24: {status: pending, reviewed_at: null, evidence: []}
+  V2L25: {status: pending, reviewed_at: null, evidence: []}
+  V2L26: {status: pending, reviewed_at: null, evidence: []}
+  V2L27: {status: pending, reviewed_at: null, evidence: []}
+  V2L28: {status: pending, reviewed_at: null, evidence: []}
+  V2L29: {status: pending, reviewed_at: null, evidence: []}
+  V2L30: {status: pending, reviewed_at: null, evidence: []}
+  V2L31: {status: pending, reviewed_at: null, evidence: []}
+  V2L32: {status: pending, reviewed_at: null, evidence: []}
+  V2L33: {status: pending, reviewed_at: null, evidence: []}
+  V2L34: {status: pending, reviewed_at: null, evidence: []}
+  V2L35: {status: pending, reviewed_at: null, evidence: []}
+  V2L36: {status: pending, reviewed_at: null, evidence: []}
+  V2L37: {status: pending, reviewed_at: null, evidence: []}
+  V2L38: {status: pending, reviewed_at: null, evidence: []}
+  V2L39: {status: pending, reviewed_at: null, evidence: []}
+  V2L40: {status: pending, reviewed_at: null, evidence: []}
+  V2L41: {status: pending, reviewed_at: null, evidence: []}
+  V2L42: {status: pending, reviewed_at: null, evidence: []}
+  V2L43: {status: pending, reviewed_at: null, evidence: []}
+  V2L44: {status: pending, reviewed_at: null, evidence: []}
+  V2L45: {status: pending, reviewed_at: null, evidence: []}
+  V2L46: {status: pending, reviewed_at: null, evidence: []}
+  V2L47: {status: pending, reviewed_at: null, evidence: []}
+  V2L48: {status: pending, reviewed_at: null, evidence: []}
+  V2L49: {status: pending, reviewed_at: null, evidence: []}
+  V2L50: {status: pending, reviewed_at: null, evidence: []}
+  V2L51: {status: pending, reviewed_at: null, evidence: []}
 milestone_reviews:
-  M0:
-    status: passed
-    reviewed_at: '2026-09-14'
-    evidence:
-      - docs/reviews/L0-M0-bootstrap-review.md
-      - L0 lot review passed
-      - main fast-ci run 34882936749 passed
-  M1:
-    status: passed
-    reviewed_at: '2026-09-15'
-    evidence:
-      - docs/reviews/L1-core-domain-review.md
-      - docs/reviews/L2-media-ingestion-review.md
-      - docs/reviews/L3-M1-colmap-baseline-review.md
-      - L1, L2 and L3 lot reviews passed
-      - PR #25 exact PyCOLMAP integration run 34978343630 passed with 60 tests
-      - PR #25 fast-ci run 34978343545 passed
-      - PR #25 CodeQL run 34978343694 passed
-      - PR #25 dependency-review run 34978343746 passed
-  M2: {status: pending, reviewed_at: null, evidence: []}
-  M3: {status: pending, reviewed_at: null, evidence: []}
-  M4: {status: pending, reviewed_at: null, evidence: []}
+  V2M0: {status: pending, reviewed_at: null, evidence: []}
+  V2M1: {status: pending, reviewed_at: null, evidence: []}
+  V2M2: {status: pending, reviewed_at: null, evidence: []}
+  V2M3: {status: pending, reviewed_at: null, evidence: []}
+  V2M4: {status: pending, reviewed_at: null, evidence: []}
+  V2M5: {status: pending, reviewed_at: null, evidence: []}
+  V2M6: {status: pending, reviewed_at: null, evidence: []}
+  V2M7: {status: pending, reviewed_at: null, evidence: []}

@@ -1,378 +1,84 @@
-schema_version: 1
+schema_version: 2
+roadmap_version: '2.0'
 status_values: [planned, ready, in_progress, in_review, done, blocked]
+policy:
+  one_active_item: true
+  deny_by_default_scope: true
+  one_pr_per_work_item: true
+  ready_requires_full_contract: true
+  max_work_items_per_lot: 6
+  canonical_roadmap: docs/25_V2_ROADMAP.md
+  migration_map: registry/v1-v2-migration.yaml
+  planned_items_may_be_concise: true
+  activation_must_expand_contract: true
+work_item_files:
+  - registry/work-items/v2m0.yaml
+  - registry/work-items/v2m1.yaml
+  - registry/work-items/v2m2.yaml
+  - registry/work-items/v2m3.yaml
+  - registry/work-items/v2m4.yaml
+  - registry/work-items/v2m5.yaml
+  - registry/work-items/v2m6.yaml
+  - registry/work-items/v2m7.yaml
 milestones:
-  M0: {title: Repo ready, lots: [L0]}
-  M1: {title: Reconstruct a place, lots: [L1, L2, L3]}
-  M2: {title: Build incrementally, lots: [L4, L5, L6]}
-  M3: {title: High-accuracy world engine, lots: [L7, L8, L9, L10]}
-  M4: {title: Advanced temporal and integration, lots: [L11, L12, L13, L14, L15, L16, L17]}
+  V2M0: {title: Production substrate ready, lots: [V2L0, V2L1, V2L2, V2L3, V2L4]}
+  V2M1: {title: Arbitrary media understood and organized, lots: [V2L5, V2L6, V2L7, V2L8, V2L9, V2L10]}
+  V2M2: {title: Reliable static physical reconstruction, lots: [V2L11, V2L12, V2L13, V2L14, V2L15, V2L16]}
+  V2M3: {title: Photorealistic master scene and interactive runtime, lots: [V2L17, V2L18, V2L19, V2L20, V2L21, V2L22, V2L23]}
+  V2M4: {title: Dynamic 4D reconstruction, lots: [V2L24, V2L25, V2L26, V2L27, V2L28, V2L29, V2L30]}
+  V2M5: {title: Historical chronology, lots: [V2L31, V2L32, V2L33, V2L34, V2L35]}
+  V2M6: {title: Specialist routes and scale, lots: [V2L36, V2L37, V2L38, V2L39, V2L40, V2L41, V2L42, V2L43]}
+  V2M7: {title: Professional production and release hardening, lots: [V2L44, V2L45, V2L46, V2L47, V2L48, V2L49, V2L50, V2L51]}
 lots:
-  L0: {title: Bootstrap and development system, review_required: true}
-  L1: {title: Core domain, review_required: true}
-  L2: {title: Media ingestion, review_required: true}
-  L3: {title: COLMAP baseline, review_required: true}
-  L4: {title: Candidate retrieval and strategy routing, review_required: true}
-  L5: {title: Evidence geometry, review_required: true}
-  L6: {title: Fragment engine, review_required: true}
-  L7: {title: LIMAP structural geometry, review_required: true}
-  L8: {title: Fragment merging, review_required: true}
-  L9: {title: World graph and absolute anchoring, review_required: true}
-  L10: {title: Hypotheses and uncertainty, review_required: true}
-  L11: {title: Video and motion, review_required: true}
-  L12: {title: Multi-solver validation, review_required: true}
-  L13: {title: Hard-case escalation, review_required: true}
-  L14: {title: Dense reconstruction, review_required: true}
-  L15: {title: Temporal and 4D world, review_required: true}
-  L16: {title: Validation program, review_required: true}
-  L17: {title: MONDE boundary, review_required: true}
-work_items:
-  - id: L0.1
-    lot: L0
-    title: Repository bootstrap and agent protocol
-    status: done
-    objective: Establish canonical docs, project state, machine-readable roadmap and review gates.
-    depends_on: []
-    read_before: [docs/00_START_HERE.md, AGENTS.md]
-    reuse: []
-    out_of_scope: [Python tooling, GitHub Actions CI, reconstruction code]
-    acceptance:
-      - New agent can identify the active work item without conversation history.
-      - Work roadmap and review gates are machine-readable.
-      - Reuse-before-implementation and epistemic separation rules are explicit.
-      - Lot and milestone reviews are represented in repository state.
-      - Pull request review evidence has a standard template.
-    tests: [manual repository-structure review]
-  - id: L0.2
-    lot: L0
-    title: Python tooling and fast CI
-    status: done
-    objective: Add uv, Ruff, type checking, pytest, actionlint-aware workflow and a fast PR CI lane.
-    depends_on: [L0.1]
-    read_before: [docs/06_TESTING.md, AGENTS.md]
-    reuse: [uv, ruff, pyright, pytest, actionlint]
-    out_of_scope: [COLMAP, LIMAP, GPU tests]
-    acceptance:
-      - Fresh checkout has one documented bootstrap command path.
-      - Fast CI runs lint, format, types, unit tests and repository validation.
-      - Obsolete CI runs are cancelled by concurrency policy.
-      - CI is suitable as a required merge check.
-    tests: [fast CI workflow]
-  - id: L0.3
-    lot: L0
-    title: Repository state validator
-    status: done
-    objective: Automatically detect inconsistent work-item, state, component and review metadata and validate the existing PR evidence contract.
-    depends_on: [L0.2]
-    read_before: [AGENTS.md, PROJECT_STATE.yaml, registry/work-items.yaml, .github/PULL_REQUEST_TEMPLATE.md]
-    reuse: [pyyaml]
-    out_of_scope: [geometry validation, redesigning the PR workflow]
-    acceptance:
-      - Validator catches unknown active work item and invalid dependencies/statuses.
-      - Validator checks referenced read_before paths exist.
-      - Validator checks core PR-template sections remain present.
-      - Validator runs in fast CI.
-    tests: [unit tests for validator, fast CI]
-  - id: L0.4
-    lot: L0
-    title: Dependency and supply-chain baseline
-    status: done
-    objective: Pin development dependencies and configure low-friction dependency/security automation where repository permissions allow it.
-    depends_on: [L0.3]
-    read_before: [docs/05_REUSE.md, registry/dependencies.yaml]
-    reuse: [Dependabot, GitHub dependency review, CodeQL, secret scanning]
-    out_of_scope: [choosing the final WRE license, native geometry dependencies]
-    acceptance:
-      - Development dependencies are locked.
-      - Dependency update policy is documented/configured.
-      - Security automation decisions are recorded, including any GitHub-setting steps not writable by the agent.
-    tests: [configuration review, fast CI, CodeQL, dependency review capability preflight]
-  - id: L0.5
-    lot: L0
-    title: Fixture and regression harness skeleton
-    status: done
-    objective: Create deterministic fixture conventions and regression metric schema without adding heavy geometry engines.
-    depends_on: [L0.4]
-    read_before: [docs/06_TESTING.md]
-    reuse: [pytest]
-    out_of_scope: [real COLMAP reconstruction fixtures]
-    acceptance:
-      - Fixture directories and metadata convention exist.
-      - Regression result schema exists.
-      - Tiny synthetic smoke fixture runs in fast CI.
-    tests: [fixture harness tests]
-  - id: L0.R
-    lot: L0
-    title: L0 lot review
-    status: done
-    objective: Verify the bootstrap is complete, fast and resumable before product code begins.
-    depends_on: [L0.1, L0.2, L0.3, L0.4, L0.5]
-    read_before: [AGENTS.md, docs/06_TESTING.md, registry/components.yaml, registry/reviews.yaml]
-    reuse: []
-    out_of_scope: [feature implementation]
-    acceptance:
-      - Every promised L0 capability exists and has appropriate tests/evidence.
-      - Fresh-agent resume path is coherent.
-      - Fast CI is green and intentionally small.
-      - No product/reconstruction algorithm was prematurely implemented.
-      - L0 review is marked passed in registry/reviews.yaml.
-    tests: [full L0 review checklist]
-  - {id: L1.1, lot: L1, title: Observation models, status: done, depends_on: [L0.R]}
-  - {id: L1.2, lot: L1, title: Camera and metadata models, status: done, depends_on: [L1.1]}
-  - {id: L1.3, lot: L1, title: SpatialFragment model, status: done, depends_on: [L1.2]}
-  - {id: L1.4, lot: L1, title: ReconstructionRun and provenance, status: done, depends_on: [L1.3]}
-  - {id: L1.5, lot: L1, title: Local persistence layer, status: done, depends_on: [L1.4]}
-  - {id: L2.1, lot: L2, title: Image ingestion, status: done, depends_on: [L1.5]}
-  - {id: L2.2, lot: L2, title: Hashing and duplicate detection, status: done, depends_on: [L2.1]}
-  - {id: L2.3, lot: L2, title: EXIF metadata, status: done, depends_on: [L2.2]}
-  - {id: L2.4, lot: L2, title: GPS and time extraction, status: done, depends_on: [L2.3]}
-  - {id: L2.5, lot: L2, title: Video ingestion, status: done, depends_on: [L2.4]}
-  - {id: L2.6, lot: L2, title: Deterministic keyframe extraction, status: done, depends_on: [L2.5]}
-  - {id: L3.1, lot: L3, title: COLMAP environment adapter, status: done, depends_on: [L2.6]}
-  - {id: L3.2, lot: L3, title: COLMAP feature extraction, status: done, depends_on: [L3.1]}
-  - {id: L3.3, lot: L3, title: COLMAP pair matching, status: done, depends_on: [L3.2]}
-  - {id: L3.4, lot: L3, title: COLMAP geometric verification, status: done, depends_on: [L3.3]}
-  - {id: L3.5, lot: L3, title: Incremental reconstruction, status: done, depends_on: [L3.4]}
-  - {id: L3.6, lot: L3, title: Reconstruction importer, status: done, depends_on: [L3.5]}
-  - {id: L3.7, lot: L3, title: COLMAP end-to-end fixture, status: done, depends_on: [L3.6]}
-  - {id: L4.1, lot: L4, title: Sequential pairing, status: done, depends_on: [L3.7]}
-  - {id: L4.2, lot: L4, title: GPS pairing, status: done, depends_on: [L4.1]}
-  - {id: L4.3, lot: L4, title: Visual vocabulary retrieval, status: ready, depends_on: [L4.2]}
-  - {id: L4.4, lot: L4, title: Graph-neighbour candidates, status: planned, depends_on: [L4.3]}
-  - {id: L4.5, lot: L4, title: Candidate ranking, status: planned, depends_on: [L4.4]}
-  - id: L4.6
-    lot: L4
-    title: Reconstruction Strategy Router
-    status: planned
-    objective: Select the cheapest deterministic FAST/STANDARD/ESCALATED route likely to reach the unchanged acceptance policy/evidence standard and record auditable reasons/escalation conditions.
-    depends_on: [L4.5]
-    read_before: [docs/12_ADAPTIVE_RECONSTRUCTION.md, docs/03_PIPELINE.md, docs/adr/0001-adaptive-routing-anchoring-temporal-world.md]
-    reuse: [COLMAP candidate/matching mechanisms, cached WRE evidence]
-    out_of_scope: [weakening acceptance policy, implementing heavy hard-case algorithms, accepting learned matches without geometry]
-    acceptance:
-      - Route selection is deterministic for identical inputs/configuration.
-      - FAST/STANDARD/ESCALATED change attempted work but not the final acceptance policy/evidence standard.
-      - Solver-specific intermediate thresholds may differ only when calibrated to equivalent semantics and documented.
-      - Decision reasons, relevant inputs/configuration and escalation outcome are auditable.
-      - Insufficient or contradictory evidence can remain unresolved.
-      - L13 remains the owner of expensive hard-case algorithms.
-    tests: [router decision unit tests, route-equivalence acceptance tests]
-  - {id: L4.7, lot: L4, title: Retrieval and strategy-router benchmark, status: planned, depends_on: [L4.6]}
-  - {id: L5.1, lot: L5, title: PairHypothesis model, status: planned, depends_on: [L4.7]}
-  - {id: L5.2, lot: L5, title: Residual storage, status: planned, depends_on: [L5.1]}
-  - {id: L5.3, lot: L5, title: Competing F E H models, status: planned, depends_on: [L5.2]}
-  - {id: L5.4, lot: L5, title: DEGENSAC configuration, status: planned, depends_on: [L5.3]}
-  - {id: L5.5, lot: L5, title: AC-RANSAC adapter, status: planned, depends_on: [L5.4]}
-  - {id: L5.6, lot: L5, title: Triplet consistency, status: planned, depends_on: [L5.5]}
-  - {id: L5.7, lot: L5, title: Cycle consistency, status: planned, depends_on: [L5.6]}
-  - {id: L5.8, lot: L5, title: Negative geometry tests, status: planned, depends_on: [L5.7]}
-  - {id: L6.1, lot: L6, title: Fragment creation, status: planned, depends_on: [L5.8]}
-  - {id: L6.2, lot: L6, title: Add image to existing fragment, status: planned, depends_on: [L6.1]}
-  - {id: L6.3, lot: L6, title: Unknown fragment handling, status: planned, depends_on: [L6.2]}
-  - {id: L6.4, lot: L6, title: Disconnected components, status: planned, depends_on: [L6.3]}
-  - {id: L6.5, lot: L6, title: Fragment lifecycle, status: planned, depends_on: [L6.4]}
-  - {id: L6.6, lot: L6, title: Incremental local bundle adjustment, status: planned, depends_on: [L6.5]}
-  - {id: L7.1, lot: L7, title: LIMAP adapter, status: planned, depends_on: [L6.6]}
-  - {id: L7.2, lot: L7, title: Line extraction, status: planned, depends_on: [L7.1]}
-  - {id: L7.3, lot: L7, title: Line matching, status: planned, depends_on: [L7.2]}
-  - {id: L7.4, lot: L7, title: Hybrid point-line registration, status: planned, depends_on: [L7.3]}
-  - {id: L7.5, lot: L7, title: Line triangulation, status: planned, depends_on: [L7.4]}
-  - {id: L7.6, lot: L7, title: Vanishing points, status: planned, depends_on: [L7.5]}
-  - {id: L7.7, lot: L7, title: Planes, status: planned, depends_on: [L7.6]}
-  - {id: L7.8, lot: L7, title: Holistic bundle adjustment, status: planned, depends_on: [L7.7]}
-  - {id: L8.1, lot: L8, title: Merge candidate generation, status: planned, depends_on: [L7.8]}
-  - {id: L8.2, lot: L8, title: 3D correspondence extraction, status: planned, depends_on: [L8.1]}
-  - {id: L8.3, lot: L8, title: Sim3 estimation, status: planned, depends_on: [L8.2]}
-  - {id: L8.4, lot: L8, title: TEASER++ adapter, status: planned, depends_on: [L8.3]}
-  - {id: L8.5, lot: L8, title: Open3D GICP refinement, status: planned, depends_on: [L8.4]}
-  - {id: L8.6, lot: L8, title: Merge evidence, status: planned, depends_on: [L8.5]}
-  - {id: L8.7, lot: L8, title: Reversible merge, status: planned, depends_on: [L8.6]}
-  - {id: L8.8, lot: L8, title: False-merge tests, status: planned, depends_on: [L8.7]}
-  - {id: L9.1, lot: L9, title: SpatialConstraint model, status: planned, depends_on: [L8.8]}
-  - {id: L9.2, lot: L9, title: GTSAM adapter, status: planned, depends_on: [L9.1]}
-  - {id: L9.3, lot: L9, title: Fragment-to-fragment factors, status: planned, depends_on: [L9.2]}
-  - {id: L9.4, lot: L9, title: GPS factors, status: planned, depends_on: [L9.3]}
-  - id: L9.5
-    lot: L9
-    title: GCP and known-landmark factors
-    status: planned
-    objective: Represent surveyed/known world-point anchors as provenance-bearing uncertain factors without destructively rewriting local fragment geometry.
-    depends_on: [L9.4]
-    read_before: [docs/12_ADAPTIVE_RECONSTRUCTION.md, docs/02_ARCHITECTURE.md, docs/adr/0001-adaptive-routing-anchoring-temporal-world.md]
-    reuse: [GTSAM, OpenSfM GCP/checkpoint patterns, PROJ, GeographicLib]
-    out_of_scope: [assuming anchors are infallible, hidden fragment merges]
-    acceptance:
-      - GCP/known-landmark constraints preserve source, world-frame/CRS identity and uncertainty where available.
-      - Optimization residuals remain inspectable.
-      - Conflicting anchors can remain contradictory/unresolved rather than being silently averaged.
-    tests: [known-control-point synthetic factor tests, conflicting-anchor tests]
-  - id: L9.6
-    lot: L9
-    title: Reference-fragment and absolute anchor factors
-    status: planned
-    objective: Allow an already-georeferenced fragment/world reference to anchor a locally reconstructed fragment through explicit validated constraints.
-    depends_on: [L9.5]
-    read_before: [docs/12_ADAPTIVE_RECONSTRUCTION.md, docs/02_ARCHITECTURE.md]
-    reuse: [GTSAM, validated fragment transforms]
-    out_of_scope: [destructive coordinate rewrite, implicit merge]
-    acceptance:
-      - A no-GPS fragment can receive world placement from later independent anchor evidence.
-      - Relative placement evidence remains distinct from absolute anchor evidence.
-      - The transform model used for anchoring is explicit; unresolved local scale may require a validated Sim3 rather than a hidden rigid transform.
-      - Anchor transform/scale uncertainty, provenance and residuals are retained.
-    tests: [late-anchor synthetic test, conflicting-reference-anchor test]
-  - {id: L9.7, lot: L9, title: Loop-closure factors, status: planned, depends_on: [L9.6]}
-  - {id: L9.8, lot: L9, title: Incremental optimization, status: planned, depends_on: [L9.7]}
-  - {id: L9.9, lot: L9, title: Covariance propagation, status: planned, depends_on: [L9.8]}
-  - {id: L10.1, lot: L10, title: Competing placements, status: planned, depends_on: [L9.9]}
-  - {id: L10.2, lot: L10, title: Observation covariance, status: planned, depends_on: [L10.1]}
-  - {id: L10.3, lot: L10, title: Camera-pose covariance, status: planned, depends_on: [L10.2]}
-  - {id: L10.4, lot: L10, title: Merge covariance, status: planned, depends_on: [L10.3]}
-  - {id: L10.5, lot: L10, title: Evidence scoring, status: planned, depends_on: [L10.4]}
-  - {id: L10.6, lot: L10, title: Unresolved-state handling, status: planned, depends_on: [L10.5]}
-  - {id: L10.7, lot: L10, title: Hypothesis invalidation, status: planned, depends_on: [L10.6]}
-  - {id: L11.1, lot: L11, title: Temporal frame graph, status: planned, depends_on: [L10.7]}
-  - {id: L11.2, lot: L11, title: Sequential tracking, status: planned, depends_on: [L11.1]}
-  - {id: L11.3, lot: L11, title: Loop closures for video, status: planned, depends_on: [L11.2]}
-  - {id: L11.4, lot: L11, title: Camera rigs, status: planned, depends_on: [L11.3]}
-  - {id: L11.5, lot: L11, title: Rolling-shutter metadata, status: planned, depends_on: [L11.4]}
-  - {id: L11.6, lot: L11, title: IMU interface, status: planned, depends_on: [L11.5]}
-  - {id: L11.7, lot: L11, title: Trajectory prior, status: planned, depends_on: [L11.6]}
-  - {id: L12.1, lot: L12, title: COLMAP incremental validation adapter, status: planned, depends_on: [L11.7]}
-  - {id: L12.2, lot: L12, title: COLMAP global validation adapter, status: planned, depends_on: [L12.1]}
-  - {id: L12.3, lot: L12, title: COLMAP hierarchical validation adapter, status: planned, depends_on: [L12.2]}
-  - {id: L12.4, lot: L12, title: OpenSfM adapter, status: planned, depends_on: [L12.3]}
-  - {id: L12.5, lot: L12, title: OpenMVG validation adapter, status: planned, depends_on: [L12.4]}
-  - {id: L12.6, lot: L12, title: Solution comparison, status: planned, depends_on: [L12.5]}
-  - {id: L12.7, lot: L12, title: Disagreement detection, status: planned, depends_on: [L12.6]}
-  - {id: L12.8, lot: L12, title: Consensus policy, status: planned, depends_on: [L12.7]}
-  - {id: L13.1, lot: L13, title: Affine-SIFT escalation, status: planned, depends_on: [L12.8]}
-  - {id: L13.2, lot: L13, title: DSP-SIFT escalation, status: planned, depends_on: [L13.1]}
-  - {id: L13.3, lot: L13, title: MODS-style view synthesis, status: planned, depends_on: [L13.2]}
-  - {id: L13.4, lot: L13, title: Aggressive geometric verification, status: planned, depends_on: [L13.3]}
-  - {id: L13.5, lot: L13, title: Escalation controller, status: planned, depends_on: [L13.4]}
-  - {id: L14.1, lot: L14, title: COLMAP PatchMatch adapter, status: planned, depends_on: [L13.5]}
-  - {id: L14.2, lot: L14, title: Depth-map store, status: planned, depends_on: [L14.1]}
-  - {id: L14.3, lot: L14, title: Depth confidence, status: planned, depends_on: [L14.2]}
-  - {id: L14.4, lot: L14, title: Dense fusion, status: planned, depends_on: [L14.3]}
-  - {id: L14.5, lot: L14, title: Mesh, status: planned, depends_on: [L14.4]}
-  - {id: L14.6, lot: L14, title: Texture, status: planned, depends_on: [L14.5]}
-  - id: L15.1
-    lot: L15
-    title: Temporal evidence and epoch model
-    status: planned
-    objective: Define solver-independent temporal evidence/epoch contracts that preserve uncertain dates and source semantics without equating publication time with capture time.
-    depends_on: [L14.6]
-    read_before: [docs/13_TEMPORAL_WORLD.md, docs/04_DATA_MODEL.md, docs/adr/0001-adaptive-routing-anchoring-temporal-world.md]
-    reuse: []
-    out_of_scope: [change detection, exact-date guessing]
-    acceptance:
-      - Epoch membership retains temporal evidence/provenance and can represent uncertain intervals.
-      - Publication/upload time remains distinct from capture time.
-      - No geometry is overwritten by epoch assignment.
-    tests: [temporal-evidence and uncertain-epoch unit tests]
-  - {id: L15.2, lot: L15, title: Observation-to-epoch association, status: planned, depends_on: [L15.1]}
-  - id: L15.3
-    lot: L15
-    title: Cross-epoch geometry alignment
-    status: planned
-    objective: Align comparable epoch geometry with an explicit transform model and uncertainty before any metric physical-change interpretation.
-    depends_on: [L15.2]
-    read_before: [docs/13_TEMPORAL_WORLD.md, docs/12_ADAPTIVE_RECONSTRUCTION.md]
-    reuse: [existing validated fragment transforms, Open3D/TEASER++ where appropriate]
-    out_of_scope: [treating unresolved scale as metric, using changed regions as unquestioned alignment control]
-    acceptance:
-      - Alignment records source/target frames, transform model and uncertainty.
-      - Sim3 versus rigid/metric alignment is explicit and justified by available scale evidence.
-      - Metric change measurement is blocked when scale/frame uncertainty is insufficiently resolved.
-      - Stable control geometry can be distinguished from candidate changed regions during alignment.
-    tests: [known-transform cross-epoch test, unresolved-scale rejection test, misregistration-change guard test]
-  - id: L15.4
-    lot: L15
-    title: py4dgeo adapter
-    status: planned
-    objective: Reuse py4dgeo multi-epoch point-cloud change algorithms behind a provenance-preserving adapter rather than implementing foundational change measurement in WRE.
-    depends_on: [L15.3]
-    read_before: [docs/13_TEMPORAL_WORLD.md, docs/05_REUSE.md, registry/dependencies.yaml]
-    reuse: [py4dgeo]
-    out_of_scope: [custom M3C2 implementation, semantic state acceptance]
-    acceptance:
-      - Exact py4dgeo version/license/integration mode are reviewed and pinned when integrated.
-      - Measurements retain input epoch/geometry and producer/configuration provenance.
-      - Adapter outputs remain derived evidence rather than accepted GeometryState.
-    tests: [known-change adapter fixture, unchanged-geometry fixture]
-  - {id: L15.5, lot: L15, title: 3D change measurement ingestion, status: planned, depends_on: [L15.4]}
-  - id: L15.6
-    lot: L15
-    title: GeometryChangeHypothesis model
-    status: planned
-    objective: Represent competing evidence-backed physical-change hypotheses without treating every cross-epoch disagreement as an outlier.
-    depends_on: [L15.5]
-    read_before: [docs/13_TEMPORAL_WORLD.md, docs/04_DATA_MODEL.md]
-    reuse: []
-    out_of_scope: [destructive state replacement]
-    acceptance:
-      - Hypotheses retain compared geometry/epochs, measurements, temporal interval, residuals/uncertainty and provenance.
-      - Candidate/rejected/unresolved/accepted outcomes remain auditable.
-    tests: [change-hypothesis invariant tests]
-  - {id: L15.7, lot: L15, title: Change-point inference, status: planned, depends_on: [L15.6]}
-  - id: L15.8
-    lot: L15
-    title: GeometryState validity intervals
-    status: planned
-    objective: Represent time-valid estimated geometry states without overwriting previously supported historical geometry.
-    depends_on: [L15.7]
-    read_before: [docs/13_TEMPORAL_WORLD.md, docs/04_DATA_MODEL.md]
-    reuse: []
-    out_of_scope: [continuous dynamic-object reconstruction]
-    acceptance:
-      - States can express validity intervals and uncertain boundaries.
-      - State geometry/support/provenance remain traceable.
-      - Multiple historical states can coexist for one spatial lineage.
-    tests: [state-validity and non-overwrite tests]
-  - {id: L15.9, lot: L15, title: Contradictory temporal evidence handling, status: planned, depends_on: [L15.8]}
-  - {id: L15.10, lot: L15, title: Temporal-state validation, status: planned, depends_on: [L15.9]}
-  - {id: L15.11, lot: L15, title: Reversible temporal transitions, status: planned, depends_on: [L15.10]}
-  - {id: L16.1, lot: L16, title: Known-camera synthetic test, status: planned, depends_on: [L15.11]}
-  - {id: L16.2, lot: L16, title: Known-geometry fixture, status: planned, depends_on: [L16.1]}
-  - id: L16.3
-    lot: L16
-    title: Absolute-anchor holdout (GPS/GCP/reference fragment)
-    status: planned
-    objective: Validate absolute-world anchoring independently of the observations/control evidence used to optimize the placement.
-    depends_on: [L16.2]
-    read_before: [docs/12_ADAPTIVE_RECONSTRUCTION.md, docs/06_TESTING.md, docs/09_FIXTURES.md]
-    reuse: [GPS/GCP/reference-fragment factors implemented by L9]
-    out_of_scope: [using optimization inputs as their own holdout, forcing a world placement when anchors conflict]
-    acceptance:
-      - GPS anchor accuracy can be evaluated against independent holdout evidence.
-      - A no-GPS fragment can be anchored and independently checked through GCP/known-landmark or georeferenced-reference evidence.
-      - Scale resolution is validated where the local reconstruction began in an arbitrary similarity frame.
-      - Conflicting/withheld anchors expose residual/error or unresolved placement rather than false certainty.
-    tests: [GPS holdout fixture, GCP holdout fixture, late reference-fragment anchor fixture, conflicting-anchor fixture]
-  - {id: L16.4, lot: L16, title: Camera-pose holdout, status: planned, depends_on: [L16.3]}
-  - {id: L16.5, lot: L16, title: Day-night fixture, status: planned, depends_on: [L16.4]}
-  - {id: L16.6, lot: L16, title: Repeated-facade fixture, status: planned, depends_on: [L16.5]}
-  - id: L16.7
-    lot: L16
-    title: Historical-change temporal-engine fixture
-    status: planned
-    objective: Validate that L15 distinguishes supported physical change from unchanged geometry, misregistration, unresolved scale and contradictory dating.
-    depends_on: [L16.6]
-    read_before: [docs/13_TEMPORAL_WORLD.md, docs/06_TESTING.md, docs/09_FIXTURES.md]
-    reuse: [L15 temporal engine]
-    out_of_scope: [accepting change merely because two meshes differ]
-    acceptance:
-      - Unchanged cross-epoch geometry does not produce a false accepted change.
-      - Known synthetic/controlled change is recovered within declared spatial/temporal tolerance.
-      - Misregistration or unresolved metric scale blocks/invalidates physical-change acceptance.
-      - Uncertain dates produce interval-valued timing rather than invented exact timestamps.
-      - Contradictory dates/alignments can remain unresolved.
-    tests: [unchanged epoch fixture, true-change fixture, misregistration fixture, unresolved-scale fixture, contradictory-date fixture]
-  - {id: L16.8, lot: L16, title: Video fixture, status: planned, depends_on: [L16.7]}
-  - {id: L16.9, lot: L16, title: Regression benchmark, status: planned, depends_on: [L16.8]}
-  - {id: L16.10, lot: L16, title: Performance benchmark, status: planned, depends_on: [L16.9]}
-  - {id: L17.1, lot: L17, title: Observation export contract, status: planned, depends_on: [L16.10]}
-  - {id: L17.2, lot: L17, title: Spatial evidence contract, status: planned, depends_on: [L17.1]}
-  - {id: L17.3, lot: L17, title: Estimated geometry contract, status: planned, depends_on: [L17.2]}
-  - {id: L17.4, lot: L17, title: Provenance contract, status: planned, depends_on: [L17.3]}
-  - {id: L17.5, lot: L17, title: Temporal geometry contract, status: planned, depends_on: [L17.4]}
+  V2L0: {title: V1 to V2 migration and retained baseline, review_required: true}
+  V2L1: {title: SceneProject and artifact identity, review_required: true}
+  V2L2: {title: Artifact DAG and cache, review_required: true}
+  V2L3: {title: Adapter model and shipping registries, review_required: true}
+  V2L4: {title: Quality failure and benchmark records, review_required: true}
+  V2L5: {title: Media profiling, review_required: true}
+  V2L6: {title: Adaptive frame selection, review_required: true}
+  V2L7: {title: Pair candidate retrieval, review_required: true}
+  V2L8: {title: Scene identity and clustering, review_required: true}
+  V2L9: {title: Temporal grouping and synchronization foundations, review_required: true}
+  V2L10: {title: Quality modes and route graph, review_required: true}
+  V2L11: {title: Canonical camera depth and geometry contracts, review_required: true}
+  V2L12: {title: Retained precision geometry baseline, review_required: true}
+  V2L13: {title: Feed forward geometry, review_required: true}
+  V2L14: {title: Precision global refinement and competing solutions, review_required: true}
+  V2L15: {title: Dense depth MVS and fusion, review_required: true}
+  V2L16: {title: Explicit physical surface, review_required: true}
+  V2L17: {title: Color and photometric pipeline, review_required: true}
+  V2L18: {title: Static appearance, review_required: true}
+  V2L19: {title: Materials and environment, review_required: true}
+  V2L20: {title: MasterScene assembly and versioning, review_required: true}
+  V2L21: {title: Runtime compiler core, review_required: true}
+  V2L22: {title: Reference interactive viewer, review_required: true}
+  V2L23: {title: Static end to end vertical slice, review_required: true}
+  V2L24: {title: Dense tracking and static dynamic decomposition, review_required: true}
+  V2L25: {title: Short video 4D preview, review_required: true}
+  V2L26: {title: Quality 4D reconstruction, review_required: true}
+  V2L27: {title: Persistent dynamic entities and dynamic surface, review_required: true}
+  V2L28: {title: Long video and streaming geometry, review_required: true}
+  V2L29: {title: Multi video event reconstruction, review_required: true}
+  V2L30: {title: Dynamic runtime and timeline, review_required: true}
+  V2L31: {title: Temporal evidence and epochs, review_required: true}
+  V2L32: {title: Cross epoch registration and change measurement, review_required: true}
+  V2L33: {title: TemporalState and ChangeEvent, review_required: true}
+  V2L34: {title: Cross temporal reconstruction support, review_required: true}
+  V2L35: {title: Historical runtime timeline, review_required: true}
+  V2L36: {title: Sparse view specialist route, review_required: true}
+  V2L37: {title: Very large unordered collections, review_required: true}
+  V2L38: {title: 360 omnidirectional route, review_required: true}
+  V2L39: {title: Drone aerial route, review_required: true}
+  V2L40: {title: Blur rolling shutter HDR low light routes, review_required: true}
+  V2L41: {title: Difficult materials and repeated structure, review_required: true}
+  V2L42: {title: Advanced relighting and PBR, review_required: true}
+  V2L43: {title: Generated completion profiles, review_required: true}
+  V2L44: {title: Human review and expert overrides, review_required: true}
+  V2L45: {title: Interoperability and export, review_required: true}
+  V2L46: {title: Resource estimation and scheduling, review_required: true}
+  V2L47: {title: Checkpoint resume and distributed execution, review_required: true}
+  V2L48: {title: Security and untrusted execution hardening, review_required: true}
+  V2L49: {title: Continuous benchmark and default refresh, review_required: true}
+  V2L50: {title: Packaging and reproducibility, review_required: true}
+  V2L51: {title: Final validation program, review_required: true}
