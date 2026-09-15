@@ -22,6 +22,7 @@ from wre.retrieval.gps import (
     GpsPairingConfig,
     GpsPairingEligibilityStatus,
     GpsPairingRequest,
+    GpsPairingResult,
     generate_gps_candidates,
 )
 
@@ -91,11 +92,10 @@ def _request(
     )
 
 
-def _pair_ids(result: object) -> tuple[tuple[str, str], ...]:
-    candidates = getattr(result, "candidates")
+def _pair_ids(result: GpsPairingResult) -> tuple[tuple[str, str], ...]:
     return tuple(
         (candidate.observation_id1.value, candidate.observation_id2.value)
-        for candidate in candidates
+        for candidate in result.candidates
     )
 
 
