@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import importlib
 from dataclasses import dataclass
-from typing import Protocol
 
 SUPPORTED_PYCOLMAP_VERSION = "4.2.0"
 SUPPORTED_COLMAP_VERSION = "COLMAP 4.2.0"
@@ -10,14 +9,6 @@ SUPPORTED_COLMAP_VERSION = "COLMAP 4.2.0"
 
 class ColmapEnvironmentError(RuntimeError):
     """Raised when the external PyCOLMAP environment is missing or incompatible."""
-
-
-class _PycolmapIdentity(Protocol):
-    __version__: object
-    COLMAP_version: object
-    COLMAP_build: object
-    __ceres_version__: object
-    has_cuda: object
 
 
 @dataclass(frozen=True, slots=True)
@@ -31,25 +22,24 @@ class ColmapEnvironmentIdentity:
     upstream_has_cuda: bool
 
 
-def _required_text(module: _PycolmapIdentity, attribute: str) -> str:
+def _required_text(module: object, attribute: str) -> str:
     value = getattr(module, attribute, None)
     if not isinstance(value, str) or not value.strip():
         raise ColmapEnvironmentError(f"pycolmap.{attribute} must be a non-empty string")
     return value
 
 
-def _load_pycolmap() -> _PycolmapIdentity:
+def _load_pycolmap() -> object:
     try:
-        module = importlib.import_module("pycolmap")
+        return importlib.import_module("pycolmap")
     except (ImportError, RuntimeError) as exc:
         raise ColmapEnvironmentError(
             "PyCOLMAP is unavailable; install the approved external pycolmap==4.2.0 environment"
         ) from exc
-    return module
 
 
 def inspect_colmap_environment(
-    module: _PycolmapIdentity | None = None,
+    module: object | None = None,
 ) -> ColmapEnvironmentIdentity:
     """Validate and describe the exact COLMAP environment supported by L3."""
 
