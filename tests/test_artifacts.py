@@ -65,13 +65,13 @@ def test_artifact_kind_rejects_invalid_values() -> None:
 
 
 def test_artifact_ref_requires_typed_identity_and_kind() -> None:
-    with pytest.raises(TypeError, match="artifact_ref.artifact_id"):
+    with pytest.raises(TypeError, match=r"artifact_ref\.artifact_id"):
         ArtifactRef(
             artifact_id=cast(Any, "artifact:surface-01"),
             artifact_kind=ArtifactKind("surface.model"),
         )
 
-    with pytest.raises(TypeError, match="artifact_ref.artifact_kind"):
+    with pytest.raises(TypeError, match=r"artifact_ref\.artifact_kind"):
         ArtifactRef(
             artifact_id=ArtifactId("artifact:surface-01"),
             artifact_kind=cast(Any, "surface.model"),
