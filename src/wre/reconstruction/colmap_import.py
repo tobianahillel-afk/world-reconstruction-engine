@@ -172,8 +172,8 @@ def _verify_native_model(
     model: ColmapSparseModelArtifact,
 ) -> Path:
     model_path = (
-        reconstruction.output_path / model.relative_path
-    ).expanduser().resolve(strict=True)
+        (reconstruction.output_path / model.relative_path).expanduser().resolve(strict=True)
+    )
     if not model_path.is_dir() or model_path.is_symlink():
         raise ColmapReconstructionImportError("COLMAP source model must be a real directory")
 
@@ -229,7 +229,9 @@ def _vector3(value: object, context: str) -> tuple[float, float, float]:
     )
 
 
-def _rotation_matrix(value: object) -> tuple[
+def _rotation_matrix(
+    value: object,
+) -> tuple[
     tuple[float, float, float],
     tuple[float, float, float],
     tuple[float, float, float],
@@ -416,9 +418,7 @@ def _import_model(
             )
         )
 
-    model_observations = tuple(
-        sorted(image_observations.values(), key=lambda item: item.value)
-    )
+    model_observations = tuple(sorted(image_observations.values(), key=lambda item: item.value))
     estimate = SparseReconstructionEstimate(
         estimate_id=estimate_id,
         local_frame_id=local_frame_id,
