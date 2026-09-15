@@ -82,8 +82,11 @@ components:
       - docs/17_COLMAP_GEOMETRIC_VERIFICATION.md
       - docs/18_COLMAP_INCREMENTAL_RECONSTRUCTION.md
       - docs/19_COLMAP_RECONSTRUCTION_IMPORT.md
+      - docs/20_COLMAP_END_TO_END_FIXTURE.md
       - registry/dependencies.yaml
       - .github/workflows/colmap-integration.yml
+      - tests/fixtures/synthetic/colmap-l3-end-to-end/fixture.json
+      - tests/fixtures/synthetic/colmap-l3-end-to-end/scene.json
       - src/wre/domain/estimated_geometry.py
       - src/wre/reconstruction/__init__.py
       - src/wre/reconstruction/colmap_environment.py
@@ -103,6 +106,7 @@ components:
       - tests/test_estimated_geometry.py
       - tests/test_colmap_reconstruction_import.py
       - tests/test_colmap_import_safety.py
+      - tests/test_colmap_end_to_end_fixture.py
     status: implementing
   candidate_retrieval:
     owner_lot: L4
