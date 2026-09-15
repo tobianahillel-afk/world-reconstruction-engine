@@ -6,7 +6,6 @@ import re
 import subprocess
 import tempfile
 from dataclasses import dataclass
-from datetime import timedelta
 from decimal import ROUND_HALF_EVEN, Decimal, InvalidOperation
 from pathlib import Path
 
@@ -20,6 +19,7 @@ from wre.domain.observations import (
 from wre.ingestion.hashing import hash_file_content
 from wre.ingestion.images import ObservationSink
 
+SUPPORTED_FFMPEG_VERSION = "6.1.1-3ubuntu5"
 _VERSION_RE = re.compile(r"^(ffmpeg|ffprobe) version ([^\s]+)")
 _MICROSECONDS_PER_SECOND = Decimal(1_000_000)
 
@@ -34,9 +34,17 @@ class ProbedVideoFrame:
     frame_time_us: int
 
     def __post_init__(self) -> None:
-        if isinstance(self.frame_index, bool) or self.frame_index < 0:
+        if (
+            isinstance(self.frame_index, bool)
+            or not isinstance(self.frame_index, int)
+            or self.frame_index < 0
+        ):
             raise ValueError("frame_index must be a non-negative integer")
-        if isinstance(self.frame_time_us, bool) or self.frame_time_us < 0:
+        if (
+            isinstance(self.frame_time_us, bool)
+            or not isinstance(self.frame_time_us, int)
+            or self.frame_time_us < 0
+        ):
             raise ValueError("frame_time_us must be a non-negative integer")
 
 
@@ -45,7 +53,11 @@ class KeyframeSelectionPolicy:
     min_interval_us: int
 
     def __post_init__(self) -> None:
-        if isinstance(self.min_interval_us, bool) or self.min_interval_us <= 0:
+        if (
+            isinstance(self.min_interval_us, bool)
+            or not isinstance(self.min_interval_us, int)
+            or self.min_interval_us <= 0
+        ):
             raise ValueError("min_interval_us must be a positive integer")
 
 
@@ -53,7 +65,7 @@ class KeyframeSelectionPolicy:
 class FFmpegToolchain:
     ffmpeg_path: str = "ffmpeg"
     ffprobe_path: str = "ffprobe"
-    required_version: str | None = None
+    required_version: str | None = SUPPORTED_FFMPEG_VERSION
     timeout_seconds: int = 120
 
     def __post_init__(self) -> None:
@@ -61,7 +73,11 @@ class FFmpegToolchain:
             raise ValueError("FFmpeg executable paths must be non-empty")
         if self.required_version is not None and not self.required_version.strip():
             raise ValueError("required_version must be non-empty when provided")
-        if isinstance(self.timeout_seconds, bool) or self.timeout_seconds <= 0:
+        if (
+            isinstance(self.timeout_seconds, bool)
+            or not isinstance(self.timeout_seconds, int)
+            or self.timeout_seconds <= 0
+        ):
             raise ValueError("timeout_seconds must be a positive integer")
 
 
@@ -137,27 +153,31 @@ def parse_ffprobe_frames(payload: str) -> tuple[ProbedVideoFrame, ...]:
         raise ValueError("ffprobe output must contain a frames array")
 
     frames: list[ProbedVideoFrame] = []
-    previous_time = -1
+    previous_raw_time: int | None = None
     for frame_index, item in enumerate(document["frames"]):
         if not isinstance(item, dict):
             raise ValueError("ffprobe frame entries must be objects")
         raw_time = item.get("best_effort_timestamp_time")
         if raw_time is None or raw_time == "N/A":
-            continue
+            raise ValueError(
+                f"ffprobe frame {frame_index} has no usable best-effort timestamp"
+            )
         if not isinstance(raw_time, str):
             raise ValueError("ffprobe best_effort_timestamp_time must be a string")
         try:
             timestamp = Decimal(raw_time)
         except InvalidOperation as exc:
             raise ValueError("invalid ffprobe frame timestamp") from exc
+        if not timestamp.is_finite():
+            raise ValueError("invalid ffprobe frame timestamp")
         microseconds = int(
             (timestamp * _MICROSECONDS_PER_SECOND).to_integral_value(rounding=ROUND_HALF_EVEN)
         )
+        if previous_raw_time is not None and microseconds < previous_raw_time:
+            raise ValueError("ffprobe frame timestamps must be non-decreasing")
+        previous_raw_time = microseconds
         if microseconds < 0:
             continue
-        if microseconds < previous_time:
-            raise ValueError("ffprobe frame timestamps must be non-decreasing")
-        previous_time = microseconds
         frames.append(ProbedVideoFrame(frame_index=frame_index, frame_time_us=microseconds))
 
     if not frames:
@@ -315,9 +335,6 @@ class LocalKeyframeExtractor:
                 )
                 temporary_path.replace(final_path)
                 frame_hash = hash_file_content(final_path)
-                captured_at = request.video.captured_at
-                if captured_at is not None:
-                    captured_at = captured_at + timedelta(microseconds=frame.frame_time_us)
                 observation = VideoFrameObservation(
                     observation_id=_frame_observation_id(request.video, frame),
                     asset=MediaAssetRef(
@@ -328,7 +345,7 @@ class LocalKeyframeExtractor:
                     ),
                     source=request.video.source,
                     received_at=request.video.received_at,
-                    captured_at=captured_at,
+                    captured_at=None,
                     video_asset=request.video.asset,
                     frame_index=frame.frame_index,
                     frame_time_us=frame.frame_time_us,
