@@ -4,31 +4,44 @@
 
 ## Objective
 
-<!-- What this PR changes and why. Keep scope aligned to the work item. -->
+<!-- What this PR changes and why. Keep scope aligned to the active work item. -->
+
+## Allowed scope
+
+<!-- List the exact behavior/contracts this PR is allowed to add/change. Missing prohibitions are not permission. -->
 
 ## Reuse
 
-<!-- External capabilities reused. State explicitly what was NOT reimplemented. -->
+<!-- External capabilities reused. State explicitly what was NOT reimplemented and the reviewed version/license assumptions when relevant. -->
+
+## Invariants / ownership boundaries
+
+<!-- Which system invariants and responsibility boundaries does this PR touch? State what must remain unchanged. -->
 
 ## Acceptance criteria
 
 - [ ] Work-item acceptance criteria satisfied
-- [ ] Relevant tests added/updated and passing
-- [ ] No unrelated scope added
+- [ ] Relevant positive and negative tests added/updated and passing
+- [ ] No unrelated or speculative scope added
+- [ ] External model/dependency identity/license metadata updated when relevant
 - [ ] Documentation/state/registry updated when required
 
 ## Test evidence
 
-<!-- Commands/checks and results. -->
+<!-- Exact commands/checks, integration/benchmark lanes and results. -->
 
 ## Review checklist
 
-- [ ] Diff matches objective and `out_of_scope`
+- [ ] Diff matches objective and the allowlisted scope
+- [ ] Invalid/unsupported states fail closed or remain explicit
 - [ ] Interfaces and data ownership remain coherent
+- [ ] Solver/model-private structures did not leak into stable core contracts
 - [ ] Reuse-before-implementation policy respected
-- [ ] Regression/security risks considered
-- [ ] Known limitations recorded
+- [ ] Provenance/artifact identity and reproducibility are preserved
+- [ ] Regression/security/resource risks considered
+- [ ] Generated/inferred/reconstructed semantics remain distinct where applicable
+- [ ] Known limitations and future work recorded rather than bundled
 
 ## Known limitations / follow-up
 
-<!-- Record follow-up work; do not silently bundle it into this PR. -->
+<!-- Record follow-up work; do not silently implement the next work item in this PR. -->
