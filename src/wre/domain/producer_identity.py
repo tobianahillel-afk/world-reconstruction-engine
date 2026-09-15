@@ -55,16 +55,10 @@ class ArtifactProducerIdentity:
         if not isinstance(self.producer, ProducerRef):
             raise TypeError("artifact_producer.producer must be ProducerRef")
         if not isinstance(self.configuration, ConfigurationIdentity):
-            raise TypeError(
-                "artifact_producer.configuration must be ConfigurationIdentity"
-            )
+            raise TypeError("artifact_producer.configuration must be ConfigurationIdentity")
         if self.model is not None and not isinstance(self.model, ModelIdentity):
             raise TypeError("artifact_producer.model must be ModelIdentity when present")
-        if self.checkpoint is not None and not isinstance(
-            self.checkpoint, CheckpointIdentity
-        ):
-            raise TypeError(
-                "artifact_producer.checkpoint must be CheckpointIdentity when present"
-            )
+        if self.checkpoint is not None and not isinstance(self.checkpoint, CheckpointIdentity):
+            raise TypeError("artifact_producer.checkpoint must be CheckpointIdentity when present")
         if self.checkpoint is not None and self.model is None:
             raise ValueError("artifact_producer.checkpoint requires model identity")
