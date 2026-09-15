@@ -25,9 +25,9 @@ The parent input is the L3.4 verified database, identified by its recorded SHA-2
 
 The L3.4 artifact is never handed directly to the solver. WRE copies it into an invocation-owned temporary working directory and re-hashes that private copy before any PyCOLMAP database read or incremental mapping call. All L3.5 solver activity uses the private copy.
 
-After mapping, WRE re-hashes the private database copy. Any unexpected mutation fails the stage. The original L3.4 database is also re-hashed before acceptance so an external concurrent change cannot be silently ignored.
+The private database is disposable solver workspace. Real PyCOLMAP 4.2.0 integration demonstrates that `incremental_mapping(...)` may legitimately change the database it receives, so byte-level mutation of this private copy is allowed and discarded with the temporary directory.
 
-This preserves the parent artifact even if a future PyCOLMAP implementation unexpectedly writes to the database it receives.
+The original L3.4 database is re-hashed before acceptance. Its bytes must remain identical to the recorded parent identity. This isolates solver-side database writes while preserving the immutable upstream artifact.
 
 L3.5 also receives the image-like observations whose membership exactly matches L3.4 provenance. Every source file is re-hashed against its persisted observation asset before it is exposed to COLMAP.
 
@@ -115,10 +115,9 @@ After `incremental_mapping(...)` returns, WRE requires:
 - every retained solver-native entry to be a regular file;
 - no symbolic links in model output;
 - canonical, unique file ordering;
-- the private L3.4 database copy to remain byte-identical to its pre-solver identity;
 - the original L3.4 parent database to remain byte-identical to its recorded identity.
 
-Contradictory or malformed output fails the stage. WRE does not silently normalize it.
+The private working database is not an output artifact and may be mutated by COLMAP before being discarded. Contradictory or malformed reconstruction output still fails the stage; WRE does not silently normalize it.
 
 ## Epistemic boundary
 
@@ -142,7 +141,7 @@ Fast tests use a strict fake PyCOLMAP boundary to verify:
 - exact option wiring;
 - deterministic single-thread/seed policy;
 - private database isolation and parent immutability;
-- detection of unexpected solver mutation on the private database copy;
+- harmless mutation of the disposable solver database copy;
 - source-byte validation and image-name membership;
 - output ownership and cleanup;
 - zero-model unresolved behavior;
@@ -150,7 +149,7 @@ Fast tests use a strict fake PyCOLMAP boundary to verify:
 - solver-file hashing;
 - public API export.
 
-The dedicated COLMAP integration lane installs exact `pycolmap==4.2.0` and exercises the real incremental mapper on COLMAP's own synthetic-dataset mechanism. This verifies the real API/environment and solver-native output contract without pretending to replace the larger geometry-quality fixture planned for L3.7.
+The dedicated COLMAP integration lane installs exact `pycolmap==4.2.0` and exercises the real incremental mapper on COLMAP's own synthetic-dataset mechanism. This verifies the real API/environment and solver-native output contract, including the observed working-database mutation behavior, without pretending to replace the larger geometry-quality fixture planned for L3.7.
 
 ## Next boundary
 
