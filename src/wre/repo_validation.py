@@ -39,7 +39,9 @@ def _load_mapping(path: Path) -> dict[str, Any]:
     return data
 
 
-def _append_missing_path(errors: list[str], root: Path, path_value: object, context: str) -> None:
+def _append_missing_path(
+    errors: list[str], root: Path, path_value: object, context: str
+) -> None:
     if not isinstance(path_value, str):
         errors.append(f"{context} path must be a string: {path_value!r}")
         return
@@ -63,13 +65,19 @@ def _ordered_lots(milestones: dict[str, Any]) -> tuple[list[str], dict[str, str]
     return ordered, owner
 
 
-def _require_non_blank_text(errors: list[str], value: object, context: str) -> None:
+def _require_non_blank_text(
+    errors: list[str], value: object, context: str
+) -> None:
     if not isinstance(value, str) or not value.strip():
         errors.append(f"{context} must be a non-blank string")
 
 
 def _require_string_list(
-    errors: list[str], value: object, context: str, *, non_empty: bool = False
+    errors: list[str],
+    value: object,
+    context: str,
+    *,
+    non_empty: bool = False,
 ) -> list[str]:
     if not isinstance(value, list):
         errors.append(f"{context} must be a list")
@@ -96,7 +104,8 @@ def _load_work_items(
     if not isinstance(work_item_files, list) or not work_item_files:
         errors.append("registry/work-items.yaml must define non-empty work_item_files")
         return []
-    if len(work_item_files) != len(set(str(item) for item in work_item_files)):
+    normalized_files = [str(item) for item in work_item_files]
+    if len(normalized_files) != len(set(normalized_files)):
         errors.append("work_item_files cannot contain duplicates")
 
     _, lot_to_milestone = _ordered_lots(milestones)
@@ -119,10 +128,14 @@ def _load_work_items(
 
         milestone_id = document.get("milestone")
         if not isinstance(milestone_id, str) or milestone_id not in milestones:
-            errors.append(f"{relative} references unknown milestone: {milestone_id!r}")
+            errors.append(
+                f"{relative} references unknown milestone: {milestone_id!r}"
+            )
             continue
         if milestone_id in seen_file_milestones:
-            errors.append(f"more than one work item file declares milestone {milestone_id}")
+            errors.append(
+                f"more than one work item file declares milestone {milestone_id}"
+            )
         seen_file_milestones.add(milestone_id)
 
         file_items = document.get("work_items")
@@ -131,25 +144,113 @@ def _load_work_items(
             continue
         for item in file_items:
             if not isinstance(item, dict):
-                errors.append(f"work item in {relative} must be a mapping: {item!r}")
+                errors.append(
+                    f"work item in {relative} must be a mapping: {item!r}"
+                )
                 continue
             lot_id = item.get("lot")
             if lot_id not in lots:
-                errors.append(f"work item {item.get('id')!r} references unknown lot: {lot_id!r}")
+                errors.append(
+                    f"work item {item.get('id')!r} references unknown lot: "
+                    f"{lot_id!r}"
+                )
             elif lot_to_milestone.get(str(lot_id)) != milestone_id:
                 errors.append(
-                    f"work item {item.get('id')!r} belongs to {lot_id!r}, which is not owned by {milestone_id}"
+                    f"work item {item.get('id')!r} belongs to {lot_id!r}, "
+                    f"which is not owned by {milestone_id}"
                 )
             loaded.append(item)
 
-    missing_milestones = set(milestones) - seen_file_milestones
-    extra_milestones = seen_file_milestones - set(milestones)
-    if missing_milestones or extra_milestones:
+    missing = set(milestones) - seen_file_milestones
+    extra = seen_file_milestones - set(milestones)
+    if missing or extra:
         errors.append(
             "work item file milestone coverage mismatch; "
-            f"missing={sorted(missing_milestones)}, extra={sorted(extra_milestones)}"
+            f"missing={sorted(missing)}, extra={sorted(extra)}"
         )
     return loaded
+
+
+def _validate_executable_contract(
+    errors: list[str], item_id: str, item: dict[str, Any]
+) -> None:
+    for field in REQUIRED_EXECUTABLE_FIELDS:
+        if field not in item:
+            errors.append(f"{item_id} requires executable field: {field}")
+    _require_non_blank_text(errors, item.get("objective"), f"{item_id}.objective")
+    _require_string_list(
+        errors,
+        item.get("allowed_scope"),
+        f"{item_id}.allowed_scope",
+        non_empty=True,
+    )
+    _require_string_list(
+        errors,
+        item.get("out_of_scope"),
+        f"{item_id}.out_of_scope",
+    )
+    _require_string_list(errors, item.get("reuse"), f"{item_id}.reuse")
+    _require_string_list(
+        errors,
+        item.get("acceptance"),
+        f"{item_id}.acceptance",
+        non_empty=True,
+    )
+    _require_string_list(
+        errors,
+        item.get("tests"),
+        f"{item_id}.tests",
+        non_empty=True,
+    )
+
+
+def _validate_reviews(
+    errors: list[str],
+    lots: dict[str, Any],
+    milestones: dict[str, Any],
+    reviews_doc: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    lot_reviews = reviews_doc.get("lot_reviews", {})
+    milestone_reviews = reviews_doc.get("milestone_reviews", {})
+    if not isinstance(lot_reviews, dict) or not isinstance(
+        milestone_reviews, dict
+    ):
+        errors.append(
+            "registry/reviews.yaml must define lot_reviews and "
+            "milestone_reviews mappings"
+        )
+        return {}, {}
+    if set(lot_reviews) != set(lots):
+        errors.append("lot review coverage must exactly match roadmap lots")
+    if set(milestone_reviews) != set(milestones):
+        errors.append(
+            "milestone review coverage must exactly match roadmap milestones"
+        )
+
+    for review_kind, review_map in (
+        ("lot", lot_reviews),
+        ("milestone", milestone_reviews),
+    ):
+        for target, review in review_map.items():
+            if not isinstance(review, dict):
+                errors.append(f"{review_kind} review {target} must be a mapping")
+                continue
+            status = review.get("status")
+            if status not in REVIEW_STATUSES:
+                errors.append(
+                    f"{review_kind} review {target} has invalid status: "
+                    f"{status!r}"
+                )
+            evidence = review.get("evidence", [])
+            if not isinstance(evidence, list):
+                errors.append(
+                    f"{review_kind} review {target}.evidence must be a list"
+                )
+            if status == "passed" and not evidence:
+                errors.append(
+                    f"passed {review_kind} review {target} must contain evidence"
+                )
+    return lot_reviews, milestone_reviews
 
 
 def validate_repository(root: Path) -> list[str]:
@@ -182,7 +283,9 @@ def validate_repository(root: Path) -> list[str]:
     if state.get("schema_version") != 2:
         errors.append("PROJECT_STATE.yaml schema_version must be 2")
     if state.get("roadmap_version") != roadmap.get("roadmap_version"):
-        errors.append("PROJECT_STATE roadmap_version must match registry/work-items.yaml")
+        errors.append(
+            "PROJECT_STATE roadmap_version must match registry/work-items.yaml"
+        )
 
     policy = roadmap.get("policy", {})
     if not isinstance(policy, dict):
@@ -194,13 +297,23 @@ def validate_repository(root: Path) -> list[str]:
         errors.append("roadmap policy must enable ready_requires_full_contract")
 
     max_items_per_lot = policy.get("max_work_items_per_lot")
-    if isinstance(max_items_per_lot, bool) or not isinstance(max_items_per_lot, int) or max_items_per_lot <= 0:
+    valid_max = (
+        not isinstance(max_items_per_lot, bool)
+        and isinstance(max_items_per_lot, int)
+        and max_items_per_lot > 0
+    )
+    if not valid_max:
         errors.append("max_work_items_per_lot must be a positive integer")
         max_items_per_lot = 6
+    assert isinstance(max_items_per_lot, int)
 
     for key in ("canonical_roadmap", "migration_map"):
-        relative = policy.get(key)
-        _append_missing_path(errors, root, relative, f"roadmap.policy.{key}")
+        _append_missing_path(
+            errors,
+            root,
+            policy.get(key),
+            f"roadmap.policy.{key}",
+        )
 
     statuses = set(roadmap.get("status_values", []))
     milestones = roadmap.get("milestones", {})
@@ -209,9 +322,9 @@ def validate_repository(root: Path) -> list[str]:
         return ["registry/work-items.yaml has invalid milestone/lot structure"]
 
     work_items = _load_work_items(root, roadmap, milestones, lots, errors)
-
     items_by_id: dict[str, dict[str, Any]] = {}
     lot_counts: Counter[str] = Counter()
+
     for item in work_items:
         item_id = item.get("id")
         if not isinstance(item_id, str) or not item_id.strip():
@@ -230,22 +343,19 @@ def validate_repository(root: Path) -> list[str]:
             lot_counts[lot_id] += 1
 
         if status in CONTRACT_REQUIRED_STATUSES:
-            for field in REQUIRED_EXECUTABLE_FIELDS:
-                if field not in item:
-                    errors.append(f"{item_id} requires executable field: {field}")
-            _require_non_blank_text(errors, item.get("objective"), f"{item_id}.objective")
-            _require_string_list(errors, item.get("allowed_scope"), f"{item_id}.allowed_scope", non_empty=True)
-            _require_string_list(errors, item.get("out_of_scope"), f"{item_id}.out_of_scope")
-            _require_string_list(errors, item.get("reuse"), f"{item_id}.reuse")
-            _require_string_list(errors, item.get("acceptance"), f"{item_id}.acceptance", non_empty=True)
-            _require_string_list(errors, item.get("tests"), f"{item_id}.tests", non_empty=True)
+            _validate_executable_contract(errors, item_id, item)
 
         read_before = item.get("read_before", [])
         if not isinstance(read_before, list):
             errors.append(f"{item_id}.read_before must be a list")
         else:
             for relative in read_before:
-                _append_missing_path(errors, root, relative, f"{item_id}.read_before")
+                _append_missing_path(
+                    errors,
+                    root,
+                    relative,
+                    f"{item_id}.read_before",
+                )
 
     for lot_id in lots:
         count = lot_counts.get(lot_id, 0)
@@ -253,7 +363,8 @@ def validate_repository(root: Path) -> list[str]:
             errors.append(f"lot {lot_id} has no work items")
         if count > max_items_per_lot:
             errors.append(
-                f"lot {lot_id} has {count} work items, exceeding max_work_items_per_lot={max_items_per_lot}"
+                f"lot {lot_id} has {count} work items, exceeding "
+                f"max_work_items_per_lot={max_items_per_lot}"
             )
 
     dependency_graph: dict[str, list[str]] = {}
@@ -265,13 +376,17 @@ def validate_repository(root: Path) -> list[str]:
         dependency_graph[item_id] = []
         for dependency in dependencies:
             if not isinstance(dependency, str):
-                errors.append(f"{item_id} has non-string dependency: {dependency!r}")
+                errors.append(
+                    f"{item_id} has non-string dependency: {dependency!r}"
+                )
                 continue
             dependency_graph[item_id].append(dependency)
             if dependency == item_id:
                 errors.append(f"{item_id} depends on itself")
             elif dependency not in items_by_id:
-                errors.append(f"{item_id} references unknown dependency: {dependency}")
+                errors.append(
+                    f"{item_id} references unknown dependency: {dependency}"
+                )
 
     visiting: set[str] = set()
     visited: set[str] = set()
@@ -293,28 +408,40 @@ def validate_repository(root: Path) -> list[str]:
         visit(item_id)
 
     active_id = state.get("active_work_item")
+    active_item: dict[str, Any] | None
     if active_id not in items_by_id:
-        errors.append(f"PROJECT_STATE active_work_item is unknown: {active_id!r}")
-        active_item: dict[str, Any] | None = None
+        errors.append(
+            f"PROJECT_STATE active_work_item is unknown: {active_id!r}"
+        )
+        active_item = None
     else:
         active_item = items_by_id[active_id]
-        if active_item.get("status") not in ACTIVE_STATUSES:
+        active_status = active_item.get("status")
+        if active_status not in ACTIVE_STATUSES:
             errors.append(
-                f"active work item {active_id} must have one of {sorted(ACTIVE_STATUSES)}, got {active_item.get('status')!r}"
+                f"active work item {active_id} must have one of "
+                f"{sorted(ACTIVE_STATUSES)}, got {active_status!r}"
             )
-        if state.get("status") != active_item.get("status"):
+        if state.get("status") != active_status:
             errors.append(
-                f"PROJECT_STATE status {state.get('status')!r} does not match {active_id} status {active_item.get('status')!r}"
+                f"PROJECT_STATE status {state.get('status')!r} does not "
+                f"match {active_id} status {active_status!r}"
             )
         for dependency in dependency_graph.get(str(active_id), []):
             dependency_item = items_by_id.get(dependency)
-            if dependency_item is not None and dependency_item.get("status") != "done":
+            if dependency_item is None:
+                continue
+            dependency_status = dependency_item.get("status")
+            if dependency_status != "done":
                 errors.append(
-                    f"active work item {active_id} depends on unfinished {dependency} ({dependency_item.get('status')!r})"
+                    f"active work item {active_id} depends on unfinished "
+                    f"{dependency} ({dependency_status!r})"
                 )
 
     active_candidates = [
-        item_id for item_id, item in items_by_id.items() if item.get("status") in ACTIVE_STATUSES
+        item_id
+        for item_id, item in items_by_id.items()
+        if item.get("status") in ACTIVE_STATUSES
     ]
     if active_id in items_by_id and active_candidates != [active_id]:
         errors.append(
@@ -328,10 +455,19 @@ def validate_repository(root: Path) -> list[str]:
         last_completed = []
     for item_id in last_completed:
         if item_id not in items_by_id:
-            errors.append(f"PROJECT_STATE.last_completed contains unknown item: {item_id!r}")
+            errors.append(
+                f"PROJECT_STATE.last_completed contains unknown item: "
+                f"{item_id!r}"
+            )
         elif items_by_id[item_id].get("status") != "done":
-            errors.append(f"PROJECT_STATE.last_completed item is not done: {item_id}")
-    done_ids = {item_id for item_id, item in items_by_id.items() if item.get("status") == "done"}
+            errors.append(
+                f"PROJECT_STATE.last_completed item is not done: {item_id}"
+            )
+    done_ids = {
+        item_id
+        for item_id, item in items_by_id.items()
+        if item.get("status") == "done"
+    }
     if set(last_completed) != done_ids:
         errors.append(
             "PROJECT_STATE.last_completed must exactly match done work items; "
@@ -347,29 +483,12 @@ def validate_repository(root: Path) -> list[str]:
     if len(ordered_lots) != len(set(ordered_lots)):
         errors.append("a lot is assigned to more than one milestone")
 
-    lot_reviews = reviews_doc.get("lot_reviews", {})
-    milestone_reviews = reviews_doc.get("milestone_reviews", {})
-    if not isinstance(lot_reviews, dict) or not isinstance(milestone_reviews, dict):
-        errors.append("registry/reviews.yaml must define lot_reviews and milestone_reviews mappings")
-        lot_reviews = {}
-        milestone_reviews = {}
-    if set(lot_reviews) != set(lots):
-        errors.append("lot review coverage must exactly match roadmap lots")
-    if set(milestone_reviews) != set(milestones):
-        errors.append("milestone review coverage must exactly match roadmap milestones")
-
-    for review_kind, review_map in (("lot", lot_reviews), ("milestone", milestone_reviews)):
-        for target, review in review_map.items():
-            if not isinstance(review, dict):
-                errors.append(f"{review_kind} review {target} must be a mapping")
-                continue
-            if review.get("status") not in REVIEW_STATUSES:
-                errors.append(f"{review_kind} review {target} has invalid status: {review.get('status')!r}")
-            evidence = review.get("evidence", [])
-            if not isinstance(evidence, list):
-                errors.append(f"{review_kind} review {target}.evidence must be a list")
-            if review.get("status") == "passed" and not evidence:
-                errors.append(f"passed {review_kind} review {target} must contain evidence")
+    lot_reviews, milestone_reviews = _validate_reviews(
+        errors,
+        lots,
+        milestones,
+        reviews_doc,
+    )
 
     if active_item is not None:
         active_lot_value = active_item.get("lot")
@@ -380,12 +499,14 @@ def validate_repository(root: Path) -> list[str]:
             active_lot = active_lot_value
         if state.get("lot") != active_lot:
             errors.append(
-                f"PROJECT_STATE lot {state.get('lot')!r} does not match active lot {active_lot!r}"
+                f"PROJECT_STATE lot {state.get('lot')!r} does not match "
+                f"active lot {active_lot!r}"
             )
         active_milestone = lot_to_milestone.get(active_lot)
         if state.get("milestone") != active_milestone:
             errors.append(
-                f"PROJECT_STATE milestone {state.get('milestone')!r} does not match active milestone {active_milestone!r}"
+                f"PROJECT_STATE milestone {state.get('milestone')!r} does "
+                f"not match active milestone {active_milestone!r}"
             )
 
         if active_lot in ordered_lots:
@@ -394,17 +515,19 @@ def validate_repository(root: Path) -> list[str]:
                 review = lot_reviews.get(previous_lot, {})
                 if not isinstance(review, dict) or review.get("status") != "passed":
                     errors.append(
-                        f"cannot advance to {active_lot}: prior lot review {previous_lot} is not passed"
+                        f"cannot advance to {active_lot}: prior lot review "
+                        f"{previous_lot} is not passed"
                     )
 
         milestone_order = list(milestones)
         if active_milestone in milestone_order:
-            active_milestone_index = milestone_order.index(active_milestone)
-            for previous_milestone in milestone_order[:active_milestone_index]:
+            active_index = milestone_order.index(active_milestone)
+            for previous_milestone in milestone_order[:active_index]:
                 review = milestone_reviews.get(previous_milestone, {})
                 if not isinstance(review, dict) or review.get("status") != "passed":
                     errors.append(
-                        f"cannot advance to {active_milestone}: prior milestone review {previous_milestone} is not passed"
+                        f"cannot advance to {active_milestone}: prior milestone "
+                        f"review {previous_milestone} is not passed"
                     )
 
     components = components_doc.get("components", {})
@@ -418,30 +541,47 @@ def validate_repository(root: Path) -> list[str]:
             continue
         owner_lot = component.get("owner_lot")
         if owner_lot not in lots:
-            errors.append(f"component {component_name} has unknown owner_lot: {owner_lot!r}")
+            errors.append(
+                f"component {component_name} has unknown owner_lot: "
+                f"{owner_lot!r}"
+            )
         elif isinstance(owner_lot, str):
             component_owner_lots.add(owner_lot)
 
         component_status = component.get("status")
         if component_status not in {"planned", "implementing", "implemented"}:
-            errors.append(f"component {component_name} has invalid status: {component_status!r}")
+            errors.append(
+                f"component {component_name} has invalid status: "
+                f"{component_status!r}"
+            )
         if component_status in {"implementing", "implemented"}:
             for field in ("implementation", "tests"):
                 paths = component.get(field, [])
                 if not isinstance(paths, list):
-                    errors.append(f"component {component_name}.{field} must be a list")
+                    errors.append(
+                        f"component {component_name}.{field} must be a list"
+                    )
                     continue
                 for relative in paths:
-                    _append_missing_path(errors, root, relative, f"component {component_name}.{field}")
+                    _append_missing_path(
+                        errors,
+                        root,
+                        relative,
+                        f"component {component_name}.{field}",
+                    )
     if component_owner_lots != set(lots):
         errors.append(
             "component registry must cover every roadmap lot; "
             f"covered={sorted(component_owner_lots)}, lots={sorted(lots)}"
         )
 
-    template = (root / ".github/PULL_REQUEST_TEMPLATE.md").read_text(encoding="utf-8")
+    template = (root / ".github/PULL_REQUEST_TEMPLATE.md").read_text(
+        encoding="utf-8"
+    )
     for section in REQUIRED_PR_SECTIONS:
         if section not in template:
-            errors.append(f"pull request template missing required section: {section}")
+            errors.append(
+                f"pull request template missing required section: {section}"
+            )
 
     return errors
