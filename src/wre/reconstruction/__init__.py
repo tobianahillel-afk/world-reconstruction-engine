@@ -24,6 +24,14 @@ from wre.reconstruction.colmap_matching import (
     ColmapPairMatchSummary,
     match_colmap_pairs,
 )
+from wre.reconstruction.colmap_verification import (
+    ColmapGeometricVerificationConfig,
+    ColmapGeometricVerificationError,
+    ColmapGeometricVerificationRequest,
+    ColmapGeometricVerificationResult,
+    ColmapPairGeometryEvidence,
+    verify_colmap_geometry,
+)
 
 __all__ = [
     "SUPPORTED_COLMAP_VERSION",
@@ -35,7 +43,12 @@ __all__ = [
     "ColmapFeatureExtractionRequest",
     "ColmapFeatureExtractionResult",
     "ColmapFeatureInput",
+    "ColmapGeometricVerificationConfig",
+    "ColmapGeometricVerificationError",
+    "ColmapGeometricVerificationRequest",
+    "ColmapGeometricVerificationResult",
     "ColmapImageFeatureSummary",
+    "ColmapPairGeometryEvidence",
     "ColmapPairMatchSummary",
     "ColmapPairMatchingConfig",
     "ColmapPairMatchingError",
@@ -44,4 +57,5 @@ __all__ = [
     "extract_colmap_features",
     "inspect_colmap_environment",
     "match_colmap_pairs",
+    "verify_colmap_geometry",
 ]
