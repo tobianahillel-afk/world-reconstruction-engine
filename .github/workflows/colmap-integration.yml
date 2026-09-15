@@ -10,7 +10,9 @@ on:
       - "registry/work-items.yaml"
       - "src/wre/reconstruction/**"
       - "tests/test_colmap_environment.py"
+      - "tests/test_colmap_features.py"
       - "docs/14_COLMAP_ENVIRONMENT.md"
+      - "docs/15_COLMAP_FEATURE_EXTRACTION.md"
   push:
     branches: [main]
     paths:
@@ -21,7 +23,9 @@ on:
       - "registry/work-items.yaml"
       - "src/wre/reconstruction/**"
       - "tests/test_colmap_environment.py"
+      - "tests/test_colmap_features.py"
       - "docs/14_COLMAP_ENVIRONMENT.md"
+      - "docs/15_COLMAP_FEATURE_EXTRACTION.md"
   workflow_dispatch:
 
 permissions:
@@ -61,7 +65,10 @@ jobs:
           uv pip install --python .venv/bin/python "numpy==2.5.3" "pycolmap==4.2.0"
           .venv/bin/python -c 'import numpy, pycolmap; assert numpy.__version__ == "2.5.3"; assert pycolmap.__version__ == "4.2.0"'
 
-      - name: Exercise real COLMAP environment adapter
+      - name: Exercise real COLMAP environment and feature extraction
         env:
           WRE_COLMAP_INTEGRATION: "1"
-        run: .venv/bin/python -m pytest tests/test_colmap_environment.py
+        run: >-
+          .venv/bin/python -m pytest
+          tests/test_colmap_environment.py
+          tests/test_colmap_features.py
