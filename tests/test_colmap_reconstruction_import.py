@@ -88,9 +88,7 @@ class _FakeReconstruction:
         self,
         image_names: tuple[str, ...] = ("000000-a.png", "000001-b.png"),
     ) -> None:
-        self._images = {
-            index + 1: _FakeImage(name) for index, name in enumerate(image_names)
-        }
+        self._images = {index + 1: _FakeImage(name) for index, name in enumerate(image_names)}
         self._points = {7: _FakePoint(tuple(self._images))}
 
     @staticmethod
@@ -175,9 +173,7 @@ def _feature_result(
     image_names: tuple[str, ...] = ("000000-a.png", "000001-b.png"),
     environment: ColmapEnvironmentIdentity | None = None,
 ) -> ColmapFeatureExtractionResult:
-    observation_ids = tuple(
-        ObservationId(f"obs:{index}") for index in range(len(image_names))
-    )
+    observation_ids = tuple(ObservationId(f"obs:{index}") for index in range(len(image_names)))
     return ColmapFeatureExtractionResult(
         provenance=DerivedArtifactProvenance(
             producing_run_id=ReconstructionRunId("run:l32"),
@@ -197,9 +193,7 @@ def _feature_result(
                 descriptor_rows=10,
                 descriptor_cols=128,
             )
-            for observation_id, image_name in zip(
-                observation_ids, image_names, strict=True
-            )
+            for observation_id, image_name in zip(observation_ids, image_names, strict=True)
         ),
     )
 
