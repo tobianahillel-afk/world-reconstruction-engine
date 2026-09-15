@@ -14,8 +14,8 @@ history:
     - docs/reviews/L3-M1-colmap-baseline-review.md
 lot_reviews:
   V2L0:
-    status: in_review
-    reviewed_at: null
+    status: passed
+    reviewed_at: '2026-09-15'
     evidence:
       - docs/reviews/V2L0-v2-migration-compatibility-review.md
   V2L1: {status: pending, reviewed_at: null, evidence: []}
