@@ -6,17 +6,18 @@ phase: v2_migration
 milestone: V2M0
 lot: V2L0
 active_work_item: V2L0.3
-status: ready
+status: in_review
 last_completed: [V2L0.1, V2L0.2]
-last_merged_pr: 30
+last_merged_pr: 31
 current_goal: >-
   Review the V1-to-V2 governance migration against the retained implementation and integration
   baselines, prove that no product behavior was lost, and close the V2L0 migration lot before
   any new V2 product-domain implementation begins.
 next_action: >-
-  Complete only V2L0.3: audit the migration diff, run/inspect fast CI and the retained PyCOLMAP
-  integration lane, record V2L0 review evidence, then expand V2L1.1 into a complete executable
-  contract and hand off to it without implementing SceneProject code in the same PR.
+  Complete only V2L0.3: audit the migration diff, require fast CI and the retained PyCOLMAP
+  integration lane on the exact review head, record V2L0 review evidence, then expand V2L1.1
+  into a complete executable contract and hand off to it without implementing SceneProject code
+  in the same PR.
 blockers: []
 architecture:
   product_blueprint: docs/01_PRODUCT.md
@@ -35,7 +36,7 @@ legacy_baseline:
   legacy_active_item_superseded: L4.3
   source_code_deleted: false
 reviews:
-  current_lot: pending
+  current_lot: in_review
   current_milestone: pending
 quality:
   fast_ci_required: true
