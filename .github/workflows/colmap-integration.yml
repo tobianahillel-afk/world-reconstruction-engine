@@ -11,6 +11,17 @@ on:
       - "src/wre/reconstruction/**"
       - "tests/test_colmap_environment.py"
       - "docs/14_COLMAP_ENVIRONMENT.md"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/colmap-integration.yml"
+      - "PROJECT_STATE.yaml"
+      - "registry/components.yaml"
+      - "registry/dependencies.yaml"
+      - "registry/work-items.yaml"
+      - "src/wre/reconstruction/**"
+      - "tests/test_colmap_environment.py"
+      - "docs/14_COLMAP_ENVIRONMENT.md"
   workflow_dispatch:
 
 permissions:
