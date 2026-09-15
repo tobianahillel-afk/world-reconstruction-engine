@@ -4,6 +4,8 @@ import hashlib
 import html
 import json
 import re
+import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -30,6 +32,20 @@ def _metadata_value(metadata: dict[str, object], key: str) -> str:
     return _plain(value if isinstance(value, str) else "")
 
 
+def _open_with_backoff(request: urllib.request.Request, *, timeout: int):
+    for attempt in range(7):
+        try:
+            return urllib.request.urlopen(request, timeout=timeout)
+        except urllib.error.HTTPError as exc:
+            if exc.code not in {429, 502, 503, 504} or attempt == 6:
+                raise
+            retry_after = exc.headers.get("Retry-After")
+            delay = float(retry_after) if retry_after and retry_after.isdigit() else min(2 ** attempt, 30)
+            print(f"Wikimedia HTTP {exc.code}; retrying in {delay:.0f}s")
+            time.sleep(delay)
+    raise AssertionError("unreachable")
+
+
 def _query_file(title: str, width: int) -> dict[str, object]:
     params = urllib.parse.urlencode(
         {
@@ -43,7 +59,7 @@ def _query_file(title: str, width: int) -> dict[str, object]:
         }
     )
     request = urllib.request.Request(f"{API}?{params}", headers={"User-Agent": USER_AGENT})
-    with urllib.request.urlopen(request, timeout=60) as response:
+    with _open_with_backoff(request, timeout=60) as response:
         payload = json.load(response)
     pages = payload.get("query", {}).get("pages", [])
     if len(pages) != 1 or "missing" in pages[0]:
@@ -58,7 +74,7 @@ def _download(url: str, path: Path) -> tuple[str, int]:
     request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
     digest = hashlib.sha256()
     size = 0
-    with urllib.request.urlopen(request, timeout=120) as response, path.open("wb") as output:
+    with _open_with_backoff(request, timeout=120) as response, path.open("wb") as output:
         while chunk := response.read(1024 * 1024):
             output.write(chunk)
             digest.update(chunk)
@@ -137,6 +153,7 @@ def main() -> int:
             }
         )
         print(f"[{index + 1:02d}/{len(titles):02d}] {local_name}: {title} [{license_short}]")
+        time.sleep(1.25)
 
     document = {
         "dataset_id": spec["dataset_id"],
