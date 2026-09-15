@@ -13,6 +13,7 @@ Before interpreting the implementation roadmap, read the current product/archite
 5. [`15_PRODUCTION_RUNTIME.md`](15_PRODUCTION_RUNTIME.md) — professional orchestration, caching, scheduling, runtime compilation and distribution.
 6. [`23_ENGINEERING_EXECUTION.md`](23_ENGINEERING_EXECUTION.md) — how blueprint capabilities are split into one-run work items and implemented safely.
 7. [`24_SYSTEM_INVARIANTS.md`](24_SYSTEM_INVARIANTS.md) — cross-cutting fail-closed product invariants every subsystem must preserve.
+8. [`25_V2_ROADMAP.md`](25_V2_ROADMAP.md) — executable capability sequence for WRE v2.0.
 
 These documents define the current target product. WRE is an independent visual spatiotemporal reconstruction engine; it is not defined as a MONDE subsystem and is not a single COLMAP-to-splat pipeline.
 
@@ -21,10 +22,10 @@ These documents define the current target product. WRE is an independent visual 
 1. Read the canonical product context above.
 2. Read `../AGENTS.md`.
 3. Read `../PROJECT_STATE.yaml` and note `active_work_item`.
-4. Find that exact ID in `../registry/work-items.yaml`.
-5. Check its dependencies are complete.
-6. Read its `read_before` files.
-7. Inspect only relevant implementation/tests plus the reuse/dependency registries.
+4. Read the v2 roadmap index `../registry/work-items.yaml`.
+5. Follow its `work_item_files` list and find the exact active work-item ID in the corresponding milestone file under `../registry/work-items/`.
+6. Check its dependencies are complete and its executable contract is fully specified.
+7. Read only its `read_before` files plus directly relevant source/tests and reuse/dependency registries.
 8. Run the item's baseline checks if configured.
 9. Implement the item without expanding scope.
 10. Run acceptance checks and relevant regression tests.
@@ -35,13 +36,28 @@ If repository state and conversation history disagree, the repository is authori
 
 ## Deny-by-default implementation rule
 
-The active work item is an allowlist. An agent may implement only the objective, explicit acceptance criteria, the minimum supporting code/tests/docs they require, and already-accepted invariants necessarily touched by the change. Missing `out_of_scope` wording is not permission to add adjacent functionality.
+The active work item is an allowlist. An agent may implement only the objective, explicit `allowed_scope`, acceptance criteria, the minimum supporting code/tests/docs they require, and already-accepted invariants necessarily touched by the change. Missing `out_of_scope` wording is not permission to add adjacent functionality.
 
 If the requested behavior does not fit the active item, record it as future work or perform an explicit roadmap/state change first. Do not opportunistically bundle it.
 
+## Work-item activation rule
+
+Planned future work may stay concise so the roadmap can survive changing research. **A work item cannot become `ready`, `in_progress`, `in_review`, `blocked` or `done` without a complete executable contract** containing at least:
+
+- objective;
+- allowed scope;
+- out-of-scope list;
+- dependencies;
+- read-before files;
+- reuse decision;
+- acceptance criteria;
+- tests/evidence.
+
+The repository validator enforces this. The PR handing off to the next item must expand that item's contract before marking it `ready`.
+
 ## Work-item sizing rule
 
-Every implementation work item must be small enough for one agent to understand, implement, test and review in one development run. If one item contains several independent solver integrations, responsibilities or failure domains, split it before coding. Prefer additional small lots over deep administrative nesting.
+Every implementation work item must be small enough for one agent to understand, implement, test and review in one development run. The v2 roadmap policy currently limits lots to at most six work items. If one item contains several independent solver integrations, responsibilities or failure domains, split it before coding. Prefer additional small lots over deep administrative nesting.
 
 ## Blueprint-versus-roadmap transition rule
 
@@ -51,9 +67,7 @@ The product/architecture blueprint can evolve ahead of the machine-readable impl
 - do not erase already completed work merely because the target architecture changed;
 - create a dedicated roadmap/state migration that maps retained work, deprecated assumptions, new lots and new acceptance gates;
 - classify existing code as retained, generalized, compatibility-wrapped, deprecated or removable before rewriting it;
-- after migration, `PROJECT_STATE.yaml` and `registry/work-items.yaml` again become the authoritative implementation sequence.
-
-Until such a migration is merged, the current active work item describes existing implementation state, while the canonical blueprint documents describe the target product architecture.
+- after migration, `PROJECT_STATE.yaml` and the split v2 work-item registry again become the authoritative implementation sequence.
 
 ## Product in one paragraph
 

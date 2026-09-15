@@ -1,20 +1,34 @@
 from __future__ import annotations
 
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
 import yaml
 
 ACTIVE_STATUSES = {"ready", "in_progress", "in_review"}
+CONTRACT_REQUIRED_STATUSES = ACTIVE_STATUSES | {"done", "blocked"}
 REVIEW_STATUSES = {"pending", "in_review", "passed", "failed"}
 REQUIRED_PR_SECTIONS = (
     "## Work item",
     "## Objective",
+    "## Allowed scope",
     "## Reuse",
+    "## Invariants / ownership boundaries",
     "## Acceptance criteria",
     "## Test evidence",
     "## Review checklist",
     "## Known limitations / follow-up",
+)
+REQUIRED_EXECUTABLE_FIELDS = (
+    "objective",
+    "allowed_scope",
+    "out_of_scope",
+    "depends_on",
+    "read_before",
+    "reuse",
+    "acceptance",
+    "tests",
 )
 
 
@@ -39,14 +53,103 @@ def _ordered_lots(milestones: dict[str, Any]) -> tuple[list[str], dict[str, str]
     for milestone_id, milestone in milestones.items():
         if not isinstance(milestone, dict):
             continue
-        lots = milestone.get("lots", [])
-        if not isinstance(lots, list):
+        lot_ids = milestone.get("lots", [])
+        if not isinstance(lot_ids, list):
             continue
-        for lot_id in lots:
+        for lot_id in lot_ids:
             if isinstance(lot_id, str):
                 ordered.append(lot_id)
                 owner[lot_id] = milestone_id
     return ordered, owner
+
+
+def _require_non_blank_text(errors: list[str], value: object, context: str) -> None:
+    if not isinstance(value, str) or not value.strip():
+        errors.append(f"{context} must be a non-blank string")
+
+
+def _require_string_list(
+    errors: list[str], value: object, context: str, *, non_empty: bool = False
+) -> list[str]:
+    if not isinstance(value, list):
+        errors.append(f"{context} must be a list")
+        return []
+    if non_empty and not value:
+        errors.append(f"{context} must not be empty")
+    normalized: list[str] = []
+    for entry in value:
+        if not isinstance(entry, str) or not entry.strip():
+            errors.append(f"{context} entries must be non-blank strings: {entry!r}")
+            continue
+        normalized.append(entry)
+    return normalized
+
+
+def _load_work_items(
+    root: Path,
+    roadmap: dict[str, Any],
+    milestones: dict[str, Any],
+    lots: dict[str, Any],
+    errors: list[str],
+) -> list[dict[str, Any]]:
+    work_item_files = roadmap.get("work_item_files")
+    if not isinstance(work_item_files, list) or not work_item_files:
+        errors.append("registry/work-items.yaml must define non-empty work_item_files")
+        return []
+    if len(work_item_files) != len(set(str(item) for item in work_item_files)):
+        errors.append("work_item_files cannot contain duplicates")
+
+    _, lot_to_milestone = _ordered_lots(milestones)
+    loaded: list[dict[str, Any]] = []
+    seen_file_milestones: set[str] = set()
+
+    for relative in work_item_files:
+        if not isinstance(relative, str):
+            errors.append(f"work_item_files entry must be a string: {relative!r}")
+            continue
+        path = root / relative
+        if not path.is_file():
+            errors.append(f"work item file does not exist: {relative}")
+            continue
+        try:
+            document = _load_mapping(path)
+        except (OSError, ValueError, yaml.YAMLError) as exc:
+            errors.append(f"cannot parse work item file {relative}: {exc}")
+            continue
+
+        milestone_id = document.get("milestone")
+        if not isinstance(milestone_id, str) or milestone_id not in milestones:
+            errors.append(f"{relative} references unknown milestone: {milestone_id!r}")
+            continue
+        if milestone_id in seen_file_milestones:
+            errors.append(f"more than one work item file declares milestone {milestone_id}")
+        seen_file_milestones.add(milestone_id)
+
+        file_items = document.get("work_items")
+        if not isinstance(file_items, list):
+            errors.append(f"{relative}.work_items must be a list")
+            continue
+        for item in file_items:
+            if not isinstance(item, dict):
+                errors.append(f"work item in {relative} must be a mapping: {item!r}")
+                continue
+            lot_id = item.get("lot")
+            if lot_id not in lots:
+                errors.append(f"work item {item.get('id')!r} references unknown lot: {lot_id!r}")
+            elif lot_to_milestone.get(str(lot_id)) != milestone_id:
+                errors.append(
+                    f"work item {item.get('id')!r} belongs to {lot_id!r}, which is not owned by {milestone_id}"
+                )
+            loaded.append(item)
+
+    missing_milestones = set(milestones) - seen_file_milestones
+    extra_milestones = seen_file_milestones - set(milestones)
+    if missing_milestones or extra_milestones:
+        errors.append(
+            "work item file milestone coverage mismatch; "
+            f"missing={sorted(missing_milestones)}, extra={sorted(extra_milestones)}"
+        )
+    return loaded
 
 
 def validate_repository(root: Path) -> list[str]:
@@ -74,25 +177,44 @@ def validate_repository(root: Path) -> list[str]:
     except (OSError, ValueError, yaml.YAMLError) as exc:
         return [f"cannot parse repository metadata: {exc}"]
 
+    if roadmap.get("schema_version") != 2:
+        errors.append("registry/work-items.yaml schema_version must be 2")
+    if state.get("schema_version") != 2:
+        errors.append("PROJECT_STATE.yaml schema_version must be 2")
+    if state.get("roadmap_version") != roadmap.get("roadmap_version"):
+        errors.append("PROJECT_STATE roadmap_version must match registry/work-items.yaml")
+
+    policy = roadmap.get("policy", {})
+    if not isinstance(policy, dict):
+        errors.append("registry/work-items.yaml policy must be a mapping")
+        policy = {}
+    if policy.get("deny_by_default_scope") is not True:
+        errors.append("roadmap policy must enable deny_by_default_scope")
+    if policy.get("ready_requires_full_contract") is not True:
+        errors.append("roadmap policy must enable ready_requires_full_contract")
+
+    max_items_per_lot = policy.get("max_work_items_per_lot")
+    if isinstance(max_items_per_lot, bool) or not isinstance(max_items_per_lot, int) or max_items_per_lot <= 0:
+        errors.append("max_work_items_per_lot must be a positive integer")
+        max_items_per_lot = 6
+
+    for key in ("canonical_roadmap", "migration_map"):
+        relative = policy.get(key)
+        _append_missing_path(errors, root, relative, f"roadmap.policy.{key}")
+
     statuses = set(roadmap.get("status_values", []))
     milestones = roadmap.get("milestones", {})
     lots = roadmap.get("lots", {})
-    work_items = roadmap.get("work_items", [])
+    if not isinstance(milestones, dict) or not isinstance(lots, dict):
+        return ["registry/work-items.yaml has invalid milestone/lot structure"]
 
-    if (
-        not isinstance(milestones, dict)
-        or not isinstance(lots, dict)
-        or not isinstance(work_items, list)
-    ):
-        return ["registry/work-items.yaml has invalid top-level structure"]
+    work_items = _load_work_items(root, roadmap, milestones, lots, errors)
 
     items_by_id: dict[str, dict[str, Any]] = {}
+    lot_counts: Counter[str] = Counter()
     for item in work_items:
-        if not isinstance(item, dict):
-            errors.append(f"work item must be a mapping: {item!r}")
-            continue
         item_id = item.get("id")
-        if not isinstance(item_id, str):
+        if not isinstance(item_id, str) or not item_id.strip():
             errors.append(f"work item missing string id: {item!r}")
             continue
         if item_id in items_by_id:
@@ -100,16 +222,42 @@ def validate_repository(root: Path) -> list[str]:
             continue
         items_by_id[item_id] = item
 
-    dependency_graph: dict[str, list[str]] = {}
-    for item_id, item in items_by_id.items():
         status = item.get("status")
         if status not in statuses:
             errors.append(f"{item_id} has invalid status: {status!r}")
-
         lot_id = item.get("lot")
-        if lot_id not in lots:
-            errors.append(f"{item_id} references unknown lot: {lot_id!r}")
+        if isinstance(lot_id, str):
+            lot_counts[lot_id] += 1
 
+        if status in CONTRACT_REQUIRED_STATUSES:
+            for field in REQUIRED_EXECUTABLE_FIELDS:
+                if field not in item:
+                    errors.append(f"{item_id} requires executable field: {field}")
+            _require_non_blank_text(errors, item.get("objective"), f"{item_id}.objective")
+            _require_string_list(errors, item.get("allowed_scope"), f"{item_id}.allowed_scope", non_empty=True)
+            _require_string_list(errors, item.get("out_of_scope"), f"{item_id}.out_of_scope")
+            _require_string_list(errors, item.get("reuse"), f"{item_id}.reuse")
+            _require_string_list(errors, item.get("acceptance"), f"{item_id}.acceptance", non_empty=True)
+            _require_string_list(errors, item.get("tests"), f"{item_id}.tests", non_empty=True)
+
+        read_before = item.get("read_before", [])
+        if not isinstance(read_before, list):
+            errors.append(f"{item_id}.read_before must be a list")
+        else:
+            for relative in read_before:
+                _append_missing_path(errors, root, relative, f"{item_id}.read_before")
+
+    for lot_id in lots:
+        count = lot_counts.get(lot_id, 0)
+        if count == 0:
+            errors.append(f"lot {lot_id} has no work items")
+        if count > max_items_per_lot:
+            errors.append(
+                f"lot {lot_id} has {count} work items, exceeding max_work_items_per_lot={max_items_per_lot}"
+            )
+
+    dependency_graph: dict[str, list[str]] = {}
+    for item_id, item in items_by_id.items():
         dependencies = item.get("depends_on", [])
         if not isinstance(dependencies, list):
             errors.append(f"{item_id}.depends_on must be a list")
@@ -124,13 +272,6 @@ def validate_repository(root: Path) -> list[str]:
                 errors.append(f"{item_id} depends on itself")
             elif dependency not in items_by_id:
                 errors.append(f"{item_id} references unknown dependency: {dependency}")
-
-        read_before = item.get("read_before", [])
-        if not isinstance(read_before, list):
-            errors.append(f"{item_id}.read_before must be a list")
-        else:
-            for relative in read_before:
-                _append_missing_path(errors, root, relative, f"{item_id}.read_before")
 
     visiting: set[str] = set()
     visited: set[str] = set()
@@ -159,20 +300,17 @@ def validate_repository(root: Path) -> list[str]:
         active_item = items_by_id[active_id]
         if active_item.get("status") not in ACTIVE_STATUSES:
             errors.append(
-                f"active work item {active_id} must have one of {sorted(ACTIVE_STATUSES)}, "
-                f"got {active_item.get('status')!r}"
+                f"active work item {active_id} must have one of {sorted(ACTIVE_STATUSES)}, got {active_item.get('status')!r}"
             )
         if state.get("status") != active_item.get("status"):
             errors.append(
-                f"PROJECT_STATE status {state.get('status')!r} does not match "
-                f"{active_id} status {active_item.get('status')!r}"
+                f"PROJECT_STATE status {state.get('status')!r} does not match {active_id} status {active_item.get('status')!r}"
             )
-        for dependency in dependency_graph.get(active_id, []):
+        for dependency in dependency_graph.get(str(active_id), []):
             dependency_item = items_by_id.get(dependency)
             if dependency_item is not None and dependency_item.get("status") != "done":
                 errors.append(
-                    f"active work item {active_id} depends on unfinished {dependency} "
-                    f"({dependency_item.get('status')!r})"
+                    f"active work item {active_id} depends on unfinished {dependency} ({dependency_item.get('status')!r})"
                 )
 
     active_candidates = [
@@ -193,7 +331,6 @@ def validate_repository(root: Path) -> list[str]:
             errors.append(f"PROJECT_STATE.last_completed contains unknown item: {item_id!r}")
         elif items_by_id[item_id].get("status") != "done":
             errors.append(f"PROJECT_STATE.last_completed item is not done: {item_id}")
-
     done_ids = {item_id for item_id, item in items_by_id.items() if item.get("status") == "done"}
     if set(last_completed) != done_ids:
         errors.append(
@@ -213,12 +350,9 @@ def validate_repository(root: Path) -> list[str]:
     lot_reviews = reviews_doc.get("lot_reviews", {})
     milestone_reviews = reviews_doc.get("milestone_reviews", {})
     if not isinstance(lot_reviews, dict) or not isinstance(milestone_reviews, dict):
-        errors.append(
-            "registry/reviews.yaml must define lot_reviews and milestone_reviews mappings"
-        )
+        errors.append("registry/reviews.yaml must define lot_reviews and milestone_reviews mappings")
         lot_reviews = {}
         milestone_reviews = {}
-
     if set(lot_reviews) != set(lots):
         errors.append("lot review coverage must exactly match roadmap lots")
     if set(milestone_reviews) != set(milestones):
@@ -230,9 +364,7 @@ def validate_repository(root: Path) -> list[str]:
                 errors.append(f"{review_kind} review {target} must be a mapping")
                 continue
             if review.get("status") not in REVIEW_STATUSES:
-                errors.append(
-                    f"{review_kind} review {target} has invalid status: {review.get('status')!r}"
-                )
+                errors.append(f"{review_kind} review {target} has invalid status: {review.get('status')!r}")
             evidence = review.get("evidence", [])
             if not isinstance(evidence, list):
                 errors.append(f"{review_kind} review {target}.evidence must be a list")
@@ -246,7 +378,6 @@ def validate_repository(root: Path) -> list[str]:
             active_lot = ""
         else:
             active_lot = active_lot_value
-
         if state.get("lot") != active_lot:
             errors.append(
                 f"PROJECT_STATE lot {state.get('lot')!r} does not match active lot {active_lot!r}"
@@ -254,8 +385,7 @@ def validate_repository(root: Path) -> list[str]:
         active_milestone = lot_to_milestone.get(active_lot)
         if state.get("milestone") != active_milestone:
             errors.append(
-                f"PROJECT_STATE milestone {state.get('milestone')!r} does not match "
-                f"active milestone {active_milestone!r}"
+                f"PROJECT_STATE milestone {state.get('milestone')!r} does not match active milestone {active_milestone!r}"
             )
 
         if active_lot in ordered_lots:
@@ -264,8 +394,7 @@ def validate_repository(root: Path) -> list[str]:
                 review = lot_reviews.get(previous_lot, {})
                 if not isinstance(review, dict) or review.get("status") != "passed":
                     errors.append(
-                        f"cannot advance to {active_lot}: prior lot review {previous_lot} "
-                        "is not passed"
+                        f"cannot advance to {active_lot}: prior lot review {previous_lot} is not passed"
                     )
 
         milestone_order = list(milestones)
@@ -275,8 +404,7 @@ def validate_repository(root: Path) -> list[str]:
                 review = milestone_reviews.get(previous_milestone, {})
                 if not isinstance(review, dict) or review.get("status") != "passed":
                     errors.append(
-                        f"cannot advance to {active_milestone}: prior milestone review "
-                        f"{previous_milestone} is not passed"
+                        f"cannot advance to {active_milestone}: prior milestone review {previous_milestone} is not passed"
                     )
 
     components = components_doc.get("components", {})
@@ -304,9 +432,7 @@ def validate_repository(root: Path) -> list[str]:
                     errors.append(f"component {component_name}.{field} must be a list")
                     continue
                 for relative in paths:
-                    _append_missing_path(
-                        errors, root, relative, f"component {component_name}.{field}"
-                    )
+                    _append_missing_path(errors, root, relative, f"component {component_name}.{field}")
     if component_owner_lots != set(lots):
         errors.append(
             "component registry must cover every roadmap lot; "

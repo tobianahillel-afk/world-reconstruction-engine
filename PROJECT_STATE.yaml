@@ -1,42 +1,42 @@
-schema_version: 1
+schema_version: 2
 project: world-reconstruction-engine
 project_name: World Reconstruction Engine
-phase: implementation
-milestone: M2
-lot: L4
-active_work_item: L4.3
+roadmap_version: '2.0'
+phase: v2_migration
+milestone: V2M0
+lot: V2L0
+active_work_item: V2L0.2
 status: ready
-last_completed: [L0.1, L0.2, L0.3, L0.4, L0.5, L0.R, L1.1, L1.2, L1.3, L1.4, L1.5, L2.1, L2.2, L2.3, L2.4, L2.5, L2.6, L3.1, L3.2, L3.3, L3.4, L3.5, L3.6, L3.7, L4.1, L4.2]
-last_merged_pr: 26
+last_completed: [V2L0.1]
+last_merged_pr: 29
 current_goal: >-
-  Add deterministic visual-vocabulary candidate retrieval as the third L4 retrieval strategy while
-  keeping retrieval similarity as proposal evidence only and preserving downstream feature matching
-  and geometric verification as the authority for pair acceptance.
+  Replace the legacy machine roadmap/state/component/review metadata with the executable v2.0
+  capability roadmap while preserving the already tested v1 implementation as a retained baseline.
 next_action: >-
-  After PR #27 merges, inspect L4.3 and the mature visual-retrieval mechanisms already identified in
-  the reuse registry and COLMAP stack, review exact API/version/license and cache semantics, then
-  implement only visual vocabulary retrieval; do not start L4.4, multi-signal ranking, or accept a
-  retrieval score as geometric truth.
+  Complete only V2L0.2: validate the split v2 work-item registry, state/review/component coverage,
+  activation-contract rules and repository validator. Do not implement V2L0.3 compatibility review
+  or V2L1.1 SceneProject code in the same PR.
 blockers: []
 architecture:
-  latest_adr: docs/adr/0001-adaptive-routing-anchoring-temporal-world.md
-  roadmap_revision: '2026-09-15'
-  future_capabilities:
-    - L4 strategy routing
-    - L9 absolute anchoring with GCP and reference-fragment factors
-    - L15 temporal and 4D world
+  product_blueprint: docs/01_PRODUCT.md
+  architecture_blueprint: docs/02_ARCHITECTURE.md
+  pipeline_blueprint: docs/03_PIPELINE.md
+  technology_selection: docs/14_TECHNOLOGY_SELECTION.md
+  production_runtime: docs/15_PRODUCTION_RUNTIME.md
+  engineering_execution: docs/23_ENGINEERING_EXECUTION.md
+  system_invariants: docs/24_SYSTEM_INVARIANTS.md
+  executable_roadmap: docs/25_V2_ROADMAP.md
+  migration_map: registry/v1-v2-migration.yaml
+legacy_baseline:
+  pre_blueprint_commit: 415f28d8f2a157d3227b2c73e139150901608df2
+  blueprint_v2_merge: 203341fd7ff1b27138394ab27bd41f4d0c58fdc2
+  completed_implementation_through: L4.2
+  legacy_active_item_superseded: L4.3
+  source_code_deleted: false
 reviews:
-  lot_reviews:
-    L0: passed
-    L1: passed
-    L2: passed
-    L3: passed
-  milestone_reviews:
-    M0: passed
-    M1: passed
+  current_lot: pending
+  current_milestone: pending
 quality:
-  fast_ci: passing
-  full_ci: passing
+  fast_ci_required: true
   known_regressions: 0
-  latest_regression_run: 34978343630
 updated_at: '2026-09-15'

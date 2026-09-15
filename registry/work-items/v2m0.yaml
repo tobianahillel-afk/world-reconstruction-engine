@@ -1,0 +1,86 @@
+schema_version: 1
+milestone: V2M0
+work_items:
+  - id: V2L0.1
+    lot: V2L0
+    title: Inventory and migration map
+    status: done
+    objective: Define the executable v2 roadmap and classify every implemented/planned v1 capability before machine-state migration.
+    allowed_scope:
+      - docs/25_V2_ROADMAP.md
+      - registry/v1-v2-migration.yaml
+      - docs/07_ROADMAP.md
+    out_of_scope: [source-code changes, dependency changes, machine-state replacement]
+    depends_on: []
+    read_before: [docs/00_START_HERE.md, docs/23_ENGINEERING_EXECUTION.md, docs/24_SYSTEM_INVARIANTS.md]
+    reuse: [existing Git/PR/review history]
+    acceptance:
+      - Every implemented v1 component has a forward migration decision.
+      - The v2 roadmap covers all canonical blueprint capability families.
+      - Work-item identity is capability-oriented rather than tied to one research model.
+      - No implementation state or source behavior changes.
+    tests: [fast CI, documentation/inventory review]
+  - id: V2L0.2
+    lot: V2L0
+    title: Machine roadmap and state migration
+    status: ready
+    objective: Replace legacy machine roadmap/state/component/review metadata with v2.0 identifiers and validation rules while preserving historical evidence and source behavior.
+    allowed_scope:
+      - registry/work-items.yaml and registry/work-items/v2m*.yaml
+      - PROJECT_STATE.yaml
+      - registry/components.yaml
+      - registry/reviews.yaml
+      - repository validator and its focused tests
+      - canonical startup documentation needed to point agents at the v2 roadmap
+    out_of_scope:
+      - product feature implementation
+      - changes to ingestion/reconstruction/retrieval behavior
+      - dependency/model installation
+      - deletion or rewrite of retained v1 source modules
+    depends_on: [V2L0.1]
+    read_before:
+      - docs/25_V2_ROADMAP.md
+      - registry/v1-v2-migration.yaml
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - src/wre/repo_validation.py
+      - tests/test_repo_validation.py
+    reuse: [existing repository validator and review-gate architecture]
+    acceptance:
+      - V2 milestones, lots and every planned work-item ID are machine-readable.
+      - Exactly one active v2 item exists and legacy L4.3 is no longer active.
+      - Planned work may stay concise, but any ready/in-progress/in-review/done item must have a full executable contract.
+      - Validator enforces deny-by-default activation metadata and maximum six work items per lot.
+      - Component and review registries cover every v2 lot/milestone.
+      - Historical v1 evidence remains referenced and recoverable.
+      - Fast CI and validator tests pass without changing product code behavior.
+    tests: [repository validator tests, full fast CI]
+  - id: V2L0.3
+    lot: V2L0
+    title: Retained baseline compatibility review
+    status: planned
+    depends_on: [V2L0.2]
+  - {id: V2L1.1, lot: V2L1, title: SceneProject contract, status: planned, depends_on: [V2L0.3]}
+  - {id: V2L1.2, lot: V2L1, title: Artifact identity and exact input references, status: planned, depends_on: [V2L1.1]}
+  - {id: V2L1.3, lot: V2L1, title: Producer model checkpoint configuration identity, status: planned, depends_on: [V2L1.2]}
+  - {id: V2L1.4, lot: V2L1, title: Provenance class contract, status: planned, depends_on: [V2L1.3]}
+  - {id: V2L1.5, lot: V2L1, title: Canonical artifact key, status: planned, depends_on: [V2L1.4]}
+  - {id: V2L1.6, lot: V2L1, title: Project and artifact metadata persistence, status: planned, depends_on: [V2L1.5]}
+  - {id: V2L2.1, lot: V2L2, title: Artifact dependency DAG contract, status: planned, depends_on: [V2L1.6]}
+  - {id: V2L2.2, lot: V2L2, title: Artifact metadata store and dependency lookup, status: planned, depends_on: [V2L2.1]}
+  - {id: V2L2.3, lot: V2L2, title: Canonical cache lookup, status: planned, depends_on: [V2L2.2]}
+  - {id: V2L2.4, lot: V2L2, title: Dependency scoped invalidation planning, status: planned, depends_on: [V2L2.3]}
+  - {id: V2L2.5, lot: V2L2, title: Artifact materialization verification metadata, status: planned, depends_on: [V2L2.4]}
+  - {id: V2L2.6, lot: V2L2, title: Cache reuse and invalidation regression, status: planned, depends_on: [V2L2.5]}
+  - {id: V2L3.1, lot: V2L3, title: Adapter capability descriptor, status: planned, depends_on: [V2L2.6]}
+  - {id: V2L3.2, lot: V2L3, title: Model checkpoint hardware identity, status: planned, depends_on: [V2L3.1]}
+  - {id: V2L3.3, lot: V2L3, title: Shipping license reproducibility registry schema, status: planned, depends_on: [V2L3.2]}
+  - {id: V2L3.4, lot: V2L3, title: Adapter failure metrics resume declarations, status: planned, depends_on: [V2L3.3]}
+  - {id: V2L3.5, lot: V2L3, title: Production registry validator, status: planned, depends_on: [V2L3.4]}
+  - {id: V2L3.6, lot: V2L3, title: Register retained production baselines, status: planned, depends_on: [V2L3.5]}
+  - {id: V2L4.1, lot: V2L4, title: Stable failure taxonomy, status: planned, depends_on: [V2L3.6]}
+  - {id: V2L4.2, lot: V2L4, title: Multidimensional metric vector, status: planned, depends_on: [V2L4.1]}
+  - {id: V2L4.3, lot: V2L4, title: Quality decision contract, status: planned, depends_on: [V2L4.2]}
+  - {id: V2L4.4, lot: V2L4, title: Benchmark record schema, status: planned, depends_on: [V2L4.3]}
+  - {id: V2L4.5, lot: V2L4, title: Deterministic quality policy evaluator, status: planned, depends_on: [V2L4.4]}
+  - {id: V2L4.6, lot: V2L4, title: Unknown metric and failure negative tests, status: planned, depends_on: [V2L4.5]}

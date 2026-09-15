@@ -1,0 +1,36 @@
+schema_version: 1
+milestone: V2M1
+work_items:
+  - {id: V2L5.1, lot: V2L5, title: MediaProfile contract, status: planned, depends_on: [V2L4.6]}
+  - {id: V2L5.2, lot: V2L5, title: Blur sharpness exposure clipping metrics, status: planned, depends_on: [V2L5.1]}
+  - {id: V2L5.3, lot: V2L5, title: Near duplicate and visual diversity signals, status: planned, depends_on: [V2L5.2]}
+  - {id: V2L5.4, lot: V2L5, title: Camera and specialist input class signals, status: planned, depends_on: [V2L5.3]}
+  - {id: V2L5.5, lot: V2L5, title: Dynamic long sequence sparse coverage signals, status: planned, depends_on: [V2L5.4]}
+  - {id: V2L5.6, lot: V2L5, title: Media profile fixture matrix, status: planned, depends_on: [V2L5.5]}
+  - {id: V2L6.1, lot: V2L6, title: Frame selection policy contract, status: planned, depends_on: [V2L5.6]}
+  - {id: V2L6.2, lot: V2L6, title: Existing interval keyframe compatibility adapter, status: planned, depends_on: [V2L6.1]}
+  - {id: V2L6.3, lot: V2L6, title: Quality diversity aware frame selection baseline, status: planned, depends_on: [V2L6.2]}
+  - {id: V2L6.4, lot: V2L6, title: Long video frame density resource bounds, status: planned, depends_on: [V2L6.3]}
+  - {id: V2L6.5, lot: V2L6, title: Frame selection provenance timing regression, status: planned, depends_on: [V2L6.4]}
+  - {id: V2L7.1, lot: V2L7, title: Canonical PairCandidate contract, status: planned, depends_on: [V2L6.5]}
+  - {id: V2L7.2, lot: V2L7, title: Sequential pairing compatibility adapter, status: planned, depends_on: [V2L7.1]}
+  - {id: V2L7.3, lot: V2L7, title: GPS pairing compatibility adapter, status: planned, depends_on: [V2L7.2]}
+  - {id: V2L7.4, lot: V2L7, title: Classical vocabulary retrieval baseline, status: planned, depends_on: [V2L7.3]}
+  - {id: V2L7.5, lot: V2L7, title: Modern visual retrieval first candidate, status: planned, depends_on: [V2L7.4]}
+  - {id: V2L7.6, lot: V2L7, title: Retrieval union dedup recall benchmark, status: planned, depends_on: [V2L7.5]}
+  - {id: V2L8.1, lot: V2L8, title: SceneCluster and scene relation hypothesis contract, status: planned, depends_on: [V2L7.6]}
+  - {id: V2L8.2, lot: V2L8, title: Local match and geometric verification evidence adapter, status: planned, depends_on: [V2L8.1]}
+  - {id: V2L8.3, lot: V2L8, title: Deterministic verified scene clustering, status: planned, depends_on: [V2L8.2]}
+  - {id: V2L8.4, lot: V2L8, title: Repeated symmetric look alike fail closed fixture, status: planned, depends_on: [V2L8.3]}
+  - {id: V2L8.5, lot: V2L8, title: Scalable scene clustering boundary, status: planned, depends_on: [V2L8.4]}
+  - {id: V2L9.1, lot: V2L9, title: TemporalGroup and SyncHypothesis contracts, status: planned, depends_on: [V2L8.5]}
+  - {id: V2L9.2, lot: V2L9, title: Metadata timecode synchronization evidence, status: planned, depends_on: [V2L9.1]}
+  - {id: V2L9.3, lot: V2L9, title: Audio correlation synchronization adapter, status: planned, depends_on: [V2L9.2]}
+  - {id: V2L9.4, lot: V2L9, title: Visual event synchronization interface, status: planned, depends_on: [V2L9.3]}
+  - {id: V2L9.5, lot: V2L9, title: Synchronization ambiguity contradiction fixtures, status: planned, depends_on: [V2L9.4]}
+  - {id: V2L10.1, lot: V2L10, title: QualityMode PREVIEW FAST QUALITY MASTER contract, status: planned, depends_on: [V2L9.5]}
+  - {id: V2L10.2, lot: V2L10, title: Route node and route graph contract, status: planned, depends_on: [V2L10.1]}
+  - {id: V2L10.3, lot: V2L10, title: Deterministic router input contract, status: planned, depends_on: [V2L10.2]}
+  - {id: V2L10.4, lot: V2L10, title: Bounded allowlisted fallback escalation policy, status: planned, depends_on: [V2L10.3]}
+  - {id: V2L10.5, lot: V2L10, title: Auditable route decision artifact, status: planned, depends_on: [V2L10.4]}
+  - {id: V2L10.6, lot: V2L10, title: Router determinism fail closed tests, status: planned, depends_on: [V2L10.5]}

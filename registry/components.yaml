@@ -1,197 +1,73 @@
-schema_version: 1
+schema_version: 2
 components:
-  agent_resume_protocol:
-    owner_lot: L0
-    implementation: [AGENTS.md, docs/00_START_HERE.md, PROJECT_STATE.yaml]
-    tests: []
-    status: implemented
-  development_quality_gates:
-    owner_lot: L0
+  v2_migration_governance:
+    owner_lot: V2L0
     implementation:
-      - pyproject.toml
-      - uv.lock
-      - .github/dependabot.yml
-      - .github/workflows/ci.yml
-      - .github/workflows/codeql.yml
-      - .github/workflows/dependency-review.yml
-      - docs/08_SECURITY.md
-      - docs/09_FIXTURES.md
-      - registry/dependencies.yaml
-      - registry/schemas/fixture.schema.json
-      - registry/schemas/regression-result.schema.json
-      - scripts/validate_repo.py
+      - docs/25_V2_ROADMAP.md
+      - registry/v1-v2-migration.yaml
+      - registry/work-items.yaml
+      - registry/work-items/v2m0.yaml
+      - registry/work-items/v2m1.yaml
+      - registry/work-items/v2m2.yaml
+      - registry/work-items/v2m3.yaml
+      - registry/work-items/v2m4.yaml
+      - registry/work-items/v2m5.yaml
+      - registry/work-items/v2m6.yaml
+      - registry/work-items/v2m7.yaml
+      - PROJECT_STATE.yaml
+      - registry/components.yaml
+      - registry/reviews.yaml
       - src/wre/repo_validation.py
-      - src/wre/regression.py
-      - tests/fixtures/synthetic/tiny-smoke/fixture.json
-      - tests/fixtures/synthetic/tiny-smoke/points.json
-      - tests/test_smoke.py
-      - tests/test_repo_validation.py
-      - tests/test_regression_harness.py
-    tests:
-      - tests/test_smoke.py
-      - tests/test_repo_validation.py
-      - tests/test_regression_harness.py
-    status: implemented
-  observation_core:
-    owner_lot: L1
-    implementation:
-      - docs/04_DATA_MODEL.md
-      - docs/10_PERSISTENCE.md
-      - src/wre/domain/__init__.py
-      - src/wre/domain/observations.py
-      - src/wre/domain/cameras.py
-      - src/wre/domain/fragments.py
-      - src/wre/domain/runs.py
-      - src/wre/persistence/__init__.py
-      - src/wre/persistence/codec.py
-      - src/wre/persistence/sqlite_store.py
-    tests:
-      - tests/test_observations.py
-      - tests/test_cameras.py
-      - tests/test_fragments.py
-      - tests/test_runs.py
-      - tests/test_persistence.py
-    status: implemented
-  media_ingestion:
-    owner_lot: L2
-    implementation:
-      - docs/11_MEDIA_INGESTION.md
-      - registry/dependencies.yaml
-      - src/wre/domain/metadata.py
-      - src/wre/ingestion/__init__.py
-      - src/wre/ingestion/images.py
-      - src/wre/ingestion/videos.py
-      - src/wre/ingestion/hashing.py
-      - src/wre/ingestion/exif.py
-      - src/wre/ingestion/metadata_interpretation.py
-      - src/wre/ingestion/keyframes.py
-    tests:
-      - tests/test_image_ingestion.py
-      - tests/test_hashing_duplicates.py
-      - tests/test_exif_metadata.py
-      - tests/test_metadata_interpretation.py
-      - tests/test_video_ingestion.py
-      - tests/test_keyframe_extraction.py
-    status: implemented
-  colmap_reconstruction:
-    owner_lot: L3
-    implementation:
-      - docs/14_COLMAP_ENVIRONMENT.md
-      - docs/15_COLMAP_FEATURE_EXTRACTION.md
-      - docs/16_COLMAP_PAIR_MATCHING.md
-      - docs/17_COLMAP_GEOMETRIC_VERIFICATION.md
-      - docs/18_COLMAP_INCREMENTAL_RECONSTRUCTION.md
-      - docs/19_COLMAP_RECONSTRUCTION_IMPORT.md
-      - docs/20_COLMAP_END_TO_END_FIXTURE.md
-      - registry/dependencies.yaml
-      - .github/workflows/colmap-integration.yml
-      - tests/fixtures/synthetic/colmap-l3-end-to-end/fixture.json
-      - tests/fixtures/synthetic/colmap-l3-end-to-end/scene.json
-      - src/wre/domain/estimated_geometry.py
-      - src/wre/reconstruction/__init__.py
-      - src/wre/reconstruction/colmap_environment.py
-      - src/wre/reconstruction/colmap_features.py
-      - src/wre/reconstruction/colmap_matching.py
-      - src/wre/reconstruction/colmap_verification.py
-      - src/wre/reconstruction/colmap_reconstruction.py
-      - src/wre/reconstruction/colmap_import.py
-    tests:
-      - tests/test_colmap_environment.py
-      - tests/test_colmap_features.py
-      - tests/test_colmap_matching.py
-      - tests/test_colmap_geometric_verification.py
-      - tests/test_colmap_verification_safety.py
-      - tests/test_colmap_incremental_reconstruction.py
-      - tests/test_colmap_reconstruction_safety.py
-      - tests/test_estimated_geometry.py
-      - tests/test_colmap_reconstruction_import.py
-      - tests/test_colmap_import_safety.py
-      - tests/test_colmap_end_to_end_fixture.py
-    status: implemented
-  candidate_retrieval:
-    owner_lot: L4
-    implementation:
-      - docs/21_SEQUENTIAL_PAIRING.md
-      - docs/22_GPS_PAIRING.md
-      - src/wre/retrieval/__init__.py
-      - src/wre/retrieval/sequential.py
-      - src/wre/retrieval/gps.py
-    tests:
-      - tests/test_sequential_pairing.py
-      - tests/test_gps_pairing.py
+    tests: [tests/test_repo_validation.py]
     status: implementing
-  strategy_routing:
-    owner_lot: L4
-    implementation: []
-    tests: []
-    status: planned
-  evidence_geometry:
-    owner_lot: L5
-    implementation: []
-    tests: []
-    status: planned
-  fragment_engine:
-    owner_lot: L6
-    implementation: []
-    tests: []
-    status: planned
-  structural_geometry:
-    owner_lot: L7
-    implementation: []
-    tests: []
-    status: planned
-  fragment_merging:
-    owner_lot: L8
-    implementation: []
-    tests: []
-    status: planned
-  world_graph:
-    owner_lot: L9
-    implementation: []
-    tests: []
-    status: planned
-  absolute_anchoring:
-    owner_lot: L9
-    implementation: []
-    tests: []
-    status: planned
-  uncertainty_hypotheses:
-    owner_lot: L10
-    implementation: []
-    tests: []
-    status: planned
-  video_motion:
-    owner_lot: L11
-    implementation: []
-    tests: []
-    status: planned
-  multi_solver_validation:
-    owner_lot: L12
-    implementation: []
-    tests: []
-    status: planned
-  hard_case_escalation:
-    owner_lot: L13
-    implementation: []
-    tests: []
-    status: planned
-  dense_reconstruction:
-    owner_lot: L14
-    implementation: []
-    tests: []
-    status: planned
-  temporal_world:
-    owner_lot: L15
-    implementation: []
-    tests: []
-    status: planned
-  validation_program:
-    owner_lot: L16
-    implementation: []
-    tests: []
-    status: planned
-  monde_boundary:
-    owner_lot: L17
-    implementation: []
-    tests: []
-    status: planned
+  scene_project_artifacts: {owner_lot: V2L1, implementation: [], tests: [], status: planned}
+  artifact_dag_cache: {owner_lot: V2L2, implementation: [], tests: [], status: planned}
+  adapter_model_registry: {owner_lot: V2L3, implementation: [], tests: [], status: planned}
+  quality_failure_benchmarks: {owner_lot: V2L4, implementation: [], tests: [], status: planned}
+  media_profiling: {owner_lot: V2L5, implementation: [], tests: [], status: planned}
+  adaptive_frame_selection: {owner_lot: V2L6, implementation: [], tests: [], status: planned}
+  pair_candidate_retrieval: {owner_lot: V2L7, implementation: [], tests: [], status: planned}
+  scene_identity_clustering: {owner_lot: V2L8, implementation: [], tests: [], status: planned}
+  temporal_grouping_sync: {owner_lot: V2L9, implementation: [], tests: [], status: planned}
+  route_graph: {owner_lot: V2L10, implementation: [], tests: [], status: planned}
+  canonical_geometry_contracts: {owner_lot: V2L11, implementation: [], tests: [], status: planned}
+  precision_geometry_baseline: {owner_lot: V2L12, implementation: [], tests: [], status: planned}
+  feed_forward_geometry: {owner_lot: V2L13, implementation: [], tests: [], status: planned}
+  precision_global_refinement: {owner_lot: V2L14, implementation: [], tests: [], status: planned}
+  dense_depth_mvs: {owner_lot: V2L15, implementation: [], tests: [], status: planned}
+  physical_surface: {owner_lot: V2L16, implementation: [], tests: [], status: planned}
+  photometric_pipeline: {owner_lot: V2L17, implementation: [], tests: [], status: planned}
+  static_appearance: {owner_lot: V2L18, implementation: [], tests: [], status: planned}
+  materials_environment: {owner_lot: V2L19, implementation: [], tests: [], status: planned}
+  master_scene: {owner_lot: V2L20, implementation: [], tests: [], status: planned}
+  runtime_compiler: {owner_lot: V2L21, implementation: [], tests: [], status: planned}
+  reference_viewer: {owner_lot: V2L22, implementation: [], tests: [], status: planned}
+  static_vertical_slice: {owner_lot: V2L23, implementation: [], tests: [], status: planned}
+  dense_tracking_decomposition: {owner_lot: V2L24, implementation: [], tests: [], status: planned}
+  short_4d_preview: {owner_lot: V2L25, implementation: [], tests: [], status: planned}
+  quality_4d: {owner_lot: V2L26, implementation: [], tests: [], status: planned}
+  persistent_dynamic_entities: {owner_lot: V2L27, implementation: [], tests: [], status: planned}
+  long_video_streaming: {owner_lot: V2L28, implementation: [], tests: [], status: planned}
+  multi_video_event: {owner_lot: V2L29, implementation: [], tests: [], status: planned}
+  dynamic_runtime: {owner_lot: V2L30, implementation: [], tests: [], status: planned}
+  temporal_epochs: {owner_lot: V2L31, implementation: [], tests: [], status: planned}
+  cross_epoch_change: {owner_lot: V2L32, implementation: [], tests: [], status: planned}
+  temporal_state_events: {owner_lot: V2L33, implementation: [], tests: [], status: planned}
+  cross_temporal_reconstruction: {owner_lot: V2L34, implementation: [], tests: [], status: planned}
+  historical_runtime: {owner_lot: V2L35, implementation: [], tests: [], status: planned}
+  sparse_view_route: {owner_lot: V2L36, implementation: [], tests: [], status: planned}
+  large_collections: {owner_lot: V2L37, implementation: [], tests: [], status: planned}
+  omnidirectional_route: {owner_lot: V2L38, implementation: [], tests: [], status: planned}
+  aerial_route: {owner_lot: V2L39, implementation: [], tests: [], status: planned}
+  capture_degradation_routes: {owner_lot: V2L40, implementation: [], tests: [], status: planned}
+  difficult_material_structure_routes: {owner_lot: V2L41, implementation: [], tests: [], status: planned}
+  relighting_pbr: {owner_lot: V2L42, implementation: [], tests: [], status: planned}
+  generated_completion: {owner_lot: V2L43, implementation: [], tests: [], status: planned}
+  human_review: {owner_lot: V2L44, implementation: [], tests: [], status: planned}
+  interoperability_export: {owner_lot: V2L45, implementation: [], tests: [], status: planned}
+  resource_scheduling: {owner_lot: V2L46, implementation: [], tests: [], status: planned}
+  checkpoint_distributed: {owner_lot: V2L47, implementation: [], tests: [], status: planned}
+  execution_security: {owner_lot: V2L48, implementation: [], tests: [], status: planned}
+  continuous_benchmarks: {owner_lot: V2L49, implementation: [], tests: [], status: planned}
+  packaging_reproducibility: {owner_lot: V2L50, implementation: [], tests: [], status: planned}
+  final_validation: {owner_lot: V2L51, implementation: [], tests: [], status: planned}

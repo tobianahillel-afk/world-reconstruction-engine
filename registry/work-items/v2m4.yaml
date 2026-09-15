@@ -1,0 +1,38 @@
+schema_version: 1
+milestone: V2M4
+work_items:
+  - {id: V2L24.1, lot: V2L24, title: Dense track motion evidence contract, status: planned, depends_on: [V2L23.4]}
+  - {id: V2L24.2, lot: V2L24, title: First approved dense tracker adapter, status: planned, depends_on: [V2L24.1]}
+  - {id: V2L24.3, lot: V2L24, title: Dynamic static decomposition contract, status: planned, depends_on: [V2L24.2]}
+  - {id: V2L24.4, lot: V2L24, title: Transient semi static dynamic classification baseline, status: planned, depends_on: [V2L24.3]}
+  - {id: V2L24.5, lot: V2L24, title: Dynamic contamination and occlusion fixtures, status: planned, depends_on: [V2L24.4]}
+  - {id: V2L25.1, lot: V2L25, title: Dynamic geometry preview adapter contract, status: planned, depends_on: [V2L24.5]}
+  - {id: V2L25.2, lot: V2L25, title: First approved fast 4D preview candidate, status: planned, depends_on: [V2L25.1]}
+  - {id: V2L25.3, lot: V2L25, title: Preview camera depth motion normalization, status: planned, depends_on: [V2L25.2]}
+  - {id: V2L25.4, lot: V2L25, title: Temporal preview metrics and resource bounds, status: planned, depends_on: [V2L25.3]}
+  - {id: V2L25.5, lot: V2L25, title: Preview fallback unresolved fixture, status: planned, depends_on: [V2L25.4]}
+  - {id: V2L26.1, lot: V2L26, title: Quality dynamic solution comparison contract, status: planned, depends_on: [V2L25.5]}
+  - {id: V2L26.2, lot: V2L26, title: First approved quality 4D candidate, status: planned, depends_on: [V2L26.1]}
+  - {id: V2L26.3, lot: V2L26, title: Dynamic geometry appearance temporal consistency gate, status: planned, depends_on: [V2L26.2]}
+  - {id: V2L26.4, lot: V2L26, title: Preview quality competing solution policy, status: planned, depends_on: [V2L26.3]}
+  - {id: V2L26.5, lot: V2L26, title: Held out free viewpoint dynamic fixture, status: planned, depends_on: [V2L26.4]}
+  - {id: V2L27.1, lot: V2L27, title: DynamicEntity and Trajectory contract, status: planned, depends_on: [V2L26.5]}
+  - {id: V2L27.2, lot: V2L27, title: Occlusion persistence inferred uncertainty, status: planned, depends_on: [V2L27.1]}
+  - {id: V2L27.3, lot: V2L27, title: Dynamic surface and motion field contract, status: planned, depends_on: [V2L27.2]}
+  - {id: V2L27.4, lot: V2L27, title: Persistent object dynamic surface adapter boundary, status: planned, depends_on: [V2L27.3]}
+  - {id: V2L27.5, lot: V2L27, title: Dynamic identity occlusion deformation fixtures, status: planned, depends_on: [V2L27.4]}
+  - {id: V2L28.1, lot: V2L28, title: Long sequence chunk window state contract, status: planned, depends_on: [V2L27.5]}
+  - {id: V2L28.2, lot: V2L28, title: First approved long sequence geometry baseline, status: planned, depends_on: [V2L28.1]}
+  - {id: V2L28.3, lot: V2L28, title: Drift and chunk boundary artifacts, status: planned, depends_on: [V2L28.2]}
+  - {id: V2L28.4, lot: V2L28, title: Loop overlap global refinement boundary, status: planned, depends_on: [V2L28.3]}
+  - {id: V2L28.5, lot: V2L28, title: Bounded memory long sequence fixture, status: planned, depends_on: [V2L28.4]}
+  - {id: V2L29.1, lot: V2L29, title: Multi signal synchronization hypothesis composition, status: planned, depends_on: [V2L28.5]}
+  - {id: V2L29.2, lot: V2L29, title: Cross camera track graph contract, status: planned, depends_on: [V2L29.1]}
+  - {id: V2L29.3, lot: V2L29, title: Per camera trajectory calibration composition, status: planned, depends_on: [V2L29.2]}
+  - {id: V2L29.4, lot: V2L29, title: Joint merged 4D adapter boundary, status: planned, depends_on: [V2L29.3]}
+  - {id: V2L29.5, lot: V2L29, title: Multi camera known offset and ambiguity fixture, status: planned, depends_on: [V2L29.4]}
+  - {id: V2L30.1, lot: V2L30, title: Temporal runtime chunk and LOD contract, status: planned, depends_on: [V2L29.5]}
+  - {id: V2L30.2, lot: V2L30, title: Dynamic playback pause frame step metadata, status: planned, depends_on: [V2L30.1]}
+  - {id: V2L30.3, lot: V2L30, title: Dynamic collision bounds interaction proxy boundary, status: planned, depends_on: [V2L30.2]}
+  - {id: V2L30.4, lot: V2L30, title: Temporal streaming and prefetch policy, status: planned, depends_on: [V2L30.3]}
+  - {id: V2L30.5, lot: V2L30, title: Dynamic runtime performance benchmark, status: planned, depends_on: [V2L30.4]}

@@ -1,0 +1,37 @@
+schema_version: 1
+milestone: V2M2
+work_items:
+  - {id: V2L11.1, lot: V2L11, title: Canonical CameraSolution contract, status: planned, depends_on: [V2L10.6]}
+  - {id: V2L11.2, lot: V2L11, title: DepthField validity confidence contract, status: planned, depends_on: [V2L11.1]}
+  - {id: V2L11.3, lot: V2L11, title: PointMap contract, status: planned, depends_on: [V2L11.2]}
+  - {id: V2L11.4, lot: V2L11, title: GeometrySolution assembly local scale contract, status: planned, depends_on: [V2L11.3]}
+  - {id: V2L11.5, lot: V2L11, title: SparseReconstructionEstimate compatibility conversion, status: planned, depends_on: [V2L11.4]}
+  - {id: V2L11.6, lot: V2L11, title: Coordinate convention regression fixture, status: planned, depends_on: [V2L11.5]}
+  - {id: V2L12.1, lot: V2L12, title: COLMAP v2 adapter descriptor and normalization, status: planned, depends_on: [V2L11.6]}
+  - {id: V2L12.2, lot: V2L12, title: Retained COLMAP evidence stages use artifact identities, status: planned, depends_on: [V2L12.1]}
+  - {id: V2L12.3, lot: V2L12, title: COLMAP emits canonical geometry contracts, status: planned, depends_on: [V2L12.2]}
+  - {id: V2L12.4, lot: V2L12, title: Disconnected and zero model explicit outcomes, status: planned, depends_on: [V2L12.3]}
+  - {id: V2L12.5, lot: V2L12, title: COLMAP end to end fixture migrated to v2 contracts, status: planned, depends_on: [V2L12.4]}
+  - {id: V2L13.1, lot: V2L13, title: Feed forward geometry adapter interface, status: planned, depends_on: [V2L12.5]}
+  - {id: V2L13.2, lot: V2L13, title: First approved feed forward preview candidate, status: planned, depends_on: [V2L13.1]}
+  - {id: V2L13.3, lot: V2L13, title: Feed forward checkpoint hardware license reproducibility, status: planned, depends_on: [V2L13.2]}
+  - {id: V2L13.4, lot: V2L13, title: Feed forward geometry camera quality metrics, status: planned, depends_on: [V2L13.3]}
+  - {id: V2L13.5, lot: V2L13, title: Preview versus COLMAP comparison, status: planned, depends_on: [V2L13.4]}
+  - {id: V2L14.1, lot: V2L14, title: Competing GeometrySolution comparison contract, status: planned, depends_on: [V2L13.5]}
+  - {id: V2L14.2, lot: V2L14, title: Geometry initialization refinement adapter boundary, status: planned, depends_on: [V2L14.1]}
+  - {id: V2L14.3, lot: V2L14, title: Classical BA global refinement path, status: planned, depends_on: [V2L14.2]}
+  - {id: V2L14.4, lot: V2L14, title: First approved hybrid global candidate, status: planned, depends_on: [V2L14.3]}
+  - {id: V2L14.5, lot: V2L14, title: Geometry consensus disagreement metrics, status: planned, depends_on: [V2L14.4]}
+  - {id: V2L14.6, lot: V2L14, title: Controlled geometry comparison benchmark, status: planned, depends_on: [V2L14.5]}
+  - {id: V2L15.1, lot: V2L15, title: Dense depth artifact contract, status: planned, depends_on: [V2L14.6]}
+  - {id: V2L15.2, lot: V2L15, title: COLMAP MVS PatchMatch baseline adapter, status: planned, depends_on: [V2L15.1]}
+  - {id: V2L15.3, lot: V2L15, title: Depth consistency fusion contract, status: planned, depends_on: [V2L15.2]}
+  - {id: V2L15.4, lot: V2L15, title: Learned depth prior adapter boundary, status: planned, depends_on: [V2L15.3]}
+  - {id: V2L15.5, lot: V2L15, title: Dense depth coverage holes confidence, status: planned, depends_on: [V2L15.4]}
+  - {id: V2L15.6, lot: V2L15, title: Dense depth benchmark, status: planned, depends_on: [V2L15.5]}
+  - {id: V2L16.1, lot: V2L16, title: SurfaceModel contract and intended use metadata, status: planned, depends_on: [V2L15.6]}
+  - {id: V2L16.2, lot: V2L16, title: Baseline depth fusion to surface adapter, status: planned, depends_on: [V2L16.1]}
+  - {id: V2L16.3, lot: V2L16, title: Collision measurement suitability metrics, status: planned, depends_on: [V2L16.2]}
+  - {id: V2L16.4, lot: V2L16, title: Hybrid surface candidate adapter boundary, status: planned, depends_on: [V2L16.3]}
+  - {id: V2L16.5, lot: V2L16, title: Unsupported region and hole semantics, status: planned, depends_on: [V2L16.4]}
+  - {id: V2L16.6, lot: V2L16, title: Physical surface benchmark, status: planned, depends_on: [V2L16.5]}
