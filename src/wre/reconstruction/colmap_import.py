@@ -171,7 +171,9 @@ def _verify_native_model(
     reconstruction: ColmapIncrementalReconstructionResult,
     model: ColmapSparseModelArtifact,
 ) -> Path:
-    model_path = (reconstruction.output_path / model.relative_path).expanduser().resolve(strict=True)
+    model_path = (
+        reconstruction.output_path / model.relative_path
+    ).expanduser().resolve(strict=True)
     if not model_path.is_dir() or model_path.is_symlink():
         raise ColmapReconstructionImportError("COLMAP source model must be a real directory")
 
@@ -249,7 +251,9 @@ def _feature_name_map(features: ColmapFeatureExtractionResult) -> dict[str, Obse
     mapping: dict[str, ObservationId] = {}
     for image in features.images:
         if image.image_name in mapping:
-            raise ColmapReconstructionImportError("L3.2 feature mapping contains duplicate image names")
+            raise ColmapReconstructionImportError(
+                "L3.2 feature mapping contains duplicate image names"
+            )
         mapping[image.image_name] = image.observation_id
     return mapping
 
