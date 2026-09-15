@@ -125,7 +125,7 @@ class _FakePycolmap:
         self.mutate_database = mutate_database
         self.extra_output = extra_output
         self.random_seed: int | None = None
-        self.calls: list[dict[str, object]] = []
+        self.calls: list[dict[str, Any]] = []
         self.Database = SimpleNamespace(open=self._open_database)
 
     @staticmethod
