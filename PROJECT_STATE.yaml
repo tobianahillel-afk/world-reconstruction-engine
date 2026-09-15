@@ -2,22 +2,21 @@ schema_version: 2
 project: world-reconstruction-engine
 project_name: World Reconstruction Engine
 roadmap_version: '2.0'
-phase: v2_migration
+phase: implementation
 milestone: V2M0
-lot: V2L0
-active_work_item: V2L0.3
-status: in_review
-last_completed: [V2L0.1, V2L0.2]
+lot: V2L1
+active_work_item: V2L1.1
+status: ready
+last_completed: [V2L0.1, V2L0.2, V2L0.3]
 last_merged_pr: 31
 current_goal: >-
-  Review the V1-to-V2 governance migration against the retained implementation and integration
-  baselines, prove that no product behavior was lost, and close the V2L0 migration lot before
-  any new V2 product-domain implementation begins.
+  Implement only the minimal immutable SceneProjectId and SceneProject root contract defined by
+  V2L1.1, establishing a distinct project identity boundary without pulling later manifest,
+  artifact, persistence, routing, media, temporal, geometry or runtime responsibilities forward.
 next_action: >-
-  Complete only V2L0.3: audit the migration diff, require fast CI and the retained PyCOLMAP
-  integration lane on the exact review head, record V2L0 review evidence, then expand V2L1.1
-  into a complete executable contract and hand off to it without implementing SceneProject code
-  in the same PR.
+  Complete only V2L1.1 from its executable contract in registry/work-items/v2m0.yaml: read the
+  required architecture/invariant/domain files, add the minimal project identity/root domain types
+  and focused positive/negative tests, preserve all retained V1 behavior, and stop before V2L1.2.
 blockers: []
 architecture:
   product_blueprint: docs/01_PRODUCT.md
@@ -36,7 +35,7 @@ legacy_baseline:
   legacy_active_item_superseded: L4.3
   source_code_deleted: false
 reviews:
-  current_lot: in_review
+  current_lot: pending
   current_milestone: pending
 quality:
   fast_ci_required: true
