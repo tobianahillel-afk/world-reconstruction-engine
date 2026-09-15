@@ -81,14 +81,17 @@ components:
       - docs/16_COLMAP_PAIR_MATCHING.md
       - docs/17_COLMAP_GEOMETRIC_VERIFICATION.md
       - docs/18_COLMAP_INCREMENTAL_RECONSTRUCTION.md
+      - docs/19_COLMAP_RECONSTRUCTION_IMPORT.md
       - registry/dependencies.yaml
       - .github/workflows/colmap-integration.yml
+      - src/wre/domain/estimated_geometry.py
       - src/wre/reconstruction/__init__.py
       - src/wre/reconstruction/colmap_environment.py
       - src/wre/reconstruction/colmap_features.py
       - src/wre/reconstruction/colmap_matching.py
       - src/wre/reconstruction/colmap_verification.py
       - src/wre/reconstruction/colmap_reconstruction.py
+      - src/wre/reconstruction/colmap_import.py
     tests:
       - tests/test_colmap_environment.py
       - tests/test_colmap_features.py
@@ -97,6 +100,9 @@ components:
       - tests/test_colmap_verification_safety.py
       - tests/test_colmap_incremental_reconstruction.py
       - tests/test_colmap_reconstruction_safety.py
+      - tests/test_estimated_geometry.py
+      - tests/test_colmap_reconstruction_import.py
+      - tests/test_colmap_import_safety.py
     status: implementing
   candidate_retrieval:
     owner_lot: L4

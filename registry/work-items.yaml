@@ -132,8 +132,8 @@ work_items:
   - {id: L3.3, lot: L3, title: COLMAP pair matching, status: done, depends_on: [L3.2]}
   - {id: L3.4, lot: L3, title: COLMAP geometric verification, status: done, depends_on: [L3.3]}
   - {id: L3.5, lot: L3, title: Incremental reconstruction, status: done, depends_on: [L3.4]}
-  - {id: L3.6, lot: L3, title: Reconstruction importer, status: ready, depends_on: [L3.5]}
-  - {id: L3.7, lot: L3, title: COLMAP end-to-end fixture, status: planned, depends_on: [L3.6]}
+  - {id: L3.6, lot: L3, title: Reconstruction importer, status: done, depends_on: [L3.5]}
+  - {id: L3.7, lot: L3, title: COLMAP end-to-end fixture, status: ready, depends_on: [L3.6]}
   - {id: L4.1, lot: L4, title: Sequential pairing, status: planned, depends_on: [L3.7]}
   - {id: L4.2, lot: L4, title: GPS pairing, status: planned, depends_on: [L4.1]}
   - {id: L4.3, lot: L4, title: Visual vocabulary retrieval, status: planned, depends_on: [L4.2]}

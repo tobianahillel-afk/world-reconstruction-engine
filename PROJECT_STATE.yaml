@@ -4,18 +4,17 @@ project_name: World Reconstruction Engine
 phase: implementation
 milestone: M1
 lot: L3
-active_work_item: L3.6
+active_work_item: L3.7
 status: ready
-last_completed: [L0.1, L0.2, L0.3, L0.4, L0.5, L0.R, L1.1, L1.2, L1.3, L1.4, L1.5, L2.1, L2.2, L2.3, L2.4, L2.5, L2.6, L3.1, L3.2, L3.3, L3.4, L3.5]
-last_merged_pr: 23
+last_completed: [L0.1, L0.2, L0.3, L0.4, L0.5, L0.R, L1.1, L1.2, L1.3, L1.4, L1.5, L2.1, L2.2, L2.3, L2.4, L2.5, L2.6, L3.1, L3.2, L3.3, L3.4, L3.5, L3.6]
+last_merged_pr: 24
 current_goal: >-
-  Import solver-native COLMAP sparse reconstruction output into explicit WRE estimated-geometry
-  models with provenance while preserving solver output as evidence and avoiding premature fragment
-  acceptance.
+  Exercise the complete L3 COLMAP baseline end to end on a deterministic controlled fixture,
+  including import into explicit WRE estimated geometry, before the required L3 lot review.
 next_action: >-
-  After PR #23 merges, review the L3.6 reconstruction-import boundary and implement only the
-  solver-native-to-WRE estimated-geometry importer on a new short-lived branch; do not start the
-  L3.7 end-to-end fixture in the L3.6 PR.
+  After PR #24 merges, implement only the L3.7 COLMAP end-to-end fixture on a new short-lived
+  branch and complete the required L3 lot review before advancing to L4; do not start L4 in the
+  L3.7 PR.
 blockers: []
 architecture:
   latest_adr: docs/adr/0001-adaptive-routing-anchoring-temporal-world.md
