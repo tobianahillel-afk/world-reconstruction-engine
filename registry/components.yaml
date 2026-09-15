@@ -110,9 +110,13 @@ components:
     status: implemented
   candidate_retrieval:
     owner_lot: L4
-    implementation: []
-    tests: []
-    status: planned
+    implementation:
+      - docs/21_SEQUENTIAL_PAIRING.md
+      - src/wre/retrieval/__init__.py
+      - src/wre/retrieval/sequential.py
+    tests:
+      - tests/test_sequential_pairing.py
+    status: implementing
   strategy_routing:
     owner_lot: L4
     implementation: []
