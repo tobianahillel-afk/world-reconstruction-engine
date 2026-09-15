@@ -1,15 +1,14 @@
 {
-  "dataset_id": "notre-dame-west-facade-commons-v1",
-  "description": "Real photographs of the west facade of Notre-Dame de Paris selected from Wikimedia Commons for a WRE sparse-reconstruction preview.",
+  "dataset_id": "notre-dame-west-facade-commons-v2",
+  "description": "Ten real photographs of the west facade of Notre-Dame de Paris selected from Wikimedia Commons for a bounded WRE sparse-reconstruction preview.",
   "download_policy": {
     "provider": "Wikimedia Commons MediaWiki API",
-    "thumbnail_width_px": 1280,
-    "note": "The committed demo inputs are Wikimedia-generated resized derivatives at a standard cached thumbnail width. Source pages and license metadata are retained in resolved_sources.json."
+    "thumbnail_width_px": 1024,
+    "note": "The committed demo inputs are Wikimedia-generated resized derivatives at a standard cached thumbnail width. The 10-image subset keeps the current CPU/single-thread exhaustive matching baseline tractable while preserving the exact WRE L3.2-L3.6 workflow. Source pages and license metadata are retained in resolved_sources.json."
   },
   "files": [
     "2017-07-29 France, Paris DSC 2672 DxO.jpg",
     "2017-07-29 France, Paris DSC 2696 DxO.jpg",
-    "20180703-Paris-9 (42105268370).jpg",
     "Cathédrale Notre-Dame (exterior).000 - Paris.jpg",
     "Cathédrale Notre-Dame (exterior).001 - Paris.jpg",
     "Cathédrale Notre-Dame (exterior).002 - Paris.jpg",
@@ -17,13 +16,6 @@
     "Cathédrale Notre-Dame (exterior).004 - Paris.jpg",
     "Cathédrale Notre-Dame (exterior).005 - Paris.jpg",
     "Cathédrale Notre-Dame (exterior).006 - Paris.jpg",
-    "Facade of Notre-Dame de Paris - 2018-06-23.jpg",
-    "Magnificent Notre Dame.jpg",
-    "Notre Dame Cathedral (43720830101).jpg",
-    "Notre Dame de Paris Cathedral (9812074585).jpg",
-    "Notre Dame de Paris Cathedral (9812113195).jpg",
-    "Notre Dame de Paris en contre-plongée.jpg",
-    "NotreDameParisFacadeDec2018.jpg",
-    "West facade of Notre-Dame de Paris (36526142494).jpg"
+    "Facade of Notre-Dame de Paris - 2018-06-23.jpg"
   ]
 }
