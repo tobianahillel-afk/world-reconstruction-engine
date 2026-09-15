@@ -21,13 +21,17 @@ The exact approved external environment remains `pycolmap==4.2.0` / COLMAP 4.2.0
 
 ## Input contract
 
-The parent input is the L3.4 verified database, identified by its recorded SHA-256 and byte length. L3.5 verifies both before any mapper work and verifies the database again after mapping.
+The parent input is the L3.4 verified database, identified by its recorded SHA-256 and byte length. L3.5 verifies both before any mapper work.
 
-The database is treated as immutable. L3.5 never intentionally modifies it. If the bytes change during the stage, the run fails rather than accepting the result.
+The L3.4 artifact is never handed directly to the solver. WRE copies it into an invocation-owned temporary working directory and re-hashes that private copy before any PyCOLMAP database read or incremental mapping call. All L3.5 solver activity uses the private copy.
+
+After mapping, WRE re-hashes the private database copy. Any unexpected mutation fails the stage. The original L3.4 database is also re-hashed before acceptance so an external concurrent change cannot be silently ignored.
+
+This preserves the parent artifact even if a future PyCOLMAP implementation unexpectedly writes to the database it receives.
 
 L3.5 also receives the image-like observations whose membership exactly matches L3.4 provenance. Every source file is re-hashed against its persisted observation asset before it is exposed to COLMAP.
 
-COLMAP image names are solver identity and must match the database exactly. WRE therefore stages verified source bytes into a private temporary image directory using the exact existing COLMAP image names. Unsafe paths, duplicate names, membership mismatches, or changed source bytes fail explicitly.
+COLMAP image names are solver identity and must match the private database copy exactly. WRE therefore stages verified source bytes into a private temporary image directory using the exact existing COLMAP image names. Unsafe paths, duplicate names, membership mismatches, or changed source bytes fail explicitly.
 
 ## Output ownership
 
@@ -111,7 +115,8 @@ After `incremental_mapping(...)` returns, WRE requires:
 - every retained solver-native entry to be a regular file;
 - no symbolic links in model output;
 - canonical, unique file ordering;
-- the L3.4 database to remain byte-identical to its pre-run identity.
+- the private L3.4 database copy to remain byte-identical to its pre-solver identity;
+- the original L3.4 parent database to remain byte-identical to its recorded identity.
 
 Contradictory or malformed output fails the stage. WRE does not silently normalize it.
 
@@ -136,7 +141,8 @@ Fast tests use a strict fake PyCOLMAP boundary to verify:
 
 - exact option wiring;
 - deterministic single-thread/seed policy;
-- parent-database immutability checks;
+- private database isolation and parent immutability;
+- detection of unexpected solver mutation on the private database copy;
 - source-byte validation and image-name membership;
 - output ownership and cleanup;
 - zero-model unresolved behavior;
