@@ -174,9 +174,7 @@ def test_rejects_missing_pr_template_section(tmp_path: Path) -> None:
     repo = _copy_repo(tmp_path)
     template_path = repo / ".github/PULL_REQUEST_TEMPLATE.md"
     template = template_path.read_text(encoding="utf-8")
-    template_path.write_text(
-        template.replace("## Allowed scope", "## Scope"), encoding="utf-8"
-    )
+    template_path.write_text(template.replace("## Allowed scope", "## Scope"), encoding="utf-8")
 
     errors = validate_repository(repo)
 
