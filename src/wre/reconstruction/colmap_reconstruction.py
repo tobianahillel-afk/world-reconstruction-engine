@@ -480,38 +480,56 @@ def reconstruct_colmap_incrementally(
                 "ReconstructionRun producer revision must match COLMAP_build when supplied"
             )
 
-        expected_names = tuple(sorted(item.image_name for item in request.inputs))
-        database_names = _verified_database_images(database_path, pycolmap)
-        if database_names != expected_names:
-            raise ValueError(
-                "reconstruction inputs must exactly match COLMAP image membership in L3.4 database"
-            )
-
         provenance = DerivedArtifactProvenance(
             producing_run_id=request.run.run_id,
             source_observation_ids=request.verification.provenance.source_observation_ids,
         )
 
         with tempfile.TemporaryDirectory(
-            prefix="wre-colmap-reconstruction-images-",
+            prefix="wre-colmap-reconstruction-",
             dir=output_path.parent,
-        ) as image_dir_name:
-            image_dir = Path(image_dir_name)
+        ) as working_dir_name:
+            working_dir = Path(working_dir_name)
+            working_database_path = working_dir / "verified.db"
+            image_dir = working_dir / "images"
+            image_dir.mkdir()
+
+            shutil.copyfile(database_path, working_database_path)
+            copied_database_hash = hash_file_content(working_database_path)
+            if copied_database_hash != database_hash:
+                raise ColmapIncrementalReconstructionError(
+                    "private L3.4 database copy does not match its parent artifact"
+                )
+
+            expected_names = tuple(sorted(item.image_name for item in request.inputs))
+            database_names = _verified_database_images(working_database_path, pycolmap)
+            if database_names != expected_names:
+                raise ValueError(
+                    "reconstruction inputs must exactly match COLMAP image membership "
+                    "in L3.4 database"
+                )
+
             _stage_inputs(request.inputs, image_dir)
             options = _configure_pycolmap(pycolmap, request.config)
             pycolmap.set_random_seed(request.config.random_seed)
             reconstructions = pycolmap.incremental_mapping(
-                database_path,
+                working_database_path,
                 image_dir,
                 output_path,
                 options=options,
             )
             models = _audit_reconstructions(output_path, reconstructions)
 
+            working_database_hash_after = hash_file_content(working_database_path)
+            if working_database_hash_after != database_hash:
+                raise ColmapIncrementalReconstructionError(
+                    "COLMAP mutated the private L3.4 database copy during L3.5"
+                )
+
         database_hash_after = hash_file_content(database_path)
         if database_hash_after != database_hash:
             raise ColmapIncrementalReconstructionError(
-                "L3.5 mutated the immutable L3.4 verification database"
+                "immutable L3.4 verification database changed during L3.5"
             )
 
         owns_output = False
