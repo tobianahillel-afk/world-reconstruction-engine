@@ -13,6 +13,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: real-world-preview-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   materialize:
     if: github.actor != 'github-actions[bot]'

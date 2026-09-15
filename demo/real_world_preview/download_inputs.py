@@ -40,7 +40,12 @@ def _open_with_backoff(request: urllib.request.Request, *, timeout: int):
             if exc.code not in {429, 502, 503, 504} or attempt == 6:
                 raise
             retry_after = exc.headers.get("Retry-After")
-            delay = float(retry_after) if retry_after and retry_after.isdigit() else min(2 ** attempt, 30)
+            requested_delay = (
+                float(retry_after)
+                if retry_after and retry_after.isdigit()
+                else float(2**attempt)
+            )
+            delay = min(requested_delay, 30.0)
             print(f"Wikimedia HTTP {exc.code}; retrying in {delay:.0f}s")
             time.sleep(delay)
     raise AssertionError("unreachable")
@@ -153,7 +158,7 @@ def main() -> int:
             }
         )
         print(f"[{index + 1:02d}/{len(titles):02d}] {local_name}: {title} [{license_short}]")
-        time.sleep(1.25)
+        time.sleep(4.0)
 
     document = {
         "dataset_id": spec["dataset_id"],
