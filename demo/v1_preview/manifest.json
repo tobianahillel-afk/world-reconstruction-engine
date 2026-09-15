@@ -4,66 +4,18 @@
     "path": "generated/reconstruction_wre_ascii.ply"
   },
   "images": [
-    {
-      "byte_length": 307215,
-      "path": "input_images/view-000.pgm",
-      "sha256": "8c49fe92371cf2129146f90ad50aab73975ecd7a3a980c4d7c316ad1a6487c0a"
-    },
-    {
-      "byte_length": 307215,
-      "path": "input_images/view-001.pgm",
-      "sha256": "53ac51cd26ef90219a87e053601e6de455912cd6f5ed33ea1c40be45fbc76fb2"
-    },
-    {
-      "byte_length": 307215,
-      "path": "input_images/view-002.pgm",
-      "sha256": "90525407ed3aa702e135330a7d8ca0d9a56eb2d02110526ed152033137136d8a"
-    },
-    {
-      "byte_length": 307215,
-      "path": "input_images/view-003.pgm",
-      "sha256": "546092036371d12b777b405092025d02adbdcc8ad7a470b378255bd9ef372774"
-    },
-    {
-      "byte_length": 307215,
-      "path": "input_images/view-004.pgm",
-      "sha256": "030b1366b8bed5841204062579ac0dbc0f828d3d447704951825e01f67fbe49c"
-    },
-    {
-      "byte_length": 307215,
-      "path": "input_images/view-005.pgm",
-      "sha256": "43fbf990c3550c05e7191a00f599b4fcb1d71e366c37f40db2d28e1479cc3e63"
-    },
-    {
-      "byte_length": 307215,
-      "path": "input_images/view-006.pgm",
-      "sha256": "e4fd181268dd6e468c9eeb1833561f9809b16059a16d4f725ed0e20d5264417f"
-    },
-    {
-      "byte_length": 307215,
-      "path": "input_images/view-007.pgm",
-      "sha256": "1a22d69005424b543c5008346e6931b5a1c870e0dbaecf369553d8b7d1d1878e"
-    },
-    {
-      "byte_length": 307215,
-      "path": "input_images/view-008.pgm",
-      "sha256": "63bd2260abc1f15123abdf1327ad969aa9d5f430841bd12fb9938fa2f00c9061"
-    },
-    {
-      "byte_length": 307215,
-      "path": "input_images/view-009.pgm",
-      "sha256": "8c8f2583fc8bb16a7619854b949436b95375e0e8d0e258c81861a141a324e15a"
-    },
-    {
-      "byte_length": 307215,
-      "path": "input_images/view-010.pgm",
-      "sha256": "be19c150137399694530fb713f8ce60e15c4c4f5a8717287d1c45ef68641c734"
-    },
-    {
-      "byte_length": 307215,
-      "path": "input_images/view-011.pgm",
-      "sha256": "27bb79a1e9db750b706d4da182a1cde29da04e54271a20be4ff4c8343d5ccb22"
-    }
+    {"byte_length": 307215, "path": "input_images/view-000.pgm", "sha256": "8c49fe92371cf2129146f90ad50aab73975ecd7a3a980c4d7c316ad1a6487c0a"},
+    {"byte_length": 307215, "path": "input_images/view-001.pgm", "sha256": "53ac51cd26ef90219a87e053601e6de455912cd6f7702a8b3c1470e8d733ce53"},
+    {"byte_length": 307215, "path": "input_images/view-002.pgm", "sha256": "46afb8ccfe93438e977136adf04ff0ba831e4fd2bbc9131e82b05a1659ee54ce"},
+    {"byte_length": 307215, "path": "input_images/view-003.pgm", "sha256": "e53f85a2f191f62402ddbea198b0092edde04a98cf898c32e5dac2018837995a"},
+    {"byte_length": 307215, "path": "input_images/view-004.pgm", "sha256": "6305ea8bc64e7213e789659dd1cbbacaaacd8b186adf9013b8967f60c7442f82"},
+    {"byte_length": 307215, "path": "input_images/view-005.pgm", "sha256": "9327ae77e5e024dd4ae79578b25abd77d7860b802c00a3dd825e14da3d23329f"},
+    {"byte_length": 307215, "path": "input_images/view-006.pgm", "sha256": "ecd922db790d93e250888fad4a796ca5c3e88757ed5a640b02e910b6f3ae486b"},
+    {"byte_length": 307215, "path": "input_images/view-007.pgm", "sha256": "3e5b9477c3db8d04de5428e1326382945d7d5ebe163dc9bf11baa0629f936c13"},
+    {"byte_length": 307215, "path": "input_images/view-008.pgm", "sha256": "caabe2d4d667e5fc5faacfee54b7bd2454140fe13cf1e1348d65a1debfc0486e"},
+    {"byte_length": 307215, "path": "input_images/view-009.pgm", "sha256": "6696c0c5a09d233061afd199926f92951b7d9b370dfd0e97f72f9b26f32de880"},
+    {"byte_length": 307215, "path": "input_images/view-010.pgm", "sha256": "84c6297a367fa78a7388eaa64fee6e990fc7155e75c1a0c5d63aebe5d0262ebf"},
+    {"byte_length": 307215, "path": "input_images/view-011.pgm", "sha256": "6c83619aa7ff094b1aba78ee28a54c5eaef05e5cc6d99226b40d59fa6469a28d"}
   ],
   "reference_scene": {
     "meaning": "Synthetic ground-truth patch centers and camera centers; not the COLMAP reconstruction.",
