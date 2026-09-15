@@ -5,18 +5,18 @@ roadmap_version: '2.0'
 phase: implementation
 milestone: V2M0
 lot: V2L1
-active_work_item: V2L1.2
+active_work_item: V2L1.3
 status: ready
-last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1]
-last_merged_pr: 33
+last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2]
+last_merged_pr: 34
 current_goal: >-
-  Implement only the minimal immutable artifact identity and exact artifact-reference contract
-  defined by V2L1.2, without pulling producer identity, provenance, content addressing,
-  persistence, DAG traversal, caching or runtime responsibilities forward.
+  Implement only the producer/model/checkpoint/configuration identity contract defined by V2L1.3,
+  reusing the retained ProducerRef for producer implementation identity and adding only the missing
+  immutable model, checkpoint and normalized-configuration identity primitives.
 next_action: >-
-  Complete only V2L1.2 from its executable contract in registry/work-items/v2m0.yaml: define the
-  typed artifact ID/kind/reference vocabulary and focused positive/negative tests, preserve the
-  SceneProject and retained V1 contracts, and stop before V2L1.3.
+  Complete only V2L1.3 from its executable contract in registry/work-items/v2m0.yaml: preserve
+  ProducerRef and ReconstructionRun behavior, add the minimal typed identity composition and
+  focused positive/negative tests, and stop before provenance classes in V2L1.4.
 blockers: []
 architecture:
   product_blueprint: docs/01_PRODUCT.md
