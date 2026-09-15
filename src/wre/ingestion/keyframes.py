@@ -159,9 +159,7 @@ def parse_ffprobe_frames(payload: str) -> tuple[ProbedVideoFrame, ...]:
             raise ValueError("ffprobe frame entries must be objects")
         raw_time = item.get("best_effort_timestamp_time")
         if raw_time is None or raw_time == "N/A":
-            raise ValueError(
-                f"ffprobe frame {frame_index} has no usable best-effort timestamp"
-            )
+            raise ValueError(f"ffprobe frame {frame_index} has no usable best-effort timestamp")
         if not isinstance(raw_time, str):
             raise ValueError("ffprobe best_effort_timestamp_time must be a string")
         try:
