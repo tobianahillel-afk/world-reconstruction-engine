@@ -38,6 +38,7 @@ from wre.domain.observations import (
     VideoFrameObservation,
     VideoObservation,
 )
+from wre.domain.projects import SceneProject, SceneProjectId
 from wre.domain.runs import (
     DerivedArtifactProvenance,
     ProducerRef,
@@ -73,6 +74,8 @@ __all__ = [
     "RawMetadataEntry",
     "ReconstructionRun",
     "ReconstructionRunId",
+    "SceneProject",
+    "SceneProjectId",
     "Sha256Digest",
     "SourceId",
     "SourceRef",
