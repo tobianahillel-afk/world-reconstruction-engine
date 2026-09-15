@@ -81,6 +81,21 @@ def test_broken_pycolmap_backend_is_wrapped_as_explicit_environment_error(
         inspect_colmap_environment()
 
 
+def test_native_loader_oserror_is_wrapped_as_explicit_environment_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def _broken_native_loader(_: str) -> object:
+        raise OSError("missing native dependency")
+
+    monkeypatch.setattr(
+        "wre.reconstruction.colmap_environment.importlib.import_module",
+        _broken_native_loader,
+    )
+
+    with pytest.raises(ColmapEnvironmentError, match="PyCOLMAP is unavailable"):
+        inspect_colmap_environment()
+
+
 def test_real_pycolmap_420_environment_when_integration_lane_enabled() -> None:
     if os.environ.get("WRE_COLMAP_INTEGRATION") != "1":
         pytest.skip("real PyCOLMAP environment is exercised only in the COLMAP integration lane")
