@@ -109,13 +109,10 @@ def test_canonical_artifact_key_has_stable_golden_vector() -> None:
 
     assert canonical == expected.encode("utf-8")
     assert key == ArtifactKey(
-        sha256=Sha256Digest(
-            "553de78370551d9ebbd843bad4f7f0b286bc4f5c18bf339aa6ac04c11a384111"
-        )
+        sha256=Sha256Digest("553de78370551d9ebbd843bad4f7f0b286bc4f5c18bf339aa6ac04c11a384111")
     )
     assert str(key) == (
-        "artifact-key:v1:"
-        "553de78370551d9ebbd843bad4f7f0b286bc4f5c18bf339aa6ac04c11a384111"
+        "artifact-key:v1:553de78370551d9ebbd843bad4f7f0b286bc4f5c18bf339aa6ac04c11a384111"
     )
 
 
