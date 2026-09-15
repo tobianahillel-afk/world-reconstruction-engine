@@ -299,7 +299,7 @@ work_items:
   - id: V2L1.5
     lot: V2L1
     title: Canonical artifact key
-    status: ready
+    status: done
     objective: Define a deterministic versioned artifact-computation key from explicit immutable key material so identical computation inputs can share an identity without introducing cache lookup, dependency traversal or persistence behavior.
     allowed_scope:
       - src/wre/domain/artifact_keys.py
@@ -348,7 +348,71 @@ work_items:
       - negative tests for list/untyped tuple members wrong digest/kind/producer types and raw-string substitutions
       - regression tests proving ArtifactId ArtifactRef ProducerRef ProvenanceClass and retained V1 behavior remain unchanged
       - full fast CI
-  - {id: V2L1.6, lot: V2L1, title: Project and artifact metadata persistence, status: planned, depends_on: [V2L1.5]}
+  - id: V2L1.6
+    lot: V2L1
+    title: Project and artifact metadata persistence
+    status: ready
+    objective: Extend the retained local codec and SQLite persistence boundary so SceneProject and the minimal immutable V2 artifact metadata can round-trip deterministically without introducing dependency-graph, cache or materialization responsibilities.
+    allowed_scope:
+      - src/wre/domain/artifact_metadata.py
+      - focused public-domain exports only if required for the new contract
+      - src/wre/persistence/codec.py
+      - src/wre/persistence/sqlite_store.py
+      - src/wre/persistence/__init__.py only if public persistence exports require it
+      - tests/test_artifact_metadata.py
+      - focused additions to tests/test_persistence.py
+      - V2L1 lot-review evidence and final state/component/review/work-item handoff metadata after implementation passes
+    out_of_scope:
+      - dependency-edge collections dependency lookup cycle detection DAG traversal or graph validation owned by V2L2.1 and V2L2.2
+      - cache lookup reuse invalidation planning or key-to-artifact resolution owned by V2L2.3 and V2L2.4
+      - artifact materialization paths URIs byte lengths output-content verification or corruption state owned by V2L2.5
+      - source-media manifest collections coordinate frames quality modes user overrides scene clusters temporal groups master-scene versions runtime exports or warnings
+      - mutating replacing deleting or listing persisted records beyond the retained immutable put/get contract
+      - implicit project creation project-existence lookup or cross-record repair while storing artifact metadata
+      - schema migration framework external database backend ORM or new dependency
+      - changing retained V1 codec/store semantics record types duplicate detection or persistence conflict behavior
+      - starting V2L2.1 product implementation in this work item
+    depends_on: [V2L1.5]
+    read_before:
+      - docs/02_ARCHITECTURE.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - src/wre/domain/projects.py
+      - src/wre/domain/artifacts.py
+      - src/wre/domain/artifact_keys.py
+      - src/wre/domain/producer_identity.py
+      - src/wre/domain/provenance.py
+      - src/wre/persistence/codec.py
+      - src/wre/persistence/sqlite_store.py
+      - tests/test_persistence.py
+    reuse:
+      - retained SQLiteLocalStore generic immutable record table transaction and conflict semantics
+      - retained canonical_json parse helpers and strict decoder style
+      - SceneProject SceneProjectId ArtifactRef ArtifactKey ArtifactProducerIdentity and ProvenanceClass contracts from V2L1.1 through V2L1.5
+      - existing database and record schema-version rejection behavior without a speculative migration framework
+    acceptance:
+      - ArtifactMetadata is a frozen immutable aggregate containing exactly SceneProjectId, ArtifactRef, ArtifactKey, ArtifactProducerIdentity and ProvenanceClass with runtime rejection of untyped members.
+      - ArtifactMetadata contains no dependency collection materialization location output-content digest timestamps confidence quality review state or mutable catch-all metadata.
+      - SceneProject has explicit deterministic encode/decode functions that preserve its typed identity exactly.
+      - ArtifactMetadata has explicit deterministic encode/decode functions that preserve nested artifact kind/id, artifact key digest, producer/config/model/checkpoint identity and provenance class exactly.
+      - Codec decoding fails closed on missing malformed wrong-type or unknown provenance values and never regenerates an ArtifactKey from partial metadata.
+      - SQLiteLocalStore persists SceneProject under a dedicated stable record type keyed by SceneProjectId and ArtifactMetadata under a dedicated stable record type keyed by ArtifactId.
+      - Identical SceneProject or ArtifactMetadata writes are idempotent; reusing the same stable record identity with different payload content raises the retained PersistenceConflictError.
+      - Artifact persistence does not implicitly create require fetch repair or mutate a project record and does not add dependency indexes or cross-record graph semantics.
+      - Existing database schema can store the new record types through the generic wre_records table without changing retained V1 record behavior or weakening schema-version checks.
+      - Reopening the SQLite store round-trips both new record types exactly while existing observation camera metadata fragment and reconstruction-run round trips remain unchanged.
+      - V2L1 lot review records PASS only after V2L1.1 through V2L1.6 acceptance and required CI/integration evidence are green.
+      - V2L2.1 is expanded to a complete executable contract before becoming the sole next ready item; no V2L2 product implementation is bundled.
+    tests:
+      - focused ArtifactMetadata construction immutability and negative typed-member tests
+      - SceneProject and ArtifactMetadata codec round-trip and malformed-payload tests
+      - SQLite put/get/reopen idempotency missing-record and conflicting-identity tests for both new record types
+      - coexistence regression with retained V1 record types in the same database
+      - existing persistence tests and full fast CI
+      - retained native PyCOLMAP integration lane for final V2L1 handoff
+      - V2L1 lot-review checklist
   - {id: V2L2.1, lot: V2L2, title: Artifact dependency DAG contract, status: planned, depends_on: [V2L1.6]}
   - {id: V2L2.2, lot: V2L2, title: Artifact metadata store and dependency lookup, status: planned, depends_on: [V2L2.1]}
   - {id: V2L2.3, lot: V2L2, title: Canonical cache lookup, status: planned, depends_on: [V2L2.2]}
