@@ -32,7 +32,7 @@ def _required_text(module: object, attribute: str) -> str:
 def _load_pycolmap() -> object:
     try:
         return importlib.import_module("pycolmap")
-    except (ImportError, RuntimeError) as exc:
+    except (ImportError, OSError, RuntimeError) as exc:
         raise ColmapEnvironmentError(
             "PyCOLMAP is unavailable; install the approved external pycolmap==4.2.0 environment"
         ) from exc
