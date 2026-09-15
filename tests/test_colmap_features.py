@@ -377,7 +377,7 @@ def test_real_pycolmap_feature_extraction_when_integration_lane_enabled(tmp_path
     if os.environ.get("WRE_COLMAP_INTEGRATION") != "1":
         pytest.skip("real PyCOLMAP extraction is exercised only in the COLMAP integration lane")
 
-    import pycolmap
+    pycolmap = __import__("pycolmap")
 
     source = tmp_path / "checkerboard.pgm"
     _write_pgm(source)
