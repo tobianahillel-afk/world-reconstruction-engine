@@ -4,7 +4,9 @@ import hashlib
 import importlib
 import json
 import math
+import os
 import shutil
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
@@ -232,7 +234,8 @@ class ColmapGeometricVerificationRequest:
             )
         if self.run.configuration_sha256 != self.config.sha256:
             raise ValueError(
-                "ReconstructionRun configuration SHA-256 must match the canonical verification config"
+                "ReconstructionRun configuration SHA-256 must match the canonical "
+                "verification config"
             )
         if self.matching.environment.pycolmap_version != SUPPORTED_PYCOLMAP_VERSION:
             raise ValueError("L3.3 match artifact was produced by an unsupported PyCOLMAP version")
@@ -353,7 +356,12 @@ def _configure_pycolmap(
     return verifier_options, pairing_options, geometry_options
 
 
-def _finite_matrix(value: object | None, rows: int, cols: int, label: str) -> tuple[tuple[float, ...], ...] | None:
+def _finite_matrix(
+    value: object | None,
+    rows: int,
+    cols: int,
+    label: str,
+) -> tuple[tuple[float, ...], ...] | None:
     if value is None:
         return None
     raw = value.tolist() if hasattr(value, "tolist") else value
@@ -466,7 +474,8 @@ def _read_geometry_evidence(
     }
     if set(raw_count_by_pair_id) != set(geometry_by_pair_id):
         raise ColmapGeometricVerificationError(
-            "COLMAP geometric verification did not produce exactly one geometry result per raw match pair"
+            "COLMAP geometric verification did not produce exactly one geometry result "
+            "per raw match pair"
         )
 
     evidence: list[ColmapPairGeometryEvidence] = []
@@ -544,6 +553,19 @@ def _read_geometry_evidence(
     return tuple(evidence)
 
 
+def _publish_verified_database(working_database_path: Path, database_path: Path) -> None:
+    try:
+        os.link(working_database_path, database_path)
+    except FileExistsError as exc:
+        raise ValueError(
+            "database_path must not already exist for a fresh L3.4 verification run"
+        ) from exc
+    except OSError as exc:
+        raise ColmapGeometricVerificationError(
+            "cannot publish verified COLMAP database atomically"
+        ) from exc
+
+
 def verify_colmap_geometry(
     request: ColmapGeometricVerificationRequest,
     *,
@@ -581,9 +603,13 @@ def verify_colmap_geometry(
         source_observation_ids=request.matching.provenance.source_observation_ids,
     )
 
-    try:
-        shutil.copyfile(source_database_path, database_path)
-        copied_hash = hash_file_content(database_path)
+    with tempfile.TemporaryDirectory(
+        prefix="wre-colmap-verification-",
+        dir=database_path.parent,
+    ) as working_dir_name:
+        working_database_path = Path(working_dir_name) / "verification.db"
+        shutil.copyfile(source_database_path, working_database_path)
+        copied_hash = hash_file_content(working_database_path)
         if copied_hash != source_hash:
             raise ColmapGeometricVerificationError(
                 "copied matching database does not match its parent artifact"
@@ -594,16 +620,18 @@ def verify_colmap_geometry(
         )
         pycolmap.set_random_seed(request.config.ransac_random_seed)
         pycolmap.geometric_verification(
-            database_path,
+            working_database_path,
             verifier_options=verifier_options,
             pairing_options=pairing_options,
             two_view_geometry_options=geometry_options,
         )
-        geometries = _read_geometry_evidence(database_path, request.matching, pycolmap)
-        database_hash = hash_file_content(database_path)
-    except Exception:
-        database_path.unlink(missing_ok=True)
-        raise
+        geometries = _read_geometry_evidence(
+            working_database_path,
+            request.matching,
+            pycolmap,
+        )
+        database_hash = hash_file_content(working_database_path)
+        _publish_verified_database(working_database_path, database_path)
 
     return ColmapGeometricVerificationResult(
         provenance=provenance,
