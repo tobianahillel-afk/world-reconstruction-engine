@@ -412,16 +412,18 @@ def test_solver_failure_cleans_only_owned_output_and_preserves_parent(tmp_path: 
     assert not request.output_path.exists()
 
 
-def test_private_database_mutation_is_detected_without_touching_parent(tmp_path: Path) -> None:
+def test_solver_may_mutate_private_database_without_touching_parent(tmp_path: Path) -> None:
     request, database_path, _ = _request(tmp_path)
     before = database_path.read_bytes()
-    with pytest.raises(ColmapIncrementalReconstructionError, match="private L3.4 database copy"):
-        reconstruct_colmap_incrementally(
-            request,
-            module=_FakePycolmap(mutate_database=True),
-        )
+    module = _FakePycolmap(mutate_database=True)
+
+    result = reconstruct_colmap_incrementally(request, module=module)
+
     assert database_path.read_bytes() == before
-    assert not request.output_path.exists()
+    assert result.has_reconstruction is True
+    assert result.model_count == 1
+    assert request.output_path.is_dir()
+    assert module.calls[0]["database_path"] != database_path
 
 
 def test_unexpected_solver_output_membership_is_rejected(tmp_path: Path) -> None:
