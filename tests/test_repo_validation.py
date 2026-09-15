@@ -117,10 +117,25 @@ def test_rejects_unfinished_active_dependency(tmp_path: Path) -> None:
 
 def test_planned_item_may_remain_concise(tmp_path: Path) -> None:
     repo = _copy_repo(tmp_path)
-    _, _, item = _item_file(repo, "V2L1.2")
-    assert item["status"] == "planned"
-    assert "objective" not in item
+    index = _load(repo / "registry/work-items.yaml")
+    files = index["work_item_files"]
+    assert isinstance(files, list)
 
+    concise_planned_items: list[dict[str, Any]] = []
+    for relative in files:
+        assert isinstance(relative, str)
+        document = _load(repo / relative)
+        items = document["work_items"]
+        assert isinstance(items, list)
+        concise_planned_items.extend(
+            item
+            for item in items
+            if isinstance(item, dict)
+            and item.get("status") == "planned"
+            and "objective" not in item
+        )
+
+    assert concise_planned_items
     assert validate_repository(repo) == []
 
 

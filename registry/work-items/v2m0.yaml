@@ -105,7 +105,7 @@ work_items:
   - id: V2L1.1
     lot: V2L1
     title: SceneProject contract
-    status: ready
+    status: done
     objective: Define the minimal immutable SceneProjectId and SceneProject root contract that establishes a distinct project identity boundary for all later V2 project and artifact metadata without pulling later manifest responsibilities forward.
     allowed_scope:
       - src/wre/domain/projects.py
@@ -147,7 +147,55 @@ work_items:
       - negative tests for invalid IDs and immutability
       - regression tests confirming no existing observation/source identity behavior changes
       - full fast CI
-  - {id: V2L1.2, lot: V2L1, title: Artifact identity and exact input references, status: planned, depends_on: [V2L1.1]}
+  - id: V2L1.2
+    lot: V2L1
+    title: Artifact identity and exact input references
+    status: ready
+    objective: Define the minimal immutable ArtifactId, ArtifactKind and ArtifactRef vocabulary required for later artifacts to identify themselves and refer to one exact input artifact without filename path timestamp or fuzzy lookup semantics.
+    allowed_scope:
+      - src/wre/domain/artifacts.py
+      - focused public-domain exports only if required for the new contract
+      - tests/test_artifacts.py
+    out_of_scope:
+      - producer model checkpoint configuration or hardware identity owned by V2L1.3
+      - provenance classes owned by V2L1.4
+      - canonical artifact keys content hashes or content-addressing rules owned by V2L1.5
+      - codec database or project/artifact metadata persistence owned by V2L1.6
+      - dependency collections DAG traversal cycle detection invalidation caching or materialization owned by V2L2
+      - adapter registry routing quality failure benchmark solver or runtime behavior
+      - file URI path timestamp or mutable-name fallback resolution
+      - hard-coding a closed list of all future artifact kinds before their owning capabilities exist
+      - refactoring retained V1 IDs or provenance contracts merely to share implementation code
+    depends_on: [V2L1.1]
+    read_before:
+      - docs/02_ARCHITECTURE.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - src/wre/domain/projects.py
+      - src/wre/domain/observations.py
+      - src/wre/domain/runs.py
+    reuse:
+      - existing frozen dataclass and slots value-object conventions in the domain layer
+      - established WRE opaque identifier lexical semantics for ArtifactId
+      - explicit typed-reference patterns rather than untyped strings or dictionaries
+      - existing deterministic ValueError-based validation and focused pytest style
+    acceptance:
+      - ArtifactId is an immutable identity type distinct from project observation source camera run scene and temporal identities.
+      - ArtifactId follows the established WRE opaque-ID lexical contract and rejects empty whitespace invalid-character and overlength values.
+      - ArtifactKind is a distinct immutable symbolic value with a conservative validated token syntax and is not inferred from a filename extension Python class or solver-private type.
+      - ArtifactKind remains open to later capability-owned kinds instead of encoding a speculative closed enum in core.
+      - ArtifactRef is immutable and identifies exactly one artifact through typed ArtifactId plus declared ArtifactKind.
+      - ArtifactRef equality and hashing are deterministic and do not consult filesystem paths timestamps registries or mutable external state.
+      - No dependency collection DAG traversal cache key producer provenance persistence or artifact materialization behavior is introduced.
+      - Existing SceneProject and retained V1 domain behavior remain unchanged.
+    tests:
+      - focused positive construction equality hashing and string/identity tests for ArtifactId ArtifactKind and ArtifactRef
+      - negative tests for invalid artifact IDs and kind tokens
+      - immutability tests for all new value objects
+      - regression tests proving artifact identity remains distinct from SceneProjectId and retained domain IDs
+      - full fast CI
   - {id: V2L1.3, lot: V2L1, title: Producer model checkpoint configuration identity, status: planned, depends_on: [V2L1.2]}
   - {id: V2L1.4, lot: V2L1, title: Provenance class contract, status: planned, depends_on: [V2L1.3]}
   - {id: V2L1.5, lot: V2L1, title: Canonical artifact key, status: planned, depends_on: [V2L1.4]}

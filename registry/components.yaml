@@ -20,7 +20,14 @@ components:
       - src/wre/repo_validation.py
     tests: [tests/test_repo_validation.py]
     status: implemented
-  scene_project_artifacts: {owner_lot: V2L1, implementation: [], tests: [], status: planned}
+  scene_project_artifacts:
+    owner_lot: V2L1
+    implementation:
+      - src/wre/domain/projects.py
+      - src/wre/domain/__init__.py
+    tests:
+      - tests/test_scene_projects.py
+    status: implementing
   artifact_dag_cache: {owner_lot: V2L2, implementation: [], tests: [], status: planned}
   adapter_model_registry: {owner_lot: V2L3, implementation: [], tests: [], status: planned}
   quality_failure_benchmarks: {owner_lot: V2L4, implementation: [], tests: [], status: planned}
