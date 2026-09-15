@@ -181,19 +181,25 @@ class ColmapFeatureExtractionRequest:
         if not isinstance(self.inputs, tuple) or not self.inputs:
             raise ValueError("feature extraction inputs must be a non-empty immutable tuple")
         if not all(isinstance(item, ColmapFeatureInput) for item in self.inputs):
-            raise ValueError("feature extraction inputs must contain only ColmapFeatureInput values")
+            raise ValueError(
+                "feature extraction inputs must contain only ColmapFeatureInput values"
+            )
         if not isinstance(self.database_path, Path):
             raise ValueError("database_path must be a pathlib.Path")
 
         values = [item.observation.observation_id.value for item in self.inputs]
         if len(values) != len(set(values)):
             raise ValueError("feature extraction inputs cannot repeat an observation ID")
-        canonical = tuple(sorted(self.inputs, key=lambda item: item.observation.observation_id.value))
+        canonical = tuple(
+            sorted(self.inputs, key=lambda item: item.observation.observation_id.value)
+        )
         object.__setattr__(self, "inputs", canonical)
 
         observation_ids = tuple(item.observation.observation_id for item in canonical)
         if self.run.input_observation_ids != observation_ids:
-            raise ValueError("ReconstructionRun inputs must exactly match feature extraction inputs")
+            raise ValueError(
+                "ReconstructionRun inputs must exactly match feature extraction inputs"
+            )
         if self.run.producer.implementation != _FEATURE_PRODUCER:
             raise ValueError(f"ReconstructionRun producer must be {_FEATURE_PRODUCER!r}")
         if self.run.producer.version != SUPPORTED_PYCOLMAP_VERSION:
@@ -201,7 +207,9 @@ class ColmapFeatureExtractionRequest:
                 f"ReconstructionRun producer version must be {SUPPORTED_PYCOLMAP_VERSION!r}"
             )
         if self.run.configuration_sha256 != self.config.sha256:
-            raise ValueError("ReconstructionRun configuration SHA-256 must match the canonical config")
+            raise ValueError(
+                "ReconstructionRun configuration SHA-256 must match the canonical config"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -393,7 +401,9 @@ def extract_colmap_features(
         request.run.producer.revision is not None
         and request.run.producer.revision != environment.colmap_build
     ):
-        raise ValueError("ReconstructionRun producer revision must match COLMAP_build when supplied")
+        raise ValueError(
+            "ReconstructionRun producer revision must match COLMAP_build when supplied"
+        )
 
     provenance = DerivedArtifactProvenance(
         producing_run_id=request.run.run_id,
