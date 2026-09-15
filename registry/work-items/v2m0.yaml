@@ -252,7 +252,7 @@ work_items:
   - id: V2L1.4
     lot: V2L1
     title: Provenance class contract
-    status: ready
+    status: done
     objective: Define the minimal closed provenance-class vocabulary that marks whether an artifact is observed/reconstructed, inferred or generated without conflating epistemic classification with retained run/observation lineage.
     allowed_scope:
       - src/wre/domain/provenance.py
@@ -296,7 +296,58 @@ work_items:
       - negative tests proving arbitrary unknown and speculative classes are rejected
       - regression test proving retained DerivedArtifactProvenance behavior is unchanged
       - full fast CI
-  - {id: V2L1.5, lot: V2L1, title: Canonical artifact key, status: planned, depends_on: [V2L1.4]}
+  - id: V2L1.5
+    lot: V2L1
+    title: Canonical artifact key
+    status: ready
+    objective: Define a deterministic versioned artifact-computation key from explicit immutable key material so identical computation inputs can share an identity without introducing cache lookup, dependency traversal or persistence behavior.
+    allowed_scope:
+      - src/wre/domain/artifact_keys.py
+      - focused public-domain exports only if required for the new contract
+      - tests/test_artifact_keys.py
+    out_of_scope:
+      - reading files or computing input content hashes from paths bytes URIs or artifact materializations
+      - ArtifactId SceneProjectId timestamps paths mtimes random values or mutable names as key material
+      - ProvenanceClass confidence review state or lineage metadata as computation-key material
+      - configuration normalization or hashing algorithms; ConfigurationIdentity is already caller supplied
+      - hardware-sensitive identity fields before the capability owned by V2L3.2
+      - project/artifact metadata persistence owned by V2L1.6
+      - dependency DAG traversal cycle detection cache lookup reuse invalidation or materialization owned by V2L2
+      - adapter/model registry shipping license benchmark routing execution or scheduling behavior owned by later lots
+    depends_on: [V2L1.4]
+    read_before:
+      - docs/02_ARCHITECTURE.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - src/wre/domain/artifacts.py
+      - src/wre/domain/producer_identity.py
+      - src/wre/domain/provenance.py
+    reuse:
+      - ArtifactKind as the typed semantic kind of input/output artifacts
+      - Sha256Digest as exact caller-supplied input-content/configuration/checkpoint digest vocabulary
+      - ArtifactProducerIdentity as the complete currently-owned producer/config/model/checkpoint computation identity
+      - immutable tuple and frozen dataclass conventions already used in the domain layer
+    acceptance:
+      - ArtifactInputFingerprint is immutable and contains exactly typed ArtifactKind plus caller-supplied Sha256Digest content identity, with no ArtifactId path timestamp or lookup semantics.
+      - ArtifactKeyMaterial is immutable and contains output ArtifactKind, an immutable ordered tuple of ArtifactInputFingerprint values and ArtifactProducerIdentity.
+      - Input order and duplicates are preserved because they can be semantically meaningful; the key layer performs no hidden sorting or deduplication.
+      - ArtifactKey is a distinct immutable typed computation identity backed by Sha256Digest and is not interchangeable with ArtifactId or a raw content digest.
+      - Key derivation uses one documented canonical UTF-8 serialization with an explicit WRE artifact-key schema/domain version marker before SHA-256 hashing.
+      - Identical typed key material yields the same key across processes and machines; changing output kind input kind input digest input order producer implementation/version/revision configuration model or checkpoint changes the key.
+      - ArtifactId SceneProjectId ProvenanceClass timestamps filesystem paths environment state and random values do not participate in the version-1 key preimage.
+      - Hardware-sensitive fields are not guessed or represented through placeholders before V2L3.2; no claim of cross-hardware equivalence is added for adapters that later declare hardware-sensitive output.
+      - Derivation performs no filesystem registry database cache network environment or runtime lookup and has no side effects.
+      - No persistence dependency-DAG cache reuse invalidation or materialization behavior is introduced.
+    tests:
+      - focused positive construction immutability equality and hashing tests for input fingerprints key material and ArtifactKey
+      - deterministic golden-vector test for canonical version-1 serialization and derived SHA-256 key
+      - tests proving changes to every owned computation-identity field alter the key
+      - tests proving input ordering and duplicate preservation affect canonical key material exactly as supplied
+      - negative tests for list/untyped tuple members wrong digest/kind/producer types and raw-string substitutions
+      - regression tests proving ArtifactId ArtifactRef ProducerRef ProvenanceClass and retained V1 behavior remain unchanged
+      - full fast CI
   - {id: V2L1.6, lot: V2L1, title: Project and artifact metadata persistence, status: planned, depends_on: [V2L1.5]}
   - {id: V2L2.1, lot: V2L2, title: Artifact dependency DAG contract, status: planned, depends_on: [V2L1.6]}
   - {id: V2L2.2, lot: V2L2, title: Artifact metadata store and dependency lookup, status: planned, depends_on: [V2L2.1]}
