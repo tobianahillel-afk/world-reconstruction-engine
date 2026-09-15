@@ -1,0 +1,56 @@
+name: colmap-integration
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/colmap-integration.yml"
+      - "PROJECT_STATE.yaml"
+      - "registry/components.yaml"
+      - "registry/dependencies.yaml"
+      - "registry/work-items.yaml"
+      - "src/wre/reconstruction/**"
+      - "tests/test_colmap_environment.py"
+      - "docs/14_COLMAP_ENVIRONMENT.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pycolmap-420:
+    name: pycolmap-4.2.0
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.13"
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Install locked WRE environment
+        run: uv sync --frozen --group dev
+
+      - name: Install exact external PyCOLMAP environment
+        run: |
+          uv pip install --python .venv/bin/python "numpy==2.5.3" "pycolmap==4.2.0"
+          .venv/bin/python -c 'import numpy, pycolmap; assert numpy.__version__ == "2.5.3"; assert pycolmap.__version__ == "4.2.0"'
+
+      - name: Exercise real COLMAP environment adapter
+        env:
+          WRE_COLMAP_INTEGRATION: "1"
+        run: .venv/bin/python -m pytest tests/test_colmap_environment.py
