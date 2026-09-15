@@ -77,11 +77,22 @@ dependencies:
     version_policy: pin_when_integrated
     license_review: pending
   ffmpeg:
-    status: candidate_core
-    role: [video_io]
-    integration: subprocess_or_library_adapter
-    version_policy: pin_when_integrated
-    license_review: pending
+    status: core
+    role: [video_io, deterministic_frame_extraction]
+    integration: subprocess_cli
+    version_policy: pin_exact_system_package
+    pinned_version: 6.1.1-3ubuntu5
+    ci_package: ffmpeg=7:6.1.1-3ubuntu5
+    upstream_repository: FFmpeg/FFmpeg
+    license: GPL-2.0-or-later
+    license_review: approved
+    notes: >-
+      FFmpeg upstream is primarily LGPL-2.1-or-later with optional GPL parts. The selected
+      Debian/Ubuntu Noble package uses GPL-licensed files, so its resulting binaries are
+      GPL-2.0-or-later. WRE invokes ffmpeg/ffprobe only as external subprocesses and does not
+      link or bundle those binaries. CI installs the exact Ubuntu package and verifies both
+      CLI version strings. Any future binary redistribution, library linkage or different
+      build/package requires a new license and version review.
   proj:
     status: candidate_core
     role: [coordinate_reference_systems]
