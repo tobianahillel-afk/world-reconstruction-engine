@@ -1,0 +1,188 @@
+schema_version: 1
+migration: v1_to_v2
+source_repository_state:
+  legacy_main_before_blueprint: 415f28d8f2a157d3227b2c73e139150901608df2
+  blueprint_v2_merge: 203341fd7ff1b27138394ab27bd41f4d0c58fdc2
+  legacy_active_work_item: L4.3
+  legacy_completed_through: [L4.1, L4.2]
+policy:
+  delete_only_with_replacement_evidence: true
+  preserve_historical_pr_evidence: true
+  preserve_passing_regression_fixtures: true
+  compatibility_before_rewrite: true
+  decisions: [retain, generalize, wrap_compatibly, deprecate, remove_later]
+components:
+  agent_resume_protocol:
+    decision: generalize
+    rationale: >-
+      The resume/state/review discipline is essential and already effective. V2 keeps it, adds
+      deny-by-default scope, one-run sizing and canonical blueprint/invariant documents.
+    v2_destination: governance_and_execution
+  development_quality_gates:
+    decision: retain
+    rationale: >-
+      uv/frozen CI, Ruff, Pyright, pytest, actionlint, CodeQL, dependency review capability checks,
+      repo validation and regression harness remain directly useful.
+    v2_destination: development_quality_gates
+  observation_core:
+    decision: generalize
+    rationale: >-
+      Observation/media identity, camera metadata, immutable provenance and local-frame concepts remain
+      valid. SpatialFragment/ReconstructionRun are not deleted, but later v2 contracts will generalize
+      project/artifact/geometry semantics and provide compatibility conversion.
+    v2_destination: scene_project_and_artifact_identity
+  local_persistence:
+    decision: generalize
+    rationale: >-
+      Canonical JSON, explicit schema versions, idempotent writes and conflict rejection remain sound.
+      SQLite stays the local baseline while v2 adds artifact-DAG/cache/job metadata separately.
+    v2_destination: artifact_persistence_and_cache
+  image_ingestion:
+    decision: retain
+    rationale: Raw image observation ingestion is solver-independent and matches v2 observation semantics.
+    v2_destination: media_ingestion
+  hashing_and_duplicate_detection:
+    decision: retain
+    rationale: >-
+      Streaming SHA-256 identity and duplicate-as-evidence semantics are directly compatible with
+      content-addressed artifact/project design.
+    v2_destination: media_ingestion_and_artifact_identity
+  exif_metadata:
+    decision: retain
+    rationale: Raw metadata preservation without semantic guessing is a v2 invariant.
+    v2_destination: media_ingestion
+  gps_time_interpretation:
+    decision: retain
+    rationale: >-
+      Explicit absent/incomplete/invalid/resolved GPS and ambiguous-time handling is exactly the
+      fail-closed behavior required by v2.
+    v2_destination: media_profiling_and_temporal_evidence
+  video_ingestion:
+    decision: retain
+    rationale: Whole source videos remain immutable raw observations before frame selection.
+    v2_destination: media_ingestion
+  deterministic_keyframes:
+    decision: wrap_compatibly
+    rationale: >-
+      The interval policy remains a valid deterministic baseline but becomes one FrameSelection adapter;
+      adaptive quality/diversity-aware selection is added later without replacing source timing/provenance.
+    v2_destination: V2L6
+  colmap_environment:
+    decision: retain
+    rationale: Exact external solver identity/version/error normalization remains useful as a baseline adapter.
+    v2_destination: V2L12
+  colmap_feature_extraction:
+    decision: wrap_compatibly
+    rationale: >-
+      Retain tested native behavior and artifact integrity. V2 later wraps inputs/outputs in canonical
+      artifact identities rather than rewriting SIFT/COLMAP internals.
+    v2_destination: V2L12
+  colmap_matching:
+    decision: wrap_compatibly
+    rationale: >-
+      Raw matching remains reusable evidence. V2 scene organization and geometry routes consume it
+      through canonical PairCandidate/Correspondence artifacts.
+    v2_destination: [V2L8, V2L12]
+  colmap_geometric_verification:
+    decision: wrap_compatibly
+    rationale: >-
+      Verified two-view evidence remains valuable for scene disambiguation and precision geometry;
+      it is not globally mandated for every future learned geometry route.
+    v2_destination: [V2L8, V2L12]
+  colmap_incremental_reconstruction:
+    decision: wrap_compatibly
+    rationale: >-
+      Keep as the precision/classical baseline. It becomes one GeometrySolution producer, not the
+      universal reconstruction path.
+    v2_destination: V2L12
+  colmap_reconstruction_import:
+    decision: generalize
+    rationale: >-
+      SparseReconstructionEstimate/local-frame/scale semantics are sound. V2 introduces canonical
+      CameraSolution/GeometrySolution with compatibility conversion instead of deleting legacy data.
+    v2_destination: V2L11
+  colmap_end_to_end_fixture:
+    decision: retain
+    rationale: >-
+      The real PyCOLMAP composition fixture remains a regression/compatibility baseline and is migrated
+      to v2 artifact contracts later.
+    v2_destination: V2L12
+  sequential_pairing:
+    decision: wrap_compatibly
+    rationale: >-
+      Deterministic explicit-order candidate generation remains useful and becomes one canonical
+      PairCandidate source.
+    v2_destination: V2L7
+  gps_pairing:
+    decision: wrap_compatibly
+    rationale: >-
+      Explicit resolved-WGS84-only proximity is a useful candidate source; it remains retrieval evidence,
+      not absolute anchoring or scene truth.
+    v2_destination: V2L7
+legacy_future_plan:
+  strategy_routing_fast_standard_escalated:
+    decision: deprecate
+    replacement: V2L10
+    reason: PREVIEW/FAST/QUALITY/MASTER plus explicit bounded escalation supersedes the legacy route enum.
+  evidence_geometry_l5:
+    decision: deprecate
+    replacement: [V2L8, V2L11, V2L14]
+    reason: Useful ideas are redistributed into scene verification, canonical geometry and competing-solution quality.
+  fragment_engine_l6:
+    decision: deprecate
+    replacement: [V2L11, V2L20]
+    reason: Fragment/local-component ideas survive only where needed; MasterScene/GeometrySolution become the product-centered contracts.
+  limap_structural_geometry_l7:
+    decision: deprecate
+    replacement: [V2L14, V2L41]
+    reason: LIMAP becomes a specialist/precision candidate rather than a mandatory sequential lot.
+  fragment_merging_l8:
+    decision: deprecate
+    replacement: [V2L14, V2L20, V2L37]
+    reason: Registration/merge capabilities are used where route/scale requires them, not as universal product architecture.
+  world_graph_absolute_anchoring_l9:
+    decision: deprecate
+    replacement: [V2L11, V2L14, V2L32]
+    reason: Absolute/cross-state constraints remain useful but a MONDE-style world graph is not the organizing product abstraction.
+  hypotheses_uncertainty_l10:
+    decision: deprecate
+    replacement: [V2L4, V2L11, V2L14, V2L33]
+    reason: Uncertainty becomes cross-cutting rather than a late isolated subsystem.
+  video_motion_l11:
+    decision: deprecate
+    replacement: [V2L24, V2L28, V2L29]
+    reason: Split into tracking/decomposition, long-sequence geometry and multi-video event reconstruction.
+  multi_solver_validation_l12:
+    decision: deprecate
+    replacement: [V2L4, V2L14, V2L49]
+    reason: Benchmark/comparison is first-class throughout the architecture.
+  hard_case_escalation_l13:
+    decision: deprecate
+    replacement: [V2L36, V2L38, V2L39, V2L40, V2L41]
+    reason: Specialist routes are explicit per data/failure profile instead of one catch-all hard-case lot.
+  dense_reconstruction_l14:
+    decision: deprecate
+    replacement: [V2L15, V2L16, V2L18]
+    reason: Dense depth, physical surface and photorealistic appearance are deliberately separate products.
+  temporal_4d_world_l15:
+    decision: deprecate
+    replacement: [V2L24, V2L25, V2L26, V2L27, V2L28, V2L29, V2L31, V2L32, V2L33, V2L34, V2L35]
+    reason: Continuous event-time 4D and long-term chronology are separated into distinct capability families.
+  validation_program_l16:
+    decision: deprecate
+    replacement: [V2L4, V2L23, V2L30, V2L35, V2L49, V2L51]
+    reason: Validation exists continuously, with a final comprehensive validation milestone.
+  monde_boundary_l17:
+    decision: remove_later
+    replacement: optional_external_integration_only
+    reason: WRE is independently useful; MONDE-specific semantics do not define internal architecture.
+historical_evidence:
+  pull_requests: 1-28
+  lot_reviews:
+    - docs/reviews/L0-M0-bootstrap-review.md
+    - docs/reviews/L1-core-domain-review.md
+    - docs/reviews/L2-media-ingestion-review.md
+    - docs/reviews/L3-M1-colmap-baseline-review.md
+  note: >-
+    The pre-v2 machine roadmap remains recoverable from Git history at legacy_main_before_blueprint.
+    V2 does not duplicate or rewrite old PR evidence; this migration map is the explicit forward mapping.
