@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 from datetime import UTC, datetime
+from pathlib import Path
 
 import pytest
 
@@ -237,3 +239,55 @@ def test_request_rejects_wrong_producer_or_configuration_identity() -> None:
             ordered_observation_ids=ordered_ids,
             config=config,
         )
+
+
+@pytest.mark.skipif(
+    os.environ.get("WRE_COLMAP_INTEGRATION") != "1",
+    reason="real PyCOLMAP equivalence runs only in the dedicated COLMAP lane",
+)
+@pytest.mark.parametrize("quadratic_overlap", [False, True])
+def test_real_pycolmap_420_sequential_generator_equivalence(
+    tmp_path: Path,
+    quadratic_overlap: bool,
+) -> None:
+    pycolmap = pytest.importorskip("pycolmap")
+    assert pycolmap.__version__ == COLMAP_SEQUENTIAL_REFERENCE_VERSION
+
+    database_path = tmp_path / f"sequential-{quadratic_overlap}.db"
+    with pycolmap.Database.open(database_path) as database:
+        options = pycolmap.SyntheticDatasetOptions()
+        options.num_rigs = 1
+        options.num_cameras_per_rig = 1
+        options.num_frames_per_rig = 5
+        options.num_points3D = 10
+        pycolmap.synthesize_dataset(options, database)
+
+        images = sorted(database.read_all_images(), key=lambda image: image.name)
+        image_id_to_index = {
+            int(image.image_id): index for index, image in enumerate(images)
+        }
+        pairing_options = pycolmap.SequentialPairingOptions()
+        pairing_options.overlap = 3
+        pairing_options.quadratic_overlap = quadratic_overlap
+        pairing_options.expand_rig_images = False
+        pairing_options.loop_detection = False
+        upstream_pairs = pycolmap.SequentialPairGenerator(
+            pairing_options,
+            database,
+        ).all_pairs()
+
+    upstream_edges = tuple(
+        (
+            min(image_id_to_index[int(image_id1)], image_id_to_index[int(image_id2)]),
+            max(image_id_to_index[int(image_id1)], image_id_to_index[int(image_id2)]),
+        )
+        for image_id1, image_id2 in upstream_pairs
+    )
+    ordered_ids = _ids("obs:0", "obs:1", "obs:2", "obs:3", "obs:4")
+    config = SequentialPairingConfig(
+        overlap=3,
+        quadratic_overlap=quadratic_overlap,
+    )
+    result = generate_sequential_candidates(_request(ordered_ids, config=config))
+
+    assert _sequence_edges(result.candidates) == upstream_edges
