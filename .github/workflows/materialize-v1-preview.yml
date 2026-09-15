@@ -49,6 +49,19 @@ jobs:
       - name: Render exact fixture images
         run: .venv/bin/python demo/v1_preview/render_inputs.py
 
+      - name: Fix demo text-export directory creation
+        run: |
+          .venv/bin/python - <<'PY'
+          from pathlib import Path
+          path = Path("demo/v1_preview/run_demo.py")
+          text = path.read_text(encoding="utf-8")
+          old = '    text_dir = output_dir / "colmap_text_model"\n    native.write_text(str(text_dir))'
+          new = '    text_dir = output_dir / "colmap_text_model"\n    text_dir.mkdir()\n    native.write_text(str(text_dir))'
+          if old not in text:
+              raise SystemExit("expected run_demo.py export block not found")
+          path.write_text(text.replace(old, new), encoding="utf-8")
+          PY
+
       - name: Build actual sparse reconstruction
         run: .venv/bin/python demo/v1_preview/run_demo.py --force
 
@@ -57,6 +70,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add \
+            demo/v1_preview/run_demo.py \
             demo/v1_preview/input_images \
             demo/v1_preview/input_previews \
             demo/v1_preview/generated/reconstruction_wre_ascii.ply \
