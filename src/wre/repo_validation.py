@@ -355,6 +355,20 @@ def validate_repository(root: Path) -> list[str]:
             elif dependency not in items_by_id:
                 errors.append(f"{item_id} references unknown dependency: {dependency}")
 
+    for item_id, item in items_by_id.items():
+        if item.get("status") != "done":
+            continue
+        for dependency in dependency_graph.get(item_id, []):
+            dependency_item = items_by_id.get(dependency)
+            if dependency_item is None:
+                continue
+            dependency_status = dependency_item.get("status")
+            if dependency_status != "done":
+                errors.append(
+                    f"done work item {item_id} depends on unfinished "
+                    f"{dependency} ({dependency_status!r})"
+                )
+
     visiting: set[str] = set()
     visited: set[str] = set()
 
