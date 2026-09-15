@@ -136,8 +136,7 @@ class CameraCalibrationEstimate:
         if not isinstance(self.parameters, tuple) or not self.parameters:
             raise ValueError("parameters must be a non-empty immutable tuple")
         parameters = tuple(
-            _finite_float(value, "camera calibration parameter")
-            for value in self.parameters
+            _finite_float(value, "camera calibration parameter") for value in self.parameters
         )
         object.__setattr__(self, "parameters", parameters)
         if not isinstance(self.has_prior_focal_length, bool):
@@ -242,8 +241,7 @@ class SparseReconstructionEstimate:
         if not isinstance(self.points3d, tuple):
             raise ValueError("points3d must be an immutable tuple")
         if not all(
-            isinstance(item, CameraCalibrationEstimate)
-            for item in self.camera_calibrations
+            isinstance(item, CameraCalibrationEstimate) for item in self.camera_calibrations
         ):
             raise ValueError("camera_calibrations contains an invalid value")
         if not all(isinstance(item, CameraPoseEstimate) for item in self.camera_poses):
@@ -257,9 +255,7 @@ class SparseReconstructionEstimate:
                 key=lambda item: item.calibration_id.value,
             )
         )
-        poses = tuple(
-            sorted(self.camera_poses, key=lambda item: item.observation_id.value)
-        )
+        poses = tuple(sorted(self.camera_poses, key=lambda item: item.observation_id.value))
         points = tuple(sorted(self.points3d, key=lambda item: item.point_id.value))
         object.__setattr__(self, "camera_calibrations", calibrations)
         object.__setattr__(self, "camera_poses", poses)
@@ -289,16 +285,10 @@ class SparseReconstructionEstimate:
 
         model_observations = set(pose_observations)
         for calibration in calibrations:
-            if not set(calibration.provenance.source_observation_ids).issubset(
-                model_observations
-            ):
-                raise ValueError(
-                    "camera calibration provenance must stay inside model membership"
-                )
+            if not set(calibration.provenance.source_observation_ids).issubset(model_observations):
+                raise ValueError("camera calibration provenance must stay inside model membership")
         for point in points:
-            if not set(point.provenance.source_observation_ids).issubset(
-                model_observations
-            ):
+            if not set(point.provenance.source_observation_ids).issubset(model_observations):
                 raise ValueError("3D point provenance must stay inside model membership")
 
     @property
