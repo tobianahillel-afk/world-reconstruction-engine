@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "fixture_id": "colmap-l3-end-to-end",
+  "kind": "synthetic",
+  "lane": "full",
+  "deterministic": true,
+  "seed": 7301,
+  "input_files": ["scene.json"],
+  "expectations": [
+    {"metric": "observation_count", "comparator": "eq", "target": 12, "abs_tolerance": 0, "unit": "images"},
+    {"metric": "attempted_pair_count", "comparator": "eq", "target": 66, "abs_tolerance": 0, "unit": "pairs"},
+    {"metric": "raw_matched_pair_count", "comparator": "gte", "target": 10, "abs_tolerance": 0, "unit": "pairs"},
+    {"metric": "verified_pair_count", "comparator": "gte", "target": 10, "abs_tolerance": 0, "unit": "pairs"},
+    {"metric": "reconstructed_model_count", "comparator": "eq", "target": 1, "abs_tolerance": 0, "unit": "models"},
+    {"metric": "registered_image_count", "comparator": "gte", "target": 10, "abs_tolerance": 0, "unit": "images"},
+    {"metric": "imported_model_count", "comparator": "eq", "target": 1, "abs_tolerance": 0, "unit": "models"},
+    {"metric": "imported_observation_count", "comparator": "gte", "target": 10, "abs_tolerance": 0, "unit": "images"},
+    {"metric": "imported_point_count", "comparator": "gte", "target": 20, "abs_tolerance": 0, "unit": "points"},
+    {"metric": "unresolved_scale_model_count", "comparator": "eq", "target": 1, "abs_tolerance": 0, "unit": "models"}
+  ],
+  "provenance": {
+    "owner": "WRE L3.7",
+    "generator": "tests/test_colmap_end_to_end_fixture.py",
+    "purpose": "Deterministic image-based end-to-end COLMAP baseline fixture for L3.1-L3.6"
+  }
+}
