@@ -107,7 +107,7 @@ components:
       - tests/test_colmap_reconstruction_import.py
       - tests/test_colmap_import_safety.py
       - tests/test_colmap_end_to_end_fixture.py
-    status: implementing
+    status: implemented
   candidate_retrieval:
     owner_lot: L4
     implementation: []
