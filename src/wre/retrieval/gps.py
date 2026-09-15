@@ -51,9 +51,7 @@ class GpsPairingConfig:
     def __post_init__(self) -> None:
         if self.schema_version != 1:
             raise ValueError("GPS pairing config schema_version must be 1")
-        if isinstance(self.max_num_neighbors, bool) or not isinstance(
-            self.max_num_neighbors, int
-        ):
+        if isinstance(self.max_num_neighbors, bool) or not isinstance(self.max_num_neighbors, int):
             raise ValueError("max_num_neighbors must be an integer")
         if self.max_num_neighbors <= 0:
             raise ValueError("max_num_neighbors must be a positive integer")
@@ -144,13 +142,9 @@ class GpsPairingRequest:
                 "ReconstructionRun inputs must exactly match GPS interpretation membership"
             )
         if self.run.producer.implementation != GPS_PAIRING_IMPLEMENTATION:
-            raise ValueError(
-                f"ReconstructionRun producer must be {GPS_PAIRING_IMPLEMENTATION!r}"
-            )
+            raise ValueError(f"ReconstructionRun producer must be {GPS_PAIRING_IMPLEMENTATION!r}")
         if self.run.producer.version != GPS_PAIRING_VERSION:
-            raise ValueError(
-                f"ReconstructionRun producer version must be {GPS_PAIRING_VERSION!r}"
-            )
+            raise ValueError(f"ReconstructionRun producer version must be {GPS_PAIRING_VERSION!r}")
         if self.run.configuration_sha256 != self.config.sha256:
             raise ValueError(
                 "ReconstructionRun configuration SHA-256 must match the GPS pairing config"
