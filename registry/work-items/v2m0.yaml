@@ -150,7 +150,7 @@ work_items:
   - id: V2L1.2
     lot: V2L1
     title: Artifact identity and exact input references
-    status: ready
+    status: done
     objective: Define the minimal immutable ArtifactId, ArtifactKind and ArtifactRef vocabulary required for later artifacts to identify themselves and refer to one exact input artifact without filename path timestamp or fuzzy lookup semantics.
     allowed_scope:
       - src/wre/domain/artifacts.py
@@ -196,7 +196,59 @@ work_items:
       - immutability tests for all new value objects
       - regression tests proving artifact identity remains distinct from SceneProjectId and retained domain IDs
       - full fast CI
-  - {id: V2L1.3, lot: V2L1, title: Producer model checkpoint configuration identity, status: planned, depends_on: [V2L1.2]}
+  - id: V2L1.3
+    lot: V2L1
+    title: Producer model checkpoint configuration identity
+    status: ready
+    objective: Define the minimal immutable execution-identity composition for artifacts by reusing retained ProducerRef as producer implementation identity and adding only typed model, checkpoint and normalized-configuration identities needed for exact reproducibility metadata.
+    allowed_scope:
+      - src/wre/domain/producer_identity.py
+      - focused public-domain exports only if required for the new contract
+      - tests/test_producer_identity.py
+    out_of_scope:
+      - modifying or replacing retained ProducerRef ReconstructionRun or DerivedArtifactProvenance behavior
+      - provenance classes OBSERVED_RECONSTRUCTED INFERRED GENERATED owned by V2L1.4
+      - canonical artifact-key composition content addressing or configuration normalization algorithms owned by V2L1.5
+      - codec database or metadata persistence owned by V2L1.6
+      - adapter capability registries model/download registries shipping status license metadata hardware requirements or benchmark state owned by V2L3
+      - artifact DAG cache invalidation checkpoint-resume execution or scheduling behavior
+      - downloading resolving loading or executing any model/checkpoint
+      - inferring identities from filenames paths package environments or mutable latest aliases
+      - refactoring retained V1 producer/run code solely to share helpers
+    depends_on: [V2L1.2]
+    read_before:
+      - docs/02_ARCHITECTURE.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - src/wre/domain/artifacts.py
+      - src/wre/domain/runs.py
+      - src/wre/domain/observations.py
+      - tests/test_runs.py
+    reuse:
+      - retained ProducerRef as the producer implementation version revision identity rather than creating a competing V2 producer type
+      - existing Sha256Digest for exact checkpoint/configuration digest values
+      - existing frozen dataclass and slots value-object conventions
+      - deterministic fail-closed validation and focused pytest style
+    acceptance:
+      - Retained ProducerRef remains unchanged and is directly reused inside the new execution identity contract.
+      - ModelIdentity is immutable and requires explicit non-blank model name and version with an optional non-blank revision; no floating latest or path inference.
+      - CheckpointIdentity is immutable and requires an explicit checkpoint identifier plus exact Sha256Digest content identity.
+      - ConfigurationIdentity is immutable and wraps a caller-supplied Sha256Digest representing already-normalized configuration; this item does not define normalization or hashing algorithms.
+      - ArtifactProducerIdentity is immutable and composes ProducerRef plus ConfigurationIdentity with optional ModelIdentity and CheckpointIdentity.
+      - A checkpoint identity without a model identity is rejected fail-closed; native/non-learned producers may explicitly have neither model nor checkpoint.
+      - Equality and hashing are deterministic from typed immutable identity only and perform no filesystem registry network or environment lookup.
+      - No provenance class artifact key persistence registry licensing hardware scheduling model loading or execution behavior is introduced.
+      - Existing ReconstructionRun ProducerRef artifact identity and retained V1 behavior remain unchanged.
+    tests:
+      - focused positive construction equality and hashing tests for model checkpoint configuration and aggregate producer identity
+      - native producer case with no model/checkpoint
+      - learned producer case with model plus checkpoint
+      - negative tests for blank model/checkpoint fields wrong digest types and checkpoint-without-model
+      - immutability tests for all new value objects
+      - regression tests proving retained ProducerRef and ReconstructionRun behavior remains unchanged
+      - full fast CI
   - {id: V2L1.4, lot: V2L1, title: Provenance class contract, status: planned, depends_on: [V2L1.3]}
   - {id: V2L1.5, lot: V2L1, title: Canonical artifact key, status: planned, depends_on: [V2L1.4]}
   - {id: V2L1.6, lot: V2L1, title: Project and artifact metadata persistence, status: planned, depends_on: [V2L1.5]}
