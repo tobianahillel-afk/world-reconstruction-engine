@@ -58,7 +58,7 @@ work_items:
   - id: V2L0.3
     lot: V2L0
     title: Retained baseline compatibility review
-    status: ready
+    status: in_review
     objective: Prove that the v2 governance migration preserved the retained v1 implementation, tests and external integration behavior, close the V2L0 migration lot, and prepare the first implementation item without adding product functionality.
     allowed_scope:
       - compatibility and migration review evidence under docs/reviews
