@@ -141,32 +141,73 @@ L2.5 deliberately treats source-video bytes as opaque media. It does not:
 
 This boundary is intentional. Source-byte identity and provenance can be stored deterministically before frame-selection policy exists. FFmpeg remains the planned reuse choice for video decode/extraction when L2.6 implements deterministic keyframe extraction; that work must review the exact binary/integration/license assumptions it adopts.
 
+## L2.6 deterministic frame/keyframe extraction
+
+L2.6 reuses the external `ffmpeg`/`ffprobe` command-line tools instead of implementing video demuxing or decoding in WRE. The supported baseline is the Ubuntu Noble package `ffmpeg=7:6.1.1-3ubuntu5`, whose CLI reports version `6.1.1-3ubuntu5`. The exact system package and CLI versions are verified in fast CI and the dependency/license decision is recorded in `registry/dependencies.yaml`.
+
+The selected Debian/Ubuntu binary build is GPL-2.0-or-later because that distribution build enables GPL-licensed FFmpeg parts. WRE executes the tools only as external subprocesses: it does not link to FFmpeg libraries and does not bundle the binary. A future change to another package/build, library linkage or binary redistribution requires a fresh version/license review.
+
+`LocalKeyframeExtractor` performs the following deterministic sequence:
+
+1. resolve the local source path and recompute SHA-256 + byte length;
+2. reject the operation if those bytes do not exactly match the supplied persisted `VideoObservation.asset`;
+3. verify that `ffmpeg` and `ffprobe` report the same required version;
+4. ask `ffprobe` for `best_effort_timestamp_time` for every decoded frame of the first video stream;
+5. reject missing, non-finite or non-monotone timestamps rather than fabricating a timeline;
+6. keep source frame indices and round observed timestamp seconds to integer microseconds using decimal round-half-even semantics;
+7. ignore only leading negative-time preroll frames because the current `VideoFrameObservation` contract requires a non-negative offset;
+8. select the first representable frame and subsequent frames separated by at least the configured positive `min_interval_us`;
+9. ask `ffmpeg` to extract exactly those source frame indices as RGB PNG files;
+10. SHA-256 content-address each PNG and persist a `VideoFrameObservation` containing the exact parent video asset, source frame index and integer-microsecond offset.
+
+Frame observation IDs are deterministic hashes of parent observation identity, parent video content digest, source frame index and integer-microsecond offset. Repeating extraction with identical source bytes, policy and supported toolchain therefore yields the same observation IDs and immutable persistence payloads.
+
+### Time semantics remain conservative
+
+`frame_time_us` is a relative coordinate in the decoded source-video timeline. L2.6 does **not** silently treat `VideoObservation.captured_at` as the start of that timeline. Even when the parent video has a caller-supplied `captured_at`, extracted `VideoFrameObservation.captured_at` remains `None` until a later contract establishes an evidence-backed mapping from the video timeline to absolute capture instants.
+
+This avoids turning a convenient parent timestamp into unsupported per-frame temporal truth.
+
+### Explicit L2.6 boundary
+
+L2.6 does not:
+
+- use scene-content scoring, learned models or motion magnitude to choose frames;
+- infer frame timestamps from nominal frame rate when timestamps are missing;
+- reinterpret duplicate or non-monotone timeline evidence;
+- extract audio or secondary video streams;
+- infer camera calibration, rolling shutter, IMU or trajectory state;
+- track features or motion across frames;
+- perform visual odometry, matching, geometric verification or reconstruction.
+
+Those capabilities remain in later lots. L3 begins the COLMAP baseline; the richer video/motion model remains L11.
+
 ## Identity and retry behavior
 
 The image/video-ingestion path inherits L1 persistence semantics:
 
 1. a new observation ID and payload are stored atomically;
-2. repeating the exact same observation, metadata or interpretation payload is idempotent;
+2. repeating the exact same observation, metadata, interpretation or extracted-frame payload is idempotent;
 3. reusing a stable record identity with different content raises the persistence conflict instead of silently replacing previously recorded evidence.
 
-Hashing, duplicate reporting, EXIF extraction, semantic interpretation and source-video ingestion do not weaken or reinterpret those rules.
+Hashing, duplicate reporting, EXIF extraction, semantic interpretation, source-video ingestion and frame extraction do not weaken or reinterpret those rules.
 
 ## Explicitly deferred work
 
-Through L2.5, media ingestion does **not** implement:
+Through L2.6, media ingestion does **not** implement:
 
 - media discovery or directory crawling;
 - byte copying into a managed media object store;
-- image decoding or image-validity inference;
-- video decoding/container validation;
+- image-validity inference beyond owning parsers' explicit failures;
 - MIME-type inference;
 - XMP parsing;
 - MakerNote interpretation;
 - automatic CRS/georeferencing policy beyond deterministic EXIF coordinate interpretation;
 - guessing a timezone for ambiguous local timestamps;
 - camera identity resolution;
-- deterministic keyframe/frame extraction;
-- feature extraction, matching or reconstruction;
+- video scene-change scoring or adaptive keyframe selection;
+- audio/secondary-stream ingestion;
+- feature extraction, matching, tracking, visual odometry or reconstruction;
 - automatic merge/deletion of observations merely because bytes are identical.
 
-Those behaviors remain in their owning work items. L2.6 next owns deterministic keyframe extraction from the persisted source-video observation; later lots own tracking, motion, matching and reconstruction.
+Those behaviors remain in their owning work items. L3 next owns the COLMAP reconstruction baseline; later lots own richer video motion, difficult matching, absolute anchoring and temporal world behavior.
