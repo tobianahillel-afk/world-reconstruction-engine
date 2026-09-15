@@ -135,8 +135,8 @@ work_items:
   - {id: L3.6, lot: L3, title: Reconstruction importer, status: done, depends_on: [L3.5]}
   - {id: L3.7, lot: L3, title: COLMAP end-to-end fixture, status: done, depends_on: [L3.6]}
   - {id: L4.1, lot: L4, title: Sequential pairing, status: done, depends_on: [L3.7]}
-  - {id: L4.2, lot: L4, title: GPS pairing, status: ready, depends_on: [L4.1]}
-  - {id: L4.3, lot: L4, title: Visual vocabulary retrieval, status: planned, depends_on: [L4.2]}
+  - {id: L4.2, lot: L4, title: GPS pairing, status: done, depends_on: [L4.1]}
+  - {id: L4.3, lot: L4, title: Visual vocabulary retrieval, status: ready, depends_on: [L4.2]}
   - {id: L4.4, lot: L4, title: Graph-neighbour candidates, status: planned, depends_on: [L4.3]}
   - {id: L4.5, lot: L4, title: Candidate ranking, status: planned, depends_on: [L4.4]}
   - id: L4.6
