@@ -361,7 +361,7 @@ def _finite_matrix(
 ) -> tuple[tuple[float, ...], ...] | None:
     if value is None:
         return None
-    raw = value.tolist() if hasattr(value, "tolist") else value
+    raw = cast(Any, value).tolist() if hasattr(value, "tolist") else value
     if not isinstance(raw, (list, tuple)) or len(raw) != rows:
         raise ColmapGeometricVerificationError(f"{label} must be a {rows}x{cols} matrix")
     converted: list[tuple[float, ...]] = []
@@ -390,12 +390,12 @@ def _pose_matrix(value: object | None) -> Matrix3x4 | None:
         return None
     if not hasattr(value, "matrix"):
         raise ColmapGeometricVerificationError("relative pose does not expose a matrix")
-    matrix = _finite_matrix(value.matrix(), 3, 4, "relative pose")
+    matrix = _finite_matrix(cast(Any, value).matrix(), 3, 4, "relative pose")
     return cast(Matrix3x4 | None, matrix)
 
 
 def _inlier_matches(value: object) -> tuple[FeatureMatch, ...]:
-    raw = value.tolist() if hasattr(value, "tolist") else value
+    raw = cast(Any, value).tolist() if hasattr(value, "tolist") else value
     if not isinstance(raw, (list, tuple)):
         raise ColmapGeometricVerificationError("inlier matches must be an Nx2 matrix")
     matches: list[FeatureMatch] = []
