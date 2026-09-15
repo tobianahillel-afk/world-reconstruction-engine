@@ -39,6 +39,12 @@ from wre.domain.observations import (
     VideoFrameObservation,
     VideoObservation,
 )
+from wre.domain.producer_identity import (
+    ArtifactProducerIdentity,
+    CheckpointIdentity,
+    ConfigurationIdentity,
+    ModelIdentity,
+)
 from wre.domain.projects import SceneProject, SceneProjectId
 from wre.domain.runs import (
     DerivedArtifactProvenance,
@@ -50,6 +56,7 @@ from wre.domain.runs import (
 __all__ = [
     "ArtifactId",
     "ArtifactKind",
+    "ArtifactProducerIdentity",
     "ArtifactRef",
     "Camera",
     "CameraCalibrationEstimate",
@@ -58,6 +65,8 @@ __all__ = [
     "CameraPoseEstimate",
     "CaptureTimeInterpretation",
     "CaptureTimeInterpretationStatus",
+    "CheckpointIdentity",
+    "ConfigurationIdentity",
     "DerivedArtifactProvenance",
     "EstimatedPoint3DId",
     "EstimatedTrackElement",
@@ -68,6 +77,7 @@ __all__ = [
     "LocalFrameId",
     "LocalScaleStatus",
     "MediaAssetRef",
+    "ModelIdentity",
     "Observation",
     "ObservationId",
     "ObservationKind",

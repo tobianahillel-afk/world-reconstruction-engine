@@ -25,10 +25,12 @@ components:
     implementation:
       - src/wre/domain/projects.py
       - src/wre/domain/artifacts.py
+      - src/wre/domain/producer_identity.py
       - src/wre/domain/__init__.py
     tests:
       - tests/test_scene_projects.py
       - tests/test_artifacts.py
+      - tests/test_producer_identity.py
     status: implementing
   artifact_dag_cache: {owner_lot: V2L2, implementation: [], tests: [], status: planned}
   adapter_model_registry: {owner_lot: V2L3, implementation: [], tests: [], status: planned}

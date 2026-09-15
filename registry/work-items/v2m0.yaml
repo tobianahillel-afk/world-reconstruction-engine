@@ -199,7 +199,7 @@ work_items:
   - id: V2L1.3
     lot: V2L1
     title: Producer model checkpoint configuration identity
-    status: ready
+    status: done
     objective: Define the minimal immutable execution-identity composition for artifacts by reusing retained ProducerRef as producer implementation identity and adding only typed model, checkpoint and normalized-configuration identities needed for exact reproducibility metadata.
     allowed_scope:
       - src/wre/domain/producer_identity.py
@@ -249,7 +249,53 @@ work_items:
       - immutability tests for all new value objects
       - regression tests proving retained ProducerRef and ReconstructionRun behavior remains unchanged
       - full fast CI
-  - {id: V2L1.4, lot: V2L1, title: Provenance class contract, status: planned, depends_on: [V2L1.3]}
+  - id: V2L1.4
+    lot: V2L1
+    title: Provenance class contract
+    status: ready
+    objective: Define the minimal closed provenance-class vocabulary that marks whether an artifact is observed/reconstructed, inferred or generated without conflating epistemic classification with retained run/observation lineage.
+    allowed_scope:
+      - src/wre/domain/provenance.py
+      - focused public-domain exports only if required for the new contract
+      - tests/test_provenance.py
+    out_of_scope:
+      - modifying replacing or migrating retained DerivedArtifactProvenance ReconstructionRun or Observation lineage behavior
+      - artifact lineage graphs source-observation collections producer identity or dependency edges
+      - confidence scores quality metrics review state or evidence strength
+      - automatic provenance classification from solver model file path artifact kind or route
+      - mixed unknown verified synthetic-confidence or other speculative provenance classes
+      - canonical artifact-key composition or content addressing owned by V2L1.5
+      - codec database or metadata persistence owned by V2L1.6
+      - generated-completion policy user visibility or rendering behavior owned by later capabilities
+    depends_on: [V2L1.3]
+    read_before:
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - src/wre/domain/runs.py
+      - src/wre/domain/producer_identity.py
+      - tests/test_runs.py
+    reuse:
+      - retained DerivedArtifactProvenance for run and source-observation lineage rather than replacing it
+      - existing explicit symbolic-domain conventions in wre.domain
+      - focused deterministic pytest style
+    acceptance:
+      - ProvenanceClass is a closed symbolic type with exactly OBSERVED_RECONSTRUCTED INFERRED and GENERATED values.
+      - The three values have stable explicit lowercase wire tokens observed_reconstructed inferred and generated.
+      - No UNKNOWN MIXED VERIFIED or solver-specific class is admitted by the core contract.
+      - ProvenanceClass carries classification only and does not contain confidence lineage producer artifact dependency or review metadata.
+      - Callers must supply the class explicitly; no filename artifact-kind solver model route or environment inference is performed.
+      - Retained DerivedArtifactProvenance remains unchanged and continues to represent run/source-observation lineage independently of epistemic class.
+      - No artifact key persistence cache routing generation policy or runtime behavior is introduced.
+    tests:
+      - focused tests for exact member set names and stable wire tokens
+      - construction equality hashing and iteration behavior
+      - negative tests proving arbitrary unknown and speculative classes are rejected
+      - regression test proving retained DerivedArtifactProvenance behavior is unchanged
+      - full fast CI
   - {id: V2L1.5, lot: V2L1, title: Canonical artifact key, status: planned, depends_on: [V2L1.4]}
   - {id: V2L1.6, lot: V2L1, title: Project and artifact metadata persistence, status: planned, depends_on: [V2L1.5]}
   - {id: V2L2.1, lot: V2L2, title: Artifact dependency DAG contract, status: planned, depends_on: [V2L1.6]}
