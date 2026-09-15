@@ -11,6 +11,7 @@ on:
       - "registry/work-items.yaml"
       - "src/wre/domain/estimated_geometry.py"
       - "src/wre/reconstruction/**"
+      - "src/wre/retrieval/sequential.py"
       - "tests/test_colmap_environment.py"
       - "tests/test_colmap_features.py"
       - "tests/test_colmap_matching.py"
@@ -18,6 +19,7 @@ on:
       - "tests/test_colmap_incremental_reconstruction.py"
       - "tests/test_colmap_reconstruction_import.py"
       - "tests/test_colmap_end_to_end_fixture.py"
+      - "tests/test_sequential_pairing.py"
       - "tests/fixtures/synthetic/colmap-l3-end-to-end/**"
       - "docs/14_COLMAP_ENVIRONMENT.md"
       - "docs/15_COLMAP_FEATURE_EXTRACTION.md"
@@ -26,6 +28,7 @@ on:
       - "docs/18_COLMAP_INCREMENTAL_RECONSTRUCTION.md"
       - "docs/19_COLMAP_RECONSTRUCTION_IMPORT.md"
       - "docs/20_COLMAP_END_TO_END_FIXTURE.md"
+      - "docs/21_SEQUENTIAL_PAIRING.md"
       - "docs/reviews/**"
   push:
     branches: [main]
@@ -38,6 +41,7 @@ on:
       - "registry/work-items.yaml"
       - "src/wre/domain/estimated_geometry.py"
       - "src/wre/reconstruction/**"
+      - "src/wre/retrieval/sequential.py"
       - "tests/test_colmap_environment.py"
       - "tests/test_colmap_features.py"
       - "tests/test_colmap_matching.py"
@@ -45,6 +49,7 @@ on:
       - "tests/test_colmap_incremental_reconstruction.py"
       - "tests/test_colmap_reconstruction_import.py"
       - "tests/test_colmap_end_to_end_fixture.py"
+      - "tests/test_sequential_pairing.py"
       - "tests/fixtures/synthetic/colmap-l3-end-to-end/**"
       - "docs/14_COLMAP_ENVIRONMENT.md"
       - "docs/15_COLMAP_FEATURE_EXTRACTION.md"
@@ -53,6 +58,7 @@ on:
       - "docs/18_COLMAP_INCREMENTAL_RECONSTRUCTION.md"
       - "docs/19_COLMAP_RECONSTRUCTION_IMPORT.md"
       - "docs/20_COLMAP_END_TO_END_FIXTURE.md"
+      - "docs/21_SEQUENTIAL_PAIRING.md"
       - "docs/reviews/**"
   workflow_dispatch:
 
@@ -93,7 +99,7 @@ jobs:
           uv pip install --python .venv/bin/python "numpy==2.5.3" "pycolmap==4.2.0"
           .venv/bin/python -c 'import numpy, pycolmap; assert numpy.__version__ == "2.5.3"; assert pycolmap.__version__ == "4.2.0"'
 
-      - name: Exercise real COLMAP environment through L3 end-to-end baseline
+      - name: Exercise exact COLMAP environment through L3 and L4.1 reference semantics
         env:
           WRE_COLMAP_INTEGRATION: "1"
         run: >-
@@ -105,3 +111,4 @@ jobs:
           tests/test_colmap_incremental_reconstruction.py
           tests/test_colmap_reconstruction_import.py
           tests/test_colmap_end_to_end_fixture.py
+          tests/test_sequential_pairing.py
