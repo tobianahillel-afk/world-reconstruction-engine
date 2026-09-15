@@ -4,7 +4,9 @@ L3.3 consumes the audited feature database produced by L3.2 and adds raw descrip
 
 ## Reuse and upstream boundary
 
-WRE reuses official PyCOLMAP/COLMAP 4.2.0. It does not implement SIFT matching. PyCOLMAP exposes `match_exhaustive(...)` together with `FeatureMatchingOptions.skip_geometric_verification`. Upstream documents this flag as skipping the geometric-verification stage and forwarding raw matches unchanged. WRE relies on that explicit supported path rather than reimplementing a descriptor matcher or trying to delete accepted geometry after the fact.
+WRE reuses official PyCOLMAP/COLMAP 4.2.0. It does not implement SIFT matching. PyCOLMAP exposes `match_exhaustive(...)` together with `FeatureMatchingOptions.skip_geometric_verification`. Upstream documents this flag as skipping the geometric-verification stage and forwarding raw matches unchanged. WRE relies on that explicit supported path rather than reimplementing a descriptor matcher.
+
+COLMAP 4.2.0 still writes a default `TwoViewGeometry()` database row when the verifier is bypassed. That row is a storage placeholder, not accepted geometry: its configuration is `UNDEFINED`, it contains zero inlier rows and no F/E/H, relative pose or estimated-camera payload. WRE therefore audits the placeholder contents rather than incorrectly requiring the table itself to be empty.
 
 The approved dependency model from L3.1/L3.2 remains unchanged: PyCOLMAP is an exact external solver environment, lazily loaded by solver-backed operations and exercised by the dedicated COLMAP integration lane.
 
@@ -52,7 +54,8 @@ The L3.3 result records:
 - the parent L3.2 feature-database SHA-256;
 - the new matched-database path, SHA-256 and exact byte length;
 - the exhaustive attempted-pair count;
-- canonical WRE observation pairs for rows present in COLMAP's raw `matches` table and their match counts.
+- canonical WRE observation pairs for rows present in COLMAP's raw `matches` table and their match counts;
+- the count of audited unverified `two_view_geometries` placeholders written by COLMAP.
 
 COLMAP pair IDs remain solver-local. WRE uses the official PyCOLMAP `pair_id_to_image_pair` conversion and the audited L3.2 image-name mapping to recover WRE observation identity.
 
@@ -60,7 +63,16 @@ A pair having raw descriptor correspondences is evidence only. It is **not** evi
 
 ## Hard geometric boundary
 
-After matching, WRE opens the resulting database read-only and requires the `two_view_geometries` table to remain empty. Any geometric contamination is treated as an L3.3 failure and the partial output is removed.
+After matching, WRE opens the resulting database read-only. A `two_view_geometries` row is allowed only when it is the empty placeholder emitted by COLMAP's skip-verification path and refers to an existing raw-match pair. The placeholder must have:
+
+- `config = UNDEFINED` (`0`);
+- zero inlier rows and two match-index columns;
+- no non-empty inlier-match blob;
+- no F, E or H matrix;
+- no relative-pose quaternion or translation;
+- no estimated camera payload.
+
+Any geometrically classified row, positive inlier count, matrix, pose or camera payload is treated as L3.3 geometric contamination. The partial output database is removed and the failure is surfaced instead of being reinterpreted or silently cleaned up.
 
 L3.3 must not:
 
@@ -79,6 +91,6 @@ L3.4 owns geometric verification. Later lots add stronger competing-model eviden
 
 ## Testing
 
-Fast tests use a small fake PyCOLMAP boundary to verify configuration, parent immutability, output cleanup, provenance and the no-geometry invariant without making PyCOLMAP a mandatory core dependency.
+Fast tests use a small fake PyCOLMAP boundary that mirrors the relevant COLMAP 4.2.0 database schema and its unverified placeholder behavior. They verify configuration, parent immutability, output cleanup, provenance and rejection of geometric contamination without making PyCOLMAP a mandatory core dependency.
 
-The dedicated COLMAP integration lane installs exact `pycolmap==4.2.0` and `numpy==2.5.3`, extracts real SIFT features from a deterministic synthetic image pair, runs real exhaustive CPU matching with geometric verification disabled, verifies that raw matches exist, verifies that `two_view_geometries` remains empty, and confirms that the original L3.2 feature database is byte-identical after L3.3 completes.
+The dedicated COLMAP integration lane installs exact `pycolmap==4.2.0` and `numpy==2.5.3`, extracts real SIFT features from a deterministic synthetic image pair, runs real exhaustive CPU matching with geometric verification disabled, verifies that raw matches exist, audits the emitted `UNDEFINED`/empty two-view placeholder, and confirms that the original L3.2 feature database is byte-identical after L3.3 completes.
