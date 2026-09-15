@@ -44,11 +44,7 @@ from wre.reconstruction import (
 from wre.regression import evaluate_fixture, load_fixture
 
 _FIXTURE_PATH = (
-    Path(__file__).parent
-    / "fixtures"
-    / "synthetic"
-    / "colmap-l3-end-to-end"
-    / "fixture.json"
+    Path(__file__).parent / "fixtures" / "synthetic" / "colmap-l3-end-to-end" / "fixture.json"
 )
 
 
@@ -121,9 +117,7 @@ def _render_scene(scene: dict[str, Any], directory: Path) -> tuple[Path, ...]:
     directory.mkdir(parents=True, exist_ok=True)
     half = patch_size // 2
     image_paths: list[Path] = []
-    for camera_index, (center_x, center_y) in enumerate(
-        zip(camera_x, camera_y, strict=True)
-    ):
+    for camera_index, (center_x, center_y) in enumerate(zip(camera_x, camera_y, strict=True)):
         pixels = bytearray([background]) * (width * height)
         for base_u, base_v, depth, patch in points:
             center_u = round(base_u - focal * center_x / depth)
@@ -205,9 +199,7 @@ def test_l37_fixture_metadata_is_valid_and_matches_camera_prior() -> None:
     assert fixture.deterministic is True
     assert fixture.seed == scene["seed"] == 7301
     assert len(_number_list(scene, "camera_centers_x")) == 12
-    assert float(scene["focal_length_px"]) == pytest.approx(
-        1.2 * int(scene["width"])
-    )
+    assert float(scene["focal_length_px"]) == pytest.approx(1.2 * int(scene["width"]))
 
 
 @pytest.mark.skipif(
@@ -288,9 +280,7 @@ def test_real_colmap_l3_end_to_end_fixture(tmp_path: Path) -> None:
     assert hash_file_content(matching.database_path) == matching_hash
     verification_hash = hash_file_content(verification.database_path)
 
-    image_name_by_observation = {
-        item.observation_id: item.image_name for item in features.images
-    }
+    image_name_by_observation = {item.observation_id: item.image_name for item in features.images}
     reconstruction_inputs = tuple(
         ColmapReconstructionInput(
             observation=observation,
@@ -359,12 +349,9 @@ def test_real_colmap_l3_end_to_end_fixture(tmp_path: Path) -> None:
         "imported_observation_count": sum(
             model.estimate.observation_count for model in imported.models
         ),
-        "imported_point_count": sum(
-            model.estimate.point_count for model in imported.models
-        ),
+        "imported_point_count": sum(model.estimate.point_count for model in imported.models),
         "unresolved_scale_model_count": sum(
-            model.estimate.scale_status is LocalScaleStatus.UNRESOLVED
-            for model in imported.models
+            model.estimate.scale_status is LocalScaleStatus.UNRESOLVED for model in imported.models
         ),
     }
     regression = evaluate_fixture(
@@ -375,6 +362,5 @@ def test_real_colmap_l3_end_to_end_fixture(tmp_path: Path) -> None:
 
     assert regression.passed, regression.to_dict()
     assert all(
-        model.estimate.scale_status is LocalScaleStatus.UNRESOLVED
-        for model in imported.models
+        model.estimate.scale_status is LocalScaleStatus.UNRESOLVED for model in imported.models
     )
