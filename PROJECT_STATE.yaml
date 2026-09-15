@@ -2,19 +2,19 @@ schema_version: 1
 project: world-reconstruction-engine
 project_name: World Reconstruction Engine
 phase: implementation
-milestone: M1
-lot: L3
-active_work_item: L3.7
+milestone: M2
+lot: L4
+active_work_item: L4.1
 status: ready
-last_completed: [L0.1, L0.2, L0.3, L0.4, L0.5, L0.R, L1.1, L1.2, L1.3, L1.4, L1.5, L2.1, L2.2, L2.3, L2.4, L2.5, L2.6, L3.1, L3.2, L3.3, L3.4, L3.5, L3.6]
+last_completed: [L0.1, L0.2, L0.3, L0.4, L0.5, L0.R, L1.1, L1.2, L1.3, L1.4, L1.5, L2.1, L2.2, L2.3, L2.4, L2.5, L2.6, L3.1, L3.2, L3.3, L3.4, L3.5, L3.6, L3.7]
 last_merged_pr: 24
 current_goal: >-
-  Exercise the complete L3 COLMAP baseline end to end on a deterministic controlled fixture,
-  including import into explicit WRE estimated geometry, before the required L3 lot review.
+  Add deterministic sequential candidate pairing as the first L4 retrieval strategy while preserving
+  the L3 evidence standard and keeping candidate generation separate from geometric acceptance.
 next_action: >-
-  After PR #24 merges, implement only the L3.7 COLMAP end-to-end fixture on a new short-lived
-  branch and complete the required L3 lot review before advancing to L4; do not start L4 in the
-  L3.7 PR.
+  After PR #25 merges, inspect L4.1 and its required docs/reuse decisions, create a new short-lived
+  branch, and implement only sequential pairing; do not start L4.2 or weaken downstream geometric
+  verification/acceptance requirements.
 blockers: []
 architecture:
   latest_adr: docs/adr/0001-adaptive-routing-anchoring-temporal-world.md
@@ -28,11 +28,13 @@ reviews:
     L0: passed
     L1: passed
     L2: passed
+    L3: passed
   milestone_reviews:
     M0: passed
+    M1: passed
 quality:
   fast_ci: passing
-  full_ci: not_configured
+  full_ci: passing
   known_regressions: 0
-  latest_regression_run: null
+  latest_regression_run: 34978343630
 updated_at: '2026-09-15'
