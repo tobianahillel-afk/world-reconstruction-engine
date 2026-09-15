@@ -4,7 +4,6 @@ import os
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
 
 import pytest
 
@@ -176,7 +175,9 @@ def _feature_result(
     image_names: tuple[str, ...] = ("000000-a.png", "000001-b.png"),
     environment: ColmapEnvironmentIdentity | None = None,
 ) -> ColmapFeatureExtractionResult:
-    observation_ids = tuple(ObservationId(f"obs:{index}") for index in range(len(image_names)))
+    observation_ids = tuple(
+        ObservationId(f"obs:{index}") for index in range(len(image_names))
+    )
     return ColmapFeatureExtractionResult(
         provenance=DerivedArtifactProvenance(
             producing_run_id=ReconstructionRunId("run:l32"),
@@ -286,7 +287,10 @@ def test_import_rejects_tampered_native_model_before_pycolmap_read(tmp_path: Pat
     request, module = _request(tmp_path)
     (request.reconstruction.output_path / "0" / "images.bin").write_bytes(b"tampered")
 
-    with pytest.raises(ColmapReconstructionImportError, match="changed after L3.5"):
+    with pytest.raises(
+        ColmapReconstructionImportError,
+        match=r"changed after L3\.5",
+    ):
         import_colmap_reconstruction(request, module=module)
 
     assert module.read_paths == []
@@ -296,7 +300,10 @@ def test_import_rejects_registered_image_without_l32_mapping(tmp_path: Path) -> 
     module = _FakePycolmap(_FakeReconstruction(("000000-a.png", "unknown.png")))
     request, _ = _request(tmp_path, module=module)
 
-    with pytest.raises(ColmapReconstructionImportError, match="no L3.2 observation mapping"):
+    with pytest.raises(
+        ColmapReconstructionImportError,
+        match=r"no L3\.2 observation mapping",
+    ):
         import_colmap_reconstruction(request, module=module)
 
 
@@ -336,7 +343,10 @@ def test_import_rejects_different_native_reader_environment(tmp_path: Path) -> N
     request, module = _request(tmp_path)
     module.COLMAP_build = "different build"
 
-    with pytest.raises(ColmapReconstructionImportError, match="exact L3.5 PyCOLMAP environment"):
+    with pytest.raises(
+        ColmapReconstructionImportError,
+        match=r"exact L3\.5 PyCOLMAP environment",
+    ):
         import_colmap_reconstruction(request, module=module)
 
 
@@ -384,10 +394,15 @@ def test_real_pycolmap_reconstruction_can_be_imported_without_fragment_acceptanc
     )
 
     native_images = sorted(
-        (reconstruction_native.image(image_id) for image_id in reconstruction_native.reg_image_ids()),
+        (
+            reconstruction_native.image(image_id)
+            for image_id in reconstruction_native.reg_image_ids()
+        ),
         key=lambda image: image.name,
     )
-    observation_ids = tuple(ObservationId(f"obs:{index:03d}") for index in range(len(native_images)))
+    observation_ids = tuple(
+        ObservationId(f"obs:{index:03d}") for index in range(len(native_images))
+    )
     features = ColmapFeatureExtractionResult(
         provenance=DerivedArtifactProvenance(
             producing_run_id=ReconstructionRunId("run:real-l32"),
