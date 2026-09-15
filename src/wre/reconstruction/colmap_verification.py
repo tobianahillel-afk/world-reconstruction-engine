@@ -225,9 +225,7 @@ class ColmapGeometricVerificationRequest:
                 "ReconstructionRun inputs must exactly match the L3.3 matching artifact"
             )
         if self.run.producer.implementation != _VERIFICATION_PRODUCER:
-            raise ValueError(
-                f"ReconstructionRun producer must be {_VERIFICATION_PRODUCER!r}"
-            )
+            raise ValueError(f"ReconstructionRun producer must be {_VERIFICATION_PRODUCER!r}")
         if self.run.producer.version != SUPPORTED_PYCOLMAP_VERSION:
             raise ValueError(
                 f"ReconstructionRun producer version must be {SUPPORTED_PYCOLMAP_VERSION!r}"
@@ -300,8 +298,7 @@ class ColmapGeometricVerificationResult:
         if isinstance(self.database_byte_length, bool) or self.database_byte_length <= 0:
             raise ValueError("database_byte_length must be a positive integer")
         pair_ids = tuple(
-            (item.observation_id1.value, item.observation_id2.value)
-            for item in self.geometries
+            (item.observation_id1.value, item.observation_id2.value) for item in self.geometries
         )
         if pair_ids != tuple(sorted(pair_ids)) or len(pair_ids) != len(set(pair_ids)):
             raise ValueError("geometry evidence must be unique and canonically ordered")
@@ -518,9 +515,7 @@ def _read_geometry_evidence(
             )
         raw_match_count = raw_count_by_pair_id[pair_id]
         if raw_match_count != expected_count:
-            raise ColmapGeometricVerificationError(
-                "raw match count changed between L3.3 and L3.4"
-            )
+            raise ColmapGeometricVerificationError("raw match count changed between L3.3 and L3.4")
 
         tri_angle = float(geometry.tri_angle)
         tri_angle_value = None if tri_angle < 0 else tri_angle
