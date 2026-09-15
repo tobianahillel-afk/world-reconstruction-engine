@@ -1,5 +1,13 @@
 """Core solver-independent domain models."""
 
+from wre.domain.artifact_keys import (
+    ARTIFACT_KEY_SCHEMA_VERSION,
+    ArtifactInputFingerprint,
+    ArtifactKey,
+    ArtifactKeyMaterial,
+    canonical_artifact_key_bytes,
+    derive_artifact_key,
+)
 from wre.domain.artifacts import ArtifactId, ArtifactKind, ArtifactRef
 from wre.domain.cameras import (
     Camera,
@@ -55,7 +63,11 @@ from wre.domain.runs import (
 )
 
 __all__ = [
+    "ARTIFACT_KEY_SCHEMA_VERSION",
     "ArtifactId",
+    "ArtifactInputFingerprint",
+    "ArtifactKey",
+    "ArtifactKeyMaterial",
     "ArtifactKind",
     "ArtifactProducerIdentity",
     "ArtifactRef",
@@ -101,4 +113,6 @@ __all__ = [
     "SpatialFragmentId",
     "VideoFrameObservation",
     "VideoObservation",
+    "canonical_artifact_key_bytes",
+    "derive_artifact_key",
 ]

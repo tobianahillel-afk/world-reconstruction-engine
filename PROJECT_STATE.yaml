@@ -5,18 +5,18 @@ roadmap_version: '2.0'
 phase: implementation
 milestone: V2M0
 lot: V2L1
-active_work_item: V2L1.5
+active_work_item: V2L1.6
 status: ready
-last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4]
-last_merged_pr: 36
+last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5]
+last_merged_pr: 37
 current_goal: >-
-  Implement only the canonical artifact-key contract defined by V2L1.5: a deterministic,
-  versioned computation identity derived from explicit typed key material, without implementing
-  cache lookup, DAG traversal, persistence or invalidation behavior.
+  Implement only the local codec and persistence round-trip for SceneProject and immutable artifact
+  metadata defined by V2L1.6, reusing the retained SQLiteLocalStore and canonical JSON boundary
+  without introducing dependency-DAG, cache lookup, invalidation or materialization behavior.
 next_action: >-
-  Complete only V2L1.5 from its executable contract in registry/work-items/v2m0.yaml: define the
-  typed artifact key, exact input-content fingerprint material and deterministic derivation tests,
-  preserve project/artifact/provenance/run behavior, and stop before metadata persistence in V2L1.6.
+  Complete only V2L1.6 from its executable contract in registry/work-items/v2m0.yaml: define the
+  minimal ArtifactMetadata aggregate needed for storage, extend retained codecs and SQLiteLocalStore
+  with exact round-trip/conflict tests, close V2L1 only after review, and stop before V2L2.1.
 blockers: []
 architecture:
   product_blueprint: docs/01_PRODUCT.md
