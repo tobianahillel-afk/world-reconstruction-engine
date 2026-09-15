@@ -19,7 +19,15 @@ lot_reviews:
       - PRs #7 through #10 merged; PR #11 carries final L1.5 and lot-review acceptance evidence
       - L1.5 implementation fast-ci run 34889364989 passed
       - L1.5 implementation CodeQL run 34889364874 passed
-  L2: {status: pending, reviewed_at: null, evidence: []}
+  L2:
+    status: passed
+    reviewed_at: '2026-09-15'
+    evidence:
+      - docs/reviews/L2-media-ingestion-review.md
+      - PRs #12 through #15 and #17 merged; PR #18 carries final L2.6 and lot-review evidence
+      - L2.6 implementation fast-ci run 34912604396 passed with pinned FFmpeg integration
+      - L2.6 implementation CodeQL run 34912604416 passed
+      - L2.6 dependency-review run 34912604439 passed
   L3: {status: pending, reviewed_at: null, evidence: []}
   L4: {status: pending, reviewed_at: null, evidence: []}
   L5: {status: pending, reviewed_at: null, evidence: []}
