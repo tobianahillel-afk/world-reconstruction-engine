@@ -13,7 +13,11 @@ history:
     - docs/reviews/L2-media-ingestion-review.md
     - docs/reviews/L3-M1-colmap-baseline-review.md
 lot_reviews:
-  V2L0: {status: pending, reviewed_at: null, evidence: []}
+  V2L0:
+    status: in_review
+    reviewed_at: null
+    evidence:
+      - docs/reviews/V2L0-v2-migration-compatibility-review.md
   V2L1: {status: pending, reviewed_at: null, evidence: []}
   V2L2: {status: pending, reviewed_at: null, evidence: []}
   V2L3: {status: pending, reviewed_at: null, evidence: []}
