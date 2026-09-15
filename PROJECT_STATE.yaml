@@ -4,18 +4,19 @@ project_name: World Reconstruction Engine
 phase: implementation
 milestone: M2
 lot: L4
-active_work_item: L4.2
+active_work_item: L4.3
 status: ready
-last_completed: [L0.1, L0.2, L0.3, L0.4, L0.5, L0.R, L1.1, L1.2, L1.3, L1.4, L1.5, L2.1, L2.2, L2.3, L2.4, L2.5, L2.6, L3.1, L3.2, L3.3, L3.4, L3.5, L3.6, L3.7, L4.1]
-last_merged_pr: 25
+last_completed: [L0.1, L0.2, L0.3, L0.4, L0.5, L0.R, L1.1, L1.2, L1.3, L1.4, L1.5, L2.1, L2.2, L2.3, L2.4, L2.5, L2.6, L3.1, L3.2, L3.3, L3.4, L3.5, L3.6, L3.7, L4.1, L4.2]
+last_merged_pr: 26
 current_goal: >-
-  Add deterministic GPS-based candidate pairing as the second L4 retrieval strategy while keeping
-  location metadata as candidate evidence only and preserving downstream geometric verification as
-  the authority for pair acceptance.
+  Add deterministic visual-vocabulary candidate retrieval as the third L4 retrieval strategy while
+  keeping retrieval similarity as proposal evidence only and preserving downstream feature matching
+  and geometric verification as the authority for pair acceptance.
 next_action: >-
-  After PR #26 merges, inspect L4.2 and the existing GPS/time metadata contracts, review mature
-  geospatial reuse and distance semantics, then implement only GPS candidate pairing; do not start
-  L4.3 or turn geographic proximity into a geometric truth claim.
+  After PR #27 merges, inspect L4.3 and the mature visual-retrieval mechanisms already identified in
+  the reuse registry and COLMAP stack, review exact API/version/license and cache semantics, then
+  implement only visual vocabulary retrieval; do not start L4.4, multi-signal ranking, or accept a
+  retrieval score as geometric truth.
 blockers: []
 architecture:
   latest_adr: docs/adr/0001-adaptive-routing-anchoring-temporal-world.md

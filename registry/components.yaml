@@ -112,10 +112,13 @@ components:
     owner_lot: L4
     implementation:
       - docs/21_SEQUENTIAL_PAIRING.md
+      - docs/22_GPS_PAIRING.md
       - src/wre/retrieval/__init__.py
       - src/wre/retrieval/sequential.py
+      - src/wre/retrieval/gps.py
     tests:
       - tests/test_sequential_pairing.py
+      - tests/test_gps_pairing.py
     status: implementing
   strategy_routing:
     owner_lot: L4
