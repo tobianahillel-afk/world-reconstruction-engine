@@ -456,9 +456,7 @@ def encode_scene_project(project: SceneProject) -> JsonObject:
 
 def decode_scene_project(payload: Mapping[str, object]) -> SceneProject:
     data = dict(payload)
-    return SceneProject(
-        project_id=SceneProjectId(_string(data.get("project_id"), "project_id"))
-    )
+    return SceneProject(project_id=SceneProjectId(_string(data.get("project_id"), "project_id")))
 
 
 def _encode_artifact_producer_identity(identity: ArtifactProducerIdentity) -> JsonObject:
@@ -503,9 +501,7 @@ def _decode_artifact_producer_identity(
         model = ModelIdentity(
             name=_string(model_data.get("name"), f"{context}.model.name"),
             version=_string(model_data.get("version"), f"{context}.model.version"),
-            revision=_optional_string(
-                model_data.get("revision"), f"{context}.model.revision"
-            ),
+            revision=_optional_string(model_data.get("revision"), f"{context}.model.revision"),
         )
 
     checkpoint = None
@@ -566,12 +562,8 @@ def decode_artifact_metadata(payload: Mapping[str, object]) -> ArtifactMetadata:
             ),
         ),
         artifact_key=ArtifactKey(
-            sha256=Sha256Digest(
-                _string(data.get("artifact_key_sha256"), "artifact_key_sha256")
-            )
+            sha256=Sha256Digest(_string(data.get("artifact_key_sha256"), "artifact_key_sha256"))
         ),
         producer=_decode_artifact_producer_identity(data.get("producer"), "producer"),
-        provenance_class=ProvenanceClass(
-            _string(data.get("provenance_class"), "provenance_class")
-        ),
+        provenance_class=ProvenanceClass(_string(data.get("provenance_class"), "provenance_class")),
     )
