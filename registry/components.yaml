@@ -77,12 +77,15 @@ components:
     owner_lot: L3
     implementation:
       - docs/14_COLMAP_ENVIRONMENT.md
+      - docs/15_COLMAP_FEATURE_EXTRACTION.md
       - registry/dependencies.yaml
       - .github/workflows/colmap-integration.yml
       - src/wre/reconstruction/__init__.py
       - src/wre/reconstruction/colmap_environment.py
+      - src/wre/reconstruction/colmap_features.py
     tests:
       - tests/test_colmap_environment.py
+      - tests/test_colmap_features.py
     status: implementing
   candidate_retrieval:
     owner_lot: L4
