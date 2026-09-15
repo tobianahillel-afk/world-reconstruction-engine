@@ -29,11 +29,25 @@ dependencies:
     license: BSD-3-Clause
     license_review: approved
   colmap:
-    status: candidate_core
+    status: core
     role: [features, matching, geometry, sfm, bundle_adjustment, mvs, candidate_retrieval]
-    integration: adapter
-    version_policy: pin_when_integrated
-    license_review: pending
+    integration: official_pycolmap_external_environment
+    version_policy: pin_exact_external_environment
+    pinned_version: 4.2.0
+    python_package: pycolmap==4.2.0
+    integration_test_numpy: 2.5.3
+    upstream_repository: colmap/colmap
+    license: BSD-3-Clause
+    license_review: approved
+    notes: >-
+      L3 uses the official PyCOLMAP 4.2.0 binding as its reference COLMAP environment.
+      L3.1 keeps it outside WRE's normal runtime lock because this work item only inspects
+      solver identity and executes no reconstruction capability. A dedicated CI lane installs
+      exact pycolmap==4.2.0 with numpy==2.5.3 and validates the real wheel. Upstream COPYING
+      states that COLMAP itself is BSD-3-Clause but separately licensed dependencies can affect
+      a concrete build/distribution. L3.2 must decide whether to promote PyCOLMAP into WRE's
+      runtime dependency/lock contract before using the feature-extraction API. Any alternate
+      COLMAP build, bundled redistribution, or integration mode requires a fresh dependency review.
   limap:
     status: candidate_core
     role: [lines, structural_sfm, planes, vanishing_points, wireframe]

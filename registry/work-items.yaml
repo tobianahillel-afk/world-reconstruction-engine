@@ -127,8 +127,8 @@ work_items:
   - {id: L2.4, lot: L2, title: GPS and time extraction, status: done, depends_on: [L2.3]}
   - {id: L2.5, lot: L2, title: Video ingestion, status: done, depends_on: [L2.4]}
   - {id: L2.6, lot: L2, title: Deterministic keyframe extraction, status: done, depends_on: [L2.5]}
-  - {id: L3.1, lot: L3, title: COLMAP environment adapter, status: ready, depends_on: [L2.6]}
-  - {id: L3.2, lot: L3, title: COLMAP feature extraction, status: planned, depends_on: [L3.1]}
+  - {id: L3.1, lot: L3, title: COLMAP environment adapter, status: done, depends_on: [L2.6]}
+  - {id: L3.2, lot: L3, title: COLMAP feature extraction, status: ready, depends_on: [L3.1]}
   - {id: L3.3, lot: L3, title: COLMAP pair matching, status: planned, depends_on: [L3.2]}
   - {id: L3.4, lot: L3, title: COLMAP geometric verification, status: planned, depends_on: [L3.3]}
   - {id: L3.5, lot: L3, title: Incremental reconstruction, status: planned, depends_on: [L3.4]}
