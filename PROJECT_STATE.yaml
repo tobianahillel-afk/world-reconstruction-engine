@@ -5,17 +5,18 @@ roadmap_version: '2.0'
 phase: v2_migration
 milestone: V2M0
 lot: V2L0
-active_work_item: V2L0.2
+active_work_item: V2L0.3
 status: ready
-last_completed: [V2L0.1]
-last_merged_pr: 29
+last_completed: [V2L0.1, V2L0.2]
+last_merged_pr: 30
 current_goal: >-
-  Replace the legacy machine roadmap/state/component/review metadata with the executable v2.0
-  capability roadmap while preserving the already tested v1 implementation as a retained baseline.
+  Review the V1-to-V2 governance migration against the retained implementation and integration
+  baselines, prove that no product behavior was lost, and close the V2L0 migration lot before
+  any new V2 product-domain implementation begins.
 next_action: >-
-  Complete only V2L0.2: validate the split v2 work-item registry, state/review/component coverage,
-  activation-contract rules and repository validator. Do not implement V2L0.3 compatibility review
-  or V2L1.1 SceneProject code in the same PR.
+  Complete only V2L0.3: audit the migration diff, run/inspect fast CI and the retained PyCOLMAP
+  integration lane, record V2L0 review evidence, then expand V2L1.1 into a complete executable
+  contract and hand off to it without implementing SceneProject code in the same PR.
 blockers: []
 architecture:
   product_blueprint: docs/01_PRODUCT.md
