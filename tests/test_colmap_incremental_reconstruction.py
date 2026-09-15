@@ -70,7 +70,9 @@ class _FakeDatabase:
     def read_all_images(self) -> list[SimpleNamespace]:
         connection = sqlite3.connect(self._path)
         try:
-            rows = connection.execute("SELECT image_id, name FROM images ORDER BY image_id").fetchall()
+            rows = connection.execute(
+                "SELECT image_id, name FROM images ORDER BY image_id"
+            ).fetchall()
         finally:
             connection.close()
         return [SimpleNamespace(image_id=image_id, name=name) for image_id, name in rows]
