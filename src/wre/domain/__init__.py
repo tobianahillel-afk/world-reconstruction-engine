@@ -1,5 +1,6 @@
 """Core solver-independent domain models."""
 
+from wre.domain.artifacts import ArtifactId, ArtifactKind, ArtifactRef
 from wre.domain.cameras import (
     Camera,
     CameraId,
@@ -47,6 +48,9 @@ from wre.domain.runs import (
 )
 
 __all__ = [
+    "ArtifactId",
+    "ArtifactKind",
+    "ArtifactRef",
     "Camera",
     "CameraCalibrationEstimate",
     "CameraCalibrationEstimateId",
