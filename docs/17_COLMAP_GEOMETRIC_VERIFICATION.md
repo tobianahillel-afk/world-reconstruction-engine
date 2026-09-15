@@ -16,9 +16,9 @@ The exact external environment remains the L3.1 baseline: `pycolmap==4.2.0` with
 
 ## Immutable parent artifact
 
-The L3.3 matched database has a recorded SHA-256 and byte length. L3.4 verifies those bytes before any solver call, copies the verified parent to a fresh target database, rechecks the copy, and runs COLMAP only on that copy.
+The L3.3 matched database has a recorded SHA-256 and byte length. L3.4 verifies those bytes before any solver call, copies the verified parent into an invocation-owned temporary database in the target directory, rechecks the copy, and runs COLMAP only on that private working artifact.
 
-The L3.3 artifact is never mutated in place. An existing L3.4 target is rejected. Any exception removes the partial L3.4 database and leaves the parent untouched.
+The L3.3 artifact is never mutated in place. The final L3.4 target is published only after verification and auditing succeed, using a non-overwriting filesystem operation. If another invocation creates the target first, publication fails without replacing or deleting that competing artifact. Any earlier exception removes only the invocation-owned temporary database and leaves both the parent and any external target untouched.
 
 ## Deterministic baseline configuration
 
@@ -98,10 +98,10 @@ After COLMAP returns, WRE requires:
 - non-negative unique inlier feature indices;
 - inlier count not exceeding the raw-match count.
 
-Any mismatch fails the stage and removes the partial output database rather than normalizing contradictory evidence.
+Any mismatch fails the stage before the final database is published rather than normalizing contradictory evidence or exposing a partially verified target.
 
 ## Testing
 
-Fast tests use a small fake PyCOLMAP boundary to verify configuration, immutable-parent behavior, cleanup, canonical pair orientation, exact option wiring and membership guards without making PyCOLMAP a core Python dependency.
+Fast tests use a small fake PyCOLMAP boundary to verify configuration, immutable-parent behavior, failure cleanup, canonical pair orientation, exact option wiring, membership guards, public exports and non-overwriting output publication without making PyCOLMAP a core Python dependency.
 
 The dedicated COLMAP integration lane installs exact `pycolmap==4.2.0` and `numpy==2.5.3`, performs real L3.2 feature extraction, real L3.3 raw matching and real L3.4 geometric verification on deterministic synthetic image data, while checking that the L3.3 parent database remains byte-identical.
