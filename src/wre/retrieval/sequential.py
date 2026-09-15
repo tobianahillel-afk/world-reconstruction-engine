@@ -186,10 +186,21 @@ class SequentialPairingResult:
         return len(self.candidates)
 
 
-def _offsets(config: SequentialPairingConfig) -> tuple[int, ...]:
+def _offsets(
+    config: SequentialPairingConfig,
+    max_sequence_distance: int,
+) -> tuple[int, ...]:
+    if max_sequence_distance <= 0:
+        return ()
     if config.quadratic_overlap:
-        return tuple(1 << exponent for exponent in range(config.overlap))
-    return tuple(range(1, config.overlap + 1))
+        offsets: list[int] = []
+        for exponent in range(config.overlap):
+            offset = 1 << exponent
+            if offset > max_sequence_distance:
+                break
+            offsets.append(offset)
+        return tuple(offsets)
+    return tuple(range(1, min(config.overlap, max_sequence_distance) + 1))
 
 
 def _candidate(
@@ -214,7 +225,7 @@ def generate_sequential_candidates(request: SequentialPairingRequest) -> Sequent
     """Propose sequence-neighbour pairs without matching or geometric acceptance."""
 
     candidates: list[SequentialPairCandidate] = []
-    offsets = _offsets(request.config)
+    offsets = _offsets(request.config, len(request.ordered_observation_ids) - 1)
     for sequence_index1, observation_id1 in enumerate(request.ordered_observation_ids):
         for offset in offsets:
             sequence_index2 = sequence_index1 + offset
