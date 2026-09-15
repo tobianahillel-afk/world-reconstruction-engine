@@ -520,12 +520,6 @@ def reconstruct_colmap_incrementally(
             )
             models = _audit_reconstructions(output_path, reconstructions)
 
-            working_database_hash_after = hash_file_content(working_database_path)
-            if working_database_hash_after != database_hash:
-                raise ColmapIncrementalReconstructionError(
-                    "COLMAP mutated the private L3.4 database copy during L3.5"
-                )
-
         database_hash_after = hash_file_content(database_path)
         if database_hash_after != database_hash:
             raise ColmapIncrementalReconstructionError(
