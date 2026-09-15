@@ -79,16 +79,19 @@ components:
       - docs/14_COLMAP_ENVIRONMENT.md
       - docs/15_COLMAP_FEATURE_EXTRACTION.md
       - docs/16_COLMAP_PAIR_MATCHING.md
+      - docs/17_COLMAP_GEOMETRIC_VERIFICATION.md
       - registry/dependencies.yaml
       - .github/workflows/colmap-integration.yml
       - src/wre/reconstruction/__init__.py
       - src/wre/reconstruction/colmap_environment.py
       - src/wre/reconstruction/colmap_features.py
       - src/wre/reconstruction/colmap_matching.py
+      - src/wre/reconstruction/colmap_verification.py
     tests:
       - tests/test_colmap_environment.py
       - tests/test_colmap_features.py
       - tests/test_colmap_matching.py
+      - tests/test_colmap_geometric_verification.py
     status: implementing
   candidate_retrieval:
     owner_lot: L4
