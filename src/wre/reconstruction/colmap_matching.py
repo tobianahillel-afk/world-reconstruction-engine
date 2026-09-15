@@ -22,6 +22,7 @@ from wre.reconstruction.colmap_environment import (
 from wre.reconstruction.colmap_features import ColmapFeatureExtractionResult
 
 _MATCH_PRODUCER = "pycolmap.match_exhaustive"
+_UNDEFINED_TWO_VIEW_CONFIG = 0
 
 
 class ColmapPairMatchingError(RuntimeError):
@@ -171,6 +172,7 @@ class ColmapPairMatchingResult:
     database_sha256: Sha256Digest
     database_byte_length: int
     attempted_pair_count: int
+    unverified_two_view_placeholder_count: int
     pairs: tuple[ColmapPairMatchSummary, ...]
 
     def __post_init__(self) -> None:
@@ -178,8 +180,16 @@ class ColmapPairMatchingResult:
             raise ValueError("database_byte_length must be a positive integer")
         if isinstance(self.attempted_pair_count, bool) or self.attempted_pair_count <= 0:
             raise ValueError("attempted_pair_count must be a positive integer")
+        if (
+            isinstance(self.unverified_two_view_placeholder_count, bool)
+            or not isinstance(self.unverified_two_view_placeholder_count, int)
+            or self.unverified_two_view_placeholder_count < 0
+        ):
+            raise ValueError("unverified_two_view_placeholder_count must be non-negative")
         if len(self.pairs) > self.attempted_pair_count:
             raise ValueError("stored match pairs cannot exceed attempted exhaustive pairs")
+        if self.unverified_two_view_placeholder_count > self.attempted_pair_count:
+            raise ValueError("unverified two-view placeholders cannot exceed attempted pairs")
         pair_ids = tuple((item.observation_id1.value, item.observation_id2.value) for item in self.pairs)
         if pair_ids != tuple(sorted(pair_ids)) or len(pair_ids) != len(set(pair_ids)):
             raise ValueError("pair summaries must be unique and canonically ordered")
@@ -217,7 +227,7 @@ def _read_match_database(
     database_path: Path,
     features: ColmapFeatureExtractionResult,
     pycolmap: Any,
-) -> tuple[ColmapPairMatchSummary, ...]:
+) -> tuple[tuple[ColmapPairMatchSummary, ...], int]:
     expected_by_name = {item.image_name: item.observation_id for item in features.images}
     try:
         connection = sqlite3.connect(f"file:{database_path}?mode=ro", uri=True)
@@ -229,9 +239,9 @@ def _read_match_database(
         match_rows = connection.execute(
             "SELECT pair_id, rows, cols FROM matches ORDER BY pair_id"
         ).fetchall()
-        geometry_count = int(
-            connection.execute("SELECT COUNT(*) FROM two_view_geometries").fetchone()[0]
-        )
+        geometry_rows = connection.execute(
+            "SELECT pair_id, config FROM two_view_geometries ORDER BY pair_id"
+        ).fetchall()
     except sqlite3.Error as exc:
         raise ColmapPairMatchingError("COLMAP matching database has an invalid schema") from exc
     finally:
@@ -242,10 +252,17 @@ def _read_match_database(
         raise ColmapPairMatchingError(
             "COLMAP matching database image membership differs from the L3.2 feature artifact"
         )
-    if geometry_count != 0:
-        raise ColmapPairMatchingError(
-            "L3.3 must not populate two_view_geometries; geometric verification belongs to L3.4"
-        )
+
+    match_pair_ids = {int(pair_id) for pair_id, _, _ in match_rows}
+    for pair_id, config in geometry_rows:
+        if int(config) != _UNDEFINED_TWO_VIEW_CONFIG:
+            raise ColmapPairMatchingError(
+                "L3.3 produced a geometrically classified two-view row; verification belongs to L3.4"
+            )
+        if int(pair_id) not in match_pair_ids:
+            raise ColmapPairMatchingError(
+                "COLMAP wrote an unverified two-view placeholder without a raw match row"
+            )
 
     summaries: list[ColmapPairMatchSummary] = []
     for pair_id, rows, cols in match_rows:
@@ -278,7 +295,7 @@ def _read_match_database(
     pair_keys = [(item.observation_id1.value, item.observation_id2.value) for item in summaries]
     if len(pair_keys) != len(set(pair_keys)):
         raise ColmapPairMatchingError("COLMAP matching database contains duplicate observation pairs")
-    return tuple(summaries)
+    return tuple(summaries), len(geometry_rows)
 
 
 def match_colmap_pairs(
@@ -333,7 +350,9 @@ def match_colmap_pairs(
             pairing_options=pairing_options,
             device=pycolmap.Device.cpu,
         )
-        pairs = _read_match_database(database_path, request.features, pycolmap)
+        pairs, placeholder_count = _read_match_database(
+            database_path, request.features, pycolmap
+        )
         database_hash = hash_file_content(database_path)
     except Exception:
         database_path.unlink(missing_ok=True)
@@ -348,5 +367,6 @@ def match_colmap_pairs(
         database_sha256=database_hash.sha256,
         database_byte_length=database_hash.byte_length,
         attempted_pair_count=attempted_pair_count,
+        unverified_two_view_placeholder_count=placeholder_count,
         pairs=pairs,
     )
