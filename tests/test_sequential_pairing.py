@@ -47,7 +47,10 @@ def _sequence_edges(
     candidates: tuple[SequentialPairCandidate, ...],
 ) -> tuple[tuple[int, int], ...]:
     return tuple(
-        tuple(sorted((candidate.sequence_index1, candidate.sequence_index2)))
+        (
+            min(candidate.sequence_index1, candidate.sequence_index2),
+            max(candidate.sequence_index1, candidate.sequence_index2),
+        )
         for candidate in candidates
     )
 
@@ -127,6 +130,20 @@ def test_quadratic_overlap_matches_colmap_420_offsets() -> None:
         2,
         1,
     )
+
+
+@pytest.mark.parametrize("quadratic_overlap", [False, True])
+def test_overlap_work_is_bounded_by_actual_sequence_length(quadratic_overlap: bool) -> None:
+    ordered_ids = _ids("obs:a", "obs:b", "obs:c")
+    config = SequentialPairingConfig(
+        overlap=1_000_000,
+        quadratic_overlap=quadratic_overlap,
+    )
+
+    result = generate_sequential_candidates(_request(ordered_ids, config=config))
+
+    assert result.candidate_count == 3
+    assert _sequence_edges(result.candidates) == ((0, 1), (0, 2), (1, 2))
 
 
 def test_explicit_sequence_order_is_not_replaced_by_observation_id_sorting() -> None:
