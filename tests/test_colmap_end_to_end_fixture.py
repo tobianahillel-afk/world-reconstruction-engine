@@ -14,6 +14,7 @@ from wre.domain.observations import (
     ImageObservation,
     MediaAssetRef,
     ObservationId,
+    Sha256Digest,
     SourceId,
     SourceRef,
 )
@@ -33,6 +34,7 @@ from wre.reconstruction import (
     ColmapReconstructionImportConfig,
     ColmapReconstructionImportRequest,
     ColmapReconstructionInput,
+    ColmapSparseModelArtifact,
     extract_colmap_features,
     import_colmap_reconstruction,
     match_colmap_pairs,
@@ -164,7 +166,7 @@ def _run(
     version: str,
     revision: str | None,
     observation_ids: tuple[ObservationId, ...],
-    configuration_sha256: object,
+    configuration_sha256: Sha256Digest,
     minute: int,
 ) -> ReconstructionRun:
     return ReconstructionRun(
@@ -176,23 +178,19 @@ def _run(
         ),
         input_observation_ids=observation_ids,
         started_at=datetime(2026, 9, 15, 13, 0, tzinfo=UTC) + timedelta(minutes=minute),
-        configuration_sha256=configuration_sha256,  # type: ignore[arg-type]
+        configuration_sha256=configuration_sha256,
     )
 
 
 def _native_model_hashes(
     output_path: Path,
-    models: tuple[object, ...],
+    models: tuple[ColmapSparseModelArtifact, ...],
 ) -> dict[tuple[int, str], FileContentHash]:
     hashes: dict[tuple[int, str], FileContentHash] = {}
-    for raw_model in models:
-        model = raw_model
-        model_index = int(getattr(model, "model_index"))
-        relative_path = str(getattr(model, "relative_path"))
-        for raw_file in getattr(model, "files"):
-            file_path = str(getattr(raw_file, "relative_path"))
-            hashes[(model_index, file_path)] = hash_file_content(
-                output_path / relative_path / file_path
+    for model in models:
+        for model_file in model.files:
+            hashes[(model.model_index, model_file.relative_path)] = hash_file_content(
+                output_path / model.relative_path / model_file.relative_path
             )
     return hashes
 
