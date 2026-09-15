@@ -263,9 +263,7 @@ def test_real_pycolmap_420_sequential_generator_equivalence(
         pycolmap.synthesize_dataset(options, database)
 
         images = sorted(database.read_all_images(), key=lambda image: image.name)
-        image_id_to_index = {
-            int(image.image_id): index for index, image in enumerate(images)
-        }
+        image_id_to_index = {int(image.image_id): index for index, image in enumerate(images)}
         pairing_options = pycolmap.SequentialPairingOptions()
         pairing_options.overlap = 3
         pairing_options.quadratic_overlap = quadratic_overlap
