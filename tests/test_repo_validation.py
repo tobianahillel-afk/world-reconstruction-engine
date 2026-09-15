@@ -257,6 +257,11 @@ def test_prior_milestone_review_blocks_advancement(tmp_path: Path) -> None:
         "reviewed_at": "2026-09-14",
         "evidence": ["test"],
     }
+    reviews["milestone_reviews"]["M1"] = {
+        "status": "pending",
+        "reviewed_at": None,
+        "evidence": [],
+    }
     _write(reviews_path, reviews)
 
     errors = validate_repository(repo)
