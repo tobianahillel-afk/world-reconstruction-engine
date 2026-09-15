@@ -3,14 +3,14 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
-from urllib.parse import unquote, urlparse
 
 import pytest
 
 from wre.domain import MediaAssetRef, ObservationId, SourceId, SourceRef, VideoObservation
 from wre.ingestion import (
+    SUPPORTED_FFMPEG_VERSION,
     FFmpegToolchain,
     KeyframeExtractionRequest,
     KeyframeSelectionPolicy,
@@ -24,6 +24,10 @@ from wre.ingestion import (
 from wre.persistence import SQLiteLocalStore
 
 NOW = datetime(2026, 9, 15, 1, 0, tzinfo=UTC)
+
+
+def test_default_toolchain_pins_supported_ffmpeg_version() -> None:
+    assert FFmpegToolchain().required_version == SUPPORTED_FFMPEG_VERSION
 
 
 def test_select_keyframes_uses_observed_frame_times_and_minimum_spacing() -> None:
@@ -56,7 +60,6 @@ def test_parse_ffprobe_frames_preserves_source_indices_and_integer_microseconds(
       "frames": [
         {"best_effort_timestamp_time": "-0.250000"},
         {"best_effort_timestamp_time": "0.0000004"},
-        {},
         {"best_effort_timestamp_time": "0.4999996"},
         {"best_effort_timestamp_time": "1.000000"}
       ]
@@ -67,9 +70,30 @@ def test_parse_ffprobe_frames_preserves_source_indices_and_integer_microseconds(
 
     assert frames == (
         ProbedVideoFrame(frame_index=1, frame_time_us=0),
-        ProbedVideoFrame(frame_index=3, frame_time_us=500_000),
-        ProbedVideoFrame(frame_index=4, frame_time_us=1_000_000),
+        ProbedVideoFrame(frame_index=2, frame_time_us=500_000),
+        ProbedVideoFrame(frame_index=3, frame_time_us=1_000_000),
     )
+
+
+def test_parse_ffprobe_frames_rejects_missing_timestamp() -> None:
+    payload = """
+    {
+      "frames": [
+        {"best_effort_timestamp_time": "0.000000"},
+        {}
+      ]
+    }
+    """
+
+    with pytest.raises(ValueError, match="no usable best-effort timestamp"):
+        parse_ffprobe_frames(payload)
+
+
+def test_parse_ffprobe_frames_rejects_non_finite_timestamp() -> None:
+    payload = '{"frames":[{"best_effort_timestamp_time":"NaN"}]}'
+
+    with pytest.raises(ValueError, match="invalid ffprobe frame timestamp"):
+        parse_ffprobe_frames(payload)
 
 
 def test_parse_ffprobe_frames_rejects_non_monotone_usable_timestamps() -> None:
@@ -89,15 +113,14 @@ def test_parse_ffprobe_frames_rejects_non_monotone_usable_timestamps() -> None:
 def test_source_bytes_must_match_persisted_video_before_toolchain_execution(tmp_path: Path) -> None:
     source = tmp_path / "source.mkv"
     source.write_bytes(b"actual bytes")
-    source_hash = hash_file_content(source)
     store = SQLiteLocalStore(tmp_path / "state.sqlite3")
 
     video = VideoObservation(
         observation_id=ObservationId("video:mismatch"),
         asset=MediaAssetRef(
             uri="file:///recorded/source.mkv",
-            sha256=source_hash.sha256,
-            byte_length=source_hash.byte_length + 1,
+            sha256=hash_file_content(source).sha256,
+            byte_length=len(b"actual bytes") + 1,
         ),
         source=SourceRef(source_id=SourceId("camera:1")),
         received_at=NOW,
@@ -122,11 +145,28 @@ def test_source_bytes_must_match_persisted_video_before_toolchain_execution(tmp_
 def _require_ffmpeg_for_integration() -> tuple[str, str]:
     ffmpeg = shutil.which("ffmpeg")
     ffprobe = shutil.which("ffprobe")
-    if ffmpeg is not None and ffprobe is not None:
-        return ffmpeg, ffprobe
-    if os.environ.get("GITHUB_ACTIONS") == "true":
-        pytest.fail("GitHub CI must provide ffmpeg and ffprobe for the L2.6 integration test")
-    pytest.skip("ffmpeg/ffprobe are not installed in this local environment")
+    if ffmpeg is None or ffprobe is None:
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            pytest.fail("GitHub CI must provide ffmpeg and ffprobe for the L2.6 integration test")
+        pytest.skip("ffmpeg/ffprobe are not installed in this local environment")
+
+    identity = inspect_toolchain(
+        FFmpegToolchain(
+            ffmpeg_path=ffmpeg,
+            ffprobe_path=ffprobe,
+            required_version=None,
+            timeout_seconds=30,
+        )
+    )
+    if identity.canonical_version != SUPPORTED_FFMPEG_VERSION:
+        message = (
+            "L2.6 integration requires FFmpeg "
+            f"{SUPPORTED_FFMPEG_VERSION}, found {identity.canonical_version}"
+        )
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            pytest.fail(message)
+        pytest.skip(message)
+    return ffmpeg, ffprobe
 
 
 def _write_ppm(path: Path, *, frame_number: int, width: int = 16, height: int = 16) -> None:
@@ -173,12 +213,6 @@ def _make_synthetic_video(tmp_path: Path, ffmpeg: str) -> Path:
     return video_path
 
 
-def _file_uri_path(uri: str) -> Path:
-    parsed = urlparse(uri)
-    assert parsed.scheme == "file"
-    return Path(unquote(parsed.path))
-
-
 def test_real_ffmpeg_keyframe_extraction_is_deterministic_and_idempotent(tmp_path: Path) -> None:
     ffmpeg, ffprobe = _require_ffmpeg_for_integration()
     video_path = _make_synthetic_video(tmp_path, ffmpeg)
@@ -198,15 +232,14 @@ def test_real_ffmpeg_keyframe_extraction_is_deterministic_and_idempotent(tmp_pat
     )
     store.put_observation(video)
 
-    toolchain = FFmpegToolchain(ffmpeg_path=ffmpeg, ffprobe_path=ffprobe, timeout_seconds=30)
-    identity = inspect_toolchain(toolchain)
-    pinned_toolchain = FFmpegToolchain(
-        ffmpeg_path=ffmpeg,
-        ffprobe_path=ffprobe,
-        required_version=identity.canonical_version,
-        timeout_seconds=30,
+    extractor = LocalKeyframeExtractor(
+        store,
+        FFmpegToolchain(
+            ffmpeg_path=ffmpeg,
+            ffprobe_path=ffprobe,
+            timeout_seconds=30,
+        ),
     )
-    extractor = LocalKeyframeExtractor(store, pinned_toolchain)
     request = KeyframeExtractionRequest(
         video=video,
         source_path=video_path,
@@ -218,7 +251,8 @@ def test_real_ffmpeg_keyframe_extraction_is_deterministic_and_idempotent(tmp_pat
     second = extractor.extract(request)
 
     assert first == second
-    assert first.toolchain.canonical_version == identity.canonical_version
+    assert first.source_observation_id == video.observation_id
+    assert first.toolchain.canonical_version == SUPPORTED_FFMPEG_VERSION
     assert tuple(frame.frame_index for frame in first.frames) == (0, 2, 4, 6)
     assert tuple(frame.frame_time_us for frame in first.frames) == (
         0,
@@ -226,14 +260,13 @@ def test_real_ffmpeg_keyframe_extraction_is_deterministic_and_idempotent(tmp_pat
         1_000_000,
         1_500_000,
     )
-    assert tuple(frame.captured_at for frame in first.frames) == (
-        NOW,
-        NOW + timedelta(microseconds=500_000),
-        NOW + timedelta(seconds=1),
-        NOW + timedelta(seconds=1, microseconds=500_000),
-    )
+    assert all(frame.captured_at is None for frame in first.frames)
     for frame in first.frames:
         assert frame.video_asset == video.asset
         assert frame.asset.mime_type == "image/png"
-        assert _file_uri_path(frame.asset.uri).exists()
+        output_path = Path(frame.asset.uri.removeprefix("file://"))
+        assert output_path.exists()
+        output_hash = hash_file_content(output_path)
+        assert output_hash.sha256 == frame.asset.sha256
+        assert output_hash.byte_length == frame.asset.byte_length
         assert store.get_observation(frame.observation_id) == frame
