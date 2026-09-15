@@ -12,6 +12,9 @@ from wre.domain.runs import DerivedArtifactProvenance
 _OPAQUE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$")
 _ROTATION_TOLERANCE = 1e-6
 
+Vector3 = tuple[float, float, float]
+RotationMatrix3 = tuple[Vector3, Vector3, Vector3]
+
 
 def _require_opaque_id(value: str, context: str) -> None:
     if not isinstance(value, str) or not _OPAQUE_ID_RE.fullmatch(value):
@@ -29,32 +32,34 @@ def _finite_float(value: object, context: str) -> float:
     return normalized
 
 
-def _finite_vector3(value: tuple[float, float, float], context: str) -> tuple[float, float, float]:
+def _finite_vector3(value: Vector3, context: str) -> Vector3:
     if not isinstance(value, tuple) or len(value) != 3:
         raise ValueError(f"{context} must be an immutable 3-vector")
-    return tuple(_finite_float(item, context) for item in value)  # type: ignore[return-value]
+    return (
+        _finite_float(value[0], context),
+        _finite_float(value[1], context),
+        _finite_float(value[2], context),
+    )
 
 
-def _finite_rotation_matrix(
-    value: tuple[
-        tuple[float, float, float],
-        tuple[float, float, float],
-        tuple[float, float, float],
-    ],
-) -> tuple[
-    tuple[float, float, float],
-    tuple[float, float, float],
-    tuple[float, float, float],
-]:
+def _finite_rotation_matrix(value: RotationMatrix3) -> RotationMatrix3:
     if not isinstance(value, tuple) or len(value) != 3:
         raise ValueError("rotation_matrix must be an immutable 3x3 matrix")
-    rows = tuple(_finite_vector3(row, "rotation_matrix") for row in value)
+    rows: RotationMatrix3 = (
+        _finite_vector3(value[0], "rotation_matrix"),
+        _finite_vector3(value[1], "rotation_matrix"),
+        _finite_vector3(value[2], "rotation_matrix"),
+    )
 
     for row in rows:
         norm_squared = sum(component * component for component in row)
         if abs(norm_squared - 1.0) > _ROTATION_TOLERANCE:
             raise ValueError("rotation_matrix rows must be unit length")
-    for left, right in ((rows[0], rows[1]), (rows[0], rows[2]), (rows[1], rows[2])):
+    for left, right in (
+        (rows[0], rows[1]),
+        (rows[0], rows[2]),
+        (rows[1], rows[2]),
+    ):
         dot = sum(a * b for a, b in zip(left, right, strict=True))
         if abs(dot) > _ROTATION_TOLERANCE:
             raise ValueError("rotation_matrix rows must be orthogonal")
@@ -66,7 +71,7 @@ def _finite_rotation_matrix(
     )
     if abs(determinant - 1.0) > _ROTATION_TOLERANCE:
         raise ValueError("rotation_matrix must have determinant +1")
-    return rows  # type: ignore[return-value]
+    return rows
 
 
 @dataclass(frozen=True, slots=True, order=True)
@@ -130,7 +135,10 @@ class CameraCalibrationEstimate:
                 raise ValueError(f"{name} must be a positive integer")
         if not isinstance(self.parameters, tuple) or not self.parameters:
             raise ValueError("parameters must be a non-empty immutable tuple")
-        parameters = tuple(_finite_float(value, "camera calibration parameter") for value in self.parameters)
+        parameters = tuple(
+            _finite_float(value, "camera calibration parameter")
+            for value in self.parameters
+        )
         object.__setattr__(self, "parameters", parameters)
         if not isinstance(self.has_prior_focal_length, bool):
             raise ValueError("has_prior_focal_length must be a boolean")
@@ -145,12 +153,8 @@ class CameraPoseEstimate:
     observation_id: ObservationId
     local_frame_id: LocalFrameId
     calibration_id: CameraCalibrationEstimateId
-    rotation_matrix: tuple[
-        tuple[float, float, float],
-        tuple[float, float, float],
-        tuple[float, float, float],
-    ]
-    translation_xyz: tuple[float, float, float]
+    rotation_matrix: RotationMatrix3
+    translation_xyz: Vector3
     provenance: DerivedArtifactProvenance
 
     def __post_init__(self) -> None:
@@ -180,7 +184,7 @@ class EstimatedTrackElement:
 class Point3DEstimate:
     point_id: EstimatedPoint3DId
     local_frame_id: LocalFrameId
-    position_xyz: tuple[float, float, float]
+    position_xyz: Vector3
     reprojection_error_px: float | None
     track: tuple[EstimatedTrackElement, ...]
     provenance: DerivedArtifactProvenance
@@ -197,7 +201,12 @@ class Point3DEstimate:
             raise ValueError("point track must be a non-empty immutable tuple")
         if not all(isinstance(item, EstimatedTrackElement) for item in self.track):
             raise ValueError("point track must contain only EstimatedTrackElement values")
-        canonical = tuple(sorted(self.track, key=lambda item: (item.observation_id.value, item.feature_index)))
+        canonical = tuple(
+            sorted(
+                self.track,
+                key=lambda item: (item.observation_id.value, item.feature_index),
+            )
+        )
         if len(canonical) != len(set(canonical)):
             raise ValueError("point track cannot contain duplicate elements")
         observation_values = [item.observation_id.value for item in canonical]
@@ -232,15 +241,25 @@ class SparseReconstructionEstimate:
             raise ValueError("camera_poses must be a non-empty immutable tuple")
         if not isinstance(self.points3d, tuple):
             raise ValueError("points3d must be an immutable tuple")
-        if not all(isinstance(item, CameraCalibrationEstimate) for item in self.camera_calibrations):
+        if not all(
+            isinstance(item, CameraCalibrationEstimate)
+            for item in self.camera_calibrations
+        ):
             raise ValueError("camera_calibrations contains an invalid value")
         if not all(isinstance(item, CameraPoseEstimate) for item in self.camera_poses):
             raise ValueError("camera_poses contains an invalid value")
         if not all(isinstance(item, Point3DEstimate) for item in self.points3d):
             raise ValueError("points3d contains an invalid value")
 
-        calibrations = tuple(sorted(self.camera_calibrations, key=lambda item: item.calibration_id.value))
-        poses = tuple(sorted(self.camera_poses, key=lambda item: item.observation_id.value))
+        calibrations = tuple(
+            sorted(
+                self.camera_calibrations,
+                key=lambda item: item.calibration_id.value,
+            )
+        )
+        poses = tuple(
+            sorted(self.camera_poses, key=lambda item: item.observation_id.value)
+        )
         points = tuple(sorted(self.points3d, key=lambda item: item.point_id.value))
         object.__setattr__(self, "camera_calibrations", calibrations)
         object.__setattr__(self, "camera_poses", poses)
@@ -270,10 +289,16 @@ class SparseReconstructionEstimate:
 
         model_observations = set(pose_observations)
         for calibration in calibrations:
-            if not set(calibration.provenance.source_observation_ids).issubset(model_observations):
-                raise ValueError("camera calibration provenance must stay inside model membership")
+            if not set(calibration.provenance.source_observation_ids).issubset(
+                model_observations
+            ):
+                raise ValueError(
+                    "camera calibration provenance must stay inside model membership"
+                )
         for point in points:
-            if not set(point.provenance.source_observation_ids).issubset(model_observations):
+            if not set(point.provenance.source_observation_ids).issubset(
+                model_observations
+            ):
                 raise ValueError("3D point provenance must stay inside model membership")
 
     @property
