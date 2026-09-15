@@ -4,17 +4,18 @@ project_name: World Reconstruction Engine
 phase: implementation
 milestone: M1
 lot: L3
-active_work_item: L3.5
+active_work_item: L3.6
 status: ready
-last_completed: [L0.1, L0.2, L0.3, L0.4, L0.5, L0.R, L1.1, L1.2, L1.3, L1.4, L1.5, L2.1, L2.2, L2.3, L2.4, L2.5, L2.6, L3.1, L3.2, L3.3, L3.4]
-last_merged_pr: 22
+last_completed: [L0.1, L0.2, L0.3, L0.4, L0.5, L0.R, L1.1, L1.2, L1.3, L1.4, L1.5, L2.1, L2.2, L2.3, L2.4, L2.5, L2.6, L3.1, L3.2, L3.3, L3.4, L3.5]
+last_merged_pr: 23
 current_goal: >-
-  Implement deterministic COLMAP incremental reconstruction over the audited L3.4 verified
-  two-view evidence while keeping solver reconstruction output separate from WRE canonical geometry.
+  Import solver-native COLMAP sparse reconstruction output into explicit WRE estimated-geometry
+  models with provenance while preserving solver output as evidence and avoiding premature fragment
+  acceptance.
 next_action: >-
-  After PR #22 merges, review the approved PyCOLMAP 4.2.0 incremental reconstruction APIs and
-  implement only the L3.5 solver reconstruction stage on a new short-lived branch; do not start
-  the L3.6 reconstruction importer in the L3.5 PR.
+  After PR #23 merges, review the L3.6 reconstruction-import boundary and implement only the
+  solver-native-to-WRE estimated-geometry importer on a new short-lived branch; do not start the
+  L3.7 end-to-end fixture in the L3.6 PR.
 blockers: []
 architecture:
   latest_adr: docs/adr/0001-adaptive-routing-anchoring-temporal-world.md

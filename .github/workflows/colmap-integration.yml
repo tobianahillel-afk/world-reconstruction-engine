@@ -13,10 +13,12 @@ on:
       - "tests/test_colmap_features.py"
       - "tests/test_colmap_matching.py"
       - "tests/test_colmap_geometric_verification.py"
+      - "tests/test_colmap_incremental_reconstruction.py"
       - "docs/14_COLMAP_ENVIRONMENT.md"
       - "docs/15_COLMAP_FEATURE_EXTRACTION.md"
       - "docs/16_COLMAP_PAIR_MATCHING.md"
       - "docs/17_COLMAP_GEOMETRIC_VERIFICATION.md"
+      - "docs/18_COLMAP_INCREMENTAL_RECONSTRUCTION.md"
   push:
     branches: [main]
     paths:
@@ -30,10 +32,12 @@ on:
       - "tests/test_colmap_features.py"
       - "tests/test_colmap_matching.py"
       - "tests/test_colmap_geometric_verification.py"
+      - "tests/test_colmap_incremental_reconstruction.py"
       - "docs/14_COLMAP_ENVIRONMENT.md"
       - "docs/15_COLMAP_FEATURE_EXTRACTION.md"
       - "docs/16_COLMAP_PAIR_MATCHING.md"
       - "docs/17_COLMAP_GEOMETRIC_VERIFICATION.md"
+      - "docs/18_COLMAP_INCREMENTAL_RECONSTRUCTION.md"
   workflow_dispatch:
 
 permissions:
@@ -73,7 +77,7 @@ jobs:
           uv pip install --python .venv/bin/python "numpy==2.5.3" "pycolmap==4.2.0"
           .venv/bin/python -c 'import numpy, pycolmap; assert numpy.__version__ == "2.5.3"; assert pycolmap.__version__ == "4.2.0"'
 
-      - name: Exercise real COLMAP environment, features, matching, and verification
+      - name: Exercise real COLMAP environment through incremental reconstruction
         env:
           WRE_COLMAP_INTEGRATION: "1"
         run: >-
@@ -82,3 +86,4 @@ jobs:
           tests/test_colmap_features.py
           tests/test_colmap_matching.py
           tests/test_colmap_geometric_verification.py
+          tests/test_colmap_incremental_reconstruction.py
