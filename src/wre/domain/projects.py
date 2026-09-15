@@ -13,7 +13,8 @@ class SceneProjectId:
     def __post_init__(self) -> None:
         if not _OPAQUE_ID_RE.fullmatch(self.value):
             raise ValueError(
-                "scene_project_id must be 1-128 characters using letters, digits, '.', '_', ':' or '-'"
+                "scene_project_id must be 1-128 characters using letters, digits, "
+                "'.', '_', ':' or '-'"
             )
 
     def __str__(self) -> str:
