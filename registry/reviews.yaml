@@ -28,7 +28,16 @@ lot_reviews:
       - L2.6 implementation fast-ci run 34912604396 passed with pinned FFmpeg integration
       - L2.6 implementation CodeQL run 34912604416 passed
       - L2.6 dependency-review run 34912604439 passed
-  L3: {status: pending, reviewed_at: null, evidence: []}
+  L3:
+    status: passed
+    reviewed_at: '2026-09-15'
+    evidence:
+      - docs/reviews/L3-M1-colmap-baseline-review.md
+      - PRs #19 through #24 merged; PR #25 carries L3.7 and lot-review acceptance evidence
+      - L3.7 implementation fast-ci run 34978343545 passed
+      - L3.7 exact PyCOLMAP integration run 34978343630 passed with 60 tests
+      - L3.7 CodeQL run 34978343694 passed
+      - L3.7 dependency-review run 34978343746 passed
   L4: {status: pending, reviewed_at: null, evidence: []}
   L5: {status: pending, reviewed_at: null, evidence: []}
   L6: {status: pending, reviewed_at: null, evidence: []}
@@ -51,7 +60,18 @@ milestone_reviews:
       - docs/reviews/L0-M0-bootstrap-review.md
       - L0 lot review passed
       - main fast-ci run 34882936749 passed
-  M1: {status: pending, reviewed_at: null, evidence: []}
+  M1:
+    status: passed
+    reviewed_at: '2026-09-15'
+    evidence:
+      - docs/reviews/L1-core-domain-review.md
+      - docs/reviews/L2-media-ingestion-review.md
+      - docs/reviews/L3-M1-colmap-baseline-review.md
+      - L1, L2 and L3 lot reviews passed
+      - PR #25 exact PyCOLMAP integration run 34978343630 passed with 60 tests
+      - PR #25 fast-ci run 34978343545 passed
+      - PR #25 CodeQL run 34978343694 passed
+      - PR #25 dependency-review run 34978343746 passed
   M2: {status: pending, reviewed_at: null, evidence: []}
   M3: {status: pending, reviewed_at: null, evidence: []}
   M4: {status: pending, reviewed_at: null, evidence: []}
