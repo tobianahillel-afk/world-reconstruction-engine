@@ -220,8 +220,7 @@ def _create_feature_database(path: Path, image_names: tuple[str, ...]) -> None:
                 (image_id,),
             )
             connection.execute(
-                "INSERT INTO descriptors(image_id, rows, cols, data) "
-                "VALUES(?, 12, 128, X'00')",
+                "INSERT INTO descriptors(image_id, rows, cols, data) VALUES(?, 12, 128, X'00')",
                 (image_id,),
             )
         connection.commit()
