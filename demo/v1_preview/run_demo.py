@@ -311,6 +311,7 @@ def main() -> int:
     native = pycolmap.Reconstruction(str(model_path))
     native.export_PLY(str(output_dir / "reconstruction_colmap.ply"))
     text_dir = output_dir / "colmap_text_model"
+    text_dir.mkdir()
     native.write_text(str(text_dir))
     _write_wre_ascii_ply(output_dir / "reconstruction_wre_ascii.ply", imported)
 

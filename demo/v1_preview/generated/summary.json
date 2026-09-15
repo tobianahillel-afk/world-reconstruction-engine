@@ -1,0 +1,26 @@
+{
+  "colmap_build": "Commit be5e291 on 2026-08-31 without GPU support",
+  "colmap_version": "COLMAP 4.2.0",
+  "files": {
+    "colmap_text_model": "colmap_text_model/",
+    "native_workdir": "work/",
+    "reconstruction_colmap_ply": "reconstruction_colmap.ply",
+    "reconstruction_wre_ascii_ply": "reconstruction_wre_ascii.ply"
+  },
+  "fixture_id": "colmap-l3-end-to-end",
+  "fixture_passed": true,
+  "metrics": {
+    "attempted_pair_count": 66,
+    "imported_model_count": 1,
+    "imported_observation_count": 12,
+    "imported_point_count": 477,
+    "observation_count": 12,
+    "raw_matched_pair_count": 66,
+    "reconstructed_model_count": 1,
+    "registered_image_count": 12,
+    "unresolved_scale_model_count": 1,
+    "verified_pair_count": 66
+  },
+  "pycolmap_version": "4.2.0",
+  "scale_status": "unresolved"
+}
