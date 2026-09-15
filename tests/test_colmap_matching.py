@@ -117,14 +117,22 @@ class _FakePycolmap:
             ]
             for offset, image_id1 in enumerate(image_ids):
                 for image_id2 in image_ids[offset + 1 :]:
+                    pair_id = self._pair_id(image_id1, image_id2)
                     connection.execute(
-                        "INSERT INTO matches(pair_id, rows, cols, data) VALUES(?, 7, 2, X'00000000')",
-                        (self._pair_id(image_id1, image_id2),),
+                        "INSERT INTO matches(pair_id, rows, cols, data) "
+                        "VALUES(?, 7, 2, X'00000000')",
+                        (pair_id,),
+                    )
+                    connection.execute(
+                        "INSERT INTO two_view_geometries("
+                        "pair_id, rows, cols, data, config, F, E, H, qvec, tvec, camera1, camera2"
+                        ") VALUES(?, 0, 2, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL)",
+                        (pair_id,),
                     )
             if self.inject_geometry:
                 connection.execute(
-                    "INSERT INTO two_view_geometries(pair_id, rows, cols, data) "
-                    "VALUES(?, 1, 2, X'00000000')",
+                    "UPDATE two_view_geometries SET rows = 1, data = X'00000000', "
+                    "config = 2, F = X'00' WHERE pair_id = ?",
                     (self._pair_id(image_ids[0], image_ids[1]),),
                 )
             connection.commit()
@@ -190,7 +198,15 @@ def _create_feature_database(path: Path, image_names: tuple[str, ...]) -> None:
                 pair_id INTEGER PRIMARY KEY NOT NULL,
                 rows INTEGER NOT NULL,
                 cols INTEGER NOT NULL,
-                data BLOB
+                data BLOB,
+                config INTEGER NOT NULL,
+                F BLOB,
+                E BLOB,
+                H BLOB,
+                qvec BLOB,
+                tvec BLOB,
+                camera1 BLOB,
+                camera2 BLOB
             );
             """
         )
@@ -204,7 +220,8 @@ def _create_feature_database(path: Path, image_names: tuple[str, ...]) -> None:
                 (image_id,),
             )
             connection.execute(
-                "INSERT INTO descriptors(image_id, rows, cols, data) VALUES(?, 12, 128, X'00')",
+                "INSERT INTO descriptors(image_id, rows, cols, data) "
+                "VALUES(?, 12, 128, X'00')",
                 (image_id,),
             )
         connection.commit()
@@ -307,6 +324,7 @@ def test_fake_exhaustive_matching_preserves_parent_and_skips_geometry(tmp_path: 
     assert result.database_path != features.database_path
     assert result.database_sha256 == hash_file_content(result.database_path).sha256
     assert result.attempted_pair_count == 3
+    assert result.unverified_two_view_placeholder_count == 3
     assert tuple(
         (pair.observation_id1.value, pair.observation_id2.value, pair.num_matches)
         for pair in result.pairs
@@ -340,9 +358,13 @@ def test_fake_exhaustive_matching_preserves_parent_and_skips_geometry(tmp_path: 
     connection = sqlite3.connect(result.database_path)
     try:
         assert connection.execute("SELECT COUNT(*) FROM matches").fetchone()[0] == 3
-        assert connection.execute("SELECT COUNT(*) FROM two_view_geometries").fetchone()[0] == 0
+        placeholders = connection.execute(
+            "SELECT rows, cols, data, config, F, E, H, qvec, tvec, camera1, camera2 "
+            "FROM two_view_geometries ORDER BY pair_id"
+        ).fetchall()
     finally:
         connection.close()
+    assert placeholders == [(0, 2, None, 0, None, None, None, None, None, None, None)] * 3
 
 
 def test_changed_feature_database_fails_before_solver(tmp_path: Path) -> None:
@@ -373,7 +395,7 @@ def test_geometric_contamination_is_rejected_and_partial_output_removed(tmp_path
     features = _fake_features(tmp_path)
     request = _request(tmp_path, features)
 
-    with pytest.raises(ColmapPairMatchingError, match="must not populate two_view_geometries"):
+    with pytest.raises(ColmapPairMatchingError, match="geometric"):
         match_colmap_pairs(request, module=_FakePycolmap(inject_geometry=True))
 
     assert not request.database_path.exists()
@@ -476,6 +498,7 @@ def test_real_pycolmap_raw_matching_when_integration_lane_enabled(tmp_path: Path
     assert hash_file_content(features.database_path) == feature_hash_before
     assert result.environment.pycolmap_version == "4.2.0"
     assert result.attempted_pair_count == 1
+    assert result.unverified_two_view_placeholder_count == 1
     assert len(result.pairs) == 1
     assert result.pairs[0].observation_id1 == observation_a.observation_id
     assert result.pairs[0].observation_id2 == observation_b.observation_id
@@ -485,6 +508,10 @@ def test_real_pycolmap_raw_matching_when_integration_lane_enabled(tmp_path: Path
     connection = sqlite3.connect(result.database_path)
     try:
         assert connection.execute("SELECT COUNT(*) FROM matches").fetchone()[0] == 1
-        assert connection.execute("SELECT COUNT(*) FROM two_view_geometries").fetchone()[0] == 0
+        placeholder = connection.execute(
+            "SELECT rows, cols, data, config, F, E, H, qvec, tvec, camera1, camera2 "
+            "FROM two_view_geometries"
+        ).fetchone()
     finally:
         connection.close()
+    assert placeholder == (0, 2, None, 0, None, None, None, None, None, None, None)
