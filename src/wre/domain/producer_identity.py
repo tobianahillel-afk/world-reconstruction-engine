@@ -20,6 +20,8 @@ class ModelIdentity:
     def __post_init__(self) -> None:
         _require_non_blank_text(self.name, "model.name")
         _require_non_blank_text(self.version, "model.version")
+        if self.version.strip().lower() == "latest":
+            raise ValueError("model.version must be exact; floating 'latest' is prohibited")
         if self.revision is not None:
             _require_non_blank_text(self.revision, "model.revision")
 
