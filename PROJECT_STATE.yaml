@@ -3,18 +3,18 @@ project: world-reconstruction-engine
 project_name: World Reconstruction Engine
 phase: implementation
 milestone: M1
-lot: L2
-active_work_item: L2.6
+lot: L3
+active_work_item: L3.1
 status: ready
-last_completed: [L0.1, L0.2, L0.3, L0.4, L0.5, L0.R, L1.1, L1.2, L1.3, L1.4, L1.5, L2.1, L2.2, L2.3, L2.4, L2.5]
-last_merged_pr: 17
+last_completed: [L0.1, L0.2, L0.3, L0.4, L0.5, L0.R, L1.1, L1.2, L1.3, L1.4, L1.5, L2.1, L2.2, L2.3, L2.4, L2.5, L2.6]
+last_merged_pr: 18
 current_goal: >-
-  Implement deterministic keyframe/frame extraction from persisted source-video observations
-  while preserving parent video identity and deterministic integer frame coordinates, without
-  starting tracking or reconstruction logic.
+  Implement the COLMAP environment adapter as the first L3 baseline step, with explicit
+  executable/version/configuration boundaries and no feature extraction or reconstruction work yet.
 next_action: >-
-  After PR #17 merges, implement L2.6 in a new short-lived branch using the documented
-  FFmpeg reuse/integration boundary; do not start L3 COLMAP work in the L2.6 PR.
+  After PR #18 merges, implement L3.1 from registry/work-items.yaml on a new short-lived branch;
+  review and pin the exact COLMAP integration/version/license assumptions before use, and do not
+  start L3.2 feature extraction in the L3.1 PR.
 blockers: []
 architecture:
   latest_adr: docs/adr/0001-adaptive-routing-anchoring-temporal-world.md
@@ -27,6 +27,7 @@ reviews:
   lot_reviews:
     L0: passed
     L1: passed
+    L2: passed
   milestone_reviews:
     M0: passed
 quality:
