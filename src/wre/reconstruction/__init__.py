@@ -16,6 +16,15 @@ from wre.reconstruction.colmap_features import (
     ColmapImageFeatureSummary,
     extract_colmap_features,
 )
+from wre.reconstruction.colmap_import import (
+    COLMAP_IMPORTER_VERSION,
+    ColmapReconstructionImportConfig,
+    ColmapReconstructionImportError,
+    ColmapReconstructionImportRequest,
+    ColmapReconstructionImportResult,
+    ImportedColmapSparseModel,
+    import_colmap_reconstruction,
+)
 from wre.reconstruction.colmap_matching import (
     ColmapPairMatchingConfig,
     ColmapPairMatchingError,
@@ -44,6 +53,7 @@ from wre.reconstruction.colmap_verification import (
 )
 
 __all__ = [
+    "COLMAP_IMPORTER_VERSION",
     "SUPPORTED_COLMAP_VERSION",
     "SUPPORTED_PYCOLMAP_VERSION",
     "ColmapEnvironmentError",
@@ -69,9 +79,15 @@ __all__ = [
     "ColmapPairMatchingError",
     "ColmapPairMatchingRequest",
     "ColmapPairMatchingResult",
+    "ColmapReconstructionImportConfig",
+    "ColmapReconstructionImportError",
+    "ColmapReconstructionImportRequest",
+    "ColmapReconstructionImportResult",
     "ColmapReconstructionInput",
     "ColmapSparseModelArtifact",
+    "ImportedColmapSparseModel",
     "extract_colmap_features",
+    "import_colmap_reconstruction",
     "inspect_colmap_environment",
     "match_colmap_pairs",
     "reconstruct_colmap_incrementally",
