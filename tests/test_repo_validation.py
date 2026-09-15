@@ -117,7 +117,7 @@ def test_rejects_unfinished_active_dependency(tmp_path: Path) -> None:
 
 def test_planned_item_may_remain_concise(tmp_path: Path) -> None:
     repo = _copy_repo(tmp_path)
-    _, _, item = _item_file(repo, "V2L1.1")
+    _, _, item = _item_file(repo, "V2L1.2")
     assert item["status"] == "planned"
     assert "objective" not in item
 
@@ -230,6 +230,15 @@ def test_prior_lot_review_blocks_advancement(tmp_path: Path) -> None:
         }
     )
     _write(state_path, state)
+
+    reviews_path = repo / "registry/reviews.yaml"
+    reviews = _load(reviews_path)
+    reviews["lot_reviews"]["V2L0"] = {
+        "status": "pending",
+        "reviewed_at": None,
+        "evidence": [],
+    }
+    _write(reviews_path, reviews)
 
     errors = validate_repository(repo)
 
