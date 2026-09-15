@@ -3,7 +3,6 @@ from __future__ import annotations
 import hashlib
 import importlib
 import json
-import math
 import shutil
 import tempfile
 from dataclasses import dataclass, field
@@ -12,7 +11,6 @@ from typing import Any, cast
 
 from wre.domain.observations import (
     ImageObservation,
-    ObservationId,
     Sha256Digest,
     VideoFrameObservation,
 )
