@@ -1,0 +1,38 @@
+{
+  "colmap_build": "Commit be5e291 on 2026-08-31 without GPU support",
+  "colmap_version": "COLMAP 4.2.0",
+  "dataset": "Notre-Dame de Paris west facade \u2014 Wikimedia Commons real photographs",
+  "files": {
+    "colmap_ply": "reconstruction_colmap.ply",
+    "colmap_text_model": "colmap_text_model/",
+    "interactive_viewer": "viewer.html",
+    "screenshots": "screenshots/",
+    "wre_ascii_ply": "reconstruction_wre_ascii.ply"
+  },
+  "input_image_count": 10,
+  "metrics": {
+    "attempted_pair_count": 45,
+    "imported_model_count": 1,
+    "largest_model_index": 0,
+    "largest_point_count": 3039,
+    "largest_registered_image_count": 10,
+    "raw_pair_count": 45,
+    "reconstructed_model_count": 1,
+    "unresolved_scale_model_count": 1,
+    "verified_pair_count": 45
+  },
+  "pycolmap_version": "4.2.0",
+  "registered_colmap_image_names": [
+    "000000-36b697304d0c36dc.jpg",
+    "000001-53487f38187243c5.jpg",
+    "000002-16e586a808d1baa9.jpg",
+    "000003-a47ada14169e9890.jpg",
+    "000004-02d8cfd90846d811.jpg",
+    "000005-357cd6da63ecfc5a.jpg",
+    "000006-19f5583df1f96d79.jpg",
+    "000007-053e68bd1f9daf2a.jpg",
+    "000008-d3768e9205a7df14.jpg",
+    "000009-3523753bc6e2d0e5.jpg"
+  ],
+  "scale_status": "unresolved"
+}
