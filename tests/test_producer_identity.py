@@ -75,11 +75,13 @@ def test_learned_artifact_producer_has_exact_model_and_checkpoint_identity() -> 
     )
 
 
-def test_model_identity_rejects_blank_fields() -> None:
+def test_model_identity_rejects_blank_or_floating_fields() -> None:
     with pytest.raises(ValueError, match=r"model\.name"):
         ModelIdentity(name=" ", version="1")
     with pytest.raises(ValueError, match=r"model\.version"):
         ModelIdentity(name="model", version=" ")
+    with pytest.raises(ValueError, match="floating 'latest'"):
+        ModelIdentity(name="model", version="LATEST")
     with pytest.raises(ValueError, match=r"model\.revision"):
         ModelIdentity(name="model", version="1", revision=" ")
 
