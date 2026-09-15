@@ -57,6 +57,8 @@ Future owning lots should add explicit fixture metadata rather than hiding scena
 
 Heavy captured datasets for these cases belong in regression/full lanes. Small synthetic invariants may be represented in the fast lane when they remain deterministic and cheap.
 
-## Current bootstrap fixture
+## Current fixtures
 
 `tests/fixtures/synthetic/tiny-smoke/` is intentionally trivial. It contains four hand-authored points and exercises the fixture loader, all three comparators, tolerance handling, deterministic result serialization and failure reporting. It is a harness test, not a reconstruction algorithm or quality claim.
+
+`tests/fixtures/synthetic/colmap-l3-end-to-end/` is the L3.7 native COLMAP composition fixture. It stores a deterministic synthetic scene specification and renders its PGM observations during the test so L3.2 feature extraction through L3.6 estimated-geometry import are exercised as one image-based chain. It belongs to the `full` lane and is described in [`20_COLMAP_END_TO_END_FIXTURE.md`](20_COLMAP_END_TO_END_FIXTURE.md).
