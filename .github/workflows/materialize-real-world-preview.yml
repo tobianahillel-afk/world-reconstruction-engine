@@ -1,0 +1,67 @@
+name: materialize-real-world-preview
+
+on:
+  push:
+    branches:
+      - demo-real-world-notre-dame
+    paths:
+      - ".github/workflows/materialize-real-world-preview.yml"
+      - "demo/real_world_preview/sources.json"
+      - "demo/real_world_preview/download_inputs.py"
+      - "demo/real_world_preview/run_demo.py"
+
+permissions:
+  contents: write
+
+jobs:
+  materialize:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout demo branch
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: demo-real-world-notre-dame
+          persist-credentials: true
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.13"
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Install locked WRE environment
+        run: uv sync --frozen --group dev
+
+      - name: Install exact external PyCOLMAP environment
+        run: |
+          uv pip install --python .venv/bin/python "numpy==2.5.3" "pycolmap==4.2.0"
+          .venv/bin/python -c 'import numpy, pycolmap; assert numpy.__version__ == "2.5.3"; assert pycolmap.__version__ == "4.2.0"'
+
+      - name: Download and license-check real Wikimedia photographs
+        run: .venv/bin/python demo/real_world_preview/download_inputs.py
+
+      - name: Run the real WRE sparse reconstruction
+        run: .venv/bin/python demo/real_world_preview/run_demo.py --force
+
+      - name: Commit real inputs and generated preview assets
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            demo/real_world_preview/input_images \
+            demo/real_world_preview/resolved_sources.json \
+            demo/real_world_preview/generated/reconstruction_wre_ascii.ply \
+            demo/real_world_preview/generated/reconstruction_colmap.ply \
+            demo/real_world_preview/generated/summary.json \
+            demo/real_world_preview/generated/viewer.html \
+            demo/real_world_preview/generated/screenshots \
+            demo/real_world_preview/generated/colmap_text_model
+          git commit -m "demo: materialize Notre-Dame real-world sparse preview [skip ci]"
+          git push origin HEAD:demo-real-world-notre-dame
