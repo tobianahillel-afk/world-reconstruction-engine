@@ -4,17 +4,17 @@ project_name: World Reconstruction Engine
 phase: implementation
 milestone: M1
 lot: L3
-active_work_item: L3.2
+active_work_item: L3.3
 status: ready
-last_completed: [L0.1, L0.2, L0.3, L0.4, L0.5, L0.R, L1.1, L1.2, L1.3, L1.4, L1.5, L2.1, L2.2, L2.3, L2.4, L2.5, L2.6, L3.1]
-last_merged_pr: 19
+last_completed: [L0.1, L0.2, L0.3, L0.4, L0.5, L0.R, L1.1, L1.2, L1.3, L1.4, L1.5, L2.1, L2.2, L2.3, L2.4, L2.5, L2.6, L3.1, L3.2]
+last_merged_pr: 20
 current_goal: >-
-  Implement deterministic COLMAP feature extraction through the approved PyCOLMAP 4.2.0
-  environment while keeping extracted solver evidence separate from accepted geometry.
+  Implement deterministic COLMAP pair matching over the audited L3.2 feature database while
+  preserving candidate correspondences as derived evidence and avoiding geometric acceptance.
 next_action: >-
-  After PR #19 merges, implement L3.2 from registry/work-items.yaml on a new short-lived branch;
-  decide the runtime dependency/lock treatment before invoking PyCOLMAP feature extraction, and do
-  not start L3.3 matching in the L3.2 PR.
+  After PR #20 merges, implement L3.3 from registry/work-items.yaml on a new short-lived branch;
+  reuse the approved PyCOLMAP 4.2.0 environment and do not start L3.4 geometric verification in
+  the L3.3 PR.
 blockers: []
 architecture:
   latest_adr: docs/adr/0001-adaptive-routing-anchoring-temporal-world.md
