@@ -261,7 +261,11 @@ class ColmapPairGeometryEvidence:
             raise ValueError("pair observation IDs must be in canonical ascending order")
         if not self.image_name1.strip() or not self.image_name2.strip():
             raise ValueError("pair image names must be non-empty")
-        if isinstance(self.raw_match_count, bool) or self.raw_match_count < 0:
+        if (
+            isinstance(self.raw_match_count, bool)
+            or not isinstance(self.raw_match_count, int)
+            or self.raw_match_count < 0
+        ):
             raise ValueError("raw_match_count must be a non-negative integer")
         if self.configuration not in _CONFIGURATION_NAMES:
             raise ValueError("unknown COLMAP two-view geometry configuration")
@@ -295,7 +299,11 @@ class ColmapGeometricVerificationResult:
     geometries: tuple[ColmapPairGeometryEvidence, ...]
 
     def __post_init__(self) -> None:
-        if isinstance(self.database_byte_length, bool) or self.database_byte_length <= 0:
+        if (
+            isinstance(self.database_byte_length, bool)
+            or not isinstance(self.database_byte_length, int)
+            or self.database_byte_length <= 0
+        ):
             raise ValueError("database_byte_length must be a positive integer")
         pair_ids = tuple(
             (item.observation_id1.value, item.observation_id2.value) for item in self.geometries
