@@ -33,7 +33,7 @@ from wre.reconstruction.colmap_reconstruction import (
     ColmapSparseModelArtifact,
 )
 
-COLMAP_IMPORTER_VERSION = "1"
+COLMAP_IMPORTER_VERSION = "2"
 _IMPORTER_PRODUCER = "wre.colmap_reconstruction_importer"
 
 
@@ -260,6 +260,53 @@ def _feature_name_map(features: ColmapFeatureExtractionResult) -> dict[str, Obse
     return mapping
 
 
+def _canonicalize_colmap_track(
+    track_elements: tuple[object, ...],
+    image_observations: dict[int, ObservationId],
+) -> tuple[EstimatedTrackElement, ...]:
+    """Map a COLMAP track onto WRE's one-feature-per-observation contract.
+
+    COLMAP sparse tracks can contain more than one Point2D from the same image.
+    WRE intentionally models at most one supporting feature per observation, so
+    the adapter keeps the smallest feature index for each observation. Choosing
+    by index rather than native iteration order makes the normalization stable.
+    """
+
+    feature_indices: dict[ObservationId, int] = {}
+    for element in track_elements:
+        try:
+            image_id = int(cast(Any, element).image_id)
+            feature_index = int(cast(Any, element).point2D_idx)
+        except (AttributeError, TypeError, ValueError, OverflowError) as exc:
+            raise ColmapReconstructionImportError(
+                "COLMAP 3D point track element is not readable"
+            ) from exc
+        try:
+            observation_id = image_observations[image_id]
+        except KeyError as exc:
+            raise ColmapReconstructionImportError(
+                "COLMAP point track references an image outside registered model membership"
+            ) from exc
+        if feature_index < 0:
+            raise ColmapReconstructionImportError(
+                "COLMAP point track feature index must be non-negative"
+            )
+        previous = feature_indices.get(observation_id)
+        if previous is None or feature_index < previous:
+            feature_indices[observation_id] = feature_index
+
+    if not feature_indices:
+        raise ColmapReconstructionImportError("COLMAP 3D point track must not be empty")
+
+    return tuple(
+        EstimatedTrackElement(
+            observation_id=observation_id,
+            feature_index=feature_indices[observation_id],
+        )
+        for observation_id in sorted(feature_indices, key=lambda item: item.value)
+    )
+
+
 def _import_model(
     *,
     run: ReconstructionRun,
@@ -377,30 +424,12 @@ def _import_model(
     points: list[Point3DEstimate] = []
     for point_id in point_ids:
         point = reconstruction.point3D(point_id)
-        track: list[EstimatedTrackElement] = []
         try:
             track_elements = tuple(point.track.elements)
         except (AttributeError, TypeError) as exc:
             raise ColmapReconstructionImportError("COLMAP 3D point has no readable track") from exc
-        for element in track_elements:
-            image_id = int(element.image_id)
-            try:
-                observation_id = image_observations[image_id]
-            except KeyError as exc:
-                raise ColmapReconstructionImportError(
-                    "COLMAP point track references an image outside registered model membership"
-                ) from exc
-            track.append(
-                EstimatedTrackElement(
-                    observation_id=observation_id,
-                    feature_index=int(element.point2D_idx),
-                )
-            )
-        if not track:
-            raise ColmapReconstructionImportError("COLMAP 3D point track must not be empty")
-        track_observations = tuple(
-            sorted({item.observation_id for item in track}, key=lambda item: item.value)
-        )
+        track = _canonicalize_colmap_track(track_elements, image_observations)
+        track_observations = tuple(item.observation_id for item in track)
         has_error = bool(point.has_error())
         points.append(
             Point3DEstimate(
@@ -410,7 +439,7 @@ def _import_model(
                 reprojection_error_px=(
                     _finite_float(point.error, "COLMAP reprojection error") if has_error else None
                 ),
-                track=tuple(track),
+                track=track,
                 provenance=DerivedArtifactProvenance(
                     producing_run_id=run.run_id,
                     source_observation_ids=track_observations,
