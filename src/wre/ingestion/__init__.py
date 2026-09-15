@@ -21,6 +21,7 @@ from wre.ingestion.hashing import (
 )
 from wre.ingestion.images import ImageIngestor, ImageIngestRequest, ObservationSink
 from wre.ingestion.keyframes import (
+    SUPPORTED_FFMPEG_VERSION,
     FFmpegExecutionError,
     FFmpegToolchain,
     FFmpegToolchainIdentity,
@@ -44,6 +45,7 @@ from wre.ingestion.videos import VideoIngestor, VideoIngestRequest
 __all__ = [
     "DEFAULT_HASH_CHUNK_SIZE",
     "EXIF_NAMESPACE",
+    "SUPPORTED_FFMPEG_VERSION",
     "DuplicateObservationLookup",
     "ExifMetadataIngestRequest",
     "ExifMetadataIngestor",
