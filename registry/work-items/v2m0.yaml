@@ -23,7 +23,7 @@ work_items:
   - id: V2L0.2
     lot: V2L0
     title: Machine roadmap and state migration
-    status: ready
+    status: done
     objective: Replace legacy machine roadmap/state/component/review metadata with v2.0 identifiers and validation rules while preserving historical evidence and source behavior.
     allowed_scope:
       - registry/work-items.yaml and registry/work-items/v2m*.yaml
@@ -49,7 +49,7 @@ work_items:
     acceptance:
       - V2 milestones, lots and every planned work-item ID are machine-readable.
       - Exactly one active v2 item exists and legacy L4.3 is no longer active.
-      - Planned work may stay concise, but any ready/in-progress/in-review/done item must have a full executable contract.
+      - Planned work may stay concise, but any ready/in_progress/in_review/done item must have a full executable contract.
       - Validator enforces deny-by-default activation metadata and maximum six work items per lot.
       - Component and review registries cover every v2 lot/milestone.
       - Historical v1 evidence remains referenced and recoverable.
@@ -58,8 +58,50 @@ work_items:
   - id: V2L0.3
     lot: V2L0
     title: Retained baseline compatibility review
-    status: planned
+    status: ready
+    objective: Prove that the v2 governance migration preserved the retained v1 implementation, tests and external integration behavior, close the V2L0 migration lot, and prepare the first implementation item without adding product functionality.
+    allowed_scope:
+      - compatibility and migration review evidence under docs/reviews
+      - registry/reviews.yaml V2L0 review state
+      - registry/components.yaml migration-governance completion state
+      - PROJECT_STATE.yaml and v2m0 work-item handoff metadata
+      - focused validation/test metadata needed to prove retained baseline compatibility
+    out_of_scope:
+      - SceneProject or artifact-domain implementation
+      - refactoring retained ingestion persistence reconstruction or retrieval modules
+      - new external dependencies models or reconstruction algorithms
+      - changing accepted geometry retrieval or metadata semantics
+      - starting V2L1.1 implementation in the compatibility-review PR
     depends_on: [V2L0.2]
+    read_before:
+      - registry/v1-v2-migration.yaml
+      - docs/25_V2_ROADMAP.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/reviews/L0-M0-bootstrap-review.md
+      - docs/reviews/L1-core-domain-review.md
+      - docs/reviews/L2-media-ingestion-review.md
+      - docs/reviews/L3-M1-colmap-baseline-review.md
+      - .github/workflows/ci.yml
+      - .github/workflows/colmap-integration.yml
+    reuse:
+      - existing fast CI and full pytest suite
+      - retained native PyCOLMAP integration lane
+      - existing deterministic COLMAP end-to-end fixture
+      - Git history and V1-to-V2 migration map
+    acceptance:
+      - Fast CI passes under the v2 roadmap and validator.
+      - The exact retained PyCOLMAP integration lane passes without weakening solver or fixture semantics.
+      - No product source module was deleted or behaviorally rewritten by V2L0 migration.
+      - V1 review and regression evidence remains traceable from the migration map and Git history.
+      - V2L0 lot review records a PASS only if governance and retained baseline compatibility are both evidenced.
+      - V2L1.1 is expanded to a complete executable contract before becoming ready.
+      - Final handoff makes V2L1.1 the sole active item and does not implement it.
+    tests:
+      - repository validator and fast CI
+      - retained PyCOLMAP integration workflow
+      - source-tree migration diff audit
+      - V2L0 lot review checklist
   - {id: V2L1.1, lot: V2L1, title: SceneProject contract, status: planned, depends_on: [V2L0.3]}
   - {id: V2L1.2, lot: V2L1, title: Artifact identity and exact input references, status: planned, depends_on: [V2L1.1]}
   - {id: V2L1.3, lot: V2L1, title: Producer model checkpoint configuration identity, status: planned, depends_on: [V2L1.2]}
