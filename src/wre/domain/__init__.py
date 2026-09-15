@@ -8,6 +8,7 @@ from wre.domain.artifact_keys import (
     canonical_artifact_key_bytes,
     derive_artifact_key,
 )
+from wre.domain.artifact_metadata import ArtifactMetadata
 from wre.domain.artifacts import ArtifactId, ArtifactKind, ArtifactRef
 from wre.domain.cameras import (
     Camera,
@@ -69,6 +70,7 @@ __all__ = [
     "ArtifactKey",
     "ArtifactKeyMaterial",
     "ArtifactKind",
+    "ArtifactMetadata",
     "ArtifactProducerIdentity",
     "ArtifactRef",
     "Camera",

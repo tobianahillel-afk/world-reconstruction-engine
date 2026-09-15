@@ -5,25 +5,32 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import TypeVar
 
+from wre.domain.artifact_metadata import ArtifactMetadata
+from wre.domain.artifacts import ArtifactId
 from wre.domain.cameras import Camera, CameraId, ObservationMetadata
 from wre.domain.fragments import SpatialFragment, SpatialFragmentId
 from wre.domain.metadata import ObservationMetadataInterpretation
 from wre.domain.observations import Observation, ObservationId, Sha256Digest
+from wre.domain.projects import SceneProject, SceneProjectId
 from wre.domain.runs import ReconstructionRun, ReconstructionRunId
 from wre.persistence.codec import (
     JsonObject,
     canonical_json,
+    decode_artifact_metadata,
     decode_camera,
     decode_metadata_interpretation,
     decode_observation,
     decode_observation_metadata,
     decode_reconstruction_run,
+    decode_scene_project,
     decode_spatial_fragment,
+    encode_artifact_metadata,
     encode_camera,
     encode_metadata_interpretation,
     encode_observation,
     encode_observation_metadata,
     encode_reconstruction_run,
+    encode_scene_project,
     encode_spatial_fragment,
     parse_json_object,
 )
@@ -286,3 +293,19 @@ class SQLiteLocalStore:
 
     def get_reconstruction_run(self, run_id: ReconstructionRunId) -> ReconstructionRun | None:
         return self._get("reconstruction_run", run_id.value, decode_reconstruction_run)
+
+    def put_scene_project(self, project: SceneProject) -> None:
+        self._put("scene_project", project.project_id.value, encode_scene_project(project))
+
+    def get_scene_project(self, project_id: SceneProjectId) -> SceneProject | None:
+        return self._get("scene_project", project_id.value, decode_scene_project)
+
+    def put_artifact_metadata(self, metadata: ArtifactMetadata) -> None:
+        self._put(
+            "artifact_metadata",
+            metadata.artifact_ref.artifact_id.value,
+            encode_artifact_metadata(metadata),
+        )
+
+    def get_artifact_metadata(self, artifact_id: ArtifactId) -> ArtifactMetadata | None:
+        return self._get("artifact_metadata", artifact_id.value, decode_artifact_metadata)
