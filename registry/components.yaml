@@ -75,9 +75,15 @@ components:
     status: implemented
   colmap_reconstruction:
     owner_lot: L3
-    implementation: []
-    tests: []
-    status: planned
+    implementation:
+      - docs/14_COLMAP_ENVIRONMENT.md
+      - registry/dependencies.yaml
+      - .github/workflows/colmap-integration.yml
+      - src/wre/reconstruction/__init__.py
+      - src/wre/reconstruction/colmap_environment.py
+    tests:
+      - tests/test_colmap_environment.py
+    status: implementing
   candidate_retrieval:
     owner_lot: L4
     implementation: []
