@@ -21,18 +21,20 @@ work_items:
   - {id: V2L40.1, lot: V2L40, title: Specialist condition profile evidence contract, status: planned, depends_on: [V2L39.4]}
   - {id: V2L40.2, lot: V2L40, title: Rolling shutter camera refinement boundary, status: planned, depends_on: [V2L40.1]}
   - {id: V2L40.3, lot: V2L40, title: Blur aware specialist first candidate, status: planned, depends_on: [V2L40.2]}
-  - {id: V2L40.4, lot: V2L40, title: HDR low light specialist first candidate, status: planned, depends_on: [V2L40.3]}
-  - {id: V2L40.5, lot: V2L40, title: Specialist trigger quality benchmark, status: planned, depends_on: [V2L40.4]}
-  - {id: V2L41.1, lot: V2L41, title: Reflective translucent water weak texture signals, status: planned, depends_on: [V2L40.5]}
+  - {id: V2L40.4, lot: V2L40, title: HDR specialist first candidate, status: planned, depends_on: [V2L40.3]}
+  - {id: V2L40.5, lot: V2L40, title: Low light specialist first candidate, status: planned, depends_on: [V2L40.4]}
+  - {id: V2L40.6, lot: V2L40, title: Specialist trigger quality benchmark, status: planned, depends_on: [V2L40.5]}
+  - {id: V2L41.1, lot: V2L41, title: Reflective translucent water weak texture signals, status: planned, depends_on: [V2L40.6]}
   - {id: V2L41.2, lot: V2L41, title: Repeated symmetric structure disambiguation boundary, status: planned, depends_on: [V2L41.1]}
   - {id: V2L41.3, lot: V2L41, title: Difficult matcher geometry specialist boundary, status: planned, depends_on: [V2L41.2]}
   - {id: V2L41.4, lot: V2L41, title: Difficult case benchmark and route update, status: planned, depends_on: [V2L41.3]}
   - {id: V2L41.5, lot: V2L41, title: Difficult case fail closed review, status: planned, depends_on: [V2L41.4]}
   - {id: V2L42.1, lot: V2L42, title: Relightable environment material capability contract, status: planned, depends_on: [V2L41.5]}
   - {id: V2L42.2, lot: V2L42, title: First approved relighting candidate, status: planned, depends_on: [V2L42.1]}
-  - {id: V2L42.3, lot: V2L42, title: Material fusion inverse rendering candidate, status: planned, depends_on: [V2L42.2]}
-  - {id: V2L42.4, lot: V2L42, title: Relighting and material benchmark, status: planned, depends_on: [V2L42.3]}
-  - {id: V2L43.1, lot: V2L43, title: STRICT REALISTIC CINEMATIC completion policy, status: planned, depends_on: [V2L42.4]}
+  - {id: V2L42.3, lot: V2L42, title: First approved material fusion candidate, status: planned, depends_on: [V2L42.2]}
+  - {id: V2L42.4, lot: V2L42, title: First approved inverse rendering candidate, status: planned, depends_on: [V2L42.3]}
+  - {id: V2L42.5, lot: V2L42, title: Relighting and material benchmark, status: planned, depends_on: [V2L42.4]}
+  - {id: V2L43.1, lot: V2L43, title: STRICT REALISTIC CINEMATIC completion policy, status: planned, depends_on: [V2L42.5]}
   - {id: V2L43.2, lot: V2L43, title: CompletionArtifact region provenance contract, status: planned, depends_on: [V2L43.1]}
   - {id: V2L43.3, lot: V2L43, title: Conservative static completion adapter boundary, status: planned, depends_on: [V2L43.2]}
   - {id: V2L43.4, lot: V2L43, title: Generated provenance preserved through export runtime, status: planned, depends_on: [V2L43.3]}
