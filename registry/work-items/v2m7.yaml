@@ -3,15 +3,17 @@ milestone: V2M7
 work_items:
   - {id: V2L44.1, lot: V2L44, title: Versioned manual decision artifact contract, status: planned, depends_on: [V2L43.5]}
   - {id: V2L44.2, lot: V2L44, title: Media frame and scene cluster review operations, status: planned, depends_on: [V2L44.1]}
-  - {id: V2L44.3, lot: V2L44, title: Camera mask region temporal correction operations, status: planned, depends_on: [V2L44.2]}
-  - {id: V2L44.4, lot: V2L44, title: Competing solver comparison selection operation, status: planned, depends_on: [V2L44.3]}
-  - {id: V2L44.5, lot: V2L44, title: AUTO ASSISTED EXPERT reproducibility flow, status: planned, depends_on: [V2L44.4]}
-  - {id: V2L45.1, lot: V2L45, title: Exchange format capability metadata contract, status: planned, depends_on: [V2L44.5]}
+  - {id: V2L44.3, lot: V2L44, title: Camera and mask correction operations, status: planned, depends_on: [V2L44.2]}
+  - {id: V2L44.4, lot: V2L44, title: Region and temporal correction operations, status: planned, depends_on: [V2L44.3]}
+  - {id: V2L44.5, lot: V2L44, title: Competing solver comparison selection operation, status: planned, depends_on: [V2L44.4]}
+  - {id: V2L44.6, lot: V2L44, title: AUTO ASSISTED EXPERT reproducibility flow, status: planned, depends_on: [V2L44.5]}
+  - {id: V2L45.1, lot: V2L45, title: Exchange format capability metadata contract, status: planned, depends_on: [V2L44.6]}
   - {id: V2L45.2, lot: V2L45, title: COLMAP import export compatibility, status: planned, depends_on: [V2L45.1]}
   - {id: V2L45.3, lot: V2L45, title: Mesh material glTF GLB export, status: planned, depends_on: [V2L45.2]}
   - {id: V2L45.4, lot: V2L45, title: Approved splat package export, status: planned, depends_on: [V2L45.3]}
-  - {id: V2L45.5, lot: V2L45, title: DCC game engine package validation, status: planned, depends_on: [V2L45.4]}
-  - {id: V2L46.1, lot: V2L46, title: JobSpec resource requirement contract, status: planned, depends_on: [V2L45.5]}
+  - {id: V2L45.5, lot: V2L45, title: DCC package boundary and round trip validation, status: planned, depends_on: [V2L45.4]}
+  - {id: V2L45.6, lot: V2L45, title: Game engine package boundary and validation, status: planned, depends_on: [V2L45.5]}
+  - {id: V2L46.1, lot: V2L46, title: JobSpec resource requirement contract, status: planned, depends_on: [V2L45.6]}
   - {id: V2L46.2, lot: V2L46, title: Local deterministic scheduler baseline, status: planned, depends_on: [V2L46.1]}
   - {id: V2L46.3, lot: V2L46, title: Empirical resource estimator contract, status: planned, depends_on: [V2L46.2]}
   - {id: V2L46.4, lot: V2L46, title: Predicted OOM disk timeout mitigation policy, status: planned, depends_on: [V2L46.3]}
@@ -36,9 +38,9 @@ work_items:
   - {id: V2L50.3, lot: V2L50, title: Project reopen rehydration from retained artifacts, status: planned, depends_on: [V2L50.2]}
   - {id: V2L50.4, lot: V2L50, title: Artifact schema model upgrade migration policy, status: planned, depends_on: [V2L50.3]}
   - {id: V2L50.5, lot: V2L50, title: Clean machine reproduction fixture, status: planned, depends_on: [V2L50.4]}
-  - {id: V2L51.1, lot: V2L51, title: Canonical blueprint profile coverage audit, status: planned, depends_on: [V2L50.5]}
-  - {id: V2L51.2, lot: V2L51, title: Full static geometry appearance runtime validation, status: planned, depends_on: [V2L51.1]}
-  - {id: V2L51.3, lot: V2L51, title: Full dynamic long multi video validation, status: planned, depends_on: [V2L51.2]}
-  - {id: V2L51.4, lot: V2L51, title: Full historical specialist generated provenance validation, status: planned, depends_on: [V2L51.3]}
-  - {id: V2L51.5, lot: V2L51, title: Security reproducibility performance validation, status: planned, depends_on: [V2L51.4]}
-  - {id: V2L51.6, lot: V2L51, title: WRE v2.0 final milestone review, status: planned, depends_on: [V2L51.5]}
+  - {id: V2L51.1, lot: V2L51, title: Canonical blueprint profile coverage audit only, status: planned, depends_on: [V2L50.5]}
+  - {id: V2L51.2, lot: V2L51, title: Run retained static geometry appearance runtime validation suites, status: planned, depends_on: [V2L51.1]}
+  - {id: V2L51.3, lot: V2L51, title: Run retained dynamic long multi video validation suites, status: planned, depends_on: [V2L51.2]}
+  - {id: V2L51.4, lot: V2L51, title: Run retained historical specialist provenance validation suites, status: planned, depends_on: [V2L51.3]}
+  - {id: V2L51.5, lot: V2L51, title: Run retained security reproducibility performance validation suites, status: planned, depends_on: [V2L51.4]}
+  - {id: V2L51.6, lot: V2L51, title: WRE v2.0 final evidence review with no new product implementation, status: planned, depends_on: [V2L51.5]}

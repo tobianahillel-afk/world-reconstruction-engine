@@ -19,6 +19,8 @@ one work item
 
 If that is not realistic, the item is too large and must be split before implementation.
 
+Wall-clock duration is not a correctness contract because external downloads, CI queues and heavy native/model integrations vary, but the **reasoning and code-change scope** must remain one-run sized. An item that routinely requires several independent implementation phases, several unrelated external integrations or several separate review domains is too large even if an agent could eventually finish it in one conversation.
+
 ## 2. Deny-by-default scope rule
 
 Implementation scope is **allowlisted**, not open-ended.
@@ -82,7 +84,23 @@ Split an item when it combines any of these:
 - master representation **and** runtime optimization;
 - dynamic event reconstruction **and** long-term chronology;
 - implementation **and** benchmark-based default promotion when the benchmark itself does not yet exist;
-- more than one independently failing heavy external solver/model integration.
+- more than one independently failing heavy external solver/model integration;
+- two specialist families that can fail independently, such as HDR and low-light, or material fusion and inverse rendering;
+- several independent editing/export targets that would require unrelated UI, package or round-trip logic;
+- a final-validation item that would need to create missing product behavior instead of only running/assembling already-owned validation evidence.
+
+### Pre-activation complexity gate
+
+A planned item must be split **before** it becomes `ready` when its executable contract would require any of the following:
+
+1. more than one major external repository/model/checkpoint integration;
+2. more than one independently shippable product responsibility;
+3. several unrelated persistence/runtime/UI surfaces whose failures can be reviewed independently;
+4. a dependency/license review, adapter implementation, normalization contract and benchmark/default promotion that cannot be reasoned about as one coherent change;
+5. a diff whose correctness cannot be reviewed locally without understanding several future lots;
+6. a validation item that discovers missing coverage requiring new implementation.
+
+For heavy research integrations, it is acceptable—and often preferable—to split dependency/checkpoint approval, adapter normalization, real integration fixture and benchmark/default promotion into separate work items.
 
 Prefer creating another lot over adding deep administrative nesting. Lots are capability-sized review groups; work items are run-sized implementation units.
 
@@ -92,7 +110,7 @@ For every new capability family, use this order unless an ADR justifies otherwis
 
 1. define/extend the solver-independent WRE contract;
 2. add deterministic codec/persistence support when needed;
-3. add the smallest baseline or compatibility adapter;
+3. add the smallest baseline or legacy-donor adapter that cleanly satisfies the WRE contract;
 4. add focused fixtures/tests;
 5. add alternative specialist adapter(s);
 6. benchmark under the same contract;
@@ -121,19 +139,38 @@ WRE should own:
 
 It should not duplicate mature solver internals merely to own more code.
 
-## 7. Compatibility-first migration
+## 7. Legacy-donor migration
 
-Existing tested components are assets, not obstacles. When a new architecture supersedes an older contract:
+V2 is authoritative. Existing tested V1 components are optional donors and regression evidence, not compatibility requirements.
+
+When a V2 contract supersedes older code:
 
 1. inventory the existing code/tests/data it affects;
-2. classify each part as `retain`, `generalize`, `wrap_compatibly`, `deprecate`, or `remove`;
-3. preserve existing behavior behind compatibility adapters where practical;
-4. add migration tests before deleting old representations;
-5. remove code only when the replacement has objective evidence and no required consumer remains.
+2. classify each part as reusable donor, generalize, temporary wrapper, deprecate or remove;
+3. reuse or temporarily wrap legacy behavior only when that is the cheapest safe way to satisfy the **V2** contract;
+4. add migration/regression tests before deleting behavior that V2 still promises;
+5. remove obsolete code when the replacement has objective evidence and no required consumer remains.
 
-No rewrite is authorized merely because a class/module name no longer matches the newest blueprint vocabulary.
+Do **not** preserve a legacy API, data model or sequencing assumption merely for backward compatibility. If a cleaner V2 implementation better satisfies the frozen architecture, V2 wins. Historical Git/PR/review evidence may remain even after the corresponding implementation is removed.
 
-## 8. External-adapter boundary
+No rewrite is authorized merely because a class/module name no longer matches the newest blueprint vocabulary; replacement still needs a concrete V2 benefit and evidence.
+
+## 8. Candidate freshness and external-adapter gate
+
+Before activating a work item that integrates or promotes an external solver/model, refresh the candidate landscape rather than trusting a shortlist written months earlier.
+
+The activation/review must check, as applicable:
+
+- `docs/14_TECHNOLOGY_SELECTION.md` and `docs/27_RESEARCH_CANDIDATE_COVERAGE.md`;
+- current upstream releases and maintained implementations;
+- major recent conference/research candidates relevant to that responsibility;
+- exact code version/commit and model/checkpoint identity;
+- code, model and dataset licensing/redistribution constraints separately;
+- hardware/runtime support and reproducibility;
+- whether a newer major dependency release materially improves WRE's required capability;
+- a stable baseline plus the strongest currently viable primary/specialist candidates.
+
+A dependency is **not** upgraded merely because a larger version number exists. Keeping an older pinned version requires a concrete reproducibility, platform, licensing or integration rationale when a materially newer viable release exists.
 
 An adapter must declare at least:
 
@@ -212,6 +249,8 @@ Every PR review asks:
 - Are coordinate/color/time conventions explicit?
 - Are tests checking the real risk, including negative cases?
 - Did the item introduce future work that belongs in another PR?
+- For external research integrations, was the candidate/dependency landscape refreshed and were license/checkpoint/hardware constraints rechecked?
+- Is the item still small enough that its behavior can be reviewed as one coherent run-sized change?
 
 Lot reviews verify cross-item composition. Milestone reviews verify an end-to-end user capability rather than merely counting completed work items.
 

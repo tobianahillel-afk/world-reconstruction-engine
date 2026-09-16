@@ -8,10 +8,12 @@ This roadmap turns the v2 blueprint into implementation-sized work. It is intent
 - A **lot** groups one coherent capability and should normally contain 3–6 work items.
 - A **work item** must be implementable/testable/reviewable by one agent in one development run and normally maps to one PR.
 - If a work item discovers a second independent responsibility or external integration, split it before coding.
+- Before a planned item becomes `ready`, apply the one-run complexity gate in `docs/23_ENGINEERING_EXECUTION.md`; split independent specialist integrations, editing/export targets or validation domains before implementation.
 - Scope is deny-by-default: a work item permits only its objective/acceptance criteria and minimum supporting changes.
 - Contracts precede alternative adapters; adapters precede benchmark-based default promotion.
 - Legacy v1 code is only an implementation donor/regression source. Reuse it when it cleanly satisfies the owning v2 contract; never preserve or wrap a v1 API merely for backward compatibility.
 - Before activating any work item that integrates or promotes a solver/model, refresh the candidate shortlist from `docs/14_TECHNOLOGY_SELECTION.md`, `docs/27_RESEARCH_CANDIDATE_COVERAGE.md`, the current adapter/model registry and current research evidence. Planned item names never freeze a 2026 winner.
+- A newer version/paper is not automatically better for WRE: default selection must account for quality, latency, resources, robustness, license, shipping and reproducibility under the owning contract.
 
 ## V2M0 — Production substrate ready
 
@@ -133,11 +135,11 @@ Purpose: create one common language for gates, escalation and comparison.
 
 ### V2L12 — Classical precision geometry baseline
 
-- `V2L12.1` — COLMAP adapter descriptor and input/output normalization through v2 artifact contracts.
-- `V2L12.2` — useful existing feature/matching/verification donor stages consume v2 artifact/cache identities.
-- `V2L12.3` — the classical incremental SfM baseline emits canonical `CameraSolution`/`GeometrySolution`.
+- `V2L12.1` — current pinned COLMAP adapter descriptor and input/output normalization through v2 artifact contracts.
+- `V2L12.2` — useful existing feature/matching/verification donor stages plus current pinned COLMAP feature/matcher capabilities consume v2 artifact/cache identities.
+- `V2L12.3` — current pinned COLMAP incremental/global mapper capabilities emit canonical `CameraSolution`/`GeometrySolution`; accelerated BA remains an explicit hardware-dependent capability rather than hidden behavior.
 - `V2L12.4` — disconnected/zero-model outcomes remain explicit.
-- `V2L12.5` — real COLMAP end-to-end regression fixture migrated to v2 contracts and lot review.
+- `V2L12.5` — real end-to-end regression/comparison fixture exercises the retained donor path and current viable classical route(s), then closes the lot review.
 
 ### V2L13 — Feed-forward geometry
 
@@ -368,8 +370,9 @@ Purpose: create one common language for gates, escalation and comparison.
 - `V2L40.1` — specialist-condition profile evidence contract.
 - `V2L40.2` — rolling-shutter camera-model/refinement adapter boundary.
 - `V2L40.3` — blur-aware specialist adapter boundary and first candidate.
-- `V2L40.4` — HDR/low-light specialist adapter boundary and first candidate.
-- `V2L40.5` — specialist-trigger false-positive/quality benchmark and lot review.
+- `V2L40.4` — HDR specialist adapter boundary and first candidate.
+- `V2L40.5` — low-light specialist adapter boundary and first candidate.
+- `V2L40.6` — specialist-trigger false-positive/quality benchmark and lot review.
 
 ### V2L41 — Difficult materials and repeated structure
 
@@ -383,8 +386,9 @@ Purpose: create one common language for gates, escalation and comparison.
 
 - `V2L42.1` — relightable environment/material capability contract.
 - `V2L42.2` — refresh the current shortlist, then integrate one approved relighting candidate.
-- `V2L42.3` — material-fusion/inverse-rendering candidate adapter.
-- `V2L42.4` — relighting/material benchmark and lot review.
+- `V2L42.3` — refresh the current shortlist, then integrate one approved material-fusion candidate.
+- `V2L42.4` — refresh the current shortlist, then integrate one approved inverse-rendering candidate.
+- `V2L42.5` — relighting/material benchmark and lot review.
 
 ### V2L43 — Generated completion profiles
 
@@ -400,9 +404,10 @@ Purpose: create one common language for gates, escalation and comparison.
 
 - `V2L44.1` — versioned manual-decision artifact contract.
 - `V2L44.2` — media/frame and scene-cluster review operations.
-- `V2L44.3` — camera/mask/region/temporal corrections.
-- `V2L44.4` — competing-solver comparison/selection operation.
-- `V2L44.5` — AUTO/ASSISTED/EXPERT state flow + reproducibility fixture and lot review.
+- `V2L44.3` — camera and mask correction operations.
+- `V2L44.4` — reconstruction-region and temporal-grouping correction operations.
+- `V2L44.5` — competing-solver comparison/selection operation.
+- `V2L44.6` — AUTO/ASSISTED/EXPERT state flow + reproducibility fixture and lot review.
 
 ### V2L45 — Interoperability/export
 
@@ -410,7 +415,8 @@ Purpose: create one common language for gates, escalation and comparison.
 - `V2L45.2` — COLMAP import/export compatibility.
 - `V2L45.3` — mesh/material glTF/GLB export.
 - `V2L45.4` — approved splat package export.
-- `V2L45.5` — DCC/game-engine package boundary and round-trip/validation tests.
+- `V2L45.5` — DCC package boundary and round-trip/validation tests.
+- `V2L45.6` — game-engine package boundary and validation tests + lot review.
 
 ### V2L46 — Resource estimation and scheduling
 
@@ -454,12 +460,14 @@ Purpose: create one common language for gates, escalation and comparison.
 
 ### V2L51 — Final validation program
 
-- `V2L51.1` — complete profile coverage audit against the canonical blueprint.
-- `V2L51.2` — full static geometry/appearance/runtime validation set.
-- `V2L51.3` — full dynamic/long/multi-video validation set.
-- `V2L51.4` — full historical/specialist/generated-provenance validation set.
-- `V2L51.5` — security/reproducibility/performance validation.
-- `V2L51.6` — v2.0 milestone review: no known blueprint capability omitted or silently conflated.
+These are **validation-only** work items. They run, aggregate and review already-owned suites/evidence; they do not become catch-all implementation PRs. If an item discovers missing product behavior or missing substantial validation infrastructure, create a remedial work item/lot, complete it, then resume V2L51.
+
+- `V2L51.1` — complete profile coverage audit against the canonical blueprint; inventory only, no new product implementation.
+- `V2L51.2` — run and retain the existing static geometry/appearance/runtime validation suites and report evidence.
+- `V2L51.3` — run and retain the existing dynamic/long/multi-video validation suites and report evidence.
+- `V2L51.4` — run and retain the existing historical/specialist/generated-provenance validation suites and report evidence.
+- `V2L51.5` — run and retain the existing security/reproducibility/performance validation suites and report evidence.
+- `V2L51.6` — v2.0 milestone evidence review: no known blueprint capability omitted or silently conflated, and no new product implementation bundled into the review.
 
 ## Dependency philosophy
 

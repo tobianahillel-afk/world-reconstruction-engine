@@ -8,13 +8,13 @@ work_items:
   - {id: V2L5.5, lot: V2L5, title: Dynamic long sequence sparse coverage signals, status: planned, depends_on: [V2L5.4]}
   - {id: V2L5.6, lot: V2L5, title: Media profile fixture matrix, status: planned, depends_on: [V2L5.5]}
   - {id: V2L6.1, lot: V2L6, title: Frame selection policy contract, status: planned, depends_on: [V2L5.6]}
-  - {id: V2L6.2, lot: V2L6, title: Existing interval keyframe compatibility adapter, status: planned, depends_on: [V2L6.1]}
+  - {id: V2L6.2, lot: V2L6, title: Existing interval keyframe donor adapter, status: planned, depends_on: [V2L6.1]}
   - {id: V2L6.3, lot: V2L6, title: Quality diversity aware frame selection baseline, status: planned, depends_on: [V2L6.2]}
   - {id: V2L6.4, lot: V2L6, title: Long video frame density resource bounds, status: planned, depends_on: [V2L6.3]}
   - {id: V2L6.5, lot: V2L6, title: Frame selection provenance timing regression, status: planned, depends_on: [V2L6.4]}
   - {id: V2L7.1, lot: V2L7, title: Canonical PairCandidate contract, status: planned, depends_on: [V2L6.5]}
-  - {id: V2L7.2, lot: V2L7, title: Sequential pairing compatibility adapter, status: planned, depends_on: [V2L7.1]}
-  - {id: V2L7.3, lot: V2L7, title: GPS pairing compatibility adapter, status: planned, depends_on: [V2L7.2]}
+  - {id: V2L7.2, lot: V2L7, title: Sequential pairing donor adapter, status: planned, depends_on: [V2L7.1]}
+  - {id: V2L7.3, lot: V2L7, title: GPS pairing donor adapter, status: planned, depends_on: [V2L7.2]}
   - {id: V2L7.4, lot: V2L7, title: Classical vocabulary retrieval baseline, status: planned, depends_on: [V2L7.3]}
   - {id: V2L7.5, lot: V2L7, title: Modern visual retrieval first candidate, status: planned, depends_on: [V2L7.4]}
   - {id: V2L7.6, lot: V2L7, title: Retrieval union dedup recall benchmark, status: planned, depends_on: [V2L7.5]}

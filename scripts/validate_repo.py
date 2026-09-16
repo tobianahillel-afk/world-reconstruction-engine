@@ -3,12 +3,13 @@ from __future__ import annotations
 from pathlib import Path
 
 from wre.repo_validation import validate_repository
+from wre.roadmap_policy_validation import validate_roadmap_guardrails
 
 ROOT = Path(__file__).resolve().parents[1]
 
 
 def main() -> int:
-    errors = validate_repository(ROOT)
+    errors = [*validate_repository(ROOT), *validate_roadmap_guardrails(ROOT)]
     if not errors:
         print("repository metadata: OK")
         return 0
