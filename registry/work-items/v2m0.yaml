@@ -596,7 +596,7 @@ work_items:
   - id: V2L2.4
     lot: V2L2
     title: Dependency scoped invalidation planning
-    status: ready
+    status: done
     objective: Define a pure immutable invalidation plan that computes exactly the changed ArtifactRef roots plus every artifact that directly or transitively depends on them in a validated ArtifactDependencyGraph, without deleting mutating persisting or scheduling anything.
     allowed_scope:
       - src/wre/domain/artifact_invalidation.py
@@ -649,7 +649,79 @@ work_items:
       - long-chain regression beyond Python recursion depth
       - regression proving input graph remains unchanged and no persistence behavior is introduced
       - full fast CI
-  - {id: V2L2.5, lot: V2L2, title: Artifact materialization verification metadata, status: planned, depends_on: [V2L2.4]}
+  - id: V2L2.5
+    lot: V2L2
+    title: Artifact materialization verification metadata
+    status: ready
+    objective: Define and persist immutable local artifact materialization metadata for one or more exact output files and verify their presence size and SHA-256 under an explicit local root, producing a fail-closed typed verification outcome without repair deletion or cache-reuse selection.
+    allowed_scope:
+      - src/wre/domain/artifact_materialization.py
+      - focused public-domain exports in src/wre/domain/__init__.py
+      - src/wre/materialization.py
+      - src/wre/persistence/codec.py
+      - src/wre/persistence/sqlite_store.py
+      - src/wre/persistence/__init__.py only if focused public persistence exports require it
+      - tests/test_artifact_materialization.py
+      - focused additions to tests/test_persistence.py if required for retained-regression coverage
+    out_of_scope:
+      - modifying ArtifactMetadata ArtifactKey ArtifactRef dependency-DAG or invalidation-plan semantics
+      - remote HTTP object-store cloud URI download upload archive extraction directory hashing or distributed storage behavior
+      - timestamps mtimes inode identity permissions ownership or filenames alone as integrity evidence
+      - silently accepting absolute paths parent traversal dot segments backslashes duplicate paths or paths that resolve outside the supplied materialization root
+      - cache candidate ranking winner selection automatic reuse recomputation retry eviction deletion garbage collection or repair owned by V2L2.6 or later orchestration
+      - mutating files while verifying them or rewriting stored expected digests/sizes to match observed bytes
+      - stable cross-adapter failure taxonomy policy owned by V2L4; this item exposes only materialization verification status
+      - schema migration framework new database table ORM external backend or new dependency
+      - routing scheduling solver adapter-registry quality runtime or V2L2.6+ implementation
+    depends_on: [V2L2.4]
+    read_before:
+      - docs/02_ARCHITECTURE.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - src/wre/domain/artifacts.py
+      - src/wre/domain/artifact_metadata.py
+      - src/wre/domain/artifact_invalidation.py
+      - src/wre/domain/observations.py
+      - src/wre/persistence/codec.py
+      - src/wre/persistence/sqlite_store.py
+      - tests/test_artifact_cache_lookup.py
+      - tests/test_artifact_invalidation.py
+      - tests/test_persistence.py
+    reuse:
+      - ArtifactRef as the exact artifact identity associated with one materialization manifest
+      - Sha256Digest as the expected output-file content identity
+      - retained frozen dataclass tuple and explicit symbolic-status conventions
+      - retained canonical_json strict codec and SQLiteLocalStore immutable-record conflict semantics
+      - streaming SHA-256 hashing patterns without introducing a new dependency
+    acceptance:
+      - ArtifactMaterializationEntry is immutable and contains exactly a canonical local relative POSIX path Sha256Digest and non-negative byte length; raw/untyped digest or boolean/negative lengths are rejected.
+      - Materialization entry paths are non-empty normalized relative POSIX paths with no absolute root empty segment dot parent-traversal backslash NUL or platform-drive semantics; verification never constructs a path outside the caller-supplied root.
+      - ArtifactMaterializationMetadata is immutable and contains exactly one ArtifactRef plus a non-empty canonical tuple of entries sorted lexicographically by relative path with unique paths; unsorted duplicate mutable or untyped entry collections fail closed rather than being silently normalized.
+      - Materialization metadata is separate from ArtifactMetadata so computation identity/provenance metadata does not silently become filesystem state.
+      - A closed materialization verification status has exactly VERIFIED MISSING and CORRUPTED states; it is not the future V2L4 cross-adapter failure taxonomy.
+      - Local verification accepts only typed ArtifactMaterializationMetadata plus an explicit pathlib Path root, performs no database/cache lookup, and returns VERIFIED only when every declared entry resolves within the root, exists as a regular file, has the exact expected byte length and exact streaming SHA-256 digest.
+      - If any declared file is absent the result is MISSING unless another declared entry is structurally unsafe non-regular or content/size mismatched, in which case CORRUPTED takes precedence; no observed bytes are used to repair expected metadata.
+      - Paths whose resolved target escapes the materialization root or resolves to a non-regular file fail closed as CORRUPTED; verification does not follow an escaping symlink as a valid artifact.
+      - Verification is read-only and does not create truncate rewrite chmod delete quarantine move or otherwise mutate files or metadata.
+      - Deterministic codec round-trips exact ArtifactRef entry paths byte lengths and digests and rejects malformed duplicate unsorted or untyped wire values.
+      - SQLiteLocalStore persists materialization metadata as an immutable dedicated record type keyed by ArtifactId in the retained generic wre_records table; identical writes are idempotent and conflicting kind path digest size or entry-set content raises PersistenceConflictError.
+      - Exact materialization lookup by ArtifactRef returns None when absent and fails closed on record-id or ArtifactKind mismatch corrupted payload or unsupported record version; it does not require or create ArtifactMetadata SceneProject or dependency records.
+      - Reopening SQLiteLocalStore preserves the exact materialization manifest and verification can be rerun against current bytes without mutating persisted expectations.
+      - Existing canonical ArtifactKey candidate lookup dependency persistence invalidation planning V2L1 metadata and retained V1 behavior remain unchanged.
+      - No candidate is declared reusable solely from ArtifactKey plus verification inside this item; integrated cache reuse/invalidation behavior remains V2L2.6.
+    tests:
+      - entry and manifest construction immutability hashing canonical-order and typed-member negative tests
+      - path validation tests for empty absolute dot parent backslash NUL drive-like duplicate and unsorted paths
+      - verifier tests for single-file and multi-file VERIFIED outcomes
+      - missing-file MISSING outcome and mixed missing-plus-corrupt CORRUPTED precedence
+      - byte-length mismatch digest mismatch non-regular target and root-escape/symlink fail-closed CORRUPTED cases
+      - regression proving verification does not mutate bytes or metadata
+      - deterministic codec round-trip plus malformed duplicate/unsorted wire payload tests
+      - SQLite put/get/reopen idempotency conflict missing-record kind-mismatch corruption and unsupported-version tests
+      - regression tests for cache candidate lookup dependency persistence invalidation planning and retained persistence
+      - full fast CI
   - {id: V2L2.6, lot: V2L2, title: Cache reuse and invalidation regression, status: planned, depends_on: [V2L2.5]}
   - {id: V2L3.1, lot: V2L3, title: Adapter capability descriptor, status: planned, depends_on: [V2L2.6]}
   - {id: V2L3.2, lot: V2L3, title: Model checkpoint hardware identity, status: planned, depends_on: [V2L3.1]}

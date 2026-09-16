@@ -5,19 +5,20 @@ roadmap_version: '2.0'
 phase: implementation
 milestone: V2M0
 lot: V2L2
-active_work_item: V2L2.4
+active_work_item: V2L2.5
 status: ready
-last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3]
-last_merged_pr: 40
+last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4]
+last_merged_pr: 41
 current_goal: >-
-  Implement only dependency-scoped invalidation planning defined by V2L2.4: compute the exact
-  non-destructive reverse dependency closure from typed changed ArtifactRef roots over a validated
-  ArtifactDependencyGraph, without persistence mutation deletion materialization or scheduling.
+  Implement only the local artifact materialization metadata and verification contract defined by
+  V2L2.5: describe exact immutable local output files by safe relative path, byte length and
+  SHA-256, persist that metadata, and verify presence/integrity fail closed without repair or reuse
+  selection.
 next_action: >-
-  Complete only V2L2.4 from its executable contract in registry/work-items/v2m0.yaml: define an
-  immutable invalidation-plan contract and pure reverse-dependency closure planner, prove roots and
-  all transitive dependents are included while upstream and unrelated artifacts are excluded, and
-  stop before materialization verification in V2L2.5.
+  Complete only V2L2.5 from its executable contract in registry/work-items/v2m0.yaml: define typed
+  materialization entries/metadata/verification status, add deterministic codec and immutable local
+  persistence, verify files against expected size and digest under an explicit root, expose missing
+  and corrupted outcomes, and stop before integrated cache reuse/invalidation regression in V2L2.6.
 blockers: []
 architecture:
   product_blueprint: docs/01_PRODUCT.md

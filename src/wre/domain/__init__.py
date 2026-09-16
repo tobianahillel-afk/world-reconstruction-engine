@@ -1,6 +1,10 @@
 """Core solver-independent domain models."""
 
 from wre.domain.artifact_graph import ArtifactDependencyEdge, ArtifactDependencyGraph
+from wre.domain.artifact_invalidation import (
+    ArtifactInvalidationPlan,
+    plan_artifact_invalidation,
+)
 from wre.domain.artifact_keys import (
     ARTIFACT_KEY_SCHEMA_VERSION,
     ArtifactInputFingerprint,
@@ -70,6 +74,7 @@ __all__ = [
     "ArtifactDependencyGraph",
     "ArtifactId",
     "ArtifactInputFingerprint",
+    "ArtifactInvalidationPlan",
     "ArtifactKey",
     "ArtifactKeyMaterial",
     "ArtifactKind",
@@ -120,4 +125,5 @@ __all__ = [
     "VideoObservation",
     "canonical_artifact_key_bytes",
     "derive_artifact_key",
+    "plan_artifact_invalidation",
 ]
