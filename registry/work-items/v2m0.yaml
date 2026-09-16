@@ -652,7 +652,7 @@ work_items:
   - id: V2L2.5
     lot: V2L2
     title: Artifact materialization verification metadata
-    status: ready
+    status: done
     objective: Define and persist immutable local artifact materialization metadata for one or more exact output files and verify their presence size and SHA-256 under an explicit local root, producing a fail-closed typed verification outcome without repair deletion or cache-reuse selection.
     allowed_scope:
       - src/wre/domain/artifact_materialization.py
@@ -722,7 +722,73 @@ work_items:
       - SQLite put/get/reopen idempotency conflict missing-record kind-mismatch corruption and unsupported-version tests
       - regression tests for cache candidate lookup dependency persistence invalidation planning and retained persistence
       - full fast CI
-  - {id: V2L2.6, lot: V2L2, title: Cache reuse and invalidation regression, status: planned, depends_on: [V2L2.5]}
+  - id: V2L2.6
+    lot: V2L2
+    title: Cache reuse and invalidation regression
+    status: ready
+    objective: Close V2L2 with a deterministic integration regression fixture proving that exact ArtifactKey candidate discovery is insufficient without verified materialization, that changed computation identity does not reuse stale candidates, and that dependency invalidation scopes only downstream artifacts, then record the V2L2 lot review without introducing a cache manager or execution scheduler.
+    allowed_scope:
+      - tests/test_artifact_cache_regression.py
+      - docs/reviews/V2L2-artifact-dag-cache-review.md
+      - registry/reviews.yaml V2L2 review state and evidence
+      - registry/components.yaml V2L2 completion and regression-test coverage
+      - PROJECT_STATE.yaml final V2L2-to-V2L3 handoff metadata after review passes
+      - registry/work-items/v2m0.yaml V2L2 completion and V2L3.1 activation metadata after review passes
+    out_of_scope:
+      - adding a production cache-manager cache-hit resolver reuse-policy service or automatic winner-selection API
+      - ranking candidates by project recency path producer timestamp or any heuristic outside exact ArtifactKey identity
+      - writing deleting evicting garbage-collecting repairing quarantining or mutating candidate metadata materialization metadata dependency records or files as part of lookup verification or invalidation planning
+      - changing ArtifactKey ArtifactMetadata ArtifactDependencyGraph ArtifactInvalidationPlan or materialization verification semantics established by V2L2.1 through V2L2.5
+      - recomputation execution retry checkpoint job ordering resource scheduling pipeline orchestration or route selection
+      - remote object-store distributed cache cloud synchronization or network transfer behavior
+      - adapter/model/shipping registry implementation owned by V2L3
+      - stable cross-adapter failure taxonomy quality policy or benchmark behavior owned by V2L4
+      - starting V2L3.1 product implementation in the V2L2 review PR
+    depends_on: [V2L2.5]
+    read_before:
+      - docs/02_ARCHITECTURE.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - src/wre/domain/artifact_keys.py
+      - src/wre/domain/artifact_graph.py
+      - src/wre/domain/artifact_invalidation.py
+      - src/wre/domain/artifact_materialization.py
+      - src/wre/materialization.py
+      - src/wre/persistence/sqlite_store.py
+      - tests/test_artifact_cache_lookup.py
+      - tests/test_artifact_invalidation.py
+      - tests/test_artifact_materialization.py
+      - docs/reviews/V2L1-scene-project-artifact-identity-review.md
+    reuse:
+      - exact SQLiteLocalStore.find_artifact_metadata_by_key candidate discovery from V2L2.3
+      - immutable persisted artifact materialization metadata and read-only local verifier from V2L2.5
+      - pure dependency-scoped plan_artifact_invalidation behavior from V2L2.4
+      - ArtifactKey derivation and exact producer/config/input identity from V2L1.5
+      - retained SQLite immutable record semantics and native PyCOLMAP integration lane for final lot handoff confidence
+    acceptance:
+      - A regression fixture composes only public V2L2.1 through V2L2.5 contracts and introduces no production cache-policy implementation.
+      - Multiple exact ArtifactKey candidates remain discoverable; the fixture demonstrates explicitly that key equality alone does not make any candidate reusable.
+      - A candidate satisfies the fixture's verified-materialization precondition only when exact materialization metadata exists for its ArtifactRef and current local bytes verify VERIFIED under the supplied root.
+      - Candidates with absent materialization metadata MISSING bytes or CORRUPTED bytes fail the verified-materialization precondition without filename timestamp project or other fallback matching.
+      - Changing canonical computation identity such as ConfigurationIdentity yields a different ArtifactKey and does not discover stale candidates stored under the previous key.
+      - Corrupting bytes after a previously VERIFIED check changes the next verification result to CORRUPTED while persisted ArtifactMetadata and materialization expectations remain unchanged.
+      - For a validated artifact dependency DAG, invalidation of a changed root includes that root and exactly its downstream direct/transitive dependents while excluding upstream dependencies and disconnected artifacts.
+      - Planning invalidation is proven non-destructive and does not delete or mutate cached ArtifactMetadata materialization metadata dependency records or local files.
+      - Reopening SQLiteLocalStore preserves candidate materialization and dependency expectations and the integrated fixture remains deterministic.
+      - The V2L2 lot review records PASS only after V2L2.1 through V2L2.6 acceptance evidence, full fast CI and the retained native PyCOLMAP integration lane are green.
+      - V2L3.1 is expanded to a complete deny-by-default executable contract before becoming the sole next ready item; no V2L3 product implementation is bundled.
+    tests:
+      - integrated exact-key candidate plus VERIFIED materialization fixture
+      - absent missing and corrupted materialization negative cases
+      - changed canonical key stale-candidate miss regression
+      - post-verification byte-corruption regression preserving persisted expectations
+      - dependency-scoped downstream invalidation with explicit non-destructive persistence/file assertions
+      - store reopen and deterministic integrated-fixture regression
+      - full fast CI
+      - retained native PyCOLMAP integration workflow for final V2L2 handoff
+      - V2L2 lot review checklist
   - {id: V2L3.1, lot: V2L3, title: Adapter capability descriptor, status: planned, depends_on: [V2L2.6]}
   - {id: V2L3.2, lot: V2L3, title: Model checkpoint hardware identity, status: planned, depends_on: [V2L3.1]}
   - {id: V2L3.3, lot: V2L3, title: Shipping license reproducibility registry schema, status: planned, depends_on: [V2L3.2]}

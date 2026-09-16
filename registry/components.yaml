@@ -46,7 +46,9 @@ components:
     implementation:
       - src/wre/domain/artifact_graph.py
       - src/wre/domain/artifact_invalidation.py
+      - src/wre/domain/artifact_materialization.py
       - src/wre/domain/__init__.py
+      - src/wre/materialization.py
       - src/wre/persistence/codec.py
       - src/wre/persistence/sqlite_store.py
     tests:
@@ -54,6 +56,7 @@ components:
       - tests/test_artifact_dependencies.py
       - tests/test_artifact_cache_lookup.py
       - tests/test_artifact_invalidation.py
+      - tests/test_artifact_materialization.py
     status: implementing
   adapter_model_registry: {owner_lot: V2L3, implementation: [], tests: [], status: planned}
   quality_failure_benchmarks: {owner_lot: V2L4, implementation: [], tests: [], status: planned}

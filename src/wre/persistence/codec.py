@@ -6,6 +6,10 @@ from datetime import UTC, datetime
 from typing import cast
 
 from wre.domain.artifact_keys import ArtifactKey
+from wre.domain.artifact_materialization import (
+    ArtifactMaterializationEntry,
+    ArtifactMaterializationMetadata,
+)
 from wre.domain.artifact_metadata import ArtifactMetadata
 from wre.domain.artifacts import ArtifactId, ArtifactKind, ArtifactRef
 from wre.domain.cameras import (
@@ -622,3 +626,39 @@ def decode_artifact_dependencies(
     if len(dependencies) != len(decoded_dependencies):
         raise ValueError("dependencies must not contain duplicate ArtifactRef values")
     return artifact_ref, dependencies
+
+
+def encode_artifact_materialization(
+    metadata: ArtifactMaterializationMetadata,
+) -> JsonObject:
+    if not isinstance(metadata, ArtifactMaterializationMetadata):
+        raise TypeError("metadata must be ArtifactMaterializationMetadata")
+    return {
+        "artifact_ref": _encode_exact_artifact_ref(metadata.artifact_ref),
+        "entries": [
+            {
+                "byte_length": entry.byte_length,
+                "relative_path": entry.relative_path,
+                "sha256": entry.sha256.value,
+            }
+            for entry in metadata.entries
+        ],
+    }
+
+
+def decode_artifact_materialization(
+    payload: Mapping[str, object],
+) -> ArtifactMaterializationMetadata:
+    data = dict(payload)
+    entries = tuple(
+        ArtifactMaterializationEntry(
+            relative_path=_string(entry.get("relative_path"), "entries[].relative_path"),
+            sha256=Sha256Digest(_string(entry.get("sha256"), "entries[].sha256")),
+            byte_length=_int(entry.get("byte_length"), "entries[].byte_length"),
+        )
+        for entry in _object_list(data.get("entries"), "entries")
+    )
+    return ArtifactMaterializationMetadata(
+        artifact_ref=_decode_exact_artifact_ref(data.get("artifact_ref"), "artifact_ref"),
+        entries=entries,
+    )
