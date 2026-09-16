@@ -416,7 +416,7 @@ work_items:
   - id: V2L2.1
     lot: V2L2
     title: Artifact dependency DAG contract
-    status: ready
+    status: done
     objective: Define the minimal immutable in-memory directed artifact-dependency graph over exact ArtifactRef values, with explicit direct-edge semantics and fail-closed structural validation including cycle rejection, without persistence or cache behavior.
     allowed_scope:
       - src/wre/domain/artifact_graph.py
@@ -455,18 +455,83 @@ work_items:
       - Any directed dependency cycle of length two or greater is rejected fail closed; disconnected acyclic components and isolated nodes remain valid.
       - Within one graph, the same logical ArtifactId cannot appear under conflicting ArtifactKind declarations.
       - Graph collection semantics are explicitly set-like and immutable; equality and hashing do not depend on caller insertion order and no hidden mutable adjacency state is exposed.
+      - Cycle validation is iterative and accepts valid dependency chains beyond the Python recursion limit without weakening cycle rejection.
       - The contract represents direct dependency claims only and does not infer transitive edges from ArtifactKeyMaterial ArtifactMetadata producer identity filenames or paths.
       - No persistence dependency lookup reverse index cache invalidation materialization scheduling adapter routing or solver behavior is introduced.
       - Existing V2L1 project/artifact metadata persistence and retained V1 behavior remain unchanged.
     tests:
       - focused construction immutability equality and hashing tests for ArtifactDependencyEdge and ArtifactDependencyGraph
-      - valid isolated chain diamond and disconnected-DAG cases
+      - valid isolated chain diamond disconnected-DAG and long-chain cases
       - negative self-cycle two-node-cycle and longer-cycle cases
       - negative undeclared-endpoint and conflicting ArtifactId-to-ArtifactKind cases
       - negative wrong collection/member/raw-string substitutions
       - regression tests proving no V2L1 metadata or persistence behavior changes
       - full fast CI
-  - {id: V2L2.2, lot: V2L2, title: Artifact metadata store and dependency lookup, status: planned, depends_on: [V2L2.1]}
+  - id: V2L2.2
+    lot: V2L2
+    title: Artifact metadata store and dependency lookup
+    status: ready
+    objective: Extend the retained local SQLite persistence boundary with deterministic immutable storage and exact lookup of validated direct artifact-dependency claims, while preserving V2L1 artifact metadata behavior and stopping before any cache lookup or invalidation policy.
+    allowed_scope:
+      - src/wre/persistence/codec.py
+      - src/wre/persistence/sqlite_store.py
+      - src/wre/persistence/__init__.py only if focused public persistence exports require it
+      - tests/test_artifact_dependencies.py
+      - focused additions to tests/test_persistence.py if required for retained-regression coverage
+    out_of_scope:
+      - changing ArtifactDependencyEdge or ArtifactDependencyGraph semantics validation or public identity contracts from V2L2.1
+      - ArtifactKey-to-artifact lookup cache hit/miss reuse policy or candidate selection owned by V2L2.3
+      - transitive dependency closure invalidation planning deletion garbage collection or destructive mutation owned by V2L2.4
+      - artifact materialization path URI output-content digest byte verification corruption state or repair owned by V2L2.5
+      - inferring dependencies from ArtifactKeyMaterial ArtifactMetadata producer identity filenames paths timestamps project state or filesystem content
+      - implicitly creating repairing or mutating SceneProject or ArtifactMetadata rows while writing dependency records
+      - adding mutable update/delete APIs for existing artifact dependency claims
+      - schema migration framework ORM external database backend or new dependency
+      - scheduler routing solver adapter-registry or runtime behavior
+      - starting V2L2.3 product implementation in this work item
+    depends_on: [V2L2.1]
+    read_before:
+      - docs/02_ARCHITECTURE.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - src/wre/domain/artifact_graph.py
+      - src/wre/domain/artifacts.py
+      - src/wre/domain/artifact_metadata.py
+      - src/wre/persistence/codec.py
+      - src/wre/persistence/sqlite_store.py
+      - tests/test_artifact_graph.py
+      - tests/test_artifact_metadata.py
+      - tests/test_persistence.py
+    reuse:
+      - validated ArtifactDependencyGraph as the only accepted graph-write input instead of accepting unvalidated raw edge collections
+      - ArtifactRef as exact persisted node/dependency identity
+      - retained SQLiteLocalStore generic wre_records table transaction and immutable conflict semantics
+      - retained canonical_json and strict fail-closed decoder helpers
+      - existing database and record schema versions without a speculative migration framework
+    acceptance:
+      - Dependency persistence records every declared graph node including isolated nodes as its exact ArtifactRef plus its immutable set of direct dependency ArtifactRef values; no transitive edges are synthesized.
+      - The wire representation of set-like nodes/dependencies is deterministic through explicit canonical ordering while the public lookup contract returns immutable frozenset values.
+      - SQLiteLocalStore accepts only a typed already-validated ArtifactDependencyGraph for graph persistence and writes all graph dependency records transactionally so a conflict or malformed existing record cannot leave a partial graph write.
+      - Rewriting an identical graph or an overlapping graph whose existing node dependency records are identical is idempotent.
+      - Reusing one ArtifactId with a different ArtifactKind or a different direct-dependency set raises PersistenceConflictError and rolls back the entire attempted graph write.
+      - Exact direct-dependency lookup by ArtifactRef returns the stored immutable direct dependency set, returns None when no dependency record exists, and fails closed if the stored record identity/kind does not exactly match the requested ArtifactRef.
+      - Exact direct-dependent lookup returns the immutable set of artifacts that directly depend on the requested ArtifactRef; an artifact with no direct dependents yields an empty frozenset and no transitive closure is performed.
+      - Corrupted malformed unsupported-version or wrong-type dependency records fail closed through the retained persistence error boundary rather than being skipped or repaired.
+      - Reopening the SQLite store preserves direct dependency and direct-dependent lookup exactly, including isolated nodes and empty dependency sets.
+      - Dependency persistence does not require create fetch repair or mutate SceneProject or ArtifactMetadata records and does not resolve ArtifactKey values.
+      - Existing SceneProject ArtifactMetadata observation camera metadata fragment reconstruction-run and V2L2.1 graph behavior remain unchanged.
+      - No cache lookup reuse invalidation materialization scheduling routing or solver behavior is introduced.
+    tests:
+      - deterministic dependency-record codec tests including canonical ordering and empty dependency sets
+      - SQLite graph-write reopen and exact direct-dependency lookup tests for isolated chain diamond and disconnected graphs
+      - direct-dependent lookup tests proving only immediate dependents are returned
+      - idempotent repeated and overlapping graph-write tests
+      - transactional rollback tests for dependency-set and ArtifactKind conflicts
+      - malformed-record identity-kind and unsupported-version fail-closed tests
+      - regression tests for V2L1 metadata persistence V2L2.1 graph behavior and retained V1 persistence
+      - full fast CI
   - {id: V2L2.3, lot: V2L2, title: Canonical cache lookup, status: planned, depends_on: [V2L2.2]}
   - {id: V2L2.4, lot: V2L2, title: Dependency scoped invalidation planning, status: planned, depends_on: [V2L2.3]}
   - {id: V2L2.5, lot: V2L2, title: Artifact materialization verification metadata, status: planned, depends_on: [V2L2.4]}
