@@ -269,9 +269,7 @@ def test_post_verification_byte_corruption_preserves_persisted_expectations(
     assert first.status is ArtifactMaterializationVerificationStatus.VERIFIED
     assert second.status is ArtifactMaterializationVerificationStatus.CORRUPTED
     assert (
-        store.get_artifact_materialization(candidate.artifact_ref)
-        == persisted_before
-        == manifest
+        store.get_artifact_materialization(candidate.artifact_ref) == persisted_before == manifest
     )
     assert (
         store.get_artifact_metadata(candidate.artifact_ref.artifact_id)
