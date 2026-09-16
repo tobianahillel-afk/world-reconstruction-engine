@@ -62,9 +62,7 @@ def test_failure_category_is_distinct_from_other_closed_domain_vocabularies() ->
     from wre.domain.provenance import ProvenanceClass
 
     failure_tokens = {member.value for member in FailureCategory}
-    materialization_tokens = {
-        member.value for member in ArtifactMaterializationVerificationStatus
-    }
+    materialization_tokens = {member.value for member in ArtifactMaterializationVerificationStatus}
     provenance_tokens = {member.value for member in ProvenanceClass}
 
     assert FailureCategory is not ArtifactMaterializationVerificationStatus
