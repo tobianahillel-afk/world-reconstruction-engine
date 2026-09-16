@@ -37,7 +37,7 @@ def test_schema_root_is_closed_draft_2020_12() -> None:
     }
 
 
-def test_entry_schema_is_closed_and_requires_only_v2l3_3_metadata() -> None:
+def test_entry_schema_is_closed_and_requires_v2l3_4_metadata() -> None:
     entry = _schema()["$defs"]["entry"]
     required = {
         "adapter_id",
@@ -50,6 +50,9 @@ def test_entry_schema_is_closed_and_requires_only_v2l3_3_metadata() -> None:
         "license",
         "shipping_status",
         "reproducibility_notes",
+        "failure_signals",
+        "metric_names",
+        "resume_mode",
     }
 
     assert entry["type"] == "object"
@@ -143,12 +146,49 @@ def test_model_checkpoint_are_nullable_explicit_identities_without_defaults() ->
     assert definitions["checkpoint_identity"]["properties"]["sha256"] == {"$ref": "#/$defs/sha256"}
 
 
-def test_v2l3_4_failure_metric_resume_fields_are_not_in_schema() -> None:
-    schema_text = json.dumps(_schema(), sort_keys=True)
+def test_failure_metric_and_resume_declarations_are_minimal() -> None:
+    entry_properties = _schema()["$defs"]["entry"]["properties"]
+    token_array = {
+        "type": "array",
+        "uniqueItems": True,
+        "items": {"$ref": "#/$defs/token"},
+    }
 
-    assert '"failure' not in schema_text
-    assert '"metric' not in schema_text
-    assert '"resume' not in schema_text
+    assert entry_properties["failure_signals"] == token_array
+    assert entry_properties["metric_names"] == token_array
+    assert "minItems" not in entry_properties["failure_signals"]
+    assert "minItems" not in entry_properties["metric_names"]
+    assert entry_properties["resume_mode"] == {
+        "type": "string",
+        "enum": ["unsupported", "checkpoint"],
+    }
+    assert "default" not in entry_properties["resume_mode"]
+
+
+def test_v2l3_4_does_not_pull_future_failure_metric_checkpoint_or_scheduler_semantics() -> None:
+    schema_text = json.dumps(_schema(), sort_keys=True)
+    forbidden_fields = (
+        "failure_category",
+        "failure_mapping",
+        "metric_values",
+        "metric_units",
+        "metric_thresholds",
+        "metric_directionality",
+        "checkpoint_path",
+        "checkpoint_hash",
+        "checkpoint_payload",
+        "last_completed_substage",
+        "interruption_reason",
+        "cpu_cores",
+        "gpu_count",
+        "vram",
+        "ram",
+        "scratch_storage",
+        "network_requirements",
+    )
+
+    for field in forbidden_fields:
+        assert f'"{field}"' not in schema_text
 
 
 def test_dependency_registry_remains_separate_evidence_source() -> None:
