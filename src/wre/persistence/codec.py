@@ -567,3 +567,58 @@ def decode_artifact_metadata(payload: Mapping[str, object]) -> ArtifactMetadata:
         producer=_decode_artifact_producer_identity(data.get("producer"), "producer"),
         provenance_class=ProvenanceClass(_string(data.get("provenance_class"), "provenance_class")),
     )
+
+
+def _artifact_ref_sort_key(artifact_ref: ArtifactRef) -> tuple[str, str]:
+    return artifact_ref.artifact_id.value, artifact_ref.artifact_kind.value
+
+
+def _encode_exact_artifact_ref(artifact_ref: ArtifactRef) -> JsonObject:
+    return {
+        "artifact_id": artifact_ref.artifact_id.value,
+        "artifact_kind": artifact_ref.artifact_kind.value,
+    }
+
+
+def _decode_exact_artifact_ref(payload: object, context: str) -> ArtifactRef:
+    data = _object(payload, context)
+    return ArtifactRef(
+        artifact_id=ArtifactId(_string(data.get("artifact_id"), f"{context}.artifact_id")),
+        artifact_kind=ArtifactKind(_string(data.get("artifact_kind"), f"{context}.artifact_kind")),
+    )
+
+
+def encode_artifact_dependencies(
+    artifact_ref: ArtifactRef,
+    dependencies: frozenset[ArtifactRef],
+) -> JsonObject:
+    if not isinstance(artifact_ref, ArtifactRef):
+        raise TypeError("artifact_ref must be ArtifactRef")
+    if not isinstance(dependencies, frozenset):
+        raise TypeError("dependencies must be an immutable frozenset")
+    if not all(isinstance(dependency, ArtifactRef) for dependency in dependencies):
+        raise TypeError("dependencies must contain ArtifactRef values")
+
+    return {
+        "artifact_ref": _encode_exact_artifact_ref(artifact_ref),
+        "dependencies": [
+            _encode_exact_artifact_ref(dependency)
+            for dependency in sorted(dependencies, key=_artifact_ref_sort_key)
+        ],
+    }
+
+
+def decode_artifact_dependencies(
+    payload: Mapping[str, object],
+) -> tuple[ArtifactRef, frozenset[ArtifactRef]]:
+    data = dict(payload)
+    artifact_ref = _decode_exact_artifact_ref(data.get("artifact_ref"), "artifact_ref")
+    encoded_dependencies = _object_list(data.get("dependencies"), "dependencies")
+    decoded_dependencies = tuple(
+        _decode_exact_artifact_ref(dependency, "dependencies[]")
+        for dependency in encoded_dependencies
+    )
+    dependencies = frozenset(decoded_dependencies)
+    if len(dependencies) != len(decoded_dependencies):
+        raise ValueError("dependencies must not contain duplicate ArtifactRef values")
+    return artifact_ref, dependencies
