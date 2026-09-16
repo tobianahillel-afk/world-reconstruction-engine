@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 from wre.domain import FailureCategory
 
 
