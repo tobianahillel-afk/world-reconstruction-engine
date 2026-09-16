@@ -775,7 +775,7 @@ work_items:
       - Changing canonical computation identity such as ConfigurationIdentity yields a different ArtifactKey and does not discover stale candidates stored under the previous key.
       - Corrupting bytes after a previously VERIFIED check changes the next verification result to CORRUPTED while persisted ArtifactMetadata and materialization expectations remain unchanged.
       - For a validated artifact dependency DAG, invalidation of a changed root includes that root and exactly its downstream direct/transitive dependents while excluding upstream dependencies and disconnected artifacts.
-      - Planning invalidation is proven non-destructive: it does not delete or mutate cached ArtifactMetadata materialization metadata dependency records or local files.
+      - Planning invalidation is proven non-destructive and does not delete or mutate cached ArtifactMetadata materialization metadata dependency records or local files.
       - Reopening SQLiteLocalStore preserves candidate materialization and dependency expectations and the integrated fixture remains deterministic.
       - The V2L2 lot review records PASS only after V2L2.1 through V2L2.6 acceptance evidence, full fast CI and the retained native PyCOLMAP integration lane are green.
       - V2L3.1 is expanded to a complete deny-by-default executable contract before becoming the sole next ready item; no V2L3 product implementation is bundled.
