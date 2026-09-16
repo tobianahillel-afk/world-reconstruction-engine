@@ -5,7 +5,7 @@ This repository is designed to be resumed by an AI coding agent with no conversa
 ## Mandatory startup sequence
 
 1. Read `docs/00_START_HERE.md`.
-2. Read the canonical blueprint documents referenced there: `docs/01_PRODUCT.md`, `docs/02_ARCHITECTURE.md`, `docs/03_PIPELINE.md`, `docs/14_TECHNOLOGY_SELECTION.md`, `docs/15_PRODUCTION_RUNTIME.md`, `docs/23_ENGINEERING_EXECUTION.md`, `docs/24_SYSTEM_INVARIANTS.md`, `docs/25_V2_ROADMAP.md`, and `docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md`.
+2. Read the canonical blueprint documents referenced there: `docs/01_PRODUCT.md`, `docs/02_ARCHITECTURE.md`, `docs/03_PIPELINE.md`, `docs/14_TECHNOLOGY_SELECTION.md`, `docs/27_RESEARCH_CANDIDATE_COVERAGE.md`, `docs/15_PRODUCTION_RUNTIME.md`, `docs/23_ENGINEERING_EXECUTION.md`, `docs/24_SYSTEM_INVARIANTS.md`, `docs/25_V2_ROADMAP.md`, and `docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md`.
 3. Read `PROJECT_STATE.yaml`.
 4. Read the roadmap index `registry/work-items.yaml`, follow its `work_item_files`, and locate the exact `active_work_item` in the corresponding milestone file under `registry/work-items/`.
 5. Verify the active item has a complete executable contract: objective, allowed scope, out-of-scope, dependencies, read-before, reuse, acceptance and tests.
@@ -21,6 +21,8 @@ This repository is designed to be resumed by an AI coding agent with no conversa
 If the blueprint advances beyond the machine-readable roadmap, follow the transition rule in `docs/00_START_HERE.md`: do not opportunistically reinterpret old work items. A dedicated roadmap/state migration must reconcile the implementation sequence.
 
 `docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md` is authoritative for the V2 product/architecture freeze and legacy-v1 policy. V1 is an implementation donor and source of regression evidence, not a compatibility target. If a legacy interface or sequencing assumption conflicts with a frozen v2 contract, the v2 contract wins.
+
+`docs/27_RESEARCH_CANDIDATE_COVERAGE.md` is intentionally living rather than frozen. It maps the current research landscape into the stable v2 responsibilities. A new method should normally update the candidate/benchmark landscape, not the core architecture.
 
 ## Scope is deny-by-default
 
@@ -43,6 +45,8 @@ A work item must be small enough for one agent to understand, implement, test an
 The v2 roadmap policy limits lots to at most six work items. Split before coding when an item combines independent failure domains such as contract + several adapters, candidate generation + truth acceptance, geometry + appearance, master representation + runtime optimization, short-event dynamics + long-term chronology, or implementation + a benchmark/default-promotion program that does not yet exist.
 
 Prefer more small lots over deep administrative nesting. One coherent work item should normally equal one PR.
+
+Before activating a work item that integrates or promotes a solver/model, refresh the candidate shortlist from `docs/14_TECHNOLOGY_SELECTION.md`, `docs/27_RESEARCH_CANDIDATE_COVERAGE.md`, the current adapter/model/dependency registries and current evidence. Do not blindly implement the method named in an old conversation or roadmap-era shortlist. Candidate refresh must still respect the work item's deny-by-default product responsibility; it changes which specialist is evaluated, not the owning contract.
 
 ## Core product rules
 
@@ -86,7 +90,7 @@ For a new capability family, normally implement in this order:
 
 1. solver-independent contract;
 2. codec/persistence support if needed;
-3. smallest baseline/compatibility adapter;
+3. smallest stable baseline or donor adapter when one cleanly fits the v2 contract;
 4. focused fixtures/tests;
 5. alternative specialist adapter(s);
 6. benchmark under the same contract;
