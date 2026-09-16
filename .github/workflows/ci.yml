@@ -16,7 +16,7 @@ concurrency:
 jobs:
   fast:
     name: fast
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
 
     steps:
@@ -41,10 +41,10 @@ jobs:
       - name: Install pinned FFmpeg CLI
         run: |
           sudo apt-get update
-          sudo apt-get install --yes --no-install-recommends ffmpeg=7:6.1.1-3ubuntu5
-          test "$(dpkg-query -W -f='${Version}' ffmpeg)" = "7:6.1.1-3ubuntu5"
-          test "$(ffmpeg -version | head -n 1 | awk '{print $3}')" = "6.1.1-3ubuntu5"
-          test "$(ffprobe -version | head -n 1 | awk '{print $3}')" = "6.1.1-3ubuntu5"
+          sudo apt-get install --yes --no-install-recommends ffmpeg=7:8.0.1-3ubuntu2
+          test "$(dpkg-query -W -f='${Version}' ffmpeg)" = "7:8.0.1-3ubuntu2"
+          test "$(ffmpeg -version | head -n 1 | awk '{print $3}')" = "8.0.1-3ubuntu2"
+          test "$(ffprobe -version | head -n 1 | awk '{print $3}')" = "8.0.1-3ubuntu2"
 
       - name: Validate repository metadata
         run: uv run python scripts/validate_repo.py
