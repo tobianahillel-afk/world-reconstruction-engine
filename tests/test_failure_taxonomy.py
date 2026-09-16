@@ -2,11 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from wre.domain import (
-    ArtifactMaterializationVerificationStatus,
-    FailureCategory,
-    ProvenanceClass,
-)
+from wre.domain import ArtifactMaterializationVerificationStatus, FailureCategory, ProvenanceClass
 
 
 _EXPECTED_FAILURES = [
