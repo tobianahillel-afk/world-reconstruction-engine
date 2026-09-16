@@ -13,6 +13,7 @@ from wre.domain import (
     ArtifactProducerIdentity,
     CheckpointIdentity,
     ConfigurationIdentity,
+    HardwareRuntimeIdentity,
     ModelIdentity,
     ProducerRef,
     Sha256Digest,
@@ -76,6 +77,7 @@ def _material(
     output_kind: str = "geometry.solution",
     input_fingerprints: tuple[ArtifactInputFingerprint, ...] | None = None,
     producer: ArtifactProducerIdentity | None = None,
+    hardware_runtime: HardwareRuntimeIdentity | None = None,
 ) -> ArtifactKeyMaterial:
     return ArtifactKeyMaterial(
         output_kind=ArtifactKind(output_kind),
@@ -83,6 +85,7 @@ def _material(
             _input_fingerprints() if input_fingerprints is None else input_fingerprints
         ),
         producer=_learned_producer() if producer is None else producer,
+        hardware_runtime=hardware_runtime,
     )
 
 
@@ -107,6 +110,8 @@ def test_canonical_artifact_key_has_stable_golden_vector() -> None:
     canonical = canonical_artifact_key_bytes(material)
     key = derive_artifact_key(material)
 
+    assert material.hardware_runtime is None
+    assert b"hardware_runtime_sha256" not in canonical
     assert canonical == expected.encode("utf-8")
     assert key == ArtifactKey(
         sha256=Sha256Digest("553de78370551d9ebbd843bad4f7f0b286bc4f5c18bf339aa6ac04c11a384111")
@@ -114,6 +119,50 @@ def test_canonical_artifact_key_has_stable_golden_vector() -> None:
     assert str(key) == (
         "artifact-key:v1:553de78370551d9ebbd843bad4f7f0b286bc4f5c18bf339aa6ac04c11a384111"
     )
+
+
+def test_present_hardware_runtime_has_stable_canonical_serialization() -> None:
+    hardware_runtime = HardwareRuntimeIdentity(sha256=_digest("5"))
+    material = _material(hardware_runtime=hardware_runtime)
+    expected = (
+        '{"checkpoint":{"identifier":"weights:quality","sha256":"'
+        + "4" * 64
+        + '"},"configuration_sha256":"'
+        + "3" * 64
+        + '","domain":"wre.artifact-key","hardware_runtime_sha256":"'
+        + "5" * 64
+        + '","inputs":[{"artifact_kind":"media.image","sha256":"'
+        + "1" * 64
+        + '"},{"artifact_kind":"feature.matches","sha256":"'
+        + "2" * 64
+        + '"}],"model":{"name":"example.model","revision":"commit:def",'
+        + '"version":"4.5"},"output_kind":"geometry.solution","producer":'
+        + '{"implementation":"wre.adapters.example","revision":"commit:abc",'
+        + '"version":"1.2.3"},"schema_version":1}'
+    )
+
+    canonical = canonical_artifact_key_bytes(material)
+    key = derive_artifact_key(material)
+
+    assert canonical == expected.encode("utf-8")
+    assert key == ArtifactKey(
+        sha256=Sha256Digest("309bbe92150192d71e7b8010b94608317dd33c8f3218ed224a67960094f35fa1")
+    )
+
+
+def test_hardware_runtime_identity_changes_only_hardware_sensitive_key_material() -> None:
+    first = HardwareRuntimeIdentity(sha256=_digest("5"))
+    same = HardwareRuntimeIdentity(sha256=_digest("5"))
+    other = HardwareRuntimeIdentity(sha256=_digest("6"))
+
+    base_key = derive_artifact_key(_material())
+    first_key = derive_artifact_key(_material(hardware_runtime=first))
+    same_key = derive_artifact_key(_material(hardware_runtime=same))
+    other_key = derive_artifact_key(_material(hardware_runtime=other))
+
+    assert first_key == same_key
+    assert first_key != other_key
+    assert base_key != first_key
 
 
 def test_key_material_excludes_logical_and_epistemic_metadata() -> None:
@@ -234,6 +283,13 @@ def test_artifact_key_contracts_reject_untyped_members() -> None:
             output_kind=ArtifactKind("geometry.solution"),
             input_fingerprints=_input_fingerprints(),
             producer=cast(Any, "producer"),
+        )
+    with pytest.raises(TypeError, match=r"artifact_key_material\.hardware_runtime"):
+        ArtifactKeyMaterial(
+            output_kind=ArtifactKind("geometry.solution"),
+            input_fingerprints=_input_fingerprints(),
+            producer=_learned_producer(),
+            hardware_runtime=cast(Any, _digest("5")),
         )
     with pytest.raises(TypeError, match=r"artifact_key\.sha256"):
         ArtifactKey(sha256=cast(Any, "8" * 64))

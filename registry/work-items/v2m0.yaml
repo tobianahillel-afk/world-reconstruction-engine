@@ -846,7 +846,7 @@ work_items:
   - id: V2L3.2
     lot: V2L3
     title: Model checkpoint hardware identity
-    status: ready
+    status: done
     objective: Reuse the exact ModelIdentity and CheckpointIdentity already owned by V2L1.3 and add only one immutable caller-supplied normalized HardwareRuntimeIdentity that can optionally participate in canonical ArtifactKeyMaterial when hardware/runtime can materially affect output bytes, while preserving existing key bytes when that identity is absent.
     allowed_scope:
       - src/wre/domain/hardware_identity.py
@@ -902,7 +902,65 @@ work_items:
       - tests proving only hardware-runtime digest changes alter the key while identical identity remains stable
       - regression proving ModelIdentity CheckpointIdentity and ArtifactProducerIdentity behavior remains unchanged
       - full fast CI
-  - {id: V2L3.3, lot: V2L3, title: Shipping license reproducibility registry schema, status: planned, depends_on: [V2L3.2]}
+  - id: V2L3.3
+    lot: V2L3
+    title: Shipping license reproducibility registry schema
+    status: ready
+    objective: Define only a versioned machine-readable adapter/model registry envelope and closed entry schema for capability identity, exact producer/model/checkpoint references, dependency references, explicit artifact-key hardware policy, license review and shipping status, and reproducibility notes without adding concrete production entries or semantic registry validation.
+    allowed_scope:
+      - registry/adapter-models.yaml
+      - registry/schemas/adapter-model-registry.schema.json
+      - tests/test_adapter_model_registry_schema.py
+    out_of_scope:
+      - adding concrete COLMAP FFmpeg ExifRead or any other adapter model tool or baseline entry owned by V2L3.6
+      - modifying reclassifying or duplicating version license source integration or review evidence already owned by registry/dependencies.yaml
+      - production semantic or cross-registry validation including dependency existence entry uniqueness canonical ordering floating-alias checks and shipping-policy cross-field enforcement owned by V2L3.5
+      - adapter failure taxonomy metric or resume declarations owned by V2L3.4
+      - benchmark records quality policy default promotion ranking fallback or routing behavior
+      - CPU core GPU count VRAM RAM scratch storage output storage network duration scheduling requirements or supported-hardware compatibility matrices
+      - probing normalizing or computing HardwareRuntimeIdentity from a real machine or runtime
+      - downloads imports plugin discovery subprocess execution model loading checkpoint resolution or network access
+      - adding a new schema-validation runtime dependency or changing pyproject.toml uv.lock or registry/dependencies.yaml
+      - starting V2L3.4 implementation in this work item
+    depends_on: [V2L3.2]
+    read_before:
+      - docs/02_ARCHITECTURE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - registry/dependencies.yaml
+      - registry/schemas/fixture.schema.json
+      - src/wre/domain/adapter_capabilities.py
+      - src/wre/domain/producer_identity.py
+      - src/wre/domain/hardware_identity.py
+    reuse:
+      - registry/dependencies.yaml keys as dependency evidence references instead of copying dependency version license or source records
+      - AdapterCapabilityName and ArtifactKind wire-token semantics for capability input and output fields
+      - ProducerRef ModelIdentity and CheckpointIdentity field shapes plus the existing lowercase Sha256Digest wire form
+      - V2L3.2 hardware-sensitive artifact-key policy concept without storing one machine-specific hardware digest in the registry
+      - existing closed JSON-schema conventions plus json and PyYAML already available in the development environment
+    acceptance:
+      - registry/adapter-models.yaml is a versioned initial envelope containing exactly schema_version 1 and an empty entries array, with no production approval or baseline entries.
+      - The JSON schema uses Draft 2020-12, rejects undeclared root and nested fields with additionalProperties false, and requires exactly schema_version plus entries at the root.
+      - A future registry entry structurally requires a stable explicit adapter_id, capability descriptor, exact producer identity, dependency_refs, nullable model and checkpoint identities, artifact_key_hardware_policy, license metadata, shipping_status and reproducibility_notes.
+      - Capability input_kinds output_kinds and dependency_refs use array wire forms with uniqueItems true; output_kinds is non-empty while input_kinds may be empty, matching V2L3.1 semantics without introducing combination or cardinality inference.
+      - Producer model and checkpoint fields mirror the existing explicit identity vocabulary; checkpoint SHA-256 uses exactly 64 lowercase hexadecimal characters and no field allows a floating latest alias by default-value inference.
+      - artifact_key_hardware_policy is a closed enum containing exactly required and omitted; the registry stores policy only and never embeds probes or a machine-specific HardwareRuntimeIdentity digest.
+      - License metadata is specific to the adapter model or checkpoint record and contains direct declaration plus review state transitive notes and redistribution notes; dependency_refs remain references to registry/dependencies.yaml rather than copies of dependency license evidence.
+      - shipping_status is a closed enum containing exactly approved experimental benchmark-only and blocked.
+      - reproducibility_notes is explicit text metadata and does not execute detect download or validate an environment.
+      - V2L3.3 contains no failure metric resume benchmark routing default-selection execution or concrete baseline fields and creates no adapter/model entries.
+      - Cross-entry uniqueness dependency-reference existence floating-alias rejection model/checkpoint coupling and shipping-policy semantic checks remain explicitly deferred to V2L3.5 rather than hidden in ad hoc runtime behavior.
+      - Existing registry/dependencies.yaml AdapterCapabilityDescriptor ArtifactProducerIdentity HardwareRuntimeIdentity ArtifactKey behavior and retained V1 behavior remain unchanged.
+    tests:
+      - parse the JSON schema and empty YAML registry envelope deterministically
+      - structural tests for Draft 2020-12 root required fields and additionalProperties false on root and nested objects
+      - tests for closed shipping-status and hardware-policy enums exact lowercase SHA-256 pattern non-empty output kinds and uniqueItems set-like arrays
+      - tests proving the initial registry contains no concrete entries and the schema contains no V2L3.4 failure metric or resume declarations
+      - regression proving registry/dependencies.yaml remains a separate unchanged evidence source rather than duplicated into adapter-models.yaml
+      - full fast CI
   - {id: V2L3.4, lot: V2L3, title: Adapter failure metrics resume declarations, status: planned, depends_on: [V2L3.3]}
   - {id: V2L3.5, lot: V2L3, title: Production registry validator, status: planned, depends_on: [V2L3.4]}
   - {id: V2L3.6, lot: V2L3, title: Register retained production baselines, status: planned, depends_on: [V2L3.5]}
