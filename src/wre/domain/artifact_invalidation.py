@@ -30,7 +30,9 @@ class ArtifactInvalidationPlan:
                 "artifact_invalidation_plan.affected_artifacts must contain ArtifactRef values"
             )
         if not self.roots.issubset(self.affected_artifacts):
-            raise ValueError("artifact invalidation plan affected_artifacts must include every root")
+            raise ValueError(
+                "artifact invalidation plan affected_artifacts must include every root"
+            )
 
 
 def plan_artifact_invalidation(
