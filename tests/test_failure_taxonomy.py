@@ -33,7 +33,7 @@ def test_failure_category_has_exact_closed_member_set() -> None:
 
 def test_failure_category_constructs_from_stable_wire_tokens() -> None:
     for name, wire_token in _EXPECTED_FAILURES:
-        member = FailureCategory[ name ]
+        member = FailureCategory[name]
         assert FailureCategory(wire_token) is member
         assert str(member) == wire_token
         assert hash(member) == hash(FailureCategory(wire_token))
