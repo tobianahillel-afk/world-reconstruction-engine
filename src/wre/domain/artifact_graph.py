@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import deque
 from dataclasses import dataclass
 
 from wre.domain.artifacts import ArtifactId, ArtifactKind, ArtifactRef
@@ -62,23 +63,20 @@ class ArtifactDependencyGraph:
 
     def _validate_acyclic(self) -> None:
         adjacency: dict[ArtifactRef, set[ArtifactRef]] = {node: set() for node in self.nodes}
+        incoming_count: dict[ArtifactRef, int] = {node: 0 for node in self.nodes}
         for edge in self.edges:
             adjacency[edge.artifact].add(edge.dependency)
+            incoming_count[edge.dependency] += 1
 
-        visiting: set[ArtifactRef] = set()
-        visited: set[ArtifactRef] = set()
-
-        def visit(node: ArtifactRef) -> None:
-            if node in visited:
-                return
-            if node in visiting:
-                raise ValueError("artifact dependency graph cannot contain a directed cycle")
-
-            visiting.add(node)
+        ready = deque(node for node, count in incoming_count.items() if count == 0)
+        visited_count = 0
+        while ready:
+            node = ready.popleft()
+            visited_count += 1
             for dependency in adjacency[node]:
-                visit(dependency)
-            visiting.remove(node)
-            visited.add(node)
+                incoming_count[dependency] -= 1
+                if incoming_count[dependency] == 0:
+                    ready.append(dependency)
 
-        for node in self.nodes:
-            visit(node)
+        if visited_count != len(self.nodes):
+            raise ValueError("artifact dependency graph cannot contain a directed cycle")
