@@ -289,7 +289,11 @@ def _schema_enum(
         errors.append(f"adapter model registry schema missing enum: {context}")
         return None
     values = schema_node.get("enum")
-    if not isinstance(values, list) or not values or not all(isinstance(value, str) for value in values):
+    if (
+        not isinstance(values, list)
+        or not values
+        or not all(isinstance(value, str) for value in values)
+    ):
         errors.append(f"adapter model registry schema has invalid enum: {context}")
         return None
     return set(cast(list[str], values))
@@ -392,7 +396,11 @@ def _validate_adapter_model_registry(errors: list[str], root: Path) -> None:
     _require_exact_mapping(errors, registry, "registry/adapter-models.yaml", expected_root_fields)
 
     schema_version = registry.get("schema_version")
-    if isinstance(schema_version, bool) or not isinstance(schema_version, int) or schema_version != 1:
+    if (
+        isinstance(schema_version, bool)
+        or not isinstance(schema_version, int)
+        or schema_version != 1
+    ):
         errors.append("registry/adapter-models.yaml schema_version must be integer 1")
 
     entries_value = registry.get("entries")
@@ -561,7 +569,9 @@ def _validate_adapter_model_registry(errors: list[str], root: Path) -> None:
         )
         for dependency_ref in dependency_refs:
             if dependency_ref not in dependencies:
-                errors.append(f"{context}.dependency_refs references unknown dependency: {dependency_ref}")
+                errors.append(
+                    f"{context}.dependency_refs references unknown dependency: {dependency_ref}"
+                )
 
         model_value = entry.get("model")
         if model_value is not None:
@@ -600,7 +610,10 @@ def _validate_adapter_model_registry(errors: list[str], root: Path) -> None:
                     f"{context}.checkpoint.identifier",
                 )
                 checkpoint_sha = checkpoint.get("sha256")
-                if not isinstance(checkpoint_sha, str) or sha_pattern.fullmatch(checkpoint_sha) is None:
+                if (
+                    not isinstance(checkpoint_sha, str)
+                    or sha_pattern.fullmatch(checkpoint_sha) is None
+                ):
                     errors.append(f"{context}.checkpoint.sha256 must be exactly 64 lowercase hex")
 
         hardware_policy = entry.get("artifact_key_hardware_policy")
@@ -677,13 +690,16 @@ def _validate_adapter_model_registry(errors: list[str], root: Path) -> None:
                         f"{dependency_ref}"
                     )
         if license_review == "blocked" and shipping_status != "blocked":
-            errors.append(f"{context} blocked entry license review requires blocked shipping_status")
+            errors.append(
+                f"{context} blocked entry license review requires blocked shipping_status"
+            )
 
     if len(adapter_ids) != len(set(adapter_ids)):
         errors.append("registry/adapter-models.yaml adapter_id values must be unique")
     if adapter_ids != sorted(adapter_ids):
         errors.append(
-            "registry/adapter-models.yaml entries must be in canonical lexicographic adapter_id order"
+            "registry/adapter-models.yaml entries must be in canonical lexicographic "
+            "adapter_id order"
         )
 
 
