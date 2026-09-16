@@ -725,7 +725,7 @@ work_items:
   - id: V2L2.6
     lot: V2L2
     title: Cache reuse and invalidation regression
-    status: ready
+    status: done
     objective: Close V2L2 with a deterministic integration regression fixture proving that exact ArtifactKey candidate discovery is insufficient without verified materialization, that changed computation identity does not reuse stale candidates, and that dependency invalidation scopes only downstream artifacts, then record the V2L2 lot review without introducing a cache manager or execution scheduler.
     allowed_scope:
       - tests/test_artifact_cache_regression.py
@@ -789,7 +789,60 @@ work_items:
       - full fast CI
       - retained native PyCOLMAP integration workflow for final V2L2 handoff
       - V2L2 lot review checklist
-  - {id: V2L3.1, lot: V2L3, title: Adapter capability descriptor, status: planned, depends_on: [V2L2.6]}
+  - id: V2L3.1
+    lot: V2L3
+    title: Adapter capability descriptor
+    status: ready
+    objective: Define the minimal immutable solver-independent adapter capability descriptor with one open semantic capability identity plus explicit supported input and produced output ArtifactKind sets, without registry execution hardware model shipping failure metrics resume routing or quality behavior.
+    allowed_scope:
+      - src/wre/domain/adapter_capabilities.py
+      - focused public-domain exports only if required for the new contract
+      - tests/test_adapter_capabilities.py
+    out_of_scope:
+      - adapter implementation identity versions revisions or changes to ProducerRef and ArtifactProducerIdentity
+      - model checkpoint hardware or runtime requirements owned by V2L3.2
+      - shipping license or reproducibility registry schema owned by V2L3.3
+      - adapter failure metrics or resume declarations owned by V2L3.4
+      - registry validation default approval or selection owned by V2L3.5
+      - registering retained COLMAP FFmpeg or ExifRead baselines owned by V2L3.6
+      - execution protocols callbacks subprocess plugin discovery imports network access model loading or solver invocation
+      - routing quality benchmark scheduling cache persistence or artifact materialization behavior
+      - solver-private Python classes filenames filesystem paths mutable metadata or catch-all dictionaries
+      - starting V2L3.2 implementation in this work item
+    depends_on: [V2L2.6]
+    read_before:
+      - docs/02_ARCHITECTURE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/reviews/V2L2-artifact-dag-cache-review.md
+      - src/wre/domain/artifacts.py
+      - src/wre/domain/producer_identity.py
+    reuse:
+      - ArtifactKind as the solver-independent semantic input and output vocabulary
+      - existing conservative validated-token and immutable value-object conventions
+      - frozen dataclass and frozenset immutable collection conventions
+      - fail-closed deterministic focused pytest style
+    acceptance:
+      - AdapterCapabilityName is a distinct immutable open symbolic token that is solver independent and conservatively validated; it is not a closed enum of all future algorithms.
+      - AdapterCapabilityDescriptor is immutable and contains exactly AdapterCapabilityName plus immutable supported input ArtifactKind values and immutable produced output ArtifactKind values.
+      - Input and output collections are typed frozensets; mutable lists or sets raw strings wrong member types and untyped substitutions are rejected rather than coerced.
+      - An empty input set is valid for a capability with no WRE-artifact prerequisite; an empty output set is rejected because a descriptor must declare at least one produced WRE artifact kind.
+      - Input and output ArtifactKind values may overlap so refinement or normalization capabilities are not forbidden by core.
+      - Set semantics make equality and hashing independent of caller insertion order and duplicate inputs cannot carry hidden meaning.
+      - The descriptor declares supported semantic kinds only and does not imply cardinality ordering concrete invocation signatures compatibility between arbitrary combinations or successful execution.
+      - Capability identity is explicitly supplied and is never inferred from solver module class file model names ArtifactKind values ProducerRef or environment state.
+      - No hardware model checkpoint license shipping reproducibility guarantee metric failure class resume capability registry membership ranking routing persistence or execution fields are introduced.
+      - Existing ArtifactKind ArtifactProducerIdentity V2L2 cache and DAG behavior and retained V1 behavior remain unchanged.
+    tests:
+      - focused construction immutability equality and hashing tests for capability name and descriptor
+      - single and multiple input and output cases plus insertion-order-independent set semantics
+      - explicit empty-input and overlapping input-output cases
+      - negative invalid capability-token empty-output mutable-collection raw-string and wrong-member tests
+      - regression proving ArtifactKind and ArtifactProducerIdentity semantics remain unchanged
+      - full fast CI
   - {id: V2L3.2, lot: V2L3, title: Model checkpoint hardware identity, status: planned, depends_on: [V2L3.1]}
   - {id: V2L3.3, lot: V2L3, title: Shipping license reproducibility registry schema, status: planned, depends_on: [V2L3.2]}
   - {id: V2L3.4, lot: V2L3, title: Adapter failure metrics resume declarations, status: planned, depends_on: [V2L3.3]}
