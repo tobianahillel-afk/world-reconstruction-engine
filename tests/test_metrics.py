@@ -79,7 +79,9 @@ def _observation(name: str, value: float, **descriptor_kwargs: Any) -> MetricObs
         (MetricAggregation, "p95"),
     ],
 )
-def test_open_metric_tokens_are_typed_immutable_and_hashable(token_type: type[Any], value: str) -> None:
+def test_open_metric_tokens_are_typed_immutable_and_hashable(
+    token_type: type[Any], value: str
+) -> None:
     first = token_type(value)
     second = token_type(value)
 
@@ -98,7 +100,10 @@ def test_open_metric_token_types_remain_distinct() -> None:
     assert MetricName(value) != cast(Any, MetricAggregation(value))
 
 
-@pytest.mark.parametrize("value", ["", "UPPER", " leading", ".leading", "has/slash", "has space", "a" * 129])
+@pytest.mark.parametrize(
+    "value",
+    ["", "UPPER", " leading", ".leading", "has/slash", "has space", "a" * 129],
+)
 @pytest.mark.parametrize(
     "token_type",
     [MetricName, MetricDimension, MetricUnit, MetricAggregation],
@@ -139,7 +144,9 @@ def test_metric_descriptor_is_explicit_immutable_and_hashable() -> None:
         ("aggregation", "mean", "aggregation must be MetricAggregation"),
     ],
 )
-def test_metric_descriptor_rejects_untyped_members(field: str, replacement: object, message: str) -> None:
+def test_metric_descriptor_rejects_untyped_members(
+    field: str, replacement: object, message: str
+) -> None:
     kwargs: dict[str, object] = {
         "name": MetricName("geometry.reprojection_error"),
         "dimension": MetricDimension("geometry"),
