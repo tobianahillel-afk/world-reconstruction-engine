@@ -40,6 +40,7 @@ from wre.domain.estimated_geometry import (
     SparseReconstructionEstimate,
     SparseReconstructionEstimateId,
 )
+from wre.domain.failures import FailureCategory
 from wre.domain.fragments import LocalFrameId, SpatialFragment, SpatialFragmentId
 from wre.domain.hardware_identity import HardwareRuntimeIdentity
 from wre.domain.metadata import (
@@ -107,6 +108,7 @@ __all__ = [
     "DerivedArtifactProvenance",
     "EstimatedPoint3DId",
     "EstimatedTrackElement",
+    "FailureCategory",
     "GpsInterpretationStatus",
     "GpsMetadataInterpretation",
     "HardwareRuntimeIdentity",
