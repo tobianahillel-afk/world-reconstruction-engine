@@ -41,7 +41,14 @@ components:
       - tests/test_artifact_metadata.py
       - tests/test_persistence.py
     status: implemented
-  artifact_dag_cache: {owner_lot: V2L2, implementation: [], tests: [], status: planned}
+  artifact_dag_cache:
+    owner_lot: V2L2
+    implementation:
+      - src/wre/domain/artifact_graph.py
+      - src/wre/domain/__init__.py
+    tests:
+      - tests/test_artifact_graph.py
+    status: implementing
   adapter_model_registry: {owner_lot: V2L3, implementation: [], tests: [], status: planned}
   quality_failure_benchmarks: {owner_lot: V2L4, implementation: [], tests: [], status: planned}
   media_profiling: {owner_lot: V2L5, implementation: [], tests: [], status: planned}
