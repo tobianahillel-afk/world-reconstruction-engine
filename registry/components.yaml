@@ -74,8 +74,9 @@ components:
       - tests/test_hardware_identity.py
       - tests/test_artifact_keys.py
       - tests/test_adapter_model_registry_schema.py
+      - tests/test_adapter_model_registry_baselines.py
       - tests/test_repo_validation.py
-    status: implementing
+    status: implemented
   quality_failure_benchmarks: {owner_lot: V2L4, implementation: [], tests: [], status: planned}
   media_profiling: {owner_lot: V2L5, implementation: [], tests: [], status: planned}
   adaptive_frame_selection: {owner_lot: V2L6, implementation: [], tests: [], status: planned}
