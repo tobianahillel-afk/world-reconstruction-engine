@@ -60,7 +60,8 @@ class ArtifactKeyMaterial:
             self.hardware_runtime, HardwareRuntimeIdentity
         ):
             raise TypeError(
-                "artifact_key_material.hardware_runtime must be HardwareRuntimeIdentity when present"
+                "artifact_key_material.hardware_runtime must be "
+                "HardwareRuntimeIdentity when present"
             )
 
 
