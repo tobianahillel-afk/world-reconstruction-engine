@@ -1061,7 +1061,7 @@ work_items:
       - Producer and model version fields reject the case-insensitive floating alias latest; model/checkpoint structures preserve the exact V2L1.3 identity rules, including checkpoint requiring model and checkpoint SHA-256 being exactly 64 lowercase hexadecimal characters.
       - shipping_status approved requires the entry license.review to be approved and every referenced dependency to have license_review approved; pending license review may remain experimental or benchmark-only but cannot be approved.
       - An entry whose own license.review is blocked must have shipping_status blocked; validation reports the inconsistency and never promotes or mutates the entry.
-      - Validation is pure repository inspection: it performs no network filesystem discovery outside declared metadata files, model download environment probing adapter import execution routing selection or benchmark lookup.
+      - Validation is pure repository inspection; it performs no network filesystem discovery outside declared metadata files, model download environment probing adapter import execution routing selection or benchmark lookup.
       - Existing roadmap component review and pull-request-template validation behavior remains unchanged and existing valid repository metadata still passes.
       - V2L3.6 is expanded to a full executable contract before becoming the sole next ready item; this work item does not add any concrete registry baseline.
     tests:
