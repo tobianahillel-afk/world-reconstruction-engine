@@ -293,7 +293,7 @@ def test_verifier_rejects_untyped_public_inputs(tmp_path: Path) -> None:
 
     with pytest.raises(TypeError, match="metadata must be ArtifactMaterializationMetadata"):
         verify_local_artifact_materialization(cast(Any, "metadata"), tmp_path)
-    with pytest.raises(TypeError, match="root must be pathlib.Path"):
+    with pytest.raises(TypeError, match=r"root must be pathlib\.Path"):
         verify_local_artifact_materialization(metadata, cast(Any, str(tmp_path)))
 
 
