@@ -13,14 +13,15 @@ Before interpreting the implementation roadmap, read the current product/archite
 5. [`27_RESEARCH_CANDIDATE_COVERAGE.md`](27_RESEARCH_CANDIDATE_COVERAGE.md) — living map from current research families/candidates to the frozen WRE contracts and roadmap lots; candidate names are intentionally not frozen.
 6. [`15_PRODUCTION_RUNTIME.md`](15_PRODUCTION_RUNTIME.md) — professional orchestration, caching, scheduling, runtime compilation and distribution.
 7. [`28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md`](28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md) — living cross-cutting strategies for work avoidance, decode/preprocess reuse, GPU execution, compression, LOD and streaming without weakening quality contracts.
-8. [`23_ENGINEERING_EXECUTION.md`](23_ENGINEERING_EXECUTION.md) — how blueprint capabilities are split into one-run work items and implemented safely.
-9. [`24_SYSTEM_INVARIANTS.md`](24_SYSTEM_INVARIANTS.md) — cross-cutting fail-closed product invariants every subsystem must preserve.
-10. [`25_V2_ROADMAP.md`](25_V2_ROADMAP.md) — executable capability sequence for WRE v2.0.
-11. [`26_V2_PRODUCT_ARCHITECTURE_FREEZE.md`](26_V2_PRODUCT_ARCHITECTURE_FREEZE.md) — frozen v2 product/architecture authority, scientific replacement rule and legacy-v1 donor policy.
+8. [`29_PERFORMANCE_INTEGRATION_MAP.md`](29_PERFORMANCE_INTEGRATION_MAP.md) — living ownership/timing map that places advanced profiling, execution, storage, compression and runtime optimizations into the existing frozen architecture and executable roadmap.
+9. [`23_ENGINEERING_EXECUTION.md`](23_ENGINEERING_EXECUTION.md) — how blueprint capabilities are split into one-run work items and implemented safely.
+10. [`24_SYSTEM_INVARIANTS.md`](24_SYSTEM_INVARIANTS.md) — cross-cutting fail-closed product invariants every subsystem must preserve.
+11. [`25_V2_ROADMAP.md`](25_V2_ROADMAP.md) — executable capability sequence for WRE v2.0.
+12. [`26_V2_PRODUCT_ARCHITECTURE_FREEZE.md`](26_V2_PRODUCT_ARCHITECTURE_FREEZE.md) — frozen v2 product/architecture authority, scientific replacement rule and legacy-v1 donor policy.
 
 These documents define the current target product. WRE is an independent visual spatiotemporal reconstruction engine; it is not defined as a MONDE subsystem and is not a single COLMAP-to-splat pipeline. The v2 product/architecture is authoritative over legacy v1 structure; v1 is only an implementation donor and regression/reference source where useful.
 
-The product/architecture documents are frozen under `26_V2_PRODUCT_ARCHITECTURE_FREEZE.md`; the technology/candidate and performance-optimization landscapes are intentionally living. A new paper normally changes `14_TECHNOLOGY_SELECTION.md`, `27_RESEARCH_CANDIDATE_COVERAGE.md`, `28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md`, benchmark evidence or an adapter default—not the frozen architecture.
+The product/architecture documents are frozen under `26_V2_PRODUCT_ARCHITECTURE_FREEZE.md`; the technology/candidate and performance-optimization/integration landscapes are intentionally living. A new paper or execution technique normally changes `14_TECHNOLOGY_SELECTION.md`, `27_RESEARCH_CANDIDATE_COVERAGE.md`, `28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md`, `29_PERFORMANCE_INTEGRATION_MAP.md`, benchmark evidence or an adapter/execution default—not the frozen architecture.
 
 ## Resume procedure
 
@@ -60,7 +61,7 @@ Planned future work may stay concise so the roadmap can survive changing researc
 
 The repository validator enforces this. The PR handing off to the next item must expand that item's contract before marking it `ready`.
 
-For any work item that integrates or promotes a solver/model, activation also requires a candidate refresh against `14_TECHNOLOGY_SELECTION.md`, `27_RESEARCH_CANDIDATE_COVERAGE.md`, the current adapter/model registry and current evidence. Performance-sensitive integrations must also consider `28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md` so an adapter is not accepted with avoidable decode, transfer, memory, batching or runtime-delivery bottlenecks. Do not blindly implement the method or execution strategy that happened to be fashionable when the roadmap was written.
+For any work item that integrates or promotes a solver/model, activation also requires a candidate refresh against `14_TECHNOLOGY_SELECTION.md`, `27_RESEARCH_CANDIDATE_COVERAGE.md`, the current adapter/model registry and current evidence. Performance-sensitive integrations must also consider `28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md` and `29_PERFORMANCE_INTEGRATION_MAP.md` so an adapter is not accepted with avoidable decode, transfer, memory, batching, storage-locality or runtime-delivery bottlenecks and so optimizations are developed only under the owning roadmap responsibility. Do not blindly implement the method or execution strategy that happened to be fashionable when the roadmap was written.
 
 ## Work-item sizing rule
 
