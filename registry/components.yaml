@@ -28,14 +28,19 @@ components:
       - src/wre/domain/producer_identity.py
       - src/wre/domain/provenance.py
       - src/wre/domain/artifact_keys.py
+      - src/wre/domain/artifact_metadata.py
       - src/wre/domain/__init__.py
+      - src/wre/persistence/codec.py
+      - src/wre/persistence/sqlite_store.py
     tests:
       - tests/test_scene_projects.py
       - tests/test_artifacts.py
       - tests/test_producer_identity.py
       - tests/test_provenance.py
       - tests/test_artifact_keys.py
-    status: implementing
+      - tests/test_artifact_metadata.py
+      - tests/test_persistence.py
+    status: implemented
   artifact_dag_cache: {owner_lot: V2L2, implementation: [], tests: [], status: planned}
   adapter_model_registry: {owner_lot: V2L3, implementation: [], tests: [], status: planned}
   quality_failure_benchmarks: {owner_lot: V2L4, implementation: [], tests: [], status: planned}
