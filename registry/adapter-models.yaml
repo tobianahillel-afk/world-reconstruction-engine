@@ -1,2 +1,71 @@
 schema_version: 1
-entries: []
+entries:
+  - adapter_id: colmap.sparse_sfm
+    capability:
+      name: geometry.sparse_sfm
+      input_kinds: [image.observation]
+      output_kinds: [geometry.sparse_reconstruction_estimate]
+    producer:
+      implementation: wre.colmap_reconstruction_importer
+      version: "2"
+      revision: null
+    dependency_refs: [colmap]
+    model: null
+    checkpoint: null
+    artifact_key_hardware_policy: required
+    license:
+      direct: BSD-3-Clause
+      review: approved
+      transitive_notes: "The approved dependency record notes that a concrete COLMAP build can include separately licensed dependencies; this registry entry does not broaden those terms."
+      redistribution_notes: "WRE retains PyCOLMAP/COLMAP as an exact external solver environment and does not approve alternate builds or bundled redistribution through this entry."
+    shipping_status: approved
+    reproducibility_notes: "WRE accepts only the retained PyCOLMAP 4.2.0 / COLMAP 4.2.0 environment and imports its sparse reconstruction through wre.colmap_reconstruction_importer version 2."
+    failure_signals: []
+    metric_names: []
+    resume_mode: unsupported
+  - adapter_id: exifread.raw_exif
+    capability:
+      name: metadata.raw_exif
+      input_kinds: [image.observation]
+      output_kinds: [observation.metadata]
+    producer:
+      implementation: wre.ingestion.exif.ExifMetadataIngestor
+      version: 3.5.1
+      revision: null
+    dependency_refs: [exifread]
+    model: null
+    checkpoint: null
+    artifact_key_hardware_policy: omitted
+    license:
+      direct: BSD-3-Clause
+      review: approved
+      transitive_notes: "The dependency registry records ExifRead 3.5.1 with approved BSD-3-Clause review; no additional learned model or native solver dependency is introduced here."
+      redistribution_notes: "This entry records the retained pinned library adapter only and does not broaden the dependency's license terms."
+    shipping_status: approved
+    reproducibility_notes: "ExifMetadataIngestor uses the pinned ExifRead 3.5.1 library to extract sorted raw EXIF entries without semantic GPS, time, or camera interpretation."
+    failure_signals: []
+    metric_names: []
+    resume_mode: unsupported
+  - adapter_id: ffmpeg.keyframe_extraction
+    capability:
+      name: media.keyframe_extraction
+      input_kinds: [video.observation]
+      output_kinds: [video.frame_observation]
+    producer:
+      implementation: wre.ingestion.keyframes.LocalKeyframeExtractor
+      version: 6.1.1-3ubuntu5
+      revision: null
+    dependency_refs: [ffmpeg]
+    model: null
+    checkpoint: null
+    artifact_key_hardware_policy: omitted
+    license:
+      direct: GPL-2.0-or-later
+      review: approved
+      transitive_notes: "The selected Ubuntu Noble FFmpeg package contains GPL-licensed files; the approved dependency record therefore treats the resulting binaries as GPL-2.0-or-later."
+      redistribution_notes: "WRE invokes the exact ffmpeg/ffprobe package only as external subprocesses and does not link or bundle the binaries; redistribution or a different build requires fresh review."
+    shipping_status: approved
+    reproducibility_notes: "LocalKeyframeExtractor requires matching ffmpeg and ffprobe 6.1.1-3ubuntu5 identities and deterministically selects source-frame timestamps before PNG extraction."
+    failure_signals: []
+    metric_names: []
+    resume_mode: unsupported
