@@ -351,7 +351,7 @@ work_items:
   - id: V2L1.6
     lot: V2L1
     title: Project and artifact metadata persistence
-    status: ready
+    status: done
     objective: Extend the retained local codec and SQLite persistence boundary so SceneProject and the minimal immutable V2 artifact metadata can round-trip deterministically without introducing dependency-graph, cache or materialization responsibilities.
     allowed_scope:
       - src/wre/domain/artifact_metadata.py
@@ -413,7 +413,59 @@ work_items:
       - existing persistence tests and full fast CI
       - retained native PyCOLMAP integration lane for final V2L1 handoff
       - V2L1 lot-review checklist
-  - {id: V2L2.1, lot: V2L2, title: Artifact dependency DAG contract, status: planned, depends_on: [V2L1.6]}
+  - id: V2L2.1
+    lot: V2L2
+    title: Artifact dependency DAG contract
+    status: ready
+    objective: Define the minimal immutable in-memory directed artifact-dependency graph over exact ArtifactRef values, with explicit direct-edge semantics and fail-closed structural validation including cycle rejection, without persistence or cache behavior.
+    allowed_scope:
+      - src/wre/domain/artifact_graph.py
+      - focused public-domain exports only if required for the new contract
+      - tests/test_artifact_graph.py
+    out_of_scope:
+      - codec database persistence dependency lookup reverse indexes or stored graph queries owned by V2L2.2
+      - cache lookup key-to-artifact resolution reuse policy or hit/miss semantics owned by V2L2.3
+      - dependency-scoped invalidation planning deletion or garbage collection owned by V2L2.4
+      - artifact materialization paths URIs content verification or corruption state owned by V2L2.5
+      - inferring dependency edges from ArtifactKeyMaterial ArtifactMetadata filenames paths timestamps producers or filesystem state
+      - project-existence checks cross-project policy or metadata repair through SQLiteLocalStore
+      - graph mutation APIs incremental update semantics scheduler execution topological scheduling or job orchestration
+      - adapter registries routing quality evaluation reconstruction behavior or external dependencies
+      - starting V2L2.2 product implementation in this work item
+    depends_on: [V2L1.6]
+    read_before:
+      - docs/02_ARCHITECTURE.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/reviews/V2L1-scene-project-artifact-identity-review.md
+      - src/wre/domain/artifacts.py
+      - src/wre/domain/artifact_metadata.py
+      - src/wre/domain/artifact_keys.py
+    reuse:
+      - ArtifactRef as the exact typed graph-node identity rather than inventing a second dependency-reference type
+      - frozen dataclass and immutable collection conventions already used in wre.domain
+      - fail-closed positive-domain validation and focused deterministic pytest style
+    acceptance:
+      - ArtifactDependencyEdge is immutable and contains exactly an artifact ArtifactRef plus a dependency ArtifactRef, with the documented meaning that artifact directly depends on dependency.
+      - ArtifactDependencyGraph is immutable and stores only exact declared ArtifactRef nodes plus direct ArtifactDependencyEdge values; raw strings dictionaries lists and untyped members are rejected.
+      - Every edge endpoint must be present in the declared node set; the graph performs no registry database or filesystem lookup to repair missing nodes.
+      - Self-dependency is rejected fail closed.
+      - Any directed dependency cycle of length two or greater is rejected fail closed; disconnected acyclic components and isolated nodes remain valid.
+      - Within one graph, the same logical ArtifactId cannot appear under conflicting ArtifactKind declarations.
+      - Graph collection semantics are explicitly set-like and immutable; equality and hashing do not depend on caller insertion order and no hidden mutable adjacency state is exposed.
+      - The contract represents direct dependency claims only and does not infer transitive edges from ArtifactKeyMaterial ArtifactMetadata producer identity filenames or paths.
+      - No persistence dependency lookup reverse index cache invalidation materialization scheduling adapter routing or solver behavior is introduced.
+      - Existing V2L1 project/artifact metadata persistence and retained V1 behavior remain unchanged.
+    tests:
+      - focused construction immutability equality and hashing tests for ArtifactDependencyEdge and ArtifactDependencyGraph
+      - valid isolated chain diamond and disconnected-DAG cases
+      - negative self-cycle two-node-cycle and longer-cycle cases
+      - negative undeclared-endpoint and conflicting ArtifactId-to-ArtifactKind cases
+      - negative wrong collection/member/raw-string substitutions
+      - regression tests proving no V2L1 metadata or persistence behavior changes
+      - full fast CI
   - {id: V2L2.2, lot: V2L2, title: Artifact metadata store and dependency lookup, status: planned, depends_on: [V2L2.1]}
   - {id: V2L2.3, lot: V2L2, title: Canonical cache lookup, status: planned, depends_on: [V2L2.2]}
   - {id: V2L2.4, lot: V2L2, title: Dependency scoped invalidation planning, status: planned, depends_on: [V2L2.3]}
