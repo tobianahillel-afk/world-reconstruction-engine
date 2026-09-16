@@ -4,20 +4,19 @@ project_name: World Reconstruction Engine
 roadmap_version: '2.0'
 phase: implementation
 milestone: V2M0
-lot: V2L3
-active_work_item: V2L3.6
+lot: V2L4
+active_work_item: V2L4.1
 status: ready
-last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5]
-last_merged_pr: 49
+last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5, V2L3.6]
+last_merged_pr: 50
 current_goal: >-
-  Register only the already-retained COLMAP/PyCOLMAP 4.2.0, FFmpeg 6.1.1-3ubuntu5 and
-  ExifRead 3.5.1 production baselines in the V2 adapter/model registry with exact dependency-backed
-  identities and approved shipping/license evidence, without changing their implementation.
+  Define only the stable closed WRE cross-adapter failure taxonomy already named by the production
+  runtime blueprint, with exact wire tokens and no metric, quality-decision, benchmark, routing or
+  retry-policy behavior.
 next_action: >-
-  Complete only V2L3.6 from its executable contract in registry/work-items/v2m0.yaml: populate
-  registry/adapter-models.yaml with exactly the three retained baselines and focused tests, preserve
-  existing integration behavior and dependency evidence, then close V2L3 by review and prepare
-  V2L4.1 without adding failure-taxonomy implementation early.
+  Complete only V2L4.1 from its executable contract in registry/work-items/v2m0.yaml: add the typed
+  FailureCategory vocabulary and focused tests, preserve V2L3 adapter-local failure declarations as
+  a separate concern, and do not start V2L4.2 metric-vector implementation early.
 blockers: []
 architecture:
   product_blueprint: docs/01_PRODUCT.md
