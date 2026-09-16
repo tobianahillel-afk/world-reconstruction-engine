@@ -9,7 +9,7 @@ work_items:
   - {id: V2L37.2, lot: V2L37, title: Submap chunk reconstruction contract, status: planned, depends_on: [V2L37.1]}
   - {id: V2L37.3, lot: V2L37, title: First approved scalable mapping path, status: planned, depends_on: [V2L37.2]}
   - {id: V2L37.4, lot: V2L37, title: Global alignment refinement long tail escalation, status: planned, depends_on: [V2L37.3]}
-  - {id: V2L37.5, lot: V2L37, title: Large collection memory time recall benchmark, status: planned, depends_on: [V2L37.4]}
+  - {id: V2L37.5, lot: V2L37, title: Large collection ANN backend memory time recall benchmark, status: planned, depends_on: [V2L37.4]}
   - {id: V2L38.1, lot: V2L38, title: Native equirectangular camera calibration contract, status: planned, depends_on: [V2L37.5]}
   - {id: V2L38.2, lot: V2L38, title: 360 media profiling route signal, status: planned, depends_on: [V2L38.1]}
   - {id: V2L38.3, lot: V2L38, title: First approved omnidirectional reconstruction path, status: planned, depends_on: [V2L38.2]}

@@ -11,6 +11,8 @@ The goal is to answer two questions continuously:
 
 If a new paper fits an existing responsibility, it becomes an adapter/benchmark candidate. It does not justify redesigning the engine. A blueprint change is justified only when a genuinely new product responsibility or representation cannot be expressed by the frozen contracts.
 
+For performance/execution candidates, `28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md` describes the strategy families and `29_PERFORMANCE_INTEGRATION_MAP.md` owns their roadmap placement/activation timing.
+
 ## Current architecture conclusion
 
 The reviewed 2025–2026 research landscape does **not** currently require a new top-level WRE architecture layer.
@@ -28,9 +30,10 @@ The major families identified so far fit the existing frozen responsibilities:
 - long-term temporal states/change;
 - master-scene assembly;
 - runtime compilation/LOD/streaming;
-- benchmark/routing/quality infrastructure.
+- benchmark/routing/quality infrastructure;
+- resource/execution/storage policy inside production orchestration.
 
-This is an important validation of the architecture: new methods can normally change a candidate shortlist or default adapter without changing the core product.
+This is an important validation of the architecture: new methods can normally change a candidate shortlist, execution profile or default adapter without changing the core product.
 
 ## Candidate families that must remain visible
 
@@ -90,6 +93,42 @@ WRE use:
 
 Primary roadmap homes: `V2L13`, `V2L14`, `V2L23`.
 
+### Learned execution and GPU profiling
+
+Relevant tooling/candidate families:
+
+- PyTorch eager/reference execution;
+- `torch.compile` / CUDA Graphs and current compiler/runtime acceleration;
+- TensorRT / Torch-TensorRT-class ahead-of-time execution for supported stable models/shapes;
+- FP16/BF16/TF32 and stronger quantization only behind explicit quality evidence;
+- solver-independent timers/CUDA events;
+- NVTX/Nsight-class trace evidence on compatible NVIDIA systems and equivalent tools elsewhere.
+
+WRE use:
+
+- treat these as execution profiles and profiling evidence for an existing adapter, never as a new `GeometrySolution`, `AppearanceModel` or other product contract;
+- compare cold-start/engine-build cost, steady-state latency/throughput, transfer cost, RAM/VRAM, unsupported-op fallback, quality and failure behavior;
+- retain an approved reference path when portability/reproducibility requires one;
+- use profiling to decide whether lower-level specialization is justified rather than assuming acceleration from a microbenchmark.
+
+Primary roadmap homes: `V2L4`, `V2L13`, owning learned-adapter lots, `V2L46`, `V2L49`.
+
+### Accelerated still-image decode
+
+Relevant candidates/families:
+
+- NVIDIA nvImageCodec / nvJPEG-class batch or device-resident decode on compatible systems;
+- demand-driven/tiled CPU processing such as libvips-class pipelines;
+- future accelerated non-NVIDIA image-decode backends behind the same canonical semantics.
+
+WRE use:
+
+- canonical decoded-image/pyramid artifacts remain vendor-neutral;
+- evaluate accelerated decode only after a portable/reference path exists and profiling shows decode/resize/transfer is material;
+- benchmark orientation/color/pixel behavior, CPU/GPU utilization, transfer overhead and end-to-end downstream reuse.
+
+Primary roadmap homes: `V2L6`, first representative learned profiling in `V2L13`, continuous comparison in `V2L49`.
+
 ### Stateful / streaming / very-large-scene geometry
 
 High-priority candidates/families:
@@ -110,6 +149,24 @@ WRE use:
 - project truth remains artifact-based, not an opaque neural state alone.
 
 Primary roadmap homes: `V2L13`, `V2L28`, `V2L37`.
+
+### Large-scale ANN retrieval backends
+
+Relevant candidate families:
+
+- exact CPU search as a deterministic reference where tractable;
+- CPU ANN;
+- quantized/compressed ANN indexes;
+- GPU ANN;
+- hybrid CPU/GPU indexing/query strategies.
+
+WRE use:
+
+- `PairCandidate`/retrieval semantics and recall remain backend-independent;
+- benchmark candidate recall, index-build time, query latency/throughput, RAM, VRAM, index size and transfer overhead;
+- do not require GPU ANN for small/medium collections merely because a GPU exists.
+
+Primary roadmap home: `V2L37`.
 
 ### Crowd-sourced / multi-reconstruction merge
 
@@ -261,6 +318,22 @@ High-priority candidates/families:
 
 Primary roadmap home: `V2L18`.
 
+### Interactive splat stability
+
+Relevant candidates/families:
+
+- Mip-Splatting-class antialiasing and scale-consistent filtering;
+- StopThePop-class view-consistent sorting/rasterization;
+- later motion-stable/multiscale renderers that improve camera-path consistency.
+
+WRE use:
+
+- evaluate appearance not only on isolated held-out frames but on camera paths, zoom/focal-scale and distance changes where applicable;
+- expose popping, shimmer/aliasing, unstable sort/blending and LOD transition artifacts as quality dimensions;
+- keep the implementation replaceable: motion/scale stability is the product need, not any named paper.
+
+Primary roadmap homes: `V2L18`, `V2L21`, `V2L22`, `V2L49`.
+
 ### Materials, lighting and HDR
 
 High-priority candidates/families:
@@ -295,14 +368,17 @@ WRE use:
 
 Primary roadmap homes: `V2L31`–`V2L35`.
 
-### LOD / streaming / compression / viewer
+### LOD / streaming / progressive compression / viewer
 
 Relevant candidates/references:
 
-- LoD-of-Gaussians and hierarchical Gaussian streaming;
+- LoD-of-Gaussians and hierarchical/multiscale Gaussian streaming;
 - SuperSplat/PlayCanvas streaming, viewer and collision separation;
-- SPZ/SOG-class compact splat formats;
-- 4DGS-1K/ReCon-GS/HPC-class compression research;
+- SPZ/SOG/Streamed-SOG-class compact splat formats;
+- PCGS-class progressive splat compression;
+- HAC++-class contextual entropy coding/adaptive quantization;
+- vector/codebook-quantized Gaussian compression families;
+- 4DGS-1K/ReCon-GS/HPC-class dynamic compression research;
 - glTF/GLB and mature mesh optimization for explicit geometry;
 - YaGS-class Unreal integration as a production reference.
 
@@ -310,9 +386,42 @@ WRE use:
 
 - compile from `MasterScene` into target-specific `RuntimeScene` artifacts;
 - keep collision/physics geometry independent from photorealistic appearance;
-- benchmark device memory, loading, streaming and FPS rather than only offline file size.
+- benchmark rate-distortion, device memory, decode/init, time-to-first-useful-view, loading, streaming, random/spatial access and FPS rather than only offline file size;
+- permit hierarchical/multiscale/progressive LOD behind scene-level global resource/error budgets.
 
 Primary roadmap homes: `V2L21`, `V2L22`, `V2L30`, `V2L45`, `V2L49`.
+
+### Artifact residency, topology and direct I/O
+
+Relevant tooling/families:
+
+- explicit hot/warm/cold or equivalent materialization-residency policies;
+- recomputation-cost/value-aware eviction rather than blind LRU where beneficial;
+- NUMA/PCIe/NVLink/device-storage locality modelling on heterogeneous systems;
+- conventional buffered/direct I/O and memory mapping as reference paths;
+- GPUDirect Storage/cuFile-class direct storage-to-GPU execution on compatible systems when profiling justifies it.
+
+WRE use:
+
+- preserve logical artifact identity, provenance and DAG history even if eligible recomputable local bytes are evicted;
+- avoid topology complexity in the simple scheduler when hardware makes it irrelevant;
+- compare direct-storage paths only when I/O is a measured bottleneck and retain a portable/reference route.
+
+Primary roadmap homes: `V2L46`, `V2L49`, packaging/reproducibility implications in `V2L50`.
+
+### Last-mile custom GPU kernels
+
+Relevant technology family:
+
+- Triton/custom CUDA or equivalent fused kernels.
+
+WRE use:
+
+- only after representative profiling identifies a durable hotspot and mature libraries/framework compilation cannot satisfy it efficiently;
+- require a reference implementation, numerical/quality equivalence evidence, hardware compatibility and end-to-end benefit;
+- keep the optimization private to the owning adapter/runtime implementation rather than adding a new roadmap-wide architecture.
+
+Primary roadmap home: the owning adapter/runtime lot when justified; continuous evidence in `V2L49`.
 
 ## Architecture coverage matrix
 
@@ -321,7 +430,10 @@ Primary roadmap homes: `V2L21`, `V2L22`, `V2L30`, `V2L45`, `V2L49`.
 | place/geo-time retrieval | relationship/date evidence | V2L7, V2L8, V2L31 | No |
 | long-tail Internet photos | retrieval/matching/geometry robustness | V2L7, V2L8, V2L14, V2L37 | No |
 | feed-forward geometry | camera/depth/geometry adapter | V2L13, V2L14 | No |
+| accelerated media decode | observation artifacts + adapter execution profile | V2L6, V2L13, V2L49 | No |
+| learned execution/profiling | adapter execution + benchmark evidence | V2L4, V2L13, V2L46, V2L49 | No |
 | stateful/streaming geometry | geometry adapter + artifact DAG + chunking | V2L28, V2L37 | No |
+| large-scale ANN backend | scalable retrieval/index execution | V2L37 | No |
 | crowd-sourced reconstruction merge | competing geometry/submap alignment | V2L14, V2L29, V2L37 | No |
 | sparse views | specialist route + coverage confidence | V2L36 | No |
 | dense tracking | motion evidence | V2L24 | No |
@@ -332,9 +444,12 @@ Primary roadmap homes: `V2L21`, `V2L22`, `V2L30`, `V2L45`, `V2L49`.
 | blur/HDR/rolling shutter/low light | specialist profile + route | V2L40 | No |
 | repeated/reflection/water difficulty | specialist matching/material route | V2L41, V2L42 | No |
 | mesh+splat/SDF hybrids | separate surface + appearance contracts | V2L16, V2L18 | No |
+| motion/scale-stable splats | appearance metrics + runtime/viewer | V2L18, V2L21, V2L22 | No |
 | PBR/relighting | materials/environment | V2L19, V2L42 | No |
 | historical/evolving scenes | TemporalState + ChangeEvent | V2L31–V2L35 | No |
-| LOD/compression/streaming | runtime compiler | V2L21, V2L30, V2L49 | No |
+| progressive compression + hierarchical LOD | runtime compiler | V2L21, V2L22, V2L49 | No |
+| artifact residency/topology/direct I/O | production resource/artifact-materialization policy | V2L46, V2L49 | No |
+| custom GPU kernels | adapter-private implementation optimization | owning adapter lot, V2L49 evidence | No |
 | generative completion | explicit generated provenance | V2L43 | No |
 
 ## Candidate refresh rule
@@ -350,12 +465,14 @@ Before any work item integrates or promotes a solver/model, its activation PR mu
 7. record per-dimension metrics and failure classes rather than only one aggregate score;
 8. promote a default only through the owning benchmark/quality policy.
 
+For performance-sensitive activation, also re-read `28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md` and `29_PERFORMANCE_INTEGRATION_MAP.md`, identify the measured bottleneck/target constraint, and distinguish algorithm choice from execution-profile choice. A faster execution profile is not promoted if it weakens required quality, provenance, reproducibility or portability constraints.
+
 A roadmap item such as “integrate first approved feed-forward geometry candidate” deliberately does **not** mean a candidate named in 2026 is permanently chosen.
 
 ## What should trigger a blueprint revision
 
-A new method should **not** trigger architecture work merely because it is much better or combines several existing outputs.
+A new method should **not** trigger architecture work merely because it is much better, faster, more compressed or combines several existing outputs.
 
 A blueprint-change proposal is warranted only if the method exposes a necessary product responsibility that cannot be represented through the current WRE contracts without distortion. Examples would be a genuinely new form of user-visible truth/provenance, a fundamentally different temporal regime, or a runtime/product representation that cannot be expressed by the existing MasterScene/RuntimeScene boundaries.
 
-So far, the reviewed candidate families do not cross that threshold.
+So far, the reviewed candidate and execution families do not cross that threshold.

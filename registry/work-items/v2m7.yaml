@@ -15,10 +15,11 @@ work_items:
   - {id: V2L45.6, lot: V2L45, title: Game engine package boundary and validation, status: planned, depends_on: [V2L45.5]}
   - {id: V2L46.1, lot: V2L46, title: JobSpec resource requirement contract, status: planned, depends_on: [V2L45.6]}
   - {id: V2L46.2, lot: V2L46, title: Local deterministic scheduler baseline, status: planned, depends_on: [V2L46.1]}
-  - {id: V2L46.3, lot: V2L46, title: Empirical resource and execution profile estimator contract, status: planned, depends_on: [V2L46.2]}
+  - {id: V2L46.3, lot: V2L46, title: Empirical resource execution and locality profile estimator, status: planned, depends_on: [V2L46.2]}
   - {id: V2L46.4, lot: V2L46, title: Predicted OOM disk timeout chunk batch precision mitigation policy, status: planned, depends_on: [V2L46.3]}
-  - {id: V2L46.5, lot: V2L46, title: Resource scheduling throughput quality benchmark, status: planned, depends_on: [V2L46.4]}
-  - {id: V2L47.1, lot: V2L47, title: Checkpoint identity compatibility contract, status: planned, depends_on: [V2L46.5]}
+  - {id: V2L46.5, lot: V2L46, title: Artifact materialization residency tiering and eviction policy, status: planned, depends_on: [V2L46.4]}
+  - {id: V2L46.6, lot: V2L46, title: Resource locality throughput quality benchmark, status: planned, depends_on: [V2L46.5]}
+  - {id: V2L47.1, lot: V2L47, title: Checkpoint identity compatibility contract, status: planned, depends_on: [V2L46.6]}
   - {id: V2L47.2, lot: V2L47, title: Bounded resume retry state machine, status: planned, depends_on: [V2L47.1]}
   - {id: V2L47.3, lot: V2L47, title: First adapter checkpoint integration, status: planned, depends_on: [V2L47.2]}
   - {id: V2L47.4, lot: V2L47, title: Remote distributed worker artifact interface, status: planned, depends_on: [V2L47.3]}
