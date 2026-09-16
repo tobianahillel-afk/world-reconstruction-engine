@@ -4,6 +4,8 @@ Status: **LIVING / NOT FROZEN**.
 
 This document records implementation strategies that can materially reduce latency, VRAM/RAM, storage, bandwidth or runtime cost without changing the frozen WRE product architecture. It complements the stable contracts in the core; exact libraries, kernels, formats and thresholds remain benchmark-driven.
 
+The detailed ownership and activation timing for these strategies is mapped in `29_PERFORMANCE_INTEGRATION_MAP.md`.
+
 The governing principle is:
 
 > **Avoid unnecessary work first; accelerate the remaining work second. Never buy speed by silently weakening the claimed quality or provenance class.**
@@ -357,6 +359,179 @@ WRE must **not** globally mandate:
 - one densification strategy.
 
 The best setting changes with hardware, data, requested quality and runtime target. The stable requirement is that alternatives are measurable, reproducible and selected explicitly.
+
+## 25. Standardized causal profiling and trace evidence
+
+Wall-clock totals are necessary but not sufficient to optimize a heterogeneous media/GPU pipeline. Once representative GPU workloads exist, WRE should support retained causal evidence that distinguishes decode, preprocess, host-to-device transfer, model execution, postprocess, device-to-host transfer, compression and artifact writeback.
+
+Candidate mechanisms include:
+
+- lightweight stage timers and CUDA events;
+- NVTX-class ranges for cross-library trace correlation;
+- Nsight-class CPU/GPU timeline profilers on NVIDIA systems;
+- equivalent platform/vendor profilers elsewhere.
+
+The profiler is not a core dependency. The core/benchmark responsibility is to retain enough solver-independent evidence or references to explain why an execution profile improved or regressed end-to-end behavior.
+
+Profile representative workloads rather than toy shapes. Always distinguish cold-start/compile/checkpoint-load cost from steady-state throughput where the distinction matters.
+
+## 26. Accelerated still-image decode as an execution profile
+
+Large photo collections can become CPU/decode/resize bound before learned retrieval or geometry begins. On compatible hardware, candidates such as nvImageCodec/nvJPEG-class decoding may reduce host work and can expose device-resident output to downstream GPU consumers.
+
+Rules:
+
+- `V2L6.6` first defines canonical decoded/pyramid artifact semantics and a portable reference path;
+- accelerated still-image decode is an execution-profile candidate, never the observation contract itself;
+- benchmark end-to-end behavior including orientation, color/pixel equivalence, batch shape, CPU utilization, VRAM, H2D transfer and downstream reuse;
+- small images or small batches may not benefit, so do not globally enable GPU decoding;
+- retain a portable/reference route and allow future non-NVIDIA accelerated backends behind the same semantics.
+
+## 27. Learned execution profiles beyond eager/compile
+
+Stable learned adapters may benchmark ahead-of-time inference/runtime systems such as TensorRT/Torch-TensorRT-class execution when the model, operators, shapes and target hardware make them viable.
+
+Treat these as execution profiles of the same adapter contract, not new WRE product types.
+
+Compare at least when applicable:
+
+- reference/eager behavior;
+- compiled behavior;
+- precision mode;
+- engine-build/cold-start cost;
+- steady-state latency/throughput;
+- RAM/VRAM;
+- unsupported-op/fallback behavior;
+- output quality and failure classes.
+
+Do not require TensorRT globally. A profile is eligible only after representative evidence shows a useful end-to-end tradeoff and its exact runtime/engine compatibility can be reproduced.
+
+## 28. Artifact residency, tiers and eviction
+
+Content-addressed artifact identity does not imply that every materialized byte should remain on fast local storage forever.
+
+Future resource policy should distinguish **logical artifact history** from **local materialization residency**. Evicting eligible recomputable bytes must not erase artifact identity, producer/input provenance, DAG relationships or the fact that the artifact previously existed.
+
+Retention/eviction decisions may consider:
+
+- irreplaceability/source status;
+- recomputation cost and expected duration;
+- downstream fan-out/value;
+- artifact size;
+- recent/frequent access;
+- quality level and user retention policy;
+- whether an artifact is a cheap preview/temp cache or an expensive MASTER intermediate;
+- whether a cache is hardware/compiler-specific and safe to regenerate.
+
+Blind LRU is not automatically appropriate. Re-materialized bytes must still satisfy normal verification/compatibility rules.
+
+## 29. Motion- and scale-stable appearance/runtime quality
+
+Still-view PSNR/SSIM/LPIPS can miss severe interactive defects. Gaussian/radiance representations should be evaluated on representative camera motion and scale changes where applicable.
+
+Candidate quality dimensions include:
+
+- popping during camera rotation/translation;
+- shimmer/aliasing under zoom, focal-length or distance changes;
+- unstable blend/sort behavior;
+- LOD-transition visibility;
+- temporal consistency along a saved camera path;
+- stereo/XR discomfort indicators when an XR target is relevant.
+
+Mip-Splatting-class antialiasing/scale-consistency methods and StopThePop-class view-consistent sorting are examples to refresh when the owning appearance/viewer work activates. The quality dimension is the product requirement; the named implementation is replaceable.
+
+## 30. Progressive, vector-quantized and entropy-coded splat compression
+
+Compact runtime delivery should evaluate more than fixed one-shot formats.
+
+Candidate research families include:
+
+- progressive bitstreams that improve quantity/quality as more bytes arrive, such as PCGS-class approaches;
+- contextual entropy coding and adaptive quantization such as HAC++-class approaches;
+- vector/codebook quantization of Gaussian attributes;
+- combinations of pruning/masking, quantization and entropy coding.
+
+Measure **rate-distortion and runtime cost**, not compression ratio alone:
+
+- bytes versus visual quality;
+- decode/initialization time;
+- time-to-first-useful-view;
+- random/spatial access suitability;
+- progressive refinement behavior;
+- device memory after decode;
+- compatibility with the selected renderer/LOD hierarchy.
+
+The rich `MasterScene` representation remains separate so a future better runtime compressor can be adopted without reconstructing geometry.
+
+## 31. Hierarchical and multiscale Gaussian LOD
+
+Distance-only LOD is a useful baseline but not the final strategy for large photorealistic scenes.
+
+Candidate representations may provide:
+
+- hierarchical Gaussian clusters;
+- multiscale primitives trained/constructed for different screen frequencies;
+- progressive-compression levels that double as LOD;
+- error bounds or expected visual contribution per level/chunk.
+
+The runtime compiler should expose enough metadata to allocate a global visible-cost budget by screen-space error/utility rather than letting every object independently choose maximum detail.
+
+## 32. ANN execution backends for huge collections
+
+Very large unordered collections should treat the ANN/index implementation as a replaceable execution backend.
+
+Depending on collection size and hardware, benchmark relevant combinations of:
+
+- exact CPU search;
+- CPU ANN;
+- quantized/compressed CPU ANN;
+- GPU ANN;
+- hybrid indexing/query strategies.
+
+Measure candidate recall, index build time, query latency/throughput, RAM, VRAM, index size and transfer overhead. GPU ANN is not required for small collections merely because a GPU is present.
+
+## 33. Topology-aware scheduling and direct storage-to-GPU paths
+
+On multi-GPU/multi-NUMA/high-throughput systems, resource class alone can be insufficient. A later scheduler may benefit from empirical locality information such as:
+
+- storage-to-device path;
+- NUMA affinity;
+- PCIe/NVLink/peer connectivity;
+- measured H2D/D2H or peer bandwidth;
+- GPU memory pressure and peer-access capability.
+
+A single-GPU workstation may resolve all of this trivially; do not burden the deterministic scheduler baseline with premature topology logic.
+
+When storage I/O is a measured bottleneck and the target system supports it, GPUDirect Storage/cuFile-class direct storage-to-GPU paths are candidate execution profiles. Keep a conventional path and include topology/setup constraints in the benchmark; direct I/O is not useful merely because the API exists.
+
+## 34. Custom Triton/CUDA kernels are last-mile work
+
+Do not plan custom kernels by default. First use mature libraries, vectorized framework operations, batching, compilation and known backend controls.
+
+A custom Triton/CUDA fused kernel becomes appropriate only when representative profiling shows a durable hotspot that materially limits WRE and existing maintained implementations cannot satisfy the same contract efficiently.
+
+Any such work belongs to the owning adapter/runtime implementation and must have:
+
+- a reference implementation;
+- numerical/quality equivalence tests;
+- hardware/runtime compatibility evidence;
+- end-to-end benchmark improvement, not only kernel microbenchmark improvement;
+- a maintained fallback when the custom path is unsupported.
+
+## 35. Activation timing summary
+
+The intended sequence is deliberately staged:
+
+1. `V2L4.4` — benchmark/performance evidence vocabulary, not profiler integration;
+2. `V2L6.6` — canonical reusable decode/pyramid artifacts and portable reference path;
+3. `V2L13.6` — first representative learned GPU profiling/execution-profile benchmark;
+4. `V2L18`/`V2L21`/`V2L22` — motion-stable appearance, advanced compression and hierarchical LOD;
+5. `V2L37` — CPU/GPU/quantized ANN comparison at large-collection scale;
+6. `V2L46` — locality-aware estimation plus materialization residency/tiering/eviction and optional direct-I/O evaluation;
+7. `V2L49` — continuous execution-profile comparison/promotion;
+8. custom kernels only after all earlier stages leave a measured hotspot.
+
+See `29_PERFORMANCE_INTEGRATION_MAP.md` for the full responsibility matrix and review checklist.
 
 ## Final principle
 
