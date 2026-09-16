@@ -59,7 +59,14 @@ components:
       - tests/test_artifact_materialization.py
       - tests/test_artifact_cache_regression.py
     status: implemented
-  adapter_model_registry: {owner_lot: V2L3, implementation: [], tests: [], status: planned}
+  adapter_model_registry:
+    owner_lot: V2L3
+    implementation:
+      - src/wre/domain/adapter_capabilities.py
+      - src/wre/domain/__init__.py
+    tests:
+      - tests/test_adapter_capabilities.py
+    status: implementing
   quality_failure_benchmarks: {owner_lot: V2L4, implementation: [], tests: [], status: planned}
   media_profiling: {owner_lot: V2L5, implementation: [], tests: [], status: planned}
   adaptive_frame_selection: {owner_lot: V2L6, implementation: [], tests: [], status: planned}
