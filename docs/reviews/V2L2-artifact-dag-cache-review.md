@@ -2,9 +2,9 @@
 
 ## Review status
 
-PENDING FINAL NATIVE INTEGRATION EVIDENCE
+PASS — 2026-09-16
 
-This review closes only after the retained PyCOLMAP integration lane passes on a review/handoff head. The fixture implementation itself is already green under fast CI and CodeQL.
+V2L2 is accepted after the closing integration fixture passed fast CI and CodeQL and the retained native PyCOLMAP lane passed again on the review head.
 
 ## Scope reviewed
 
@@ -53,12 +53,19 @@ Head: `26cec967848bafb82cef169234f4eac5b2eb27ba`
 
 - fast-ci #368 (`35077140554`) — PASS: repository validator, Ruff lint, Ruff format, Pyright, full pytest, actionlint.
 - CodeQL #313 (`35077140556`) — PASS.
-- V2L2.6 diff at this stage is limited to `tests/test_artifact_cache_regression.py` plus this review evidence; no `src/` behavior changes are introduced by the closing item.
 
-### Retained native baseline
+### Review evidence head
 
-The immediately preceding V2L2.5 final product head `49c2f3312a675cc35bc9dbd32edd02a31e68471b` passed native PyCOLMAP integration #176 (`35076402356`) before PR #43 merged. V2L2.6 adds no product source change; nevertheless this review file intentionally triggers the retained native lane again so lot closure has fresh exact-head evidence.
+Head: `e47f65caaa254c2e22b07c308fff3f6909919687`
 
-## Decision gate
+- fast-ci #369 (`35077565143`) — PASS.
+- native PyCOLMAP integration #178 (`35077565192`) — PASS in the exact pinned external PyCOLMAP 4.2.0 environment and retained L3/L4 retrieval references.
+- CodeQL #314 (`35077565152`) — PASS.
 
-The lot review remains **PENDING** until the review/handoff head has fresh native PyCOLMAP evidence. After that pass, this document will record `PASS`, `registry/reviews.yaml` will mark V2L2 passed, `artifact_dag_cache` will become implemented, V2L2.6 will become done, and V2L3.1 will be expanded to a complete deny-by-default contract before becoming the sole ready item.
+### Retained product baseline
+
+The immediately preceding V2L2.5 final product head `49c2f3312a675cc35bc9dbd32edd02a31e68471b` also passed native PyCOLMAP integration #176 (`35076402356`) before PR #43 merged. V2L2.6 itself adds no product source behavior.
+
+## Decision
+
+**PASS.** V2L2.1 through V2L2.6 compose correctly under the tested invariants. The lot may close, `artifact_dag_cache` may become `implemented`, and V2L3.1 may become the sole next `ready` work item once its full deny-by-default executable contract is present. This review does not authorize V2L3 implementation inside the V2L2 closing PR.
