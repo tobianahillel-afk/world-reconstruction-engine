@@ -140,9 +140,7 @@ def test_model_checkpoint_are_nullable_explicit_identities_without_defaults() ->
         ]
     }
     assert "default" not in json.dumps(definitions, sort_keys=True)
-    assert definitions["checkpoint_identity"]["properties"]["sha256"] == {
-        "$ref": "#/$defs/sha256"
-    }
+    assert definitions["checkpoint_identity"]["properties"]["sha256"] == {"$ref": "#/$defs/sha256"}
 
 
 def test_v2l3_4_failure_metric_resume_fields_are_not_in_schema() -> None:
