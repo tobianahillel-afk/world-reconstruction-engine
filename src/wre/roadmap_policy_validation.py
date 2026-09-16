@@ -8,6 +8,7 @@ import yaml
 _REQUIRED_TRUE_POLICY_FLAGS = (
     "activation_requires_candidate_refresh",
     "activation_requires_one_run_complexity_gate",
+    "activation_requires_performance_review",
     "final_validation_is_validation_only",
 )
 
