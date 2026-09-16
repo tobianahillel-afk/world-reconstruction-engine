@@ -273,9 +273,7 @@ def _schema_object_fields(
     required_fields = set(cast(list[str], required))
     property_fields = set(cast(dict[str, Any], properties))
     if required_fields != property_fields:
-        errors.append(
-            f"adapter model registry schema {name} required/properties fields must match"
-        )
+        errors.append(f"adapter model registry schema {name} required/properties fields must match")
         return None
     return required_fields
 
