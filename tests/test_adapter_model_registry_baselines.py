@@ -153,9 +153,7 @@ def test_baseline_shipping_license_and_hardware_policy_match_approved_evidence()
 def test_registry_does_not_promote_pending_candidates() -> None:
     entries = _entries_by_id()
     registered_dependencies = {
-        dependency_ref
-        for entry in entries.values()
-        for dependency_ref in entry["dependency_refs"]
+        dependency_ref for entry in entries.values() for dependency_ref in entry["dependency_refs"]
     }
 
     assert registered_dependencies == {"colmap", "exifread", "ffmpeg"}
