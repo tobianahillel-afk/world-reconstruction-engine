@@ -57,7 +57,8 @@ components:
       - tests/test_artifact_cache_lookup.py
       - tests/test_artifact_invalidation.py
       - tests/test_artifact_materialization.py
-    status: implementing
+      - tests/test_artifact_cache_regression.py
+    status: implemented
   adapter_model_registry: {owner_lot: V2L3, implementation: [], tests: [], status: planned}
   quality_failure_benchmarks: {owner_lot: V2L4, implementation: [], tests: [], status: planned}
   media_profiling: {owner_lot: V2L5, implementation: [], tests: [], status: planned}
