@@ -5,19 +5,19 @@ roadmap_version: '2.0'
 phase: implementation
 milestone: V2M0
 lot: V2L3
-active_work_item: V2L3.2
+active_work_item: V2L3.3
 status: ready
-last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1]
-last_merged_pr: 44
+last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2]
+last_merged_pr: 46
 current_goal: >-
-  Extend exact reproducibility identity only where hardware/runtime can materially affect artifact bytes:
-  reuse existing ModelIdentity and CheckpointIdentity, introduce one immutable caller-supplied normalized
-  HardwareRuntimeIdentity, and make it optional artifact-key material without changing legacy keys when absent.
+  Define only the machine-readable adapter/model shipping, license and reproducibility registry schema:
+  reuse existing dependency-license evidence, capability and producer/model/checkpoint identities, declare
+  hardware-sensitive artifact-key policy explicitly, and create no production adapter registrations yet.
 next_action: >-
-  Complete only V2L3.2 from its executable contract in registry/work-items/v2m0.yaml: implement and test
-  HardwareRuntimeIdentity plus optional hardware-sensitive ArtifactKeyMaterial integration, preserve existing
-  key bytes when hardware identity is absent, and do not implement scheduler, runtime discovery, registry,
-  shipping/license, failure/metrics/resume or V2L3.3+ behavior.
+  Complete only V2L3.3 from its executable contract in registry/work-items/v2m0.yaml: add the closed
+  registry schema plus an empty versioned registry envelope and focused schema tests, reference rather
+  than duplicate registry/dependencies.yaml evidence, and do not implement V2L3.4+ declarations,
+  semantic registry validation, concrete baseline entries, routing, model loading or execution.
 blockers: []
 architecture:
   product_blueprint: docs/01_PRODUCT.md
