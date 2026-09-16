@@ -7,6 +7,7 @@ from typing import TypeVar
 
 from wre.domain.artifact_graph import ArtifactDependencyGraph
 from wre.domain.artifact_keys import ArtifactKey
+from wre.domain.artifact_materialization import ArtifactMaterializationMetadata
 from wre.domain.artifact_metadata import ArtifactMetadata
 from wre.domain.artifacts import ArtifactId, ArtifactRef
 from wre.domain.cameras import Camera, CameraId, ObservationMetadata
@@ -19,6 +20,7 @@ from wre.persistence.codec import (
     JsonObject,
     canonical_json,
     decode_artifact_dependencies,
+    decode_artifact_materialization,
     decode_artifact_metadata,
     decode_camera,
     decode_metadata_interpretation,
@@ -28,6 +30,7 @@ from wre.persistence.codec import (
     decode_scene_project,
     decode_spatial_fragment,
     encode_artifact_dependencies,
+    encode_artifact_materialization,
     encode_artifact_metadata,
     encode_camera,
     encode_metadata_interpretation,
@@ -331,6 +334,34 @@ class SQLiteLocalStore:
 
     def get_artifact_metadata(self, artifact_id: ArtifactId) -> ArtifactMetadata | None:
         return self._get("artifact_metadata", artifact_id.value, decode_artifact_metadata)
+
+    def put_artifact_materialization(self, metadata: ArtifactMaterializationMetadata) -> None:
+        if not isinstance(metadata, ArtifactMaterializationMetadata):
+            raise TypeError("metadata must be ArtifactMaterializationMetadata")
+        self._put(
+            "artifact_materialization",
+            metadata.artifact_ref.artifact_id.value,
+            encode_artifact_materialization(metadata),
+        )
+
+    def get_artifact_materialization(
+        self,
+        artifact_ref: ArtifactRef,
+    ) -> ArtifactMaterializationMetadata | None:
+        if not isinstance(artifact_ref, ArtifactRef):
+            raise TypeError("artifact_ref must be ArtifactRef")
+        metadata = self._get(
+            "artifact_materialization",
+            artifact_ref.artifact_id.value,
+            decode_artifact_materialization,
+        )
+        if metadata is None:
+            return None
+        if metadata.artifact_ref != artifact_ref:
+            raise PersistenceError(
+                "artifact materialization record identity does not match the requested ArtifactRef"
+            )
+        return metadata
 
     def find_artifact_metadata_by_key(
         self,
