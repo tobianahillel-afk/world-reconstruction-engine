@@ -42,10 +42,11 @@ def test_current_roadmap_guardrails_are_enabled() -> None:
     assert validate_roadmap_guardrails(ROOT) == []
 
 
-def test_each_modernity_and_sizing_guardrail_is_fail_closed(tmp_path: Path) -> None:
+def test_each_modernity_sizing_and_performance_guardrail_is_fail_closed(tmp_path: Path) -> None:
     for flag in (
         "activation_requires_candidate_refresh",
         "activation_requires_one_run_complexity_gate",
+        "activation_requires_performance_review",
         "final_validation_is_validation_only",
     ):
         repo = _copy_repo(tmp_path / flag)
