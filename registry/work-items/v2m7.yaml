@@ -15,9 +15,9 @@ work_items:
   - {id: V2L45.6, lot: V2L45, title: Game engine package boundary and validation, status: planned, depends_on: [V2L45.5]}
   - {id: V2L46.1, lot: V2L46, title: JobSpec resource requirement contract, status: planned, depends_on: [V2L45.6]}
   - {id: V2L46.2, lot: V2L46, title: Local deterministic scheduler baseline, status: planned, depends_on: [V2L46.1]}
-  - {id: V2L46.3, lot: V2L46, title: Empirical resource estimator contract, status: planned, depends_on: [V2L46.2]}
-  - {id: V2L46.4, lot: V2L46, title: Predicted OOM disk timeout mitigation policy, status: planned, depends_on: [V2L46.3]}
-  - {id: V2L46.5, lot: V2L46, title: Resource scheduling benchmark, status: planned, depends_on: [V2L46.4]}
+  - {id: V2L46.3, lot: V2L46, title: Empirical resource and execution profile estimator contract, status: planned, depends_on: [V2L46.2]}
+  - {id: V2L46.4, lot: V2L46, title: Predicted OOM disk timeout chunk batch precision mitigation policy, status: planned, depends_on: [V2L46.3]}
+  - {id: V2L46.5, lot: V2L46, title: Resource scheduling throughput quality benchmark, status: planned, depends_on: [V2L46.4]}
   - {id: V2L47.1, lot: V2L47, title: Checkpoint identity compatibility contract, status: planned, depends_on: [V2L46.5]}
   - {id: V2L47.2, lot: V2L47, title: Bounded resume retry state machine, status: planned, depends_on: [V2L47.1]}
   - {id: V2L47.3, lot: V2L47, title: First adapter checkpoint integration, status: planned, depends_on: [V2L47.2]}
@@ -29,8 +29,8 @@ work_items:
   - {id: V2L48.4, lot: V2L48, title: Injection path oversized media negative tests, status: planned, depends_on: [V2L48.3]}
   - {id: V2L48.5, lot: V2L48, title: Security supply chain review, status: planned, depends_on: [V2L48.4]}
   - {id: V2L49.1, lot: V2L49, title: Benchmark suite manifest and result store, status: planned, depends_on: [V2L48.5]}
-  - {id: V2L49.2, lot: V2L49, title: Candidate versus default comparison runner, status: planned, depends_on: [V2L49.1]}
-  - {id: V2L49.3, lot: V2L49, title: Default promotion eligibility policy, status: planned, depends_on: [V2L49.2]}
+  - {id: V2L49.2, lot: V2L49, title: Candidate default and execution profile comparison runner, status: planned, depends_on: [V2L49.1]}
+  - {id: V2L49.3, lot: V2L49, title: Default and execution profile promotion eligibility policy, status: planned, depends_on: [V2L49.2]}
   - {id: V2L49.4, lot: V2L49, title: Default change human approval audit record, status: planned, depends_on: [V2L49.3]}
   - {id: V2L49.5, lot: V2L49, title: Benchmark cannot bypass license invariant guard, status: planned, depends_on: [V2L49.4]}
   - {id: V2L50.1, lot: V2L50, title: Supported installation runtime profiles, status: planned, depends_on: [V2L49.5]}
