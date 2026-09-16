@@ -997,7 +997,7 @@ work_items:
       - empty adapter-model registry envelope unchanged until concrete baseline registration in V2L3.6
       - later V2L4 failure and metric contracts as explicit future owners rather than duplicating their semantics here
     acceptance:
-      - The closed adapter registry entry schema requires exactly three additional declaration fields failure_signals metric_names and resume_mode alongside the V2L3.3 fields.
+      - The closed adapter registry entry schema requires exactly three additional declaration fields failure_signals, metric_names and resume_mode alongside the V2L3.3 fields.
       - failure_signals is an array of unique open token strings representing adapter-local raw failure signal names only; it may be empty and carries no stable WRE failure-category meaning or fallback policy.
       - metric_names is an array of unique open token strings representing names of metrics an adapter can expose; it may be empty and carries no values units directionality thresholds aggregation or quality-gate semantics.
       - resume_mode is a required closed enum containing exactly unsupported and checkpoint, with no implicit default or truthy/falsy coercion.
