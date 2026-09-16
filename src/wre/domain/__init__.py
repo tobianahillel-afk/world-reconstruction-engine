@@ -41,6 +41,7 @@ from wre.domain.estimated_geometry import (
     SparseReconstructionEstimateId,
 )
 from wre.domain.fragments import LocalFrameId, SpatialFragment, SpatialFragmentId
+from wre.domain.hardware_identity import HardwareRuntimeIdentity
 from wre.domain.metadata import (
     CaptureTimeInterpretation,
     CaptureTimeInterpretationStatus,
@@ -108,6 +109,7 @@ __all__ = [
     "EstimatedTrackElement",
     "GpsInterpretationStatus",
     "GpsMetadataInterpretation",
+    "HardwareRuntimeIdentity",
     "ImageDimensions",
     "ImageObservation",
     "LocalFrameId",
