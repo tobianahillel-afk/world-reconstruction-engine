@@ -97,18 +97,21 @@ dependencies:
     role: [video_io, deterministic_frame_extraction]
     integration: subprocess_cli
     version_policy: pin_exact_system_package
-    pinned_version: 6.1.1-3ubuntu5
-    ci_package: ffmpeg=7:6.1.1-3ubuntu5
+    pinned_version: 8.0.1-3ubuntu2
+    ci_package: ffmpeg=7:8.0.1-3ubuntu2
     upstream_repository: FFmpeg/FFmpeg
     license: GPL-2.0-or-later
     license_review: approved
     notes: >-
-      FFmpeg upstream is primarily LGPL-2.1-or-later with optional GPL parts. The selected
-      Debian/Ubuntu Noble package uses GPL-licensed files, so its resulting binaries are
-      GPL-2.0-or-later. WRE invokes ffmpeg/ffprobe only as external subprocesses and does not
-      link or bundle those binaries. CI installs the exact Ubuntu package and verifies both
-      CLI version strings. Any future binary redistribution, library linkage or different
-      build/package requires a new license and version review.
+      The selected Ubuntu 26.04 Resolute package is the exact FFmpeg 8.0.1-3ubuntu2 baseline
+      exercised by WRE CI. FFmpeg upstream is primarily LGPL-2.1-or-later with optional GPL
+      components; WRE conservatively retains the previously approved GPL-2.0-or-later package
+      posture for this external subprocess integration. WRE invokes ffmpeg/ffprobe only as
+      external subprocesses and does not link or bundle those binaries. The FFmpeg 8 migration
+      was preceded by a dedicated compatibility probe exercising synthetic-video creation,
+      timestamp probing, deterministic frame selection, PNG extraction, persistence and
+      idempotent rerun. Any future binary redistribution, library linkage or materially different
+      build/package requires a fresh license/version review.
   proj:
     status: candidate_core
     role: [coordinate_reference_systems]
