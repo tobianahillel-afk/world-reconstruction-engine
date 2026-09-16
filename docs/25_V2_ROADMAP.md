@@ -10,17 +10,18 @@ This roadmap turns the v2 blueprint into implementation-sized work. It is intent
 - If a work item discovers a second independent responsibility or external integration, split it before coding.
 - Scope is deny-by-default: a work item permits only its objective/acceptance criteria and minimum supporting changes.
 - Contracts precede alternative adapters; adapters precede benchmark-based default promotion.
-- Existing tested v1 code is retained/generalized/wrapped unless replacement evidence justifies removal.
+- Legacy v1 code is only an implementation donor/regression source. Reuse it when it cleanly satisfies the owning v2 contract; never preserve or wrap a v1 API merely for backward compatibility.
+- Before activating any work item that integrates or promotes a solver/model, refresh the candidate shortlist from `docs/14_TECHNOLOGY_SELECTION.md`, `docs/27_RESEARCH_CANDIDATE_COVERAGE.md`, the current adapter/model registry and current research evidence. Planned item names never freeze a 2026 winner.
 
 ## V2M0 — Production substrate ready
 
-### V2L0 — V1→V2 migration and retained baseline
+### V2L0 — V1→V2 migration and donor baseline
 
-Purpose: establish v2.0 repository authority without deleting proven v1 code.
+Purpose: establish v2.0 repository authority while preserving only useful legacy implementation donors, regression fixtures and historical evidence.
 
-- `V2L0.1` — Inventory and migration map: classify every implemented v1 component as retain/generalize/wrap/deprecate/remove-later and archive the v1 machine roadmap/review state.
+- `V2L0.1` — Inventory and migration map: classify every implemented v1 component as reusable donor/generalize/temporary wrap/deprecate/remove-later and archive the v1 machine roadmap/review state.
 - `V2L0.2` — Replace active roadmap/state/components/reviews with v2 identifiers and validator coverage while preserving historical evidence.
-- `V2L0.3` — Migration compatibility review: prove current fast CI and retained COLMAP/media fixtures still pass under v2 governance.
+- `V2L0.3` — Migration regression review: prove current fast CI and useful COLMAP/media donor fixtures still pass under v2 governance without making v1 compatibility a product requirement.
 
 ### V2L1 — SceneProject and artifact identity
 
@@ -53,7 +54,7 @@ Purpose: make algorithms replaceable without changing core semantics.
 - `V2L3.3` — shipping status/license/reproducibility registry schema.
 - `V2L3.4` — adapter failure/metrics/resume capability declaration.
 - `V2L3.5` — registry validator: reject floating/unapproved defaults and incomplete production metadata.
-- `V2L3.6` — register retained COLMAP/FFmpeg/ExifRead baselines through the v2 registry without changing their implementation.
+- `V2L3.6` — register useful COLMAP/FFmpeg/ExifRead donor baselines through the v2 registry without making their v1 wrappers authoritative.
 
 ### V2L4 — Quality, failure and benchmark records
 
@@ -80,7 +81,7 @@ Purpose: create one common language for gates, escalation and comparison.
 ### V2L6 — Adaptive frame selection
 
 - `V2L6.1` — frame-selection policy contract separate from raw video ingestion.
-- `V2L6.2` — compatibility adapter for existing deterministic interval keyframes.
+- `V2L6.2` — donor adapter for the existing deterministic interval-keyframe implementation; no legacy API compatibility promise.
 - `V2L6.3` — quality/diversity-aware selection baseline using only explicit profile metrics.
 - `V2L6.4` — bounded density/resource controls for long videos.
 - `V2L6.5` — provenance/timing preservation + selection regression fixtures and lot review.
@@ -88,16 +89,16 @@ Purpose: create one common language for gates, escalation and comparison.
 ### V2L7 — Pair candidate retrieval
 
 - `V2L7.1` — canonical `PairCandidate`/candidate-source contract and dedup semantics.
-- `V2L7.2` — wrap retained sequential pairing behind the canonical contract.
-- `V2L7.3` — wrap retained GPS pairing behind the canonical contract.
+- `V2L7.2` — reuse the sequential-pairing donor behind the canonical contract where still useful.
+- `V2L7.3` — reuse the GPS-pairing donor behind the canonical contract where still useful.
 - `V2L7.4` — deterministic classical vocabulary retrieval baseline.
-- `V2L7.5` — modern visual-retrieval adapter contract + first benchmark candidate, without scene fusion.
+- `V2L7.5` — modern visual/place-retrieval evidence adapter contract + first benchmark candidate; optional learned geo/time signals may contribute evidence but never define scene identity or capture time by themselves.
 - `V2L7.6` — candidate-union/dedup/retrieval-recall benchmark and lot review.
 
 ### V2L8 — Scene identity and clustering
 
 - `V2L8.1` — `SceneCluster` / scene-relationship hypothesis contract.
-- `V2L8.2` — local-match/geometric-verification evidence adapter using retained COLMAP baseline.
+- `V2L8.2` — local-match/geometric-verification evidence adapter using the useful COLMAP donor baseline where appropriate.
 - `V2L8.3` — deterministic cluster construction from verified relationships.
 - `V2L8.4` — repeated/symmetric look-alike fail-closed fixture; weak similarity must remain separate/unresolved.
 - `V2L8.5` — scalable clustering boundary for large candidate graphs and lot review.
@@ -127,38 +128,38 @@ Purpose: create one common language for gates, escalation and comparison.
 - `V2L11.2` — `DepthField` and validity/confidence contract.
 - `V2L11.3` — `PointMap` contract.
 - `V2L11.4` — `GeometrySolution` assembly contract and local-scale semantics.
-- `V2L11.5` — compatibility conversion from retained `SparseReconstructionEstimate` to canonical geometry without deleting legacy representation.
+- `V2L11.5` — one-way migration/conversion from legacy `SparseReconstructionEstimate` when useful for donor fixtures or historical artifacts; no permanent legacy representation requirement.
 - `V2L11.6` — coordinate-convention regression fixture and lot review.
 
-### V2L12 — Retained precision geometry baseline
+### V2L12 — Classical precision geometry baseline
 
 - `V2L12.1` — COLMAP adapter descriptor and input/output normalization through v2 artifact contracts.
-- `V2L12.2` — retained feature/matching/verification stages consume artifact/cache identities.
-- `V2L12.3` — retained incremental SfM emits canonical `CameraSolution`/`GeometrySolution`.
+- `V2L12.2` — useful existing feature/matching/verification donor stages consume v2 artifact/cache identities.
+- `V2L12.3` — the classical incremental SfM baseline emits canonical `CameraSolution`/`GeometrySolution`.
 - `V2L12.4` — disconnected/zero-model outcomes remain explicit.
-- `V2L12.5` — existing real COLMAP end-to-end fixture migrated to v2 contracts and lot review.
+- `V2L12.5` — real COLMAP end-to-end regression fixture migrated to v2 contracts and lot review.
 
 ### V2L13 — Feed-forward geometry
 
 - `V2L13.1` — feed-forward camera/depth adapter interface and normalized outputs.
-- `V2L13.2` — integrate one approved preview candidate behind the contract.
+- `V2L13.2` — refresh the current shortlist, then integrate one approved preview candidate behind the contract.
 - `V2L13.3` — exact checkpoint/hardware/license registry + reproducibility fixture.
 - `V2L13.4` — geometry/camera quality metrics against controlled holdout/reference.
-- `V2L13.5` — preview-vs-COLMAP comparison without default promotion and lot review.
+- `V2L13.5` — preview-vs-classical-baseline comparison without default promotion and lot review.
 
 ### V2L14 — Precision/global refinement and competing solutions
 
 - `V2L14.1` — competing `GeometrySolution` comparison contract.
 - `V2L14.2` — geometry-initialization/refinement adapter boundary.
-- `V2L14.3` — retained classical BA/global refinement path behind the boundary.
-- `V2L14.4` — first hybrid/global candidate integration when approved.
+- `V2L14.3` — classical BA/global refinement baseline path behind the boundary.
+- `V2L14.4` — refresh the current shortlist, then integrate the first approved hybrid/global candidate.
 - `V2L14.5` — consensus/disagreement metrics and unresolved policy.
 - `V2L14.6` — controlled geometry benchmark and lot review.
 
 ### V2L15 — Dense depth / MVS / fusion
 
 - `V2L15.1` — dense-depth artifact contract.
-- `V2L15.2` — retained COLMAP MVS/PatchMatch baseline adapter.
+- `V2L15.2` — COLMAP MVS/PatchMatch donor baseline adapter where still useful under v2 contracts.
 - `V2L15.3` — depth consistency/fusion contract.
 - `V2L15.4` — learned depth-prior adapter boundary without automatic truth promotion.
 - `V2L15.5` — coverage/holes/confidence outputs.
@@ -187,7 +188,7 @@ Purpose: create one common language for gates, escalation and comparison.
 
 - `V2L18.1` — canonical `AppearanceModel` contract distinct from surface.
 - `V2L18.2` — Gaussian/radiance adapter capability contract.
-- `V2L18.3` — integrate one approved static appearance baseline.
+- `V2L18.3` — refresh the current shortlist, then integrate one approved static appearance baseline.
 - `V2L18.4` — held-out render metrics + geometry disagreement diagnostics.
 - `V2L18.5` — in-the-wild exposure/distractor specialist adapter boundary.
 - `V2L18.6` — appearance benchmark/default candidate review.
@@ -239,7 +240,7 @@ Purpose: create one common language for gates, escalation and comparison.
 ### V2L24 — Dense tracking and static/dynamic decomposition
 
 - `V2L24.1` — dense track/motion evidence contract.
-- `V2L24.2` — integrate one approved dense tracker.
+- `V2L24.2` — refresh the current shortlist, then integrate one approved dense tracker.
 - `V2L24.3` — dynamic/static mask/decomposition contract.
 - `V2L24.4` — transient/semi-static/dynamic classification baseline.
 - `V2L24.5` — contamination/occlusion fixtures and lot review.
@@ -247,7 +248,7 @@ Purpose: create one common language for gates, escalation and comparison.
 ### V2L25 — Short-video 4D preview
 
 - `V2L25.1` — dynamic geometry/preview adapter contract.
-- `V2L25.2` — integrate one approved fast 4D preview candidate.
+- `V2L25.2` — refresh the current shortlist, then integrate one approved fast 4D preview candidate.
 - `V2L25.3` — camera/depth/motion normalization into WRE artifacts.
 - `V2L25.4` — temporal preview metrics and resource bounds.
 - `V2L25.5` — fallback/unresolved fixture and lot review.
@@ -255,7 +256,7 @@ Purpose: create one common language for gates, escalation and comparison.
 ### V2L26 — Quality 4D reconstruction
 
 - `V2L26.1` — quality dynamic-solution contract and comparison metrics.
-- `V2L26.2` — integrate first approved quality 4D candidate.
+- `V2L26.2` — refresh the current shortlist, then integrate the first approved quality 4D candidate.
 - `V2L26.3` — geometry/appearance temporal consistency gate.
 - `V2L26.4` — competing preview/quality solution comparison/fusion policy.
 - `V2L26.5` — held-out/free-viewpoint dynamic fixture and lot review.
@@ -271,7 +272,7 @@ Purpose: create one common language for gates, escalation and comparison.
 ### V2L28 — Long video / streaming geometry
 
 - `V2L28.1` — chunk/window/stateful processing contract.
-- `V2L28.2` — integrate one approved long-sequence geometry baseline.
+- `V2L28.2` — refresh the current shortlist, then integrate one approved long-sequence/stateful geometry baseline.
 - `V2L28.3` — drift metric and chunk-boundary artifacts.
 - `V2L28.4` — overlap/loop/global refinement boundary.
 - `V2L28.5` — bounded-memory long-sequence fixture and lot review.
@@ -296,7 +297,7 @@ Purpose: create one common language for gates, escalation and comparison.
 
 ### V2L31 — Temporal evidence and epochs
 
-- `V2L31.1` — capture-date evidence contract with uncertain intervals.
+- `V2L31.1` — capture-date evidence contract with uncertain intervals; metadata, archive context and learned geo/time signals may contribute evidence, but publication time or model prediction never silently becomes exact capture time.
 - `V2L31.2` — `TemporalEpoch` grouping hypothesis.
 - `V2L31.3` — contradictory/unknown date handling; publication time never silently becomes capture time.
 - `V2L31.4` — epoch grouping fixture and lot review.
@@ -320,7 +321,7 @@ Purpose: create one common language for gates, escalation and comparison.
 ### V2L34 — Cross-temporal reconstruction support
 
 - `V2L34.1` — sparse-epoch support/transfer contract preserving provenance.
-- `V2L34.2` — integrate one approved cross-temporal geometry/appearance candidate.
+- `V2L34.2` — refresh the current shortlist, then integrate one approved cross-temporal geometry/appearance candidate.
 - `V2L34.3` — state-specific geometry/appearance ownership rules.
 - `V2L34.4` — transfer hallucination/coverage safeguards and lot review.
 
@@ -336,7 +337,7 @@ Purpose: create one common language for gates, escalation and comparison.
 ### V2L36 — Sparse-view specialist route
 
 - `V2L36.1` — sparse-coverage classifier threshold policy.
-- `V2L36.2` — integrate first approved sparse-view specialist.
+- `V2L36.2` — refresh the current shortlist, then integrate the first approved sparse-view specialist.
 - `V2L36.3` — uncertainty/coverage artifact and conservative completion boundary.
 - `V2L36.4` — sparse-view benchmark + routing policy update and lot review.
 
@@ -344,15 +345,15 @@ Purpose: create one common language for gates, escalation and comparison.
 
 - `V2L37.1` — scalable retrieval-index contract.
 - `V2L37.2` — submap/chunk reconstruction contract.
-- `V2L37.3` — integrate first approved scalable mapping path.
-- `V2L37.4` — global alignment/refinement and long-tail escalation boundary.
+- `V2L37.3` — refresh the current shortlist, then integrate the first approved scalable/stateful mapping path.
+- `V2L37.4` — global/submap/crowd-sourced reconstruction merge alignment/refinement and long-tail escalation boundary.
 - `V2L37.5` — memory/time/candidate-recall large-collection benchmark and lot review.
 
 ### V2L38 — 360 / omnidirectional route
 
 - `V2L38.1` — native equirectangular camera/calibration contract.
 - `V2L38.2` — 360 profiling/routing signal.
-- `V2L38.3` — integrate first approved omnidirectional reconstruction path.
+- `V2L38.3` — refresh the current shortlist, then integrate the first approved omnidirectional reconstruction path.
 - `V2L38.4` — environment separation and 360 benchmark/lot review.
 
 ### V2L39 — Drone / aerial route
@@ -381,7 +382,7 @@ Purpose: create one common language for gates, escalation and comparison.
 ### V2L42 — Advanced relighting / PBR
 
 - `V2L42.1` — relightable environment/material capability contract.
-- `V2L42.2` — integrate one approved relighting candidate.
+- `V2L42.2` — refresh the current shortlist, then integrate one approved relighting candidate.
 - `V2L42.3` — material-fusion/inverse-rendering candidate adapter.
 - `V2L42.4` — relighting/material benchmark and lot review.
 
@@ -462,7 +463,9 @@ Purpose: create one common language for gates, escalation and comparison.
 
 ## Dependency philosophy
 
-The roadmap deliberately leaves exact research winners out of work-item identity. For example, `V2L13.2` means “first approved feed-forward geometry candidate”, not “DA3 forever”. Exact candidates are chosen from `docs/14_TECHNOLOGY_SELECTION.md` and the model/dependency registry at implementation time, then benchmarked under the stable WRE contract.
+The roadmap deliberately leaves exact research winners out of work-item identity. For example, `V2L13.2` means “first approved feed-forward geometry candidate”, not “DA3 forever”. Before each solver/model integration item is activated, the owning PR must refresh the shortlist from `docs/14_TECHNOLOGY_SELECTION.md`, `docs/27_RESEARCH_CANDIDATE_COVERAGE.md`, the adapter/model registry and current evidence, then benchmark the selected candidate under the stable WRE contract.
+
+The goal is to integrate the strongest currently approved specialist for each responsibility without turning the roadmap into a list of papers. New research normally changes the shortlist, benchmark result or default promotion—not the frozen architecture or work-item identity.
 
 ## Why there are many lots
 

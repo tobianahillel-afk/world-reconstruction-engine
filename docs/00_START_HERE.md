@@ -10,13 +10,16 @@ Before interpreting the implementation roadmap, read the current product/archite
 2. [`02_ARCHITECTURE.md`](02_ARCHITECTURE.md) — responsibilities, representations, artifact graph, router and quality architecture.
 3. [`03_PIPELINE.md`](03_PIPELINE.md) — adaptive reconstruction routes by data profile.
 4. [`14_TECHNOLOGY_SELECTION.md`](14_TECHNOLOGY_SELECTION.md) — current candidate technologies and benchmark policy.
-5. [`15_PRODUCTION_RUNTIME.md`](15_PRODUCTION_RUNTIME.md) — professional orchestration, caching, scheduling, runtime compilation and distribution.
-6. [`23_ENGINEERING_EXECUTION.md`](23_ENGINEERING_EXECUTION.md) — how blueprint capabilities are split into one-run work items and implemented safely.
-7. [`24_SYSTEM_INVARIANTS.md`](24_SYSTEM_INVARIANTS.md) — cross-cutting fail-closed product invariants every subsystem must preserve.
-8. [`25_V2_ROADMAP.md`](25_V2_ROADMAP.md) — executable capability sequence for WRE v2.0.
-9. [`26_V2_PRODUCT_ARCHITECTURE_FREEZE.md`](26_V2_PRODUCT_ARCHITECTURE_FREEZE.md) — frozen v2 product/architecture authority, scientific replacement rule and legacy-v1 donor policy.
+5. [`27_RESEARCH_CANDIDATE_COVERAGE.md`](27_RESEARCH_CANDIDATE_COVERAGE.md) — living map from current research families/candidates to the frozen WRE contracts and roadmap lots; candidate names are intentionally not frozen.
+6. [`15_PRODUCTION_RUNTIME.md`](15_PRODUCTION_RUNTIME.md) — professional orchestration, caching, scheduling, runtime compilation and distribution.
+7. [`23_ENGINEERING_EXECUTION.md`](23_ENGINEERING_EXECUTION.md) — how blueprint capabilities are split into one-run work items and implemented safely.
+8. [`24_SYSTEM_INVARIANTS.md`](24_SYSTEM_INVARIANTS.md) — cross-cutting fail-closed product invariants every subsystem must preserve.
+9. [`25_V2_ROADMAP.md`](25_V2_ROADMAP.md) — executable capability sequence for WRE v2.0.
+10. [`26_V2_PRODUCT_ARCHITECTURE_FREEZE.md`](26_V2_PRODUCT_ARCHITECTURE_FREEZE.md) — frozen v2 product/architecture authority, scientific replacement rule and legacy-v1 donor policy.
 
 These documents define the current target product. WRE is an independent visual spatiotemporal reconstruction engine; it is not defined as a MONDE subsystem and is not a single COLMAP-to-splat pipeline. The v2 product/architecture is authoritative over legacy v1 structure; v1 is only an implementation donor and regression/reference source where useful.
+
+The product/architecture documents are frozen under `26_V2_PRODUCT_ARCHITECTURE_FREEZE.md`; the technology/candidate landscape is intentionally living. A new paper normally changes `14_TECHNOLOGY_SELECTION.md`, `27_RESEARCH_CANDIDATE_COVERAGE.md`, benchmark evidence or an adapter default—not the frozen architecture.
 
 ## Resume procedure
 
@@ -55,6 +58,8 @@ Planned future work may stay concise so the roadmap can survive changing researc
 - tests/evidence.
 
 The repository validator enforces this. The PR handing off to the next item must expand that item's contract before marking it `ready`.
+
+For any work item that integrates or promotes a solver/model, activation also requires a candidate refresh against `14_TECHNOLOGY_SELECTION.md`, `27_RESEARCH_CANDIDATE_COVERAGE.md`, the current adapter/model registry and current evidence. Do not blindly implement the method that happened to be fashionable when the roadmap was written.
 
 ## Work-item sizing rule
 
