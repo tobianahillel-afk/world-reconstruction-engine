@@ -12,14 +12,15 @@ Before interpreting the implementation roadmap, read the current product/archite
 4. [`14_TECHNOLOGY_SELECTION.md`](14_TECHNOLOGY_SELECTION.md) — current candidate technologies and benchmark policy.
 5. [`27_RESEARCH_CANDIDATE_COVERAGE.md`](27_RESEARCH_CANDIDATE_COVERAGE.md) — living map from current research families/candidates to the frozen WRE contracts and roadmap lots; candidate names are intentionally not frozen.
 6. [`15_PRODUCTION_RUNTIME.md`](15_PRODUCTION_RUNTIME.md) — professional orchestration, caching, scheduling, runtime compilation and distribution.
-7. [`23_ENGINEERING_EXECUTION.md`](23_ENGINEERING_EXECUTION.md) — how blueprint capabilities are split into one-run work items and implemented safely.
-8. [`24_SYSTEM_INVARIANTS.md`](24_SYSTEM_INVARIANTS.md) — cross-cutting fail-closed product invariants every subsystem must preserve.
-9. [`25_V2_ROADMAP.md`](25_V2_ROADMAP.md) — executable capability sequence for WRE v2.0.
-10. [`26_V2_PRODUCT_ARCHITECTURE_FREEZE.md`](26_V2_PRODUCT_ARCHITECTURE_FREEZE.md) — frozen v2 product/architecture authority, scientific replacement rule and legacy-v1 donor policy.
+7. [`28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md`](28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md) — living cross-cutting strategies for work avoidance, decode/preprocess reuse, GPU execution, compression, LOD and streaming without weakening quality contracts.
+8. [`23_ENGINEERING_EXECUTION.md`](23_ENGINEERING_EXECUTION.md) — how blueprint capabilities are split into one-run work items and implemented safely.
+9. [`24_SYSTEM_INVARIANTS.md`](24_SYSTEM_INVARIANTS.md) — cross-cutting fail-closed product invariants every subsystem must preserve.
+10. [`25_V2_ROADMAP.md`](25_V2_ROADMAP.md) — executable capability sequence for WRE v2.0.
+11. [`26_V2_PRODUCT_ARCHITECTURE_FREEZE.md`](26_V2_PRODUCT_ARCHITECTURE_FREEZE.md) — frozen v2 product/architecture authority, scientific replacement rule and legacy-v1 donor policy.
 
 These documents define the current target product. WRE is an independent visual spatiotemporal reconstruction engine; it is not defined as a MONDE subsystem and is not a single COLMAP-to-splat pipeline. The v2 product/architecture is authoritative over legacy v1 structure; v1 is only an implementation donor and regression/reference source where useful.
 
-The product/architecture documents are frozen under `26_V2_PRODUCT_ARCHITECTURE_FREEZE.md`; the technology/candidate landscape is intentionally living. A new paper normally changes `14_TECHNOLOGY_SELECTION.md`, `27_RESEARCH_CANDIDATE_COVERAGE.md`, benchmark evidence or an adapter default—not the frozen architecture.
+The product/architecture documents are frozen under `26_V2_PRODUCT_ARCHITECTURE_FREEZE.md`; the technology/candidate and performance-optimization landscapes are intentionally living. A new paper normally changes `14_TECHNOLOGY_SELECTION.md`, `27_RESEARCH_CANDIDATE_COVERAGE.md`, `28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md`, benchmark evidence or an adapter default—not the frozen architecture.
 
 ## Resume procedure
 
@@ -59,7 +60,7 @@ Planned future work may stay concise so the roadmap can survive changing researc
 
 The repository validator enforces this. The PR handing off to the next item must expand that item's contract before marking it `ready`.
 
-For any work item that integrates or promotes a solver/model, activation also requires a candidate refresh against `14_TECHNOLOGY_SELECTION.md`, `27_RESEARCH_CANDIDATE_COVERAGE.md`, the current adapter/model registry and current evidence. Do not blindly implement the method that happened to be fashionable when the roadmap was written.
+For any work item that integrates or promotes a solver/model, activation also requires a candidate refresh against `14_TECHNOLOGY_SELECTION.md`, `27_RESEARCH_CANDIDATE_COVERAGE.md`, the current adapter/model registry and current evidence. Performance-sensitive integrations must also consider `28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md` so an adapter is not accepted with avoidable decode, transfer, memory, batching or runtime-delivery bottlenecks. Do not blindly implement the method or execution strategy that happened to be fashionable when the roadmap was written.
 
 ## Work-item sizing rule
 
@@ -91,5 +92,6 @@ WRE receives arbitrary real-world photos and videos, organizes which observation
 - Preserve reconstructed/inferred/generated provenance classes.
 - Keep PREVIEW/FAST/QUALITY/MASTER products measurable and reproducible.
 - Treat artifact caching, resumability, benchmark registries, human review, compression and streaming as product capabilities, not afterthoughts.
+- Avoid unnecessary work before adding lower-level acceleration; reuse artifacts, warm-start explicitly and escalate only when the requested quality still needs it.
 - Prefer diagnosable unresolved output over a polished but structurally wrong reconstruction.
 - Treat legacy v1 as an optional implementation donor, never as a compatibility target. Reuse only what cleanly satisfies v2; replace/remove legacy code when validated v2 coverage exists.

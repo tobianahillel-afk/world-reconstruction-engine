@@ -5,7 +5,7 @@ work_items:
   - {id: V2L36.2, lot: V2L36, title: First approved sparse view specialist, status: planned, depends_on: [V2L36.1]}
   - {id: V2L36.3, lot: V2L36, title: Sparse uncertainty coverage and completion boundary, status: planned, depends_on: [V2L36.2]}
   - {id: V2L36.4, lot: V2L36, title: Sparse view benchmark and route update, status: planned, depends_on: [V2L36.3]}
-  - {id: V2L37.1, lot: V2L37, title: Scalable retrieval index contract, status: planned, depends_on: [V2L36.4]}
+  - {id: V2L37.1, lot: V2L37, title: Scalable ANN quantized retrieval index contract, status: planned, depends_on: [V2L36.4]}
   - {id: V2L37.2, lot: V2L37, title: Submap chunk reconstruction contract, status: planned, depends_on: [V2L37.1]}
   - {id: V2L37.3, lot: V2L37, title: First approved scalable mapping path, status: planned, depends_on: [V2L37.2]}
   - {id: V2L37.4, lot: V2L37, title: Global alignment refinement long tail escalation, status: planned, depends_on: [V2L37.3]}

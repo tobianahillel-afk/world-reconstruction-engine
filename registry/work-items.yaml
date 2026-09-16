@@ -13,6 +13,7 @@ policy:
   activation_must_expand_contract: true
   activation_requires_candidate_refresh: true
   activation_requires_one_run_complexity_gate: true
+  activation_requires_performance_review: true
   final_validation_is_validation_only: true
 work_item_files:
   - registry/work-items/v2m0.yaml
