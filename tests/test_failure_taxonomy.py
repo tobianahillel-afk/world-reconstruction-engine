@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from wre.domain.artifact_materialization import ArtifactMaterializationVerificationStatus
-from wre.domain.failures import FailureCategory
-from wre.domain.provenance import ProvenanceClass
+from wre.domain import FailureCategory
 
 
 _EXPECTED_FAILURES = [
@@ -61,6 +59,9 @@ def test_failure_category_rejects_unknown_success_decision_warning_and_solver_to
 
 
 def test_failure_category_is_distinct_from_other_closed_domain_vocabularies() -> None:
+    from wre.domain.artifact_materialization import ArtifactMaterializationVerificationStatus
+    from wre.domain.provenance import ProvenanceClass
+
     failure_tokens = {member.value for member in FailureCategory}
     materialization_tokens = {
         member.value for member in ArtifactMaterializationVerificationStatus
