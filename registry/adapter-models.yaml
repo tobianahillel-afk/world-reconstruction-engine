@@ -53,7 +53,7 @@ entries:
       output_kinds: [video.frame_observation]
     producer:
       implementation: wre.ingestion.keyframes.LocalKeyframeExtractor
-      version: 6.1.1-3ubuntu5
+      version: 8.0.1-3ubuntu2
       revision: null
     dependency_refs: [ffmpeg]
     model: null
@@ -62,10 +62,10 @@ entries:
     license:
       direct: GPL-2.0-or-later
       review: approved
-      transitive_notes: "The selected Ubuntu Noble FFmpeg package contains GPL-licensed files; the approved dependency record therefore treats the resulting binaries as GPL-2.0-or-later."
-      redistribution_notes: "WRE invokes the exact ffmpeg/ffprobe package only as external subprocesses and does not link or bundle the binaries; redistribution or a different build requires fresh review."
+      transitive_notes: "The exact Ubuntu 26.04 FFmpeg 8.0.1 package is treated conservatively under the approved GPL-2.0-or-later external-binary posture; this entry does not broaden upstream or transitive terms."
+      redistribution_notes: "WRE invokes exact ffmpeg/ffprobe binaries as external subprocesses and does not link or bundle them; redistribution or a materially different build requires fresh review."
     shipping_status: approved
-    reproducibility_notes: "LocalKeyframeExtractor requires matching ffmpeg and ffprobe 6.1.1-3ubuntu5 identities and deterministically selects source-frame timestamps before PNG extraction."
+    reproducibility_notes: "LocalKeyframeExtractor requires matching ffmpeg and ffprobe 8.0.1-3ubuntu2 identities and deterministically selects source-frame timestamps before PNG extraction; a dedicated pre-migration compatibility probe validated the same media contract on this exact package."
     failure_signals: []
     metric_names: []
     resume_mode: unsupported
