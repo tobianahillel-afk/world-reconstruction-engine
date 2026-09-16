@@ -6,7 +6,6 @@ from typing import Any
 
 import yaml
 
-
 _ROOT = Path(__file__).resolve().parents[1]
 _SCHEMA_PATH = _ROOT / "registry" / "schemas" / "adapter-model-registry.schema.json"
 _REGISTRY_PATH = _ROOT / "registry" / "adapter-models.yaml"
