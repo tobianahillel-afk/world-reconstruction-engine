@@ -64,8 +64,257 @@ def _make_executable(item: dict[str, Any]) -> None:
     item.setdefault("tests", ["test evidence"])
 
 
+def _adapter_registry_path(repo: Path) -> Path:
+    return repo / "registry/adapter-models.yaml"
+
+
+def _valid_adapter_entry(
+    adapter_id: str,
+    *,
+    dependency_ref: str = "exifread",
+    with_model: bool = False,
+    shipping_status: str = "approved",
+    license_review: str = "approved",
+) -> dict[str, Any]:
+    model: dict[str, Any] | None = None
+    checkpoint: dict[str, Any] | None = None
+    resume_mode = "unsupported"
+    if with_model:
+        model = {"name": "example-model", "version": "1.2.3", "revision": "rev-1"}
+        checkpoint = {"identifier": "weights-v1", "sha256": "a" * 64}
+        resume_mode = "checkpoint"
+
+    return {
+        "adapter_id": adapter_id,
+        "capability": {
+            "name": "geometry.reconstruction",
+            "input_kinds": ["image.observation"],
+            "output_kinds": ["geometry.sparse"],
+        },
+        "producer": {
+            "implementation": "wre.adapters.example",
+            "version": "1.0.0",
+            "revision": None,
+        },
+        "dependency_refs": [dependency_ref],
+        "model": model,
+        "checkpoint": checkpoint,
+        "artifact_key_hardware_policy": "omitted",
+        "license": {
+            "direct": "BSD-3-Clause",
+            "review": license_review,
+            "transitive_notes": "Synthetic test fixture only.",
+            "redistribution_notes": "Synthetic test fixture only.",
+        },
+        "shipping_status": shipping_status,
+        "reproducibility_notes": "Synthetic validator fixture.",
+        "failure_signals": ["input_missing", "solver_failed"],
+        "metric_names": ["latency_ms", "reprojection_error"],
+        "resume_mode": resume_mode,
+    }
+
+
+def _write_adapter_entries(repo: Path, entries: list[dict[str, Any]]) -> None:
+    _write(_adapter_registry_path(repo), {"schema_version": 1, "entries": entries})
+
+
 def test_current_repository_metadata_is_valid() -> None:
     assert validate_repository(ROOT) == []
+
+
+def test_adapter_registry_accepts_empty_and_synthetic_exact_entries(tmp_path: Path) -> None:
+    repo = _copy_repo(tmp_path)
+    assert validate_repository(repo) == []
+
+    _write_adapter_entries(
+        repo,
+        [
+            _valid_adapter_entry("alpha.native"),
+            _valid_adapter_entry("beta.learned", with_model=True),
+        ],
+    )
+
+    assert validate_repository(repo) == []
+
+
+def test_adapter_registry_fails_closed_for_root_and_schema_version(tmp_path: Path) -> None:
+    repo = _copy_repo(tmp_path)
+    registry_path = _adapter_registry_path(repo)
+
+    registry_path.write_text("- not\n- a\n- mapping\n", encoding="utf-8")
+    errors = validate_repository(repo)
+    assert any("adapter-models.yaml must contain a YAML mapping" in error for error in errors)
+
+    _write(registry_path, {"schema_version": 2, "entries": []})
+    errors = validate_repository(repo)
+    assert any("schema_version must be integer 1" in error for error in errors)
+
+    _write(registry_path, {"schema_version": 1, "entries": {}, "unexpected": True})
+    errors = validate_repository(repo)
+    assert any("undeclared fields" in error for error in errors)
+    assert any("entries must be a list" in error for error in errors)
+
+
+def test_adapter_registry_rejects_missing_extra_wrong_type_token_enum_blank_and_sha(
+    tmp_path: Path,
+) -> None:
+    repo = _copy_repo(tmp_path)
+    entry = _valid_adapter_entry("alpha.native", with_model=True)
+    del entry["resume_mode"]
+    entry["unexpected"] = "scope-creep"
+    entry["capability"] = []
+    entry["adapter_id"] = "Invalid Token"
+    entry["producer"]["implementation"] = " "
+    entry["artifact_key_hardware_policy"] = "sometimes"
+    entry["shipping_status"] = "maybe"
+    entry["license"]["review"] = "unknown"
+    entry["checkpoint"]["sha256"] = "A" * 64
+    _write_adapter_entries(repo, [entry])
+
+    errors = validate_repository(repo)
+
+    assert any("missing fields: ['resume_mode']" in error for error in errors)
+    assert any("undeclared fields: ['unexpected']" in error for error in errors)
+    assert any("capability must be a mapping" in error for error in errors)
+    assert any("adapter_id must be a valid registry token" in error for error in errors)
+    assert any("producer.implementation must be a non-blank string" in error for error in errors)
+    assert any("artifact_key_hardware_policy has invalid value" in error for error in errors)
+    assert any("shipping_status has invalid value" in error for error in errors)
+    assert any("license.review has invalid value" in error for error in errors)
+    assert any("checkpoint.sha256 must be exactly 64 lowercase hex" in error for error in errors)
+
+
+def test_adapter_registry_rejects_duplicate_and_unsorted_adapter_ids(tmp_path: Path) -> None:
+    repo = _copy_repo(tmp_path)
+    _write_adapter_entries(
+        repo,
+        [
+            _valid_adapter_entry("beta.adapter"),
+            _valid_adapter_entry("alpha.adapter"),
+            _valid_adapter_entry("alpha.adapter"),
+        ],
+    )
+
+    errors = validate_repository(repo)
+
+    assert any("adapter_id values must be unique" in error for error in errors)
+    assert any("canonical lexicographic adapter_id order" in error for error in errors)
+
+
+def test_adapter_registry_rejects_duplicate_or_unsorted_set_like_collections(tmp_path: Path) -> None:
+    repo = _copy_repo(tmp_path)
+    entry = _valid_adapter_entry("alpha.native")
+    entry["capability"]["input_kinds"] = ["image.observation", "image.observation"]
+    entry["capability"]["output_kinds"] = ["z.output", "a.output"]
+    entry["dependency_refs"] = ["ffmpeg", "exifread"]
+    entry["failure_signals"] = ["solver_failed", "input_missing"]
+    entry["metric_names"] = ["latency_ms", "latency_ms"]
+    _write_adapter_entries(repo, [entry])
+
+    errors = validate_repository(repo)
+
+    assert any("capability.input_kinds must not contain duplicates" in error for error in errors)
+    assert any("capability.output_kinds must be in canonical lexicographic order" in error for error in errors)
+    assert any("dependency_refs must be in canonical lexicographic order" in error for error in errors)
+    assert any("failure_signals must be in canonical lexicographic order" in error for error in errors)
+    assert any("metric_names must not contain duplicates" in error for error in errors)
+
+
+def test_adapter_registry_rejects_empty_outputs_but_allows_other_empty_sets(tmp_path: Path) -> None:
+    repo = _copy_repo(tmp_path)
+    entry = _valid_adapter_entry("alpha.native")
+    entry["capability"]["input_kinds"] = []
+    entry["dependency_refs"] = []
+    entry["failure_signals"] = []
+    entry["metric_names"] = []
+    _write_adapter_entries(repo, [entry])
+    assert validate_repository(repo) == []
+
+    entry["capability"]["output_kinds"] = []
+    _write_adapter_entries(repo, [entry])
+    errors = validate_repository(repo)
+    assert any("capability.output_kinds must not be empty" in error for error in errors)
+
+
+def test_adapter_registry_rejects_unknown_dependency_reference(tmp_path: Path) -> None:
+    repo = _copy_repo(tmp_path)
+    entry = _valid_adapter_entry("alpha.native")
+    entry["dependency_refs"] = ["does-not-exist"]
+    _write_adapter_entries(repo, [entry])
+
+    errors = validate_repository(repo)
+
+    assert any("references unknown dependency: does-not-exist" in error for error in errors)
+    dependencies = _load(repo / "registry/dependencies.yaml")
+    assert "does-not-exist" not in dependencies["dependencies"]
+
+
+def test_adapter_registry_rejects_floating_latest_versions(tmp_path: Path) -> None:
+    repo = _copy_repo(tmp_path)
+    entry = _valid_adapter_entry("alpha.learned", with_model=True)
+    entry["producer"]["version"] = "LATEST"
+    entry["model"]["version"] = " latest "
+    _write_adapter_entries(repo, [entry])
+
+    errors = validate_repository(repo)
+
+    assert any("producer.version cannot use floating latest" in error for error in errors)
+    assert any("model.version cannot use floating latest" in error for error in errors)
+
+
+def test_adapter_registry_rejects_checkpoint_without_model(tmp_path: Path) -> None:
+    repo = _copy_repo(tmp_path)
+    entry = _valid_adapter_entry("alpha.learned", with_model=True)
+    entry["model"] = None
+    _write_adapter_entries(repo, [entry])
+
+    errors = validate_repository(repo)
+
+    assert any("checkpoint requires model" in error for error in errors)
+
+
+def test_adapter_registry_enforces_approved_shipping_license_evidence(tmp_path: Path) -> None:
+    repo = _copy_repo(tmp_path)
+    entry = _valid_adapter_entry("alpha.native", license_review="pending")
+    _write_adapter_entries(repo, [entry])
+
+    errors = validate_repository(repo)
+    assert any("approved shipping requires approved entry license review" in error for error in errors)
+
+    entry = _valid_adapter_entry("alpha.native", dependency_ref="limap")
+    _write_adapter_entries(repo, [entry])
+    errors = validate_repository(repo)
+    assert any(
+        "approved shipping requires approved dependency license review: limap" in error
+        for error in errors
+    )
+
+
+def test_adapter_registry_allows_pending_review_for_nonapproved_shipping(tmp_path: Path) -> None:
+    repo = _copy_repo(tmp_path)
+    entry = _valid_adapter_entry(
+        "alpha.experimental",
+        dependency_ref="limap",
+        shipping_status="benchmark-only",
+        license_review="pending",
+    )
+    _write_adapter_entries(repo, [entry])
+
+    assert validate_repository(repo) == []
+
+
+def test_adapter_registry_blocked_license_requires_blocked_shipping(tmp_path: Path) -> None:
+    repo = _copy_repo(tmp_path)
+    entry = _valid_adapter_entry(
+        "alpha.blocked",
+        shipping_status="experimental",
+        license_review="blocked",
+    )
+    _write_adapter_entries(repo, [entry])
+
+    errors = validate_repository(repo)
+
+    assert any("blocked entry license review requires blocked shipping_status" in error for error in errors)
 
 
 def test_rejects_unknown_active_work_item(tmp_path: Path) -> None:
