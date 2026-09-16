@@ -1,5 +1,6 @@
 """Core solver-independent domain models."""
 
+from wre.domain.adapter_capabilities import AdapterCapabilityDescriptor, AdapterCapabilityName
 from wre.domain.artifact_graph import ArtifactDependencyEdge, ArtifactDependencyGraph
 from wre.domain.artifact_invalidation import (
     ArtifactInvalidationPlan,
@@ -76,6 +77,8 @@ from wre.domain.runs import (
 
 __all__ = [
     "ARTIFACT_KEY_SCHEMA_VERSION",
+    "AdapterCapabilityDescriptor",
+    "AdapterCapabilityName",
     "ArtifactDependencyEdge",
     "ArtifactDependencyGraph",
     "ArtifactId",
