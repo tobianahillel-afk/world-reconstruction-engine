@@ -535,7 +535,7 @@ work_items:
   - id: V2L2.3
     lot: V2L2
     title: Canonical cache lookup
-    status: ready
+    status: done
     objective: Add deterministic exact candidate lookup for persisted ArtifactMetadata by canonical ArtifactKey so prior identical computations can be discovered without filename timestamp or fuzzy heuristics, while explicitly stopping before materialization verification reuse selection or invalidation.
     allowed_scope:
       - src/wre/persistence/sqlite_store.py
@@ -593,7 +593,62 @@ work_items:
       - malformed artifact_metadata unsupported-version and record-id/payload-identity mismatch fail-closed tests
       - regression tests for existing ArtifactMetadata and dependency persistence APIs
       - full fast CI
-  - {id: V2L2.4, lot: V2L2, title: Dependency scoped invalidation planning, status: planned, depends_on: [V2L2.3]}
+  - id: V2L2.4
+    lot: V2L2
+    title: Dependency scoped invalidation planning
+    status: ready
+    objective: Define a pure immutable invalidation plan that computes exactly the changed ArtifactRef roots plus every artifact that directly or transitively depends on them in a validated ArtifactDependencyGraph, without deleting mutating persisting or scheduling anything.
+    allowed_scope:
+      - src/wre/domain/artifact_invalidation.py
+      - focused public-domain exports in src/wre/domain/__init__.py
+      - tests/test_artifact_invalidation.py
+    out_of_scope:
+      - SQLiteLocalStore persistence queries writes updates deletes or schema changes
+      - deleting evicting garbage-collecting or mutating ArtifactMetadata dependency records cache candidates files or materializations
+      - materialization path URI byte length content-digest health or corruption verification owned by V2L2.5
+      - cache winner selection reuse execution retry scheduling topological job ordering or recomputation orchestration
+      - deriving dependency edges from ArtifactKey ArtifactMetadata producers paths filenames timestamps or filesystem state
+      - accepting undeclared roots or repairing incomplete graphs from persistence or external state
+      - adapter registry routing quality solver runtime behavior or V2L2.5+ implementation
+    depends_on: [V2L2.3]
+    read_before:
+      - docs/02_ARCHITECTURE.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - src/wre/domain/artifact_graph.py
+      - src/wre/domain/artifacts.py
+      - tests/test_artifact_graph.py
+      - tests/test_artifact_dependencies.py
+      - tests/test_artifact_cache_lookup.py
+    reuse:
+      - ArtifactDependencyGraph as the already-validated authoritative dependency structure
+      - ArtifactRef as exact root and affected-artifact identity
+      - frozen dataclass and frozenset conventions already used in wre.domain
+      - iterative graph traversal style so valid long dependency chains do not depend on Python recursion depth
+    acceptance:
+      - ArtifactInvalidationPlan is immutable and contains exactly an immutable root ArtifactRef set plus an immutable affected ArtifactRef set; affected includes every root and all downstream dependents selected by the planner.
+      - The planner accepts only a typed ArtifactDependencyGraph and frozenset of ArtifactRef roots; mutable raw or untyped substitutes are rejected rather than coerced.
+      - Every non-empty root must be an exact declared graph node; undeclared or kind-mismatched ArtifactRef roots fail closed and no registry database or filesystem lookup repairs them.
+      - For edge semantics artifact depends on dependency, changing a dependency invalidates that artifact and every transitive dependent reachable through reverse edges.
+      - Upstream dependencies of a changed artifact are not invalidated merely because the changed artifact depends on them.
+      - Unrelated disconnected nodes and branches are excluded from the affected set.
+      - Multiple roots produce the set union of their reverse dependency closures with duplicates removed; one root being downstream of another does not alter the final affected set.
+      - An isolated declared root produces a plan containing only that root; an empty root frozenset produces an explicit empty no-op plan.
+      - Traversal is iterative and accepts valid chains beyond Python recursion depth while preserving exact reverse-closure semantics.
+      - Planning is pure and does not mutate the input graph, write persistence state, delete files, change cache metadata or expose hidden mutable adjacency state.
+      - The plan carries no deletion order execution order reason timestamps policy priority materialization state or catch-all metadata; later orchestration may consume it without those concerns entering this contract.
+      - Existing dependency graph persistence canonical cache-candidate lookup V2L1 metadata behavior and retained V1 behavior remain unchanged.
+    tests:
+      - immutable plan construction equality and hashing tests
+      - chain diamond branched and disconnected reverse-closure cases
+      - tests proving upstream dependencies and unrelated artifacts are excluded
+      - multi-root union downstream-root isolated-root and empty-root cases
+      - undeclared-root wrong-root-collection wrong-member and wrong-graph negative tests
+      - long-chain regression beyond Python recursion depth
+      - regression proving input graph remains unchanged and no persistence behavior is introduced
+      - full fast CI
   - {id: V2L2.5, lot: V2L2, title: Artifact materialization verification metadata, status: planned, depends_on: [V2L2.4]}
   - {id: V2L2.6, lot: V2L2, title: Cache reuse and invalidation regression, status: planned, depends_on: [V2L2.5]}
   - {id: V2L3.1, lot: V2L3, title: Adapter capability descriptor, status: planned, depends_on: [V2L2.6]}

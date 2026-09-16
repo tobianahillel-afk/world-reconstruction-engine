@@ -51,6 +51,7 @@ components:
     tests:
       - tests/test_artifact_graph.py
       - tests/test_artifact_dependencies.py
+      - tests/test_artifact_cache_lookup.py
     status: implementing
   adapter_model_registry: {owner_lot: V2L3, implementation: [], tests: [], status: planned}
   quality_failure_benchmarks: {owner_lot: V2L4, implementation: [], tests: [], status: planned}
