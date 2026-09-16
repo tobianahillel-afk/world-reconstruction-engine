@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from pathlib import PurePosixPath, PureWindowsPath
 
 from wre.domain.artifacts import ArtifactRef
@@ -86,7 +86,7 @@ class ArtifactMaterializationMetadata:
             )
 
 
-class ArtifactMaterializationVerificationStatus(str, Enum):
+class ArtifactMaterializationVerificationStatus(StrEnum):
     VERIFIED = "verified"
     MISSING = "missing"
     CORRUPTED = "corrupted"
@@ -101,7 +101,9 @@ class ArtifactMaterializationVerification:
 
     def __post_init__(self) -> None:
         if not isinstance(self.artifact_ref, ArtifactRef):
-            raise TypeError("artifact_materialization_verification.artifact_ref must be ArtifactRef")
+            raise TypeError(
+                "artifact_materialization_verification.artifact_ref must be ArtifactRef"
+            )
         if not isinstance(self.status, ArtifactMaterializationVerificationStatus):
             raise TypeError(
                 "artifact_materialization_verification.status must be "
