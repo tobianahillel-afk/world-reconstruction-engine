@@ -788,7 +788,7 @@ work_items:
       - store reopen and deterministic integrated-fixture regression
       - full fast CI
       - retained native PyCOLMAP integration workflow for final V2L2 handoff
-      - V2L2 lot review checklist
+      - V2L2 lot-review checklist
   - id: V2L3.1
     lot: V2L3
     title: Adapter capability descriptor
@@ -1078,11 +1078,12 @@ work_items:
   - id: V2L3.6
     lot: V2L3
     title: Register retained production baselines
-    status: ready
+    status: done
     objective: Register the already-retained COLMAP/PyCOLMAP, FFmpeg and ExifRead production baselines in the versioned V2 adapter/model registry with exact dependency-backed identities, approved shipping/license evidence and conservative declared capabilities, without changing any retained integration implementation or introducing new runtime selection behavior.
     allowed_scope:
       - registry/adapter-models.yaml
       - tests/test_adapter_model_registry_baselines.py
+      - focused lifecycle updates to tests/test_adapter_model_registry_schema.py required when the initial empty registry becomes populated
       - docs/reviews/V2L3-adapter-model-registry-review.md after implementation evidence is green
       - registry/reviews.yaml V2L3 review state and evidence after implementation evidence is green
       - registry/components.yaml V2L3 completion and baseline-registry test coverage after review passes
@@ -1138,6 +1139,7 @@ work_items:
       - resume_mode reflects retained implemented behavior only and does not claim checkpoint support absent an existing retained resume path.
       - The existing V2L3.5 repository validator accepts the committed real registry without code changes or special-case bypasses.
       - Focused baseline-registry tests assert the exact three-entry set, exact versions/dependency refs, null model/checkpoint identities, approved license/shipping coupling and absence of pending candidates.
+      - Existing V2L3.3 schema tests remain structural after population by replacing only the initial-empty assertions with enduring envelope and dependency-evidence separation checks.
       - Existing ExifRead/FFmpeg unit fixtures and retained native PyCOLMAP integration fixture pass unchanged, proving registry registration did not alter implementation behavior.
       - V2L3 lot review records PASS only after V2L3.1 through V2L3.6 acceptance and required CI/integration evidence are green.
       - V2L4.1 is expanded to a complete deny-by-default executable contract before becoming the sole next ready item; no V2L4 product implementation is bundled.
@@ -1146,12 +1148,64 @@ work_items:
       - exact retained version and dependency-reference tests for colmap exifread and ffmpeg
       - null model/checkpoint and no-pending-candidate regression tests
       - license review shipping status hardware-policy capability failure-signal metric-name and resume-mode declaration tests
+      - lifecycle regression proving the populated registry preserves the V2L3.3 closed envelope and separate dependency evidence source
       - repository validator regression over the real populated registry
       - unchanged ExifRead and FFmpeg retained unit fixtures
       - retained native PyCOLMAP integration workflow and end-to-end fixture
       - full fast CI
       - V2L3 lot-review checklist
-  - {id: V2L4.1, lot: V2L4, title: Stable failure taxonomy, status: planned, depends_on: [V2L3.6]}
+  - id: V2L4.1
+    lot: V2L4
+    title: Stable failure taxonomy
+    status: ready
+    objective: Define the closed stable cross-adapter WRE failure-category vocabulary already named by the production-runtime blueprint so later routing and quality layers can exchange explicit failure meaning without parsing adapter logs or pulling metric, decision, benchmark or fallback policy forward.
+    allowed_scope:
+      - src/wre/domain/failures.py
+      - focused public-domain exports only if required for the new contract
+      - tests/test_failure_taxonomy.py
+    out_of_scope:
+      - changing adapter-local failure_signals declarations or the V2L3 adapter-model registry schema validator or production baseline entries
+      - adapter-specific raw-signal mapping tables registration data or automatic mappings from existing exception classes
+      - parsing exception messages stderr logs return codes filenames or free text to infer a category
+      - metric names values units dimensions provenance directionality thresholds aggregation or vectors owned by V2L4.2
+      - PASS ACCEPT_WITH_WARNINGS RETRY ESCALATE UNRESOLVED or other quality-decision semantics owned by V2L4.3
+      - benchmark record schema comparison results or baseline ranking owned by V2L4.4
+      - deterministic threshold policy fallback routing default selection retry scheduling or escalation execution owned by V2L4.5 and later routing lots
+      - persistence codec database registry mutation artifact-key cache or materialization behavior
+      - starting V2L4.2 product implementation in this work item
+    depends_on: [V2L3.6]
+    read_before:
+      - docs/02_ARCHITECTURE.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/reviews/V2L3-adapter-model-registry-review.md
+      - src/wre/domain/provenance.py
+      - src/wre/domain/adapter_capabilities.py
+      - src/wre/domain/artifact_materialization.py
+    reuse:
+      - the exact failure-taxonomy concepts already listed under docs/15_PRODUCTION_RUNTIME.md rather than inventing a competing taxonomy
+      - existing StrEnum closed symbolic-domain style used by ProvenanceClass and materialization verification status
+      - V2L3.4 failure_signals as adapter-local raw vocabulary that remains distinct from stable WRE categories
+      - fail-closed unresolved-state principles from docs/24_SYSTEM_INVARIANTS.md
+    acceptance:
+      - FailureCategory is a closed StrEnum with exactly UNSUPPORTED_INPUT DEPENDENCY_UNAVAILABLE INSUFFICIENT_OVERLAP CAMERA_AMBIGUITY CALIBRATION_FAILURE GEOMETRIC_INCONSISTENCY DYNAMIC_CONTAMINATION DEPTH_INCONSISTENCY MEMORY_EXHAUSTION TIMEOUT CORRUPTED_MEDIA CHECKPOINT_INCOMPATIBILITY QUALITY_GATE_FAILURE and UNKNOWN_INTERNAL_ERROR.
+      - Stable wire tokens are exactly unsupported_input dependency_unavailable insufficient_overlap camera_ambiguity calibration_failure geometric_inconsistency dynamic_contamination depth_inconsistency memory_exhaustion timeout corrupted_media checkpoint_incompatibility quality_gate_failure and unknown_internal_error.
+      - No SUCCESS PASS RETRY ESCALATE UNRESOLVED WARNING or solver-specific raw failure value is a FailureCategory.
+      - Callers choose a stable category explicitly; the core performs no log exception stderr return-code filename route adapter or environment inference.
+      - UNKNOWN_INTERNAL_ERROR is an explicit stable last-resort category, not permission to accept arbitrary unknown category strings or silently coerce them.
+      - FailureCategory is distinct from adapter-local failure_signals, MaterializationVerificationStatus and future QualityDecision values.
+      - The taxonomy carries no message stack trace retryability severity metric threshold policy route fallback timestamp producer artifact or catch-all metadata.
+      - No registry persistence routing scheduling benchmark quality-policy adapter execution or external-dependency behavior changes.
+      - Existing V2L3 registry behavior V2L2 materialization verification and retained V1 behavior remain unchanged.
+    tests:
+      - exact enum member-name and wire-token golden set tests
+      - construction equality hashing iteration and serialization-friendly string behavior
+      - negative arbitrary unknown success decision warning and solver-specific token tests
+      - regression proving MaterializationVerificationStatus and ProvenanceClass remain distinct independent vocabularies
+      - regression proving adapter registry and retained domain behavior are unchanged
+      - full fast CI
   - {id: V2L4.2, lot: V2L4, title: Multidimensional metric vector, status: planned, depends_on: [V2L4.1]}
   - {id: V2L4.3, lot: V2L4, title: Quality decision contract, status: planned, depends_on: [V2L4.2]}
   - {id: V2L4.4, lot: V2L4, title: Benchmark record schema, status: planned, depends_on: [V2L4.3]}
