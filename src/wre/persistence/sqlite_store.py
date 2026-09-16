@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import TypeVar
 
 from wre.domain.artifact_graph import ArtifactDependencyGraph
+from wre.domain.artifact_keys import ArtifactKey
 from wre.domain.artifact_metadata import ArtifactMetadata
 from wre.domain.artifacts import ArtifactId, ArtifactRef
 from wre.domain.cameras import Camera, CameraId, ObservationMetadata
@@ -330,6 +331,56 @@ class SQLiteLocalStore:
 
     def get_artifact_metadata(self, artifact_id: ArtifactId) -> ArtifactMetadata | None:
         return self._get("artifact_metadata", artifact_id.value, decode_artifact_metadata)
+
+    def find_artifact_metadata_by_key(
+        self,
+        artifact_key: ArtifactKey,
+    ) -> tuple[ArtifactMetadata, ...]:
+        if not isinstance(artifact_key, ArtifactKey):
+            raise TypeError("artifact_key must be ArtifactKey")
+
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT record_id, schema_version, payload_json
+                FROM wre_records
+                WHERE record_type = 'artifact_metadata'
+                ORDER BY record_id
+                """
+            ).fetchall()
+
+        matches: list[ArtifactMetadata] = []
+        for record_id, schema_version, payload_json in rows:
+            if schema_version != RECORD_SCHEMA_VERSION:
+                raise UnsupportedSchemaVersionError(
+                    f"record schema version {schema_version} is unsupported for "
+                    f"artifact_metadata:{record_id}"
+                )
+            if not isinstance(record_id, str) or not isinstance(payload_json, str):
+                raise PersistenceError(
+                    "artifact metadata cache lookup encountered invalid storage data"
+                )
+            try:
+                metadata = decode_artifact_metadata(parse_json_object(payload_json))
+            except (TypeError, ValueError) as exc:
+                raise PersistenceError(
+                    f"record payload cannot be decoded for artifact_metadata:{record_id}"
+                ) from exc
+            if metadata.artifact_ref.artifact_id.value != record_id:
+                raise PersistenceError(
+                    f"record identity artifact_metadata:{record_id} does not match its payload"
+                )
+            if metadata.artifact_key == artifact_key:
+                matches.append(metadata)
+
+        matches.sort(
+            key=lambda item: (
+                item.project_id.value,
+                item.artifact_ref.artifact_id.value,
+                item.artifact_ref.artifact_kind.value,
+            )
+        )
+        return tuple(matches)
 
     def put_artifact_dependency_graph(self, graph: ArtifactDependencyGraph) -> None:
         if not isinstance(graph, ArtifactDependencyGraph):
