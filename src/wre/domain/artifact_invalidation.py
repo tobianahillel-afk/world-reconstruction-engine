@@ -23,9 +23,7 @@ class ArtifactInvalidationPlan:
             raise TypeError(
                 "artifact_invalidation_plan.affected_artifacts must be an immutable frozenset"
             )
-        if not all(
-            isinstance(artifact, ArtifactRef) for artifact in self.affected_artifacts
-        ):
+        if not all(isinstance(artifact, ArtifactRef) for artifact in self.affected_artifacts):
             raise TypeError(
                 "artifact_invalidation_plan.affected_artifacts must contain ArtifactRef values"
             )
