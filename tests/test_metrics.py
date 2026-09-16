@@ -169,8 +169,10 @@ def test_metric_provenance_preserves_order_and_allows_empty_inputs() -> None:
 
     assert provenance.input_artifacts == (first, second)
     assert provenance != reversed_provenance
-    assert hash(provenance) != hash(reversed_provenance)
+    assert len({provenance, reversed_provenance}) == 2
     assert empty.input_artifacts == ()
+    with pytest.raises(FrozenInstanceError):
+        provenance.input_artifacts = ()  # type: ignore[misc]
 
 
 def test_metric_provenance_rejects_untyped_evaluator_collection_and_members() -> None:
@@ -191,6 +193,8 @@ def test_metric_observation_accepts_only_finite_float_values() -> None:
 
     assert observation.value == 1.25
     assert hash(observation) == hash(MetricObservation(descriptor, 1.25, provenance))
+    with pytest.raises(FrozenInstanceError):
+        observation.value = 2.0  # type: ignore[misc]
 
     for value in (float("nan"), float("inf"), float("-inf")):
         with pytest.raises(ValueError, match="must be finite"):
@@ -245,6 +249,8 @@ def test_metric_vector_accepts_empty_single_and_multidimensional_canonical_order
         "geometry.reprojection_error",
         "runtime.wall_time",
     ]
+    with pytest.raises(FrozenInstanceError):
+        multidimensional.observations = ()  # type: ignore[misc]
 
 
 def test_metric_vector_rejects_unsorted_duplicate_mutable_and_untyped_observations() -> None:
