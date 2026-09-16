@@ -237,6 +237,10 @@ def _require_exact_mapping(
     if not isinstance(value, dict):
         errors.append(f"{context} must be a mapping")
         return None
+    raw_mapping = cast(dict[object, Any], value)
+    if not all(isinstance(key, str) for key in raw_mapping):
+        errors.append(f"{context} field names must be strings")
+        return None
     mapping = cast(dict[str, Any], value)
     actual_fields = set(mapping)
     missing = sorted(expected_fields - actual_fields)
@@ -403,14 +407,15 @@ def _validate_adapter_model_registry(errors: list[str], root: Path) -> None:
     model_fields = _schema_object_fields(errors, definitions, "model_identity")
     checkpoint_fields = _schema_object_fields(errors, definitions, "checkpoint_identity")
     license_fields = _schema_object_fields(errors, definitions, "license_metadata")
-    if None in {
+    object_field_sets = (
         entry_fields,
         capability_fields,
         producer_fields,
         model_fields,
         checkpoint_fields,
         license_fields,
-    }:
+    )
+    if any(field_set is None for field_set in object_field_sets):
         return
     assert entry_fields is not None
     assert capability_fields is not None
@@ -463,7 +468,8 @@ def _validate_adapter_model_registry(errors: list[str], root: Path) -> None:
         license_properties.get("review"),
         "license_metadata.review",
     )
-    if None in {hardware_values, shipping_values, resume_values, license_review_values}:
+    enum_sets = (hardware_values, shipping_values, resume_values, license_review_values)
+    if any(enum_set is None for enum_set in enum_sets):
         return
     assert hardware_values is not None
     assert shipping_values is not None
@@ -531,7 +537,11 @@ def _validate_adapter_model_registry(errors: list[str], root: Path) -> None:
             producer_fields,
         )
         if producer is not None:
-            _require_non_blank_text(errors, producer.get("implementation"), f"{context}.producer.implementation")
+            _require_non_blank_text(
+                errors,
+                producer.get("implementation"),
+                f"{context}.producer.implementation",
+            )
             producer_version = producer.get("version")
             _require_non_blank_text(errors, producer_version, f"{context}.producer.version")
             if isinstance(producer_version, str) and producer_version.strip().lower() == "latest":
@@ -554,7 +564,6 @@ def _validate_adapter_model_registry(errors: list[str], root: Path) -> None:
                 errors.append(f"{context}.dependency_refs references unknown dependency: {dependency_ref}")
 
         model_value = entry.get("model")
-        model: dict[str, Any] | None = None
         if model_value is not None:
             model = _require_exact_mapping(
                 errors,
@@ -608,7 +617,11 @@ def _validate_adapter_model_registry(errors: list[str], root: Path) -> None:
         )
         license_review: object = None
         if license_metadata is not None:
-            _require_non_blank_text(errors, license_metadata.get("direct"), f"{context}.license.direct")
+            _require_non_blank_text(
+                errors,
+                license_metadata.get("direct"),
+                f"{context}.license.direct",
+            )
             license_review = license_metadata.get("review")
             if license_review not in license_review_values:
                 errors.append(f"{context}.license.review has invalid value: {license_review!r}")
