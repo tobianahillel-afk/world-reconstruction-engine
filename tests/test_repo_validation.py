@@ -201,7 +201,9 @@ def test_adapter_registry_rejects_duplicate_and_unsorted_adapter_ids(tmp_path: P
     assert any("canonical lexicographic adapter_id order" in error for error in errors)
 
 
-def test_adapter_registry_rejects_duplicate_or_unsorted_set_like_collections(tmp_path: Path) -> None:
+def test_adapter_registry_rejects_duplicate_or_unsorted_set_like_collections(
+    tmp_path: Path,
+) -> None:
     repo = _copy_repo(tmp_path)
     entry = _valid_adapter_entry("alpha.native")
     entry["capability"]["input_kinds"] = ["image.observation", "image.observation"]
@@ -214,9 +216,16 @@ def test_adapter_registry_rejects_duplicate_or_unsorted_set_like_collections(tmp
     errors = validate_repository(repo)
 
     assert any("capability.input_kinds must not contain duplicates" in error for error in errors)
-    assert any("capability.output_kinds must be in canonical lexicographic order" in error for error in errors)
-    assert any("dependency_refs must be in canonical lexicographic order" in error for error in errors)
-    assert any("failure_signals must be in canonical lexicographic order" in error for error in errors)
+    assert any(
+        "capability.output_kinds must be in canonical lexicographic order" in error
+        for error in errors
+    )
+    assert any(
+        "dependency_refs must be in canonical lexicographic order" in error for error in errors
+    )
+    assert any(
+        "failure_signals must be in canonical lexicographic order" in error for error in errors
+    )
     assert any("metric_names must not contain duplicates" in error for error in errors)
 
 
@@ -279,7 +288,9 @@ def test_adapter_registry_enforces_approved_shipping_license_evidence(tmp_path: 
     _write_adapter_entries(repo, [entry])
 
     errors = validate_repository(repo)
-    assert any("approved shipping requires approved entry license review" in error for error in errors)
+    assert any(
+        "approved shipping requires approved entry license review" in error for error in errors
+    )
 
     entry = _valid_adapter_entry("alpha.native", dependency_ref="limap")
     _write_adapter_entries(repo, [entry])
@@ -314,7 +325,10 @@ def test_adapter_registry_blocked_license_requires_blocked_shipping(tmp_path: Pa
 
     errors = validate_repository(repo)
 
-    assert any("blocked entry license review requires blocked shipping_status" in error for error in errors)
+    assert any(
+        "blocked entry license review requires blocked shipping_status" in error
+        for error in errors
+    )
 
 
 def test_rejects_unknown_active_work_item(tmp_path: Path) -> None:
