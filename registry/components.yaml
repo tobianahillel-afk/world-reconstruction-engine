@@ -77,7 +77,14 @@ components:
       - tests/test_adapter_model_registry_baselines.py
       - tests/test_repo_validation.py
     status: implemented
-  quality_failure_benchmarks: {owner_lot: V2L4, implementation: [], tests: [], status: planned}
+  quality_failure_benchmarks:
+    owner_lot: V2L4
+    implementation:
+      - src/wre/domain/failures.py
+      - src/wre/domain/__init__.py
+    tests:
+      - tests/test_failure_taxonomy.py
+    status: implementing
   media_profiling: {owner_lot: V2L5, implementation: [], tests: [], status: planned}
   adaptive_frame_selection: {owner_lot: V2L6, implementation: [], tests: [], status: planned}
   pair_candidate_retrieval: {owner_lot: V2L7, implementation: [], tests: [], status: planned}

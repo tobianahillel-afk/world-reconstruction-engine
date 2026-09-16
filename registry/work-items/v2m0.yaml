@@ -1157,7 +1157,7 @@ work_items:
   - id: V2L4.1
     lot: V2L4
     title: Stable failure taxonomy
-    status: ready
+    status: done
     objective: Define the closed stable cross-adapter WRE failure-category vocabulary already named by the production-runtime blueprint so later routing and quality layers can exchange explicit failure meaning without parsing adapter logs or pulling metric, decision, benchmark or fallback policy forward.
     allowed_scope:
       - src/wre/domain/failures.py
@@ -1206,7 +1206,70 @@ work_items:
       - regression proving MaterializationVerificationStatus and ProvenanceClass remain distinct independent vocabularies
       - regression proving adapter registry and retained domain behavior are unchanged
       - full fast CI
-  - {id: V2L4.2, lot: V2L4, title: Multidimensional metric vector, status: planned, depends_on: [V2L4.1]}
+  - id: V2L4.2
+    lot: V2L4
+    title: Multidimensional metric vector
+    status: ready
+    objective: Define the minimal immutable solver-independent metric observation and vector vocabulary needed to carry multidimensional numeric quality and resource measurements with explicit semantic identity and exact evaluator/input provenance, while deferring metric computation, quality decisions, threshold policy, benchmark records and routing behavior.
+    allowed_scope:
+      - src/wre/domain/metrics.py
+      - focused public-domain exports only if required for the new contract
+      - tests/test_metrics.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry after implementation evidence is green so V2L4.3 can be activated without implementing it
+    out_of_scope:
+      - changing V2L3 adapter-local metric_names declarations adapter-model registry schema validator or production baseline entries
+      - automatic mapping from adapter-local metric_names to canonical WRE metric identities
+      - a closed global catalog of geometry camera surface appearance temporal resource runtime or performance metric names dimensions units or aggregation labels
+      - computing reprojection error PSNR SSIM LPIPS depth error FPS latency memory utilization transfer cost or any other concrete metric
+      - thresholds pass/fail criteria weighted scores ranking normalization policy or aggregation execution
+      - PASS ACCEPT_WITH_WARNINGS RETRY ESCALATE UNRESOLVED or other QualityDecision semantics owned by V2L4.3
+      - benchmark fixture hardware execution-profile trace or comparison records owned by V2L4.4 and later benchmark infrastructure
+      - deterministic quality-policy evaluation threshold application fallback routing retry scheduling or escalation owned by V2L4.5 and later routing lots
+      - profiler NVTX Nsight TensorRT decode-backend ANN storage-path or other execution-profile integration described by docs/28 and docs/29
+      - persistence codec database registry mutation artifact-key cache or materialization behavior
+      - starting V2L4.3 product implementation in this work item
+    depends_on: [V2L4.1]
+    read_before:
+      - docs/02_ARCHITECTURE.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md
+      - docs/29_PERFORMANCE_INTEGRATION_MAP.md
+      - registry/adapter-models.yaml
+      - registry/schemas/adapter-model-registry.schema.json
+      - src/wre/domain/adapter_capabilities.py
+      - src/wre/domain/artifacts.py
+      - src/wre/domain/producer_identity.py
+      - src/wre/domain/failures.py
+    reuse:
+      - conservative open symbolic-token validation style already used by AdapterCapabilityName and ArtifactKind rather than freezing all future metric names
+      - ArtifactRef as exact metric input/reference artifact identity and ArtifactProducerIdentity as exact evaluator/config/model/checkpoint identity
+      - frozen dataclass tuple and fail-closed typed-value conventions already used in wre.domain
+      - V2L3.4 metric_names as adapter-local declared raw vocabulary that remains separate from canonical metric semantics
+      - multidimensional quality and performance principles from docs/02 docs/15 docs/28 and docs/29 without pulling their later computation or benchmark implementations forward
+    acceptance:
+      - MetricName MetricDimension MetricUnit and MetricAggregation are distinct immutable open symbolic tokens with conservative validation; none is a closed catalog of current algorithms datasets or 2026 metric names.
+      - MetricDirection is a closed StrEnum with exactly HIGHER_IS_BETTER LOWER_IS_BETTER and INFORMATIONAL using stable wire tokens higher_is_better lower_is_better and informational.
+      - MetricDescriptor is immutable and contains exactly MetricName MetricDimension MetricUnit MetricDirection and MetricAggregation; all members are explicitly typed and supplied by the caller.
+      - MetricProvenance is immutable and contains exactly an ArtifactProducerIdentity evaluator plus an ordered immutable tuple of input ArtifactRef values; an empty input tuple is valid for a measurement whose artifact linkage is supplied by a later owner, and no filename path timestamp registry or environment inference is performed.
+      - MetricObservation is immutable and contains exactly MetricDescriptor finite float value and MetricProvenance; NaN positive/negative infinity booleans integers raw strings and other implicit numeric coercions are rejected.
+      - MetricVector is immutable and contains an ordered tuple of MetricObservation values in canonical lexicographic MetricName order with unique metric names; unsorted duplicate mutable raw or untyped collections fail closed rather than being silently normalized.
+      - An empty MetricVector is valid and means no metric observation is present; later quality policy may require particular names but this contract does not.
+      - Geometry camera surface appearance temporal resource runtime and future performance observations can coexist in one MetricVector while retaining their individual dimensions units directions aggregations and provenance; the contract never collapses them into one weighted score.
+      - MetricAggregation is descriptive metadata for how a supplied scalar was produced and does not execute aggregation over samples; thresholds normalization and quality decisions remain later responsibilities.
+      - V2L3 adapter-local metric_names remain unchanged and no automatic mapping or requirement is inferred from them.
+      - FailureCategory remains an independent vocabulary and a metric observation cannot encode success retry escalation warning failure category or quality decision state.
+      - No persistence benchmark routing scheduling profiler execution-profile external-dependency or metric-computation behavior is introduced.
+    tests:
+      - focused token construction validation equality hashing immutability and wrong-type tests for MetricName MetricDimension MetricUnit and MetricAggregation
+      - exact MetricDirection member-name and wire-token golden set plus arbitrary-value rejection
+      - MetricDescriptor and MetricProvenance typed construction immutability equality and hashing tests including ordered input-artifact semantics and empty-input allowance
+      - MetricObservation finite float cases plus NaN infinity bool integer raw-string and wrong-member rejection
+      - MetricVector empty single and multidimensional canonical-order cases plus unsorted duplicate-name mutable-collection raw-member negative tests
+      - regression proving FailureCategory V2L3 metric_names ArtifactRef and ArtifactProducerIdentity semantics remain unchanged
+      - full fast CI
   - {id: V2L4.3, lot: V2L4, title: Quality decision contract, status: planned, depends_on: [V2L4.2]}
   - {id: V2L4.4, lot: V2L4, title: Benchmark record schema, status: planned, depends_on: [V2L4.3]}
   - {id: V2L4.5, lot: V2L4, title: Deterministic quality policy evaluator, status: planned, depends_on: [V2L4.4]}
