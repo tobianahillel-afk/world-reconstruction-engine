@@ -16,10 +16,12 @@ def _schema() -> dict[str, Any]:
     return json.loads(_SCHEMA_PATH.read_text(encoding="utf-8"))
 
 
-def test_empty_registry_envelope_is_versioned_and_contains_no_entries() -> None:
+def test_registry_envelope_is_versioned_and_entries_are_explicit() -> None:
     registry = yaml.safe_load(_REGISTRY_PATH.read_text(encoding="utf-8"))
 
-    assert registry == {"schema_version": 1, "entries": []}
+    assert set(registry) == {"schema_version", "entries"}
+    assert registry["schema_version"] == 1
+    assert isinstance(registry["entries"], list)
 
 
 def test_schema_root_is_closed_draft_2020_12() -> None:
@@ -196,8 +198,25 @@ def test_dependency_registry_remains_separate_evidence_source() -> None:
     dependency_registry = yaml.safe_load(_DEPENDENCIES_PATH.read_text(encoding="utf-8"))
 
     assert set(adapter_registry) == {"schema_version", "entries"}
-    assert adapter_registry["entries"] == []
     assert "dependencies" in dependency_registry
-    assert "colmap" in dependency_registry["dependencies"]
-    assert "ffmpeg" in dependency_registry["dependencies"]
-    assert "exifread" in dependency_registry["dependencies"]
+    dependencies = dependency_registry["dependencies"]
+    assert isinstance(dependencies, dict)
+    assert {"colmap", "ffmpeg", "exifread"}.issubset(dependencies)
+
+    copied_dependency_fields = {
+        "integration",
+        "license_review",
+        "pinned_version",
+        "python_package",
+        "status",
+        "upstream_repository",
+        "version_policy",
+    }
+    entries = adapter_registry["entries"]
+    assert isinstance(entries, list)
+    for entry in entries:
+        assert isinstance(entry, dict)
+        assert copied_dependency_fields.isdisjoint(entry)
+        dependency_refs = entry["dependency_refs"]
+        assert isinstance(dependency_refs, list)
+        assert all(reference in dependencies for reference in dependency_refs)
