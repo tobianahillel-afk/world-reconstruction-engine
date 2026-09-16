@@ -12,7 +12,8 @@ work_items:
   - {id: V2L6.3, lot: V2L6, title: Quality diversity aware frame selection baseline, status: planned, depends_on: [V2L6.2]}
   - {id: V2L6.4, lot: V2L6, title: Long video frame density resource bounds, status: planned, depends_on: [V2L6.3]}
   - {id: V2L6.5, lot: V2L6, title: Frame selection provenance timing regression, status: planned, depends_on: [V2L6.4]}
-  - {id: V2L7.1, lot: V2L7, title: Canonical PairCandidate contract, status: planned, depends_on: [V2L6.5]}
+  - {id: V2L6.6, lot: V2L6, title: Reusable decoded image pyramid artifact cache, status: planned, depends_on: [V2L6.5]}
+  - {id: V2L7.1, lot: V2L7, title: Canonical PairCandidate contract, status: planned, depends_on: [V2L6.6]}
   - {id: V2L7.2, lot: V2L7, title: Sequential pairing donor adapter, status: planned, depends_on: [V2L7.1]}
   - {id: V2L7.3, lot: V2L7, title: GPS pairing donor adapter, status: planned, depends_on: [V2L7.2]}
   - {id: V2L7.4, lot: V2L7, title: Classical vocabulary retrieval baseline, status: planned, depends_on: [V2L7.3]}
