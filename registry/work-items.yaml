@@ -11,6 +11,9 @@ policy:
   migration_map: registry/v1-v2-migration.yaml
   planned_items_may_be_concise: true
   activation_must_expand_contract: true
+  activation_requires_candidate_refresh: true
+  activation_requires_one_run_complexity_gate: true
+  final_validation_is_validation_only: true
 work_item_files:
   - registry/work-items/v2m0.yaml
   - registry/work-items/v2m1.yaml
@@ -30,7 +33,7 @@ milestones:
   V2M6: {title: Specialist routes and scale, lots: [V2L36, V2L37, V2L38, V2L39, V2L40, V2L41, V2L42, V2L43]}
   V2M7: {title: Professional production and release hardening, lots: [V2L44, V2L45, V2L46, V2L47, V2L48, V2L49, V2L50, V2L51]}
 lots:
-  V2L0: {title: V1 to V2 migration and retained baseline, review_required: true}
+  V2L0: {title: V1 to V2 migration and donor baseline, review_required: true}
   V2L1: {title: SceneProject and artifact identity, review_required: true}
   V2L2: {title: Artifact DAG and cache, review_required: true}
   V2L3: {title: Adapter model and shipping registries, review_required: true}
@@ -42,7 +45,7 @@ lots:
   V2L9: {title: Temporal grouping and synchronization foundations, review_required: true}
   V2L10: {title: Quality modes and route graph, review_required: true}
   V2L11: {title: Canonical camera depth and geometry contracts, review_required: true}
-  V2L12: {title: Retained precision geometry baseline, review_required: true}
+  V2L12: {title: Classical precision geometry baseline, review_required: true}
   V2L13: {title: Feed forward geometry, review_required: true}
   V2L14: {title: Precision global refinement and competing solutions, review_required: true}
   V2L15: {title: Dense depth MVS and fusion, review_required: true}
