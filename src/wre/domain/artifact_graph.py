@@ -56,16 +56,12 @@ class ArtifactDependencyGraph:
     def _validate_edges(self) -> None:
         for edge in self.edges:
             if edge.artifact not in self.nodes or edge.dependency not in self.nodes:
-                raise ValueError(
-                    "artifact dependency edge endpoints must be declared graph nodes"
-                )
+                raise ValueError("artifact dependency edge endpoints must be declared graph nodes")
             if edge.artifact == edge.dependency:
                 raise ValueError("artifact dependency graph cannot contain a self-dependency")
 
     def _validate_acyclic(self) -> None:
-        adjacency: dict[ArtifactRef, set[ArtifactRef]] = {
-            node: set() for node in self.nodes
-        }
+        adjacency: dict[ArtifactRef, set[ArtifactRef]] = {node: set() for node in self.nodes}
         for edge in self.edges:
             adjacency[edge.artifact].add(edge.dependency)
 
