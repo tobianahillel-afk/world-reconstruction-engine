@@ -5,8 +5,13 @@ from typing import Any, cast
 
 import pytest
 
-from wre.domain import ArtifactId, ArtifactKind, ArtifactRef
-from wre.domain.artifact_graph import ArtifactDependencyEdge, ArtifactDependencyGraph
+from wre.domain import (
+    ArtifactDependencyEdge,
+    ArtifactDependencyGraph,
+    ArtifactId,
+    ArtifactKind,
+    ArtifactRef,
+)
 
 
 def _ref(name: str, kind: str = "artifact.generic") -> ArtifactRef:
@@ -62,6 +67,16 @@ def test_valid_dag_accepts_isolated_chain_diamond_and_disconnected_components() 
     assert isolated in graph.nodes
     assert _edge(cameras, features) in graph.edges
     assert _edge(cameras, matches) in graph.edges
+
+
+def test_valid_long_chain_does_not_depend_on_python_recursion_limit() -> None:
+    nodes = tuple(_ref(f"chain-{index}") for index in range(1500))
+    edges = frozenset(_edge(nodes[index], nodes[index - 1]) for index in range(1, len(nodes)))
+
+    graph = ArtifactDependencyGraph(nodes=frozenset(nodes), edges=edges)
+
+    assert len(graph.nodes) == 1500
+    assert len(graph.edges) == 1499
 
 
 def test_graph_equality_and_hashing_are_insertion_order_independent() -> None:
