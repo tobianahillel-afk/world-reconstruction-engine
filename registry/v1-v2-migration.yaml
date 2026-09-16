@@ -6,40 +6,51 @@ source_repository_state:
   legacy_active_work_item: L4.3
   legacy_completed_through: [L4.1, L4.2]
 policy:
+  v2_product_architecture_authoritative: true
+  v1_role: legacy_implementation_donor
+  v1_backward_compatibility_target: false
+  finish_v1_before_v2: false
+  reuse_requires_v2_contract_fit: true
   delete_only_with_replacement_evidence: true
   preserve_historical_pr_evidence: true
   preserve_passing_regression_fixtures: true
-  compatibility_before_rewrite: true
+  compatibility_before_rewrite: false
   decisions: [retain, generalize, wrap_compatibly, deprecate, remove_later]
+  retained_baseline_semantics: >-
+    A retained v1 baseline is temporary regression/reference evidence and a source of reusable
+    implementation, not a product architecture or backward-compatibility promise. V2 contracts may
+    replace legacy APIs, data structures and sequencing whenever the validated v2 design is cleaner
+    or better aligned with the frozen product architecture.
 components:
   agent_resume_protocol:
     decision: generalize
     rationale: >-
-      The resume/state/review discipline is essential and already effective. V2 keeps it, adds
-      deny-by-default scope, one-run sizing and canonical blueprint/invariant documents.
+      The resume/state/review discipline is essential and already effective. V2 keeps the useful
+      governance behavior, adds deny-by-default scope, one-run sizing and canonical frozen blueprint
+      documents, without preserving legacy product architecture.
     v2_destination: governance_and_execution
   development_quality_gates:
     decision: retain
     rationale: >-
       uv/frozen CI, Ruff, Pyright, pytest, actionlint, CodeQL, dependency review capability checks,
-      repo validation and regression harness remain directly useful.
+      repo validation and regression harness remain directly useful as development infrastructure.
     v2_destination: development_quality_gates
   observation_core:
     decision: generalize
     rationale: >-
       Observation/media identity, camera metadata, immutable provenance and local-frame concepts remain
-      valid. SpatialFragment/ReconstructionRun are not deleted, but later v2 contracts will generalize
-      project/artifact/geometry semantics and provide compatibility conversion.
+      useful. Legacy SpatialFragment/ReconstructionRun types do not constrain v2; later v2 contracts
+      may reuse concepts, convert historical data where useful, or replace legacy structures entirely.
     v2_destination: scene_project_and_artifact_identity
   local_persistence:
     decision: generalize
     rationale: >-
       Canonical JSON, explicit schema versions, idempotent writes and conflict rejection remain sound.
-      SQLite stays the local baseline while v2 adds artifact-DAG/cache/job metadata separately.
+      SQLite stays a useful local implementation donor while v2 owns its artifact-DAG/cache/job semantics.
     v2_destination: artifact_persistence_and_cache
   image_ingestion:
     decision: retain
-    rationale: Raw image observation ingestion is solver-independent and matches v2 observation semantics.
+    rationale: Raw image observation ingestion is solver-independent and cleanly matches v2 observation semantics.
     v2_destination: media_ingestion
   hashing_and_duplicate_detection:
     decision: retain
@@ -64,60 +75,67 @@ components:
   deterministic_keyframes:
     decision: wrap_compatibly
     rationale: >-
-      The interval policy remains a valid deterministic baseline but becomes one FrameSelection adapter;
-      adaptive quality/diversity-aware selection is added later without replacing source timing/provenance.
+      The interval policy is a useful deterministic donor/baseline and may temporarily sit behind a
+      FrameSelection adapter. V2 is free to replace its legacy API or implementation once the owning
+      frame-selection contracts and regression evidence are established.
     v2_destination: V2L6
   colmap_environment:
     decision: retain
-    rationale: Exact external solver identity/version/error normalization remains useful as a baseline adapter.
+    rationale: >-
+      Exact external solver identity/version/error normalization remains useful as a classical baseline
+      donor. It does not make COLMAP or the v1 wrapper architecture mandatory for v2 routes.
     v2_destination: V2L12
   colmap_feature_extraction:
     decision: wrap_compatibly
     rationale: >-
-      Retain tested native behavior and artifact integrity. V2 later wraps inputs/outputs in canonical
-      artifact identities rather than rewriting SIFT/COLMAP internals.
+      Tested native behavior and artifact-integrity evidence are useful donors. V2 normalizes inputs and
+      outputs through its own artifact contracts and may replace legacy wrapper structure without preserving
+      its API.
     v2_destination: V2L12
   colmap_matching:
     decision: wrap_compatibly
     rationale: >-
       Raw matching remains reusable evidence. V2 scene organization and geometry routes consume it
-      through canonical PairCandidate/Correspondence artifacts.
+      through canonical PairCandidate/Correspondence artifacts rather than treating v1 interfaces as stable.
     v2_destination: [V2L8, V2L12]
   colmap_geometric_verification:
     decision: wrap_compatibly
     rationale: >-
       Verified two-view evidence remains valuable for scene disambiguation and precision geometry;
-      it is not globally mandated for every future learned geometry route.
+      it is not globally mandated for every future learned geometry route and its legacy wrapper is not a
+      compatibility target.
     v2_destination: [V2L8, V2L12]
   colmap_incremental_reconstruction:
     decision: wrap_compatibly
     rationale: >-
-      Keep as the precision/classical baseline. It becomes one GeometrySolution producer, not the
-      universal reconstruction path.
+      Keep the proven behavior as a precision/classical donor baseline while useful. It becomes one
+      GeometrySolution producer under v2 contracts, not the universal reconstruction path or a legacy API
+      that future solvers must imitate.
     v2_destination: V2L12
   colmap_reconstruction_import:
     decision: generalize
     rationale: >-
-      SparseReconstructionEstimate/local-frame/scale semantics are sound. V2 introduces canonical
-      CameraSolution/GeometrySolution with compatibility conversion instead of deleting legacy data.
+      SparseReconstructionEstimate/local-frame/scale ideas remain useful evidence. V2 introduces canonical
+      CameraSolution/GeometrySolution and may provide conversion for historical data, but it has no obligation
+      to preserve the legacy representation once validated v2 coverage exists.
     v2_destination: V2L11
   colmap_end_to_end_fixture:
     decision: retain
     rationale: >-
-      The real PyCOLMAP composition fixture remains a regression/compatibility baseline and is migrated
-      to v2 artifact contracts later.
+      The real PyCOLMAP composition fixture remains valuable regression evidence and can be migrated to v2
+      artifact contracts. Passing it protects retained behavior; it does not make v1 architecture authoritative.
     v2_destination: V2L12
   sequential_pairing:
     decision: wrap_compatibly
     rationale: >-
-      Deterministic explicit-order candidate generation remains useful and becomes one canonical
-      PairCandidate source.
+      Deterministic explicit-order candidate generation remains a useful donor baseline and can become one
+      canonical PairCandidate source without preserving the legacy API.
     v2_destination: V2L7
   gps_pairing:
     decision: wrap_compatibly
     rationale: >-
-      Explicit resolved-WGS84-only proximity is a useful candidate source; it remains retrieval evidence,
-      not absolute anchoring or scene truth.
+      Explicit resolved-WGS84-only proximity remains useful candidate evidence; it can become one v2
+      PairCandidate source without making its legacy interface or assumptions a compatibility requirement.
     v2_destination: V2L7
 legacy_future_plan:
   strategy_routing_fast_standard_escalated:
@@ -186,3 +204,4 @@ historical_evidence:
   note: >-
     The pre-v2 machine roadmap remains recoverable from Git history at legacy_main_before_blueprint.
     V2 does not duplicate or rewrite old PR evidence; this migration map is the explicit forward mapping.
+    Historical evidence is preserved even when the legacy implementation it describes is later removed.

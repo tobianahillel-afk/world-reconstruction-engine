@@ -5,7 +5,7 @@ This repository is designed to be resumed by an AI coding agent with no conversa
 ## Mandatory startup sequence
 
 1. Read `docs/00_START_HERE.md`.
-2. Read the canonical blueprint documents referenced there: `docs/01_PRODUCT.md`, `docs/02_ARCHITECTURE.md`, `docs/03_PIPELINE.md`, `docs/14_TECHNOLOGY_SELECTION.md`, `docs/15_PRODUCTION_RUNTIME.md`, `docs/23_ENGINEERING_EXECUTION.md`, `docs/24_SYSTEM_INVARIANTS.md`, and `docs/25_V2_ROADMAP.md`.
+2. Read the canonical blueprint documents referenced there: `docs/01_PRODUCT.md`, `docs/02_ARCHITECTURE.md`, `docs/03_PIPELINE.md`, `docs/14_TECHNOLOGY_SELECTION.md`, `docs/15_PRODUCTION_RUNTIME.md`, `docs/23_ENGINEERING_EXECUTION.md`, `docs/24_SYSTEM_INVARIANTS.md`, `docs/25_V2_ROADMAP.md`, and `docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md`.
 3. Read `PROJECT_STATE.yaml`.
 4. Read the roadmap index `registry/work-items.yaml`, follow its `work_item_files`, and locate the exact `active_work_item` in the corresponding milestone file under `registry/work-items/`.
 5. Verify the active item has a complete executable contract: objective, allowed scope, out-of-scope, dependencies, read-before, reuse, acceptance and tests.
@@ -19,6 +19,8 @@ This repository is designed to be resumed by an AI coding agent with no conversa
 13. Do not start the next work item in the same PR unless the registry explicitly says so.
 
 If the blueprint advances beyond the machine-readable roadmap, follow the transition rule in `docs/00_START_HERE.md`: do not opportunistically reinterpret old work items. A dedicated roadmap/state migration must reconcile the implementation sequence.
+
+`docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md` is authoritative for the V2 product/architecture freeze and legacy-v1 policy. V1 is an implementation donor and source of regression evidence, not a compatibility target. If a legacy interface or sequencing assumption conflicts with a frozen v2 contract, the v2 contract wins.
 
 ## Scope is deny-by-default
 
@@ -45,6 +47,7 @@ Prefer more small lots over deep administrative nesting. One coherent work item 
 ## Core product rules
 
 - **WRE is an independent visual spatiotemporal reconstruction engine.** Do not redefine it as a MONDE subsystem or a single fixed photogrammetry/splat pipeline.
+- **V2 is authoritative. V1 is a legacy implementation donor, not a compatibility target.** Reuse legacy code only when it cleanly satisfies the owning v2 contract; never distort v2 architecture to preserve a v1 API, data model, sequencing assumption or unfinished roadmap.
 - **Reuse before implementation.** Do not reimplement a maintained, suitable foundational algorithm merely to own the code.
 - External solvers and learned models remain behind explicit adapters with stable WRE contracts.
 - Do not implement custom SIFT, SfM, bundle adjustment, RANSAC, ICP, MVS, Gaussian rasterization, video codecs or equivalent foundational systems unless an accepted ADR/work item shows a measured reason that existing implementations are inadequate.
@@ -102,7 +105,7 @@ Do not build routing policy around incomparable solver-private outputs.
 - Heavy jobs should expose checkpoint/resume semantics when the underlying tool supports them.
 - Coordinate-system conversions must be explicit, tested and centralized; never scatter undocumented axis/sign conventions.
 - Color/exposure transforms must be explicit enough that incompatible camera pipelines are not accidentally treated as identical radiance observations.
-- Existing tested components are retained/generalized/wrapped before rewrite; deletion requires replacement evidence and migration coverage.
+- Legacy components may be reused, generalized or temporarily wrapped when they cleanly satisfy a v2 need. They may also be replaced or removed once validated v2 coverage and migration evidence exist; backward compatibility with v1 is not a product requirement.
 
 ## Reviews
 

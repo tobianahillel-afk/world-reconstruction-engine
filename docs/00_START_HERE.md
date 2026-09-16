@@ -14,8 +14,9 @@ Before interpreting the implementation roadmap, read the current product/archite
 6. [`23_ENGINEERING_EXECUTION.md`](23_ENGINEERING_EXECUTION.md) — how blueprint capabilities are split into one-run work items and implemented safely.
 7. [`24_SYSTEM_INVARIANTS.md`](24_SYSTEM_INVARIANTS.md) — cross-cutting fail-closed product invariants every subsystem must preserve.
 8. [`25_V2_ROADMAP.md`](25_V2_ROADMAP.md) — executable capability sequence for WRE v2.0.
+9. [`26_V2_PRODUCT_ARCHITECTURE_FREEZE.md`](26_V2_PRODUCT_ARCHITECTURE_FREEZE.md) — frozen v2 product/architecture authority, scientific replacement rule and legacy-v1 donor policy.
 
-These documents define the current target product. WRE is an independent visual spatiotemporal reconstruction engine; it is not defined as a MONDE subsystem and is not a single COLMAP-to-splat pipeline.
+These documents define the current target product. WRE is an independent visual spatiotemporal reconstruction engine; it is not defined as a MONDE subsystem and is not a single COLMAP-to-splat pipeline. The v2 product/architecture is authoritative over legacy v1 structure; v1 is only an implementation donor and regression/reference source where useful.
 
 ## Resume procedure
 
@@ -61,13 +62,15 @@ Every implementation work item must be small enough for one agent to understand,
 
 ## Blueprint-versus-roadmap transition rule
 
-The product/architecture blueprint can evolve ahead of the machine-readable implementation roadmap. When that happens:
+The frozen v2 product/architecture can change only through an explicit blueprint-change decision as defined in `26_V2_PRODUCT_ARCHITECTURE_FREEZE.md`. When an accepted blueprint revision advances beyond the machine-readable implementation roadmap:
 
 - do not reinterpret an old work item as permission to implement newly described future capabilities;
 - do not erase already completed work merely because the target architecture changed;
 - create a dedicated roadmap/state migration that maps retained work, deprecated assumptions, new lots and new acceptance gates;
-- classify existing code as retained, generalized, compatibility-wrapped, deprecated or removable before rewriting it;
+- classify existing implementation code by whether it cleanly serves the new v2 contract; legacy-v1 compatibility is never itself a reason to retain a design;
 - after migration, `PROJECT_STATE.yaml` and the split v2 work-item registry again become the authoritative implementation sequence.
+
+Replacing a solver/model behind an existing frozen contract is normal adapter evolution and does not require a blueprint change.
 
 ## Product in one paragraph
 
@@ -84,4 +87,4 @@ WRE receives arbitrary real-world photos and videos, organizes which observation
 - Keep PREVIEW/FAST/QUALITY/MASTER products measurable and reproducible.
 - Treat artifact caching, resumability, benchmark registries, human review, compression and streaming as product capabilities, not afterthoughts.
 - Prefer diagnosable unresolved output over a polished but structurally wrong reconstruction.
-- Preserve tested existing components through compatibility/generalization unless replacement evidence justifies deletion.
+- Treat legacy v1 as an optional implementation donor, never as a compatibility target. Reuse only what cleanly satisfies v2; replace/remove legacy code when validated v2 coverage exists.
