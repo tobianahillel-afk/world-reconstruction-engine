@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://wre.local/schemas/adapter-model-registry.schema.json",
+  "title": "WRE Adapter Model Registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "entries"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "entries": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/entry"}
+    }
+  },
+  "$defs": {
+    "token": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "pattern": "^[a-z0-9][a-z0-9._:-]*$"
+    },
+    "non_blank_string": {
+      "type": "string",
+      "minLength": 1
+    },
+    "nullable_non_blank_string": {
+      "type": ["string", "null"],
+      "minLength": 1
+    },
+    "sha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "capability": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "input_kinds", "output_kinds"],
+      "properties": {
+        "name": {"$ref": "#/$defs/token"},
+        "input_kinds": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/token"}
+        },
+        "output_kinds": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/token"}
+        }
+      }
+    },
+    "producer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["implementation", "version", "revision"],
+      "properties": {
+        "implementation": {"$ref": "#/$defs/non_blank_string"},
+        "version": {"$ref": "#/$defs/non_blank_string"},
+        "revision": {"$ref": "#/$defs/nullable_non_blank_string"}
+      }
+    },
+    "model_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "revision"],
+      "properties": {
+        "name": {"$ref": "#/$defs/non_blank_string"},
+        "version": {"$ref": "#/$defs/non_blank_string"},
+        "revision": {"$ref": "#/$defs/nullable_non_blank_string"}
+      }
+    },
+    "checkpoint_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["identifier", "sha256"],
+      "properties": {
+        "identifier": {"$ref": "#/$defs/non_blank_string"},
+        "sha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "license_metadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["direct", "review", "transitive_notes", "redistribution_notes"],
+      "properties": {
+        "direct": {"$ref": "#/$defs/non_blank_string"},
+        "review": {
+          "type": "string",
+          "enum": ["approved", "pending", "blocked"]
+        },
+        "transitive_notes": {"$ref": "#/$defs/non_blank_string"},
+        "redistribution_notes": {"$ref": "#/$defs/non_blank_string"}
+      }
+    },
+    "entry": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "adapter_id",
+        "capability",
+        "producer",
+        "dependency_refs",
+        "model",
+        "checkpoint",
+        "artifact_key_hardware_policy",
+        "license",
+        "shipping_status",
+        "reproducibility_notes"
+      ],
+      "properties": {
+        "adapter_id": {"$ref": "#/$defs/token"},
+        "capability": {"$ref": "#/$defs/capability"},
+        "producer": {"$ref": "#/$defs/producer"},
+        "dependency_refs": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/token"}
+        },
+        "model": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/model_identity"}
+          ]
+        },
+        "checkpoint": {
+          "oneOf": [
+            {"type": "null"},
+            {"$ref": "#/$defs/checkpoint_identity"}
+          ]
+        },
+        "artifact_key_hardware_policy": {
+          "type": "string",
+          "enum": ["required", "omitted"]
+        },
+        "license": {"$ref": "#/$defs/license_metadata"},
+        "shipping_status": {
+          "type": "string",
+          "enum": ["approved", "experimental", "benchmark-only", "blocked"]
+        },
+        "reproducibility_notes": {"$ref": "#/$defs/non_blank_string"}
+      }
+    }
+  }
+}

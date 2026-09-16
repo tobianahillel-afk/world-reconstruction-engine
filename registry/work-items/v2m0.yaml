@@ -905,7 +905,7 @@ work_items:
   - id: V2L3.3
     lot: V2L3
     title: Shipping license reproducibility registry schema
-    status: ready
+    status: done
     objective: Define only a versioned machine-readable adapter/model registry envelope and closed entry schema for capability identity, exact producer/model/checkpoint references, dependency references, explicit artifact-key hardware policy, license review and shipping status, and reproducibility notes without adding concrete production entries or semantic registry validation.
     allowed_scope:
       - registry/adapter-models.yaml
@@ -961,7 +961,57 @@ work_items:
       - tests proving the initial registry contains no concrete entries and the schema contains no V2L3.4 failure metric or resume declarations
       - regression proving registry/dependencies.yaml remains a separate unchanged evidence source rather than duplicated into adapter-models.yaml
       - full fast CI
-  - {id: V2L3.4, lot: V2L3, title: Adapter failure metrics resume declarations, status: planned, depends_on: [V2L3.3]}
+  - id: V2L3.4
+    lot: V2L3
+    title: Adapter failure metrics resume declarations
+    status: ready
+    objective: Extend only the adapter/model registry entry contract with adapter-local raw failure signal names, exposed metric names and a minimal declared resume mode so later orchestration can reason over declared adapter surfaces without prematurely defining stable WRE failure taxonomy, metric semantics or checkpoint execution state.
+    allowed_scope:
+      - registry/schemas/adapter-model-registry.schema.json
+      - focused additions to tests/test_adapter_model_registry_schema.py
+    out_of_scope:
+      - stable cross-adapter failure categories or mapping raw signals to WRE failure taxonomy owned by V2L4.1
+      - metric values units dimensions directionality aggregations thresholds policies vectors or quality decisions owned by V2L4.2 through V2L4.5
+      - checkpoint path hash payload last completed substage interruption reason compatibility record persistence resume execution retry or distributed checkpoint behavior owned by later checkpoint/orchestration capabilities
+      - CPU core GPU class/count VRAM RAM scratch storage output storage network duration or scheduler resource requirements owned by V2L46
+      - semantic or cross-registry validation entry uniqueness dependency existence floating alias rejection canonical ordering or shipping-policy enforcement owned by V2L3.5
+      - concrete COLMAP FFmpeg ExifRead or other adapter/model entries owned by V2L3.6
+      - changing the empty registry envelope dependency evidence producer/model/checkpoint identity ArtifactKey or hardware identity semantics
+      - benchmark routing default selection fallback scheduling subprocess plugin loading network model download or solver execution
+      - new runtime dependency pyproject.toml uv.lock changes or a schema-validation library
+      - starting V2L3.5 implementation in this work item
+    depends_on: [V2L3.3]
+    read_before:
+      - docs/02_ARCHITECTURE.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - registry/adapter-models.yaml
+      - registry/schemas/adapter-model-registry.schema.json
+      - tests/test_adapter_model_registry_schema.py
+    reuse:
+      - existing open lowercase token definition in the adapter-model registry schema for adapter-local failure-signal and metric-name vocabulary
+      - existing closed entry schema and focused structural test style from V2L3.3
+      - empty adapter-model registry envelope unchanged until concrete baseline registration in V2L3.6
+      - later V2L4 failure and metric contracts as explicit future owners rather than duplicating their semantics here
+    acceptance:
+      - The closed adapter registry entry schema requires exactly three additional declaration fields failure_signals, metric_names and resume_mode alongside the V2L3.3 fields.
+      - failure_signals is an array of unique open token strings representing adapter-local raw failure signal names only; it may be empty and carries no stable WRE failure-category meaning or fallback policy.
+      - metric_names is an array of unique open token strings representing names of metrics an adapter can expose; it may be empty and carries no values units directionality thresholds aggregation or quality-gate semantics.
+      - resume_mode is a required closed enum containing exactly unsupported and checkpoint, with no implicit default or truthy/falsy coercion.
+      - Declaring checkpoint resume capability does not store a checkpoint path digest payload substage interruption reason or compatibility decision and does not execute resume behavior.
+      - The schema remains Draft 2020-12 with additionalProperties false at root and every object boundary already closed by V2L3.3.
+      - registry/adapter-models.yaml remains exactly the empty versioned envelope and no concrete adapter/model entry is introduced.
+      - V2L3.4 defines no stable failure taxonomy, failure mapping, metric vector/value schema, checkpoint storage format, scheduler resource contract, benchmark or runtime execution behavior.
+      - Existing V2L3.1 capability declarations V2L3.2 hardware-sensitive artifact identity V2L3.3 shipping/license/reproducibility metadata registry/dependencies.yaml and retained V1 behavior remain unchanged.
+    tests:
+      - structural test proving entry required/properties add exactly failure_signals metric_names and resume_mode
+      - uniqueItems token-array tests for failure_signals and metric_names including explicit empty-array allowance
+      - closed resume_mode enum test proving exactly unsupported and checkpoint with no default
+      - negative structural regression proving no stable failure taxonomy metric value threshold unit checkpoint path/hash or scheduler resource fields enter the schema
+      - regression proving registry/adapter-models.yaml remains empty and existing V2L3.3 schema fields remain unchanged
+      - full fast CI
   - {id: V2L3.5, lot: V2L3, title: Production registry validator, status: planned, depends_on: [V2L3.4]}
   - {id: V2L3.6, lot: V2L3, title: Register retained production baselines, status: planned, depends_on: [V2L3.5]}
   - {id: V2L4.1, lot: V2L4, title: Stable failure taxonomy, status: planned, depends_on: [V2L3.6]}

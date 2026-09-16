@@ -66,10 +66,13 @@ components:
       - src/wre/domain/hardware_identity.py
       - src/wre/domain/artifact_keys.py
       - src/wre/domain/__init__.py
+      - registry/adapter-models.yaml
+      - registry/schemas/adapter-model-registry.schema.json
     tests:
       - tests/test_adapter_capabilities.py
       - tests/test_hardware_identity.py
       - tests/test_artifact_keys.py
+      - tests/test_adapter_model_registry_schema.py
     status: implementing
   quality_failure_benchmarks: {owner_lot: V2L4, implementation: [], tests: [], status: planned}
   media_profiling: {owner_lot: V2L5, implementation: [], tests: [], status: planned}
