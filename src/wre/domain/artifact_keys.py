@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Final
 
 from wre.domain.artifacts import ArtifactKind
+from wre.domain.hardware_identity import HardwareRuntimeIdentity
 from wre.domain.observations import Sha256Digest
 from wre.domain.producer_identity import (
     ArtifactProducerIdentity,
@@ -38,6 +39,7 @@ class ArtifactKeyMaterial:
     output_kind: ArtifactKind
     input_fingerprints: tuple[ArtifactInputFingerprint, ...]
     producer: ArtifactProducerIdentity
+    hardware_runtime: HardwareRuntimeIdentity | None = None
 
     def __post_init__(self) -> None:
         if not isinstance(self.output_kind, ArtifactKind):
@@ -54,6 +56,12 @@ class ArtifactKeyMaterial:
             )
         if not isinstance(self.producer, ArtifactProducerIdentity):
             raise TypeError("artifact_key_material.producer must be ArtifactProducerIdentity")
+        if self.hardware_runtime is not None and not isinstance(
+            self.hardware_runtime, HardwareRuntimeIdentity
+        ):
+            raise TypeError(
+                "artifact_key_material.hardware_runtime must be HardwareRuntimeIdentity when present"
+            )
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,6 +126,9 @@ def canonical_artifact_key_bytes(material: ArtifactKeyMaterial) -> bytes:
         "model": _model_payload(producer.model),
         "checkpoint": _checkpoint_payload(producer.checkpoint),
     }
+    if material.hardware_runtime is not None:
+        payload["hardware_runtime_sha256"] = str(material.hardware_runtime.sha256)
+
     canonical = json.dumps(
         payload,
         ensure_ascii=True,
