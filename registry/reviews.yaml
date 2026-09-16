@@ -23,7 +23,11 @@ lot_reviews:
     reviewed_at: '2026-09-16'
     evidence:
       - docs/reviews/V2L1-scene-project-artifact-identity-review.md
-  V2L2: {status: pending, reviewed_at: null, evidence: []}
+  V2L2:
+    status: passed
+    reviewed_at: '2026-09-16'
+    evidence:
+      - docs/reviews/V2L2-artifact-dag-cache-review.md
   V2L3: {status: pending, reviewed_at: null, evidence: []}
   V2L4: {status: pending, reviewed_at: null, evidence: []}
   V2L5: {status: pending, reviewed_at: null, evidence: []}
