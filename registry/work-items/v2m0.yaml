@@ -366,7 +366,7 @@ work_items:
       - dependency-edge collections dependency lookup cycle detection DAG traversal or graph validation owned by V2L2.1 and V2L2.2
       - cache lookup reuse invalidation planning or key-to-artifact resolution owned by V2L2.3 and V2L2.4
       - artifact materialization paths URIs byte lengths output-content verification or corruption state owned by V2L2.5
-      - source-media manifest collections coordinate frames quality modes user overrides scene clusters temporal groups artifact roots master-scene versions runtime exports or warnings
+      - source-media manifest collections coordinate frames quality modes user overrides scene clusters temporal groups master-scene versions runtime exports or warnings
       - mutating replacing deleting or listing persisted records beyond the retained immutable put/get contract
       - implicit project creation project-existence lookup or cross-record repair while storing artifact metadata
       - schema migration framework external database backend ORM or new dependency
