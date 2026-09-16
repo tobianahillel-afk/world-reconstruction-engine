@@ -239,9 +239,7 @@ def test_long_chain_planning_does_not_depend_on_python_recursion_limit() -> None
     nodes = tuple(_ref(f"n{index:04d}") for index in range(1500))
     graph = ArtifactDependencyGraph(
         nodes=frozenset(nodes),
-        edges=frozenset(
-            _edge(nodes[index], nodes[index - 1]) for index in range(1, len(nodes))
-        ),
+        edges=frozenset(_edge(nodes[index], nodes[index - 1]) for index in range(1, len(nodes))),
     )
 
     plan = plan_artifact_invalidation(graph, frozenset({nodes[0]}))
