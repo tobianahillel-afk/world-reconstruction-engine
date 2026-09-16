@@ -1,6 +1,5 @@
 from wre.domain import FailureCategory
 
-
 _EXPECTED_FAILURES = [
     ("UNSUPPORTED_INPUT", "unsupported_input"),
     ("DEPENDENCY_UNAVAILABLE", "dependency_unavailable"),
