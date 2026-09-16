@@ -326,8 +326,7 @@ def test_adapter_registry_blocked_license_requires_blocked_shipping(tmp_path: Pa
     errors = validate_repository(repo)
 
     assert any(
-        "blocked entry license review requires blocked shipping_status" in error
-        for error in errors
+        "blocked entry license review requires blocked shipping_status" in error for error in errors
     )
 
 
