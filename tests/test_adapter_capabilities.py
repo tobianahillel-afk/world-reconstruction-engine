@@ -54,9 +54,7 @@ def test_descriptor_supports_single_and_multiple_semantic_kinds() -> None:
         output_kinds=frozenset({_kind("camera.solution"), _kind("geometry.solution")}),
     )
 
-    assert descriptor.input_kinds == frozenset(
-        {_kind("media.image"), _kind("feature.matches")}
-    )
+    assert descriptor.input_kinds == frozenset({_kind("media.image"), _kind("feature.matches")})
     assert descriptor.output_kinds == frozenset(
         {_kind("camera.solution"), _kind("geometry.solution")}
     )
