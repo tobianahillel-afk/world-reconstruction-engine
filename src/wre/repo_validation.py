@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import json
+import re
 from collections import Counter
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import yaml
 
@@ -226,6 +228,479 @@ def _validate_reviews(
     return lot_reviews, milestone_reviews
 
 
+def _require_exact_mapping(
+    errors: list[str],
+    value: object,
+    context: str,
+    expected_fields: set[str],
+) -> dict[str, Any] | None:
+    if not isinstance(value, dict):
+        errors.append(f"{context} must be a mapping")
+        return None
+    raw_mapping = cast(dict[object, Any], value)
+    if not all(isinstance(key, str) for key in raw_mapping):
+        errors.append(f"{context} field names must be strings")
+        return None
+    mapping = cast(dict[str, Any], value)
+    actual_fields = set(mapping)
+    missing = sorted(expected_fields - actual_fields)
+    extra = sorted(actual_fields - expected_fields)
+    if missing:
+        errors.append(f"{context} missing fields: {missing}")
+    if extra:
+        errors.append(f"{context} has undeclared fields: {extra}")
+    return mapping
+
+
+def _schema_object_fields(
+    errors: list[str],
+    definitions: dict[str, Any],
+    name: str,
+) -> set[str] | None:
+    definition = definitions.get(name)
+    if not isinstance(definition, dict):
+        errors.append(f"adapter model registry schema missing object definition: {name}")
+        return None
+    required = definition.get("required")
+    properties = definition.get("properties")
+    if (
+        not isinstance(required, list)
+        or not all(isinstance(field, str) for field in required)
+        or not isinstance(properties, dict)
+    ):
+        errors.append(f"adapter model registry schema has invalid object definition: {name}")
+        return None
+    required_fields = set(cast(list[str], required))
+    property_fields = set(cast(dict[str, Any], properties))
+    if required_fields != property_fields:
+        errors.append(f"adapter model registry schema {name} required/properties fields must match")
+        return None
+    return required_fields
+
+
+def _schema_enum(
+    errors: list[str],
+    schema_node: object,
+    context: str,
+) -> set[str] | None:
+    if not isinstance(schema_node, dict):
+        errors.append(f"adapter model registry schema missing enum: {context}")
+        return None
+    values = schema_node.get("enum")
+    if (
+        not isinstance(values, list)
+        or not values
+        or not all(isinstance(value, str) for value in values)
+    ):
+        errors.append(f"adapter model registry schema has invalid enum: {context}")
+        return None
+    return set(cast(list[str], values))
+
+
+def _validate_token(
+    errors: list[str],
+    value: object,
+    context: str,
+    pattern: re.Pattern[str],
+    max_length: int,
+) -> str | None:
+    if not isinstance(value, str) or len(value) > max_length or pattern.fullmatch(value) is None:
+        errors.append(f"{context} must be a valid registry token")
+        return None
+    return value
+
+
+def _validate_nullable_non_blank(errors: list[str], value: object, context: str) -> None:
+    if value is not None:
+        _require_non_blank_text(errors, value, context)
+
+
+def _validate_canonical_token_list(
+    errors: list[str],
+    value: object,
+    context: str,
+    pattern: re.Pattern[str],
+    max_length: int,
+    *,
+    non_empty: bool = False,
+) -> list[str]:
+    if not isinstance(value, list):
+        errors.append(f"{context} must be a list")
+        return []
+    if non_empty and not value:
+        errors.append(f"{context} must not be empty")
+
+    tokens: list[str] = []
+    valid_collection = True
+    for index, entry in enumerate(value):
+        token = _validate_token(errors, entry, f"{context}[{index}]", pattern, max_length)
+        if token is None:
+            valid_collection = False
+        else:
+            tokens.append(token)
+    if valid_collection:
+        if len(tokens) != len(set(tokens)):
+            errors.append(f"{context} must not contain duplicates")
+        if tokens != sorted(tokens):
+            errors.append(f"{context} must be in canonical lexicographic order")
+    return tokens
+
+
+def _validate_adapter_model_registry(errors: list[str], root: Path) -> None:
+    registry_path = root / "registry/adapter-models.yaml"
+    dependencies_path = root / "registry/dependencies.yaml"
+    schema_path = root / "registry/schemas/adapter-model-registry.schema.json"
+
+    try:
+        registry_data = yaml.safe_load(registry_path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError) as exc:
+        errors.append(f"cannot parse registry/adapter-models.yaml: {exc}")
+        return
+    if not isinstance(registry_data, dict):
+        errors.append("registry/adapter-models.yaml must contain a YAML mapping")
+        return
+    registry = cast(dict[str, Any], registry_data)
+
+    try:
+        dependencies_doc = _load_mapping(dependencies_path)
+    except (OSError, ValueError, yaml.YAMLError) as exc:
+        errors.append(f"cannot parse registry/dependencies.yaml: {exc}")
+        return
+    try:
+        schema_data = json.loads(schema_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        errors.append(f"cannot parse adapter model registry schema: {exc}")
+        return
+    if not isinstance(schema_data, dict):
+        errors.append("adapter model registry schema must contain a JSON object")
+        return
+    schema = cast(dict[str, Any], schema_data)
+
+    root_fields = schema.get("required")
+    root_properties = schema.get("properties")
+    definitions_value = schema.get("$defs")
+    if (
+        not isinstance(root_fields, list)
+        or not all(isinstance(field, str) for field in root_fields)
+        or not isinstance(root_properties, dict)
+        or not isinstance(definitions_value, dict)
+    ):
+        errors.append("adapter model registry schema has invalid root contract")
+        return
+    expected_root_fields = set(cast(list[str], root_fields))
+    if expected_root_fields != set(cast(dict[str, Any], root_properties)):
+        errors.append("adapter model registry schema root required/properties fields must match")
+        return
+    _require_exact_mapping(errors, registry, "registry/adapter-models.yaml", expected_root_fields)
+
+    schema_version = registry.get("schema_version")
+    if (
+        isinstance(schema_version, bool)
+        or not isinstance(schema_version, int)
+        or schema_version != 1
+    ):
+        errors.append("registry/adapter-models.yaml schema_version must be integer 1")
+
+    entries_value = registry.get("entries")
+    if not isinstance(entries_value, list):
+        errors.append("registry/adapter-models.yaml entries must be a list")
+        return
+
+    definitions = cast(dict[str, Any], definitions_value)
+    entry_fields = _schema_object_fields(errors, definitions, "entry")
+    capability_fields = _schema_object_fields(errors, definitions, "capability")
+    producer_fields = _schema_object_fields(errors, definitions, "producer")
+    model_fields = _schema_object_fields(errors, definitions, "model_identity")
+    checkpoint_fields = _schema_object_fields(errors, definitions, "checkpoint_identity")
+    license_fields = _schema_object_fields(errors, definitions, "license_metadata")
+    object_field_sets = (
+        entry_fields,
+        capability_fields,
+        producer_fields,
+        model_fields,
+        checkpoint_fields,
+        license_fields,
+    )
+    if any(field_set is None for field_set in object_field_sets):
+        return
+    assert entry_fields is not None
+    assert capability_fields is not None
+    assert producer_fields is not None
+    assert model_fields is not None
+    assert checkpoint_fields is not None
+    assert license_fields is not None
+
+    token_schema = definitions.get("token")
+    sha_schema = definitions.get("sha256")
+    if not isinstance(token_schema, dict) or not isinstance(sha_schema, dict):
+        errors.append("adapter model registry schema is missing token or sha256 definitions")
+        return
+    token_pattern_value = token_schema.get("pattern")
+    token_max_length = token_schema.get("maxLength")
+    sha_pattern_value = sha_schema.get("pattern")
+    if (
+        not isinstance(token_pattern_value, str)
+        or isinstance(token_max_length, bool)
+        or not isinstance(token_max_length, int)
+        or token_max_length <= 0
+        or not isinstance(sha_pattern_value, str)
+    ):
+        errors.append("adapter model registry schema has invalid token or sha256 constraints")
+        return
+    try:
+        token_pattern = re.compile(token_pattern_value)
+        sha_pattern = re.compile(sha_pattern_value)
+    except re.error as exc:
+        errors.append(f"adapter model registry schema has invalid regex: {exc}")
+        return
+
+    entry_definition = cast(dict[str, Any], definitions["entry"])
+    entry_properties = cast(dict[str, Any], entry_definition["properties"])
+    license_definition = cast(dict[str, Any], definitions["license_metadata"])
+    license_properties = cast(dict[str, Any], license_definition["properties"])
+    hardware_values = _schema_enum(
+        errors,
+        entry_properties.get("artifact_key_hardware_policy"),
+        "entry.artifact_key_hardware_policy",
+    )
+    shipping_values = _schema_enum(
+        errors,
+        entry_properties.get("shipping_status"),
+        "entry.shipping_status",
+    )
+    resume_values = _schema_enum(errors, entry_properties.get("resume_mode"), "entry.resume_mode")
+    license_review_values = _schema_enum(
+        errors,
+        license_properties.get("review"),
+        "license_metadata.review",
+    )
+    enum_sets = (hardware_values, shipping_values, resume_values, license_review_values)
+    if any(enum_set is None for enum_set in enum_sets):
+        return
+    assert hardware_values is not None
+    assert shipping_values is not None
+    assert resume_values is not None
+    assert license_review_values is not None
+
+    dependencies_value = dependencies_doc.get("dependencies")
+    if not isinstance(dependencies_value, dict):
+        errors.append("registry/dependencies.yaml must define a dependencies mapping")
+        dependencies: dict[str, Any] = {}
+    else:
+        dependencies = cast(dict[str, Any], dependencies_value)
+
+    adapter_ids: list[str] = []
+    for index, entry_value in enumerate(entries_value):
+        context = f"registry/adapter-models.yaml entries[{index}]"
+        entry = _require_exact_mapping(errors, entry_value, context, entry_fields)
+        if entry is None:
+            continue
+
+        adapter_id = _validate_token(
+            errors,
+            entry.get("adapter_id"),
+            f"{context}.adapter_id",
+            token_pattern,
+            token_max_length,
+        )
+        if adapter_id is not None:
+            adapter_ids.append(adapter_id)
+
+        capability = _require_exact_mapping(
+            errors,
+            entry.get("capability"),
+            f"{context}.capability",
+            capability_fields,
+        )
+        if capability is not None:
+            _validate_token(
+                errors,
+                capability.get("name"),
+                f"{context}.capability.name",
+                token_pattern,
+                token_max_length,
+            )
+            _validate_canonical_token_list(
+                errors,
+                capability.get("input_kinds"),
+                f"{context}.capability.input_kinds",
+                token_pattern,
+                token_max_length,
+            )
+            _validate_canonical_token_list(
+                errors,
+                capability.get("output_kinds"),
+                f"{context}.capability.output_kinds",
+                token_pattern,
+                token_max_length,
+                non_empty=True,
+            )
+
+        producer = _require_exact_mapping(
+            errors,
+            entry.get("producer"),
+            f"{context}.producer",
+            producer_fields,
+        )
+        if producer is not None:
+            _require_non_blank_text(
+                errors,
+                producer.get("implementation"),
+                f"{context}.producer.implementation",
+            )
+            producer_version = producer.get("version")
+            _require_non_blank_text(errors, producer_version, f"{context}.producer.version")
+            if isinstance(producer_version, str) and producer_version.strip().lower() == "latest":
+                errors.append(f"{context}.producer.version cannot use floating latest")
+            _validate_nullable_non_blank(
+                errors,
+                producer.get("revision"),
+                f"{context}.producer.revision",
+            )
+
+        dependency_refs = _validate_canonical_token_list(
+            errors,
+            entry.get("dependency_refs"),
+            f"{context}.dependency_refs",
+            token_pattern,
+            token_max_length,
+        )
+        for dependency_ref in dependency_refs:
+            if dependency_ref not in dependencies:
+                errors.append(
+                    f"{context}.dependency_refs references unknown dependency: {dependency_ref}"
+                )
+
+        model_value = entry.get("model")
+        if model_value is not None:
+            model = _require_exact_mapping(
+                errors,
+                model_value,
+                f"{context}.model",
+                model_fields,
+            )
+            if model is not None:
+                _require_non_blank_text(errors, model.get("name"), f"{context}.model.name")
+                model_version = model.get("version")
+                _require_non_blank_text(errors, model_version, f"{context}.model.version")
+                if isinstance(model_version, str) and model_version.strip().lower() == "latest":
+                    errors.append(f"{context}.model.version cannot use floating latest")
+                _validate_nullable_non_blank(
+                    errors,
+                    model.get("revision"),
+                    f"{context}.model.revision",
+                )
+
+        checkpoint_value = entry.get("checkpoint")
+        if checkpoint_value is not None:
+            checkpoint = _require_exact_mapping(
+                errors,
+                checkpoint_value,
+                f"{context}.checkpoint",
+                checkpoint_fields,
+            )
+            if model_value is None:
+                errors.append(f"{context}.checkpoint requires model")
+            if checkpoint is not None:
+                _require_non_blank_text(
+                    errors,
+                    checkpoint.get("identifier"),
+                    f"{context}.checkpoint.identifier",
+                )
+                checkpoint_sha = checkpoint.get("sha256")
+                if (
+                    not isinstance(checkpoint_sha, str)
+                    or sha_pattern.fullmatch(checkpoint_sha) is None
+                ):
+                    errors.append(f"{context}.checkpoint.sha256 must be exactly 64 lowercase hex")
+
+        hardware_policy = entry.get("artifact_key_hardware_policy")
+        if hardware_policy not in hardware_values:
+            errors.append(
+                f"{context}.artifact_key_hardware_policy has invalid value: {hardware_policy!r}"
+            )
+
+        license_metadata = _require_exact_mapping(
+            errors,
+            entry.get("license"),
+            f"{context}.license",
+            license_fields,
+        )
+        license_review: object = None
+        if license_metadata is not None:
+            _require_non_blank_text(
+                errors,
+                license_metadata.get("direct"),
+                f"{context}.license.direct",
+            )
+            license_review = license_metadata.get("review")
+            if license_review not in license_review_values:
+                errors.append(f"{context}.license.review has invalid value: {license_review!r}")
+            _require_non_blank_text(
+                errors,
+                license_metadata.get("transitive_notes"),
+                f"{context}.license.transitive_notes",
+            )
+            _require_non_blank_text(
+                errors,
+                license_metadata.get("redistribution_notes"),
+                f"{context}.license.redistribution_notes",
+            )
+
+        shipping_status = entry.get("shipping_status")
+        if shipping_status not in shipping_values:
+            errors.append(f"{context}.shipping_status has invalid value: {shipping_status!r}")
+
+        _require_non_blank_text(
+            errors,
+            entry.get("reproducibility_notes"),
+            f"{context}.reproducibility_notes",
+        )
+        _validate_canonical_token_list(
+            errors,
+            entry.get("failure_signals"),
+            f"{context}.failure_signals",
+            token_pattern,
+            token_max_length,
+        )
+        _validate_canonical_token_list(
+            errors,
+            entry.get("metric_names"),
+            f"{context}.metric_names",
+            token_pattern,
+            token_max_length,
+        )
+        resume_mode = entry.get("resume_mode")
+        if resume_mode not in resume_values:
+            errors.append(f"{context}.resume_mode has invalid value: {resume_mode!r}")
+
+        if shipping_status == "approved":
+            if license_review != "approved":
+                errors.append(f"{context} approved shipping requires approved entry license review")
+            for dependency_ref in dependency_refs:
+                dependency = dependencies.get(dependency_ref)
+                dependency_review = (
+                    dependency.get("license_review") if isinstance(dependency, dict) else None
+                )
+                if dependency_review != "approved":
+                    errors.append(
+                        f"{context} approved shipping requires approved dependency license review: "
+                        f"{dependency_ref}"
+                    )
+        if license_review == "blocked" and shipping_status != "blocked":
+            errors.append(
+                f"{context} blocked entry license review requires blocked shipping_status"
+            )
+
+    if len(adapter_ids) != len(set(adapter_ids)):
+        errors.append("registry/adapter-models.yaml adapter_id values must be unique")
+    if adapter_ids != sorted(adapter_ids):
+        errors.append(
+            "registry/adapter-models.yaml entries must be in canonical lexicographic "
+            "adapter_id order"
+        )
+
+
 def validate_repository(root: Path) -> list[str]:
     root = root.resolve()
     errors: list[str] = []
@@ -235,6 +710,9 @@ def validate_repository(root: Path) -> list[str]:
         "registry/work-items.yaml",
         "registry/components.yaml",
         "registry/reviews.yaml",
+        "registry/adapter-models.yaml",
+        "registry/dependencies.yaml",
+        "registry/schemas/adapter-model-registry.schema.json",
         ".github/PULL_REQUEST_TEMPLATE.md",
     )
     for relative in required_files:
@@ -250,6 +728,8 @@ def validate_repository(root: Path) -> list[str]:
         reviews_doc = _load_mapping(root / "registry/reviews.yaml")
     except (OSError, ValueError, yaml.YAMLError) as exc:
         return [f"cannot parse repository metadata: {exc}"]
+
+    _validate_adapter_model_registry(errors, root)
 
     if roadmap.get("schema_version") != 2:
         errors.append("registry/work-items.yaml schema_version must be 2")

@@ -983,6 +983,7 @@ work_items:
     depends_on: [V2L3.3]
     read_before:
       - docs/02_ARCHITECTURE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
       - docs/15_PRODUCTION_RUNTIME.md
       - docs/23_ENGINEERING_EXECUTION.md
       - docs/24_SYSTEM_INVARIANTS.md
@@ -1015,7 +1016,7 @@ work_items:
   - id: V2L3.5
     lot: V2L3
     title: Production registry validator
-    status: ready
+    status: done
     objective: Extend the existing fail-closed repository metadata validator so adapter/model registry entries are validated against the exact V2L3.4 structural contract and deterministic production semantics, including canonical ordering, exact identities, dependency-reference existence and minimal shipping/license consistency, without selecting, loading or executing any adapter.
     allowed_scope:
       - src/wre/repo_validation.py
@@ -1074,7 +1075,82 @@ work_items:
       - approved shipping with pending or blocked entry/dependency license-review negative tests plus allowed experimental/benchmark-only pending-review cases
       - regression tests for existing roadmap component review and active-work-item validation
       - full fast CI
-  - {id: V2L3.6, lot: V2L3, title: Register retained production baselines, status: planned, depends_on: [V2L3.5]}
+  - id: V2L3.6
+    lot: V2L3
+    title: Register retained production baselines
+    status: ready
+    objective: Register the already-retained COLMAP/PyCOLMAP, FFmpeg and ExifRead production baselines in the versioned V2 adapter/model registry with exact dependency-backed identities, approved shipping/license evidence and conservative declared capabilities, without changing any retained integration implementation or introducing new runtime selection behavior.
+    allowed_scope:
+      - registry/adapter-models.yaml
+      - tests/test_adapter_model_registry_baselines.py
+      - docs/reviews/V2L3-adapter-model-registry-review.md after implementation evidence is green
+      - registry/reviews.yaml V2L3 review state and evidence after implementation evidence is green
+      - registry/components.yaml V2L3 completion and baseline-registry test coverage after review passes
+      - PROJECT_STATE.yaml final V2L3-to-V2L4 handoff metadata after review passes
+      - registry/work-items/v2m0.yaml V2L3 completion and V2L4.1 activation metadata after review passes
+    out_of_scope:
+      - changing retained COLMAP PyCOLMAP FFmpeg ExifRead source implementation invocation behavior configuration defaults or output semantics
+      - modifying registry/dependencies.yaml versions integration modes source license or review evidence
+      - modifying the adapter-model registry schema or V2L3.5 semantic validator
+      - adding LIMAP GTSAM TEASER++ Open3D OpenMVG AliceVision OpenSfM HLoc LightGlue or any other pending candidate entry
+      - adding learned model or checkpoint identities downloads model loading or checkpoint resolution
+      - claiming current retained COLMAP output is the future canonical CameraSolution or GeometrySolution owned by V2L12
+      - benchmark records quality ranking default promotion route selection fallback scheduling or resource estimation
+      - stable WRE failure taxonomy metric vector/value threshold or quality decision behavior owned by V2L4
+      - checkpoint path payload resume execution retry or distributed checkpoint behavior
+      - pyproject.toml uv.lock dependency installation or new runtime dependency changes
+      - starting V2L4.1 product implementation in this work item
+    depends_on: [V2L3.5]
+    read_before:
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - registry/adapter-models.yaml
+      - registry/schemas/adapter-model-registry.schema.json
+      - registry/dependencies.yaml
+      - src/wre/ingestion/exif.py
+      - src/wre/ingestion/keyframes.py
+      - src/wre/reconstruction/colmap_environment.py
+      - src/wre/reconstruction/colmap_features.py
+      - src/wre/reconstruction/colmap_matching.py
+      - src/wre/reconstruction/colmap_reconstruction.py
+      - tests/test_exif_metadata.py
+      - tests/test_keyframe_extraction.py
+      - tests/test_colmap_end_to_end_fixture.py
+    reuse:
+      - exact dependency identities and approved license-review evidence already owned by registry/dependencies.yaml
+      - V2L3.3 through V2L3.5 registry schema and fail-closed semantic validation unchanged
+      - retained ExifMetadataIngestor FFmpegToolchain and PyCOLMAP/COLMAP integration behavior as implementation evidence only
+      - existing open AdapterCapabilityName and ArtifactKind token semantics without introducing a closed global capability or artifact-kind enum
+      - retained native PyCOLMAP integration workflow and existing media/unit fixtures as compatibility evidence
+    acceptance:
+      - registry/adapter-models.yaml contains exactly three concrete baseline entries for retained COLMAP/PyCOLMAP 4.2.0, ExifRead 3.5.1 and FFmpeg 6.1.1-3ubuntu5, plus no pending research candidate, learned model or checkpoint entry.
+      - Entries are in canonical lexicographic adapter_id order and each dependency_refs array contains exactly its owning approved dependency key; colmap, exifread or ffmpeg.
+      - Each entry uses an explicit stable WRE implementation identity, exact retained dependency version and null model/checkpoint identities; no floating latest alias, environment-derived version or hidden path identity is used.
+      - Capability declarations describe only behavior already implemented by the retained integration and do not claim future V2L12 canonical CameraSolution or GeometrySolution output.
+      - ExifRead declares raw EXIF metadata extraction from image media; FFmpeg declares deterministic frame/keyframe extraction from video media; COLMAP declares retained sparse SfM reconstruction from image media into the existing sparse reconstruction estimate boundary.
+      - artifact_key_hardware_policy is explicitly declared per baseline and documented conservatively; no machine-specific HardwareRuntimeIdentity digest is embedded in the registry.
+      - Direct license strings, approved review state, transitive notes and redistribution notes are consistent with registry/dependencies.yaml evidence and do not broaden redistribution rights beyond that evidence.
+      - All three retained baselines use shipping_status approved only because their referenced dependency license_review values are already approved; this item does not auto-approve any pending dependency.
+      - failure_signals and metric_names contain only adapter-local names already supported by retained behavior or remain explicitly empty; no stable V2L4 failure taxonomy metric value threshold unit or quality policy is introduced.
+      - resume_mode reflects retained implemented behavior only and does not claim checkpoint support absent an existing retained resume path.
+      - The existing V2L3.5 repository validator accepts the committed real registry without code changes or special-case bypasses.
+      - Focused baseline-registry tests assert the exact three-entry set, exact versions/dependency refs, null model/checkpoint identities, approved license/shipping coupling and absence of pending candidates.
+      - Existing ExifRead/FFmpeg unit fixtures and retained native PyCOLMAP integration fixture pass unchanged, proving registry registration did not alter implementation behavior.
+      - V2L3 lot review records PASS only after V2L3.1 through V2L3.6 acceptance and required CI/integration evidence are green.
+      - V2L4.1 is expanded to a complete deny-by-default executable contract before becoming the sole next ready item; no V2L4 product implementation is bundled.
+    tests:
+      - focused exact baseline-entry parsing and canonical-order tests
+      - exact retained version and dependency-reference tests for colmap exifread and ffmpeg
+      - null model/checkpoint and no-pending-candidate regression tests
+      - license review shipping status hardware-policy capability failure-signal metric-name and resume-mode declaration tests
+      - repository validator regression over the real populated registry
+      - unchanged ExifRead and FFmpeg retained unit fixtures
+      - retained native PyCOLMAP integration workflow and end-to-end fixture
+      - full fast CI
+      - V2L3 lot-review checklist
   - {id: V2L4.1, lot: V2L4, title: Stable failure taxonomy, status: planned, depends_on: [V2L3.6]}
   - {id: V2L4.2, lot: V2L4, title: Multidimensional metric vector, status: planned, depends_on: [V2L4.1]}
   - {id: V2L4.3, lot: V2L4, title: Quality decision contract, status: planned, depends_on: [V2L4.2]}
