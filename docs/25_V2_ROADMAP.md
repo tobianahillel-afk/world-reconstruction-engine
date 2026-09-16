@@ -13,6 +13,7 @@ This roadmap turns the v2 blueprint into implementation-sized work. It is intent
 - Contracts precede alternative adapters; adapters precede benchmark-based default promotion.
 - Legacy v1 code is only an implementation donor/regression source. Reuse it when it cleanly satisfies the owning v2 contract; never preserve or wrap a v1 API merely for backward compatibility.
 - Before activating any work item that integrates or promotes a solver/model, refresh the candidate shortlist from `docs/14_TECHNOLOGY_SELECTION.md`, `docs/27_RESEARCH_CANDIDATE_COVERAGE.md`, the current adapter/model registry and current research evidence. Planned item names never freeze a 2026 winner.
+- Performance-sensitive work must also consult `docs/28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md`: avoid unnecessary work before accelerating kernels, compare execution profiles under the same quality contract, and never trade away claimed provenance or quality silently.
 - A newer version/paper is not automatically better for WRE: default selection must account for quality, latency, resources, robustness, license, shipping and reproducibility under the owning contract.
 
 ## V2M0 — Production substrate ready
@@ -86,7 +87,8 @@ Purpose: create one common language for gates, escalation and comparison.
 - `V2L6.2` — donor adapter for the existing deterministic interval-keyframe implementation; no legacy API compatibility promise.
 - `V2L6.3` — quality/diversity-aware selection baseline using only explicit profile metrics.
 - `V2L6.4` — bounded density/resource controls for long videos.
-- `V2L6.5` — provenance/timing preservation + selection regression fixtures and lot review.
+- `V2L6.5` — provenance/timing preservation + selection regression fixtures.
+- `V2L6.6` — reusable decoded-image / multiresolution-pyramid artifact cache so retrieval, matching and geometry do not repeatedly decode/resize equivalent inputs; lot review.
 
 ### V2L7 — Pair candidate retrieval
 
@@ -193,7 +195,7 @@ Purpose: create one common language for gates, escalation and comparison.
 - `V2L18.3` — refresh the current shortlist, then integrate one approved static appearance baseline.
 - `V2L18.4` — held-out render metrics + geometry disagreement diagnostics.
 - `V2L18.5` — in-the-wild exposure/distractor specialist adapter boundary.
-- `V2L18.6` — appearance benchmark/default candidate review.
+- `V2L18.6` — appearance quality/resource-efficiency benchmark, execution-profile evidence and default candidate review.
 
 ### V2L19 — Materials and environment
 
@@ -215,10 +217,10 @@ Purpose: create one common language for gates, escalation and comparison.
 ### V2L21 — Runtime compiler core
 
 - `V2L21.1` — `RuntimeTargetProfile` / `RuntimeScene` contracts.
-- `V2L21.2` — geometry simplification/collision output boundary.
-- `V2L21.3` — appearance packaging/compression boundary.
-- `V2L21.4` — spatial chunk and LOD manifest.
-- `V2L21.5` — global target memory/download/FPS budget validation.
+- `V2L21.2` — geometry simplification/collision output boundary, including mature mesh/runtime optimization where target support permits it.
+- `V2L21.3` — target-specific appearance packaging/compression boundary; evaluate compact splat formats and compressed mesh/texture delivery rather than treating PLY/raw textures as final runtime assets.
+- `V2L21.4` — spatial chunk + global primitive budget + distance/error-driven LOD manifest and progressive coarse-first loading metadata.
+- `V2L21.5` — target time-to-first-frame, memory, download, frame-time/FPS and quality budget validation.
 - `V2L21.6` — runtime compilation provenance + master-link regression and lot review.
 
 ### V2L22 — Reference interactive viewer
@@ -228,12 +230,12 @@ Purpose: create one common language for gates, escalation and comparison.
 - `V2L22.3` — free-fly/drone camera and saved camera path.
 - `V2L22.4` — appearance + environment rendering integration.
 - `V2L22.5` — expert provenance/confidence inspection overlay.
-- `V2L22.6` — representative load/FPS/memory fixture and lot review.
+- `V2L22.6` — representative time-to-first-frame/load/FPS/frame-time/memory fixture and lot review.
 
 ### V2L23 — Static end-to-end vertical slice
 
 - `V2L23.1` — arbitrary static media -> SceneCluster -> geometry -> surface -> appearance -> MasterScene -> RuntimeScene integration fixture.
-- `V2L23.2` — PREVIEW/FAST/QUALITY route comparison on the same fixture.
+- `V2L23.2` — PREVIEW/FAST/QUALITY route comparison on the same fixture, including explicit artifact reuse/warm-start and quality-gate early-exit evidence where valid.
 - `V2L23.3` — failure/holes/unresolved behavior fixture.
 - `V2L23.4` — retained benchmark report and M3 review.
 
@@ -413,8 +415,8 @@ Purpose: create one common language for gates, escalation and comparison.
 
 - `V2L45.1` — exchange-format capability/metadata contract.
 - `V2L45.2` — COLMAP import/export compatibility.
-- `V2L45.3` — mesh/material glTF/GLB export.
-- `V2L45.4` — approved splat package export.
+- `V2L45.3` — mesh/material glTF/GLB export; evaluate meshoptimizer/EXT_meshopt_compression and KTX2/BasisU where target support and measured quality justify them.
+- `V2L45.4` — approved splat package export with explicit interchange versus compact runtime format capability metadata.
 - `V2L45.5` — DCC package boundary and round-trip/validation tests.
 - `V2L45.6` — game-engine package boundary and validation tests + lot review.
 
@@ -422,9 +424,9 @@ Purpose: create one common language for gates, escalation and comparison.
 
 - `V2L46.1` — `JobSpec` resource requirement contract.
 - `V2L46.2` — local deterministic scheduler baseline.
-- `V2L46.3` — empirical resource estimator inputs/output contract.
-- `V2L46.4` — OOM/disk/time predicted-failure policy and chunk/downscale alternatives.
-- `V2L46.5` — resource scheduling benchmark and lot review.
+- `V2L46.3` — empirical resource + execution-profile estimator covering memory, compute, transfer/I/O and steady-state versus cold-start cost.
+- `V2L46.4` — OOM/disk/time predicted-failure policy plus explicit chunking, batching, precision/downscale and concurrency alternatives when the owning adapter supports them.
+- `V2L46.5` — resource scheduling throughput/quality benchmark and lot review; maximum concurrency is not assumed to equal maximum throughput.
 
 ### V2L47 — Checkpoint/resume and distributed execution
 
@@ -445,15 +447,15 @@ Purpose: create one common language for gates, escalation and comparison.
 ### V2L49 — Continuous benchmark/default refresh
 
 - `V2L49.1` — benchmark suite manifest and retained result store.
-- `V2L49.2` — candidate-vs-default comparison runner.
-- `V2L49.3` — promotion eligibility policy by profile/quality mode.
+- `V2L49.2` — candidate-vs-default **and execution-profile** comparison runner: model choice and optimization settings are measured separately when both affect cost/quality.
+- `V2L49.3` — promotion eligibility policy by data profile/quality mode/hardware profile; fastest setting is not promoted if required quality regresses.
 - `V2L49.4` — human approval/audit record for default changes.
 - `V2L49.5` — regression guard preventing benchmark score from bypassing license/invariant checks.
 
 ### V2L50 — Packaging and reproducibility
 
 - `V2L50.1` — supported installation/runtime profiles.
-- `V2L50.2` — reproducibility manifest/export for a completed project.
+- `V2L50.2` — reproducibility manifest/export for a completed project, including material execution/hardware identities when required.
 - `V2L50.3` — project reopen/rehydration from retained artifacts months later.
 - `V2L50.4` — upgrade/migration policy for artifact schemas/models.
 - `V2L50.5` — clean-machine installation/reproduction fixture and lot review.
@@ -473,7 +475,9 @@ These are **validation-only** work items. They run, aggregate and review already
 
 The roadmap deliberately leaves exact research winners out of work-item identity. For example, `V2L13.2` means “first approved feed-forward geometry candidate”, not “DA3 forever”. Before each solver/model integration item is activated, the owning PR must refresh the shortlist from `docs/14_TECHNOLOGY_SELECTION.md`, `docs/27_RESEARCH_CANDIDATE_COVERAGE.md`, the adapter/model registry and current evidence, then benchmark the selected candidate under the stable WRE contract.
 
-The goal is to integrate the strongest currently approved specialist for each responsibility without turning the roadmap into a list of papers. New research normally changes the shortlist, benchmark result or default promotion—not the frozen architecture or work-item identity.
+Execution optimization is also deliberately non-frozen. Before performance-sensitive activation, consult `docs/28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md` and evaluate only the strategies relevant to that adapter/runtime target. Prefer artifact reuse, early exit and bounded representations before lower-level kernel acceleration. Precision, compiler mode, batching, decode backend, compression format and LOD budget are explicit measured execution choices rather than hidden global defaults.
+
+The goal is to integrate the strongest currently approved specialist for each responsibility without turning the roadmap into a list of papers or optimization flags. New research normally changes the shortlist, benchmark result, execution profile or default promotion—not the frozen architecture or work-item identity.
 
 ## Why there are many lots
 
