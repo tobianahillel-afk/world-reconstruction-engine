@@ -964,7 +964,7 @@ work_items:
   - id: V2L3.4
     lot: V2L3
     title: Adapter failure metrics resume declarations
-    status: ready
+    status: done
     objective: Extend only the adapter/model registry entry contract with adapter-local raw failure signal names, exposed metric names and a minimal declared resume mode so later orchestration can reason over declared adapter surfaces without prematurely defining stable WRE failure taxonomy, metric semantics or checkpoint execution state.
     allowed_scope:
       - registry/schemas/adapter-model-registry.schema.json
@@ -1012,7 +1012,68 @@ work_items:
       - negative structural regression proving no stable failure taxonomy metric value threshold unit checkpoint path/hash or scheduler resource fields enter the schema
       - regression proving registry/adapter-models.yaml remains empty and existing V2L3.3 schema fields remain unchanged
       - full fast CI
-  - {id: V2L3.5, lot: V2L3, title: Production registry validator, status: planned, depends_on: [V2L3.4]}
+  - id: V2L3.5
+    lot: V2L3
+    title: Production registry validator
+    status: ready
+    objective: Extend the existing fail-closed repository metadata validator so adapter/model registry entries are validated against the exact V2L3.4 structural contract and deterministic production semantics, including canonical ordering, exact identities, dependency-reference existence and minimal shipping/license consistency, without selecting, loading or executing any adapter.
+    allowed_scope:
+      - src/wre/repo_validation.py
+      - focused additions to tests/test_repo_validation.py
+    out_of_scope:
+      - modifying the V2L3.4 adapter-model registry schema or adding fields to it
+      - adding concrete COLMAP FFmpeg ExifRead model checkpoint or other adapter registry entries owned by V2L3.6
+      - modifying registry/dependencies.yaml dependency version license source role integration or review evidence
+      - introducing a generic JSON Schema engine schema-validation dependency pyproject.toml or uv.lock change
+      - default adapter selection ranking route eligibility fallback benchmark promotion or quality policy
+      - stable WRE failure taxonomy or raw-signal mapping owned by V2L4.1
+      - metric values units dimensions directionality thresholds aggregation vectors or quality decisions owned by V2L4.2 through V2L4.5
+      - checkpoint persistence paths hashes payloads resume execution retry or scheduler resource behavior
+      - downloads imports plugin discovery subprocess execution model loading network access or runtime environment probing
+      - starting V2L3.6 baseline registration in this work item
+    depends_on: [V2L3.4]
+    read_before:
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - registry/adapter-models.yaml
+      - registry/schemas/adapter-model-registry.schema.json
+      - registry/dependencies.yaml
+      - src/wre/repo_validation.py
+      - tests/test_repo_validation.py
+      - src/wre/domain/producer_identity.py
+      - src/wre/domain/runs.py
+    reuse:
+      - existing validate_repository error-accumulation and repository-metadata failure boundary rather than adding a parallel validator command
+      - existing temporary copied-repository mutation pattern in tests/test_repo_validation.py
+      - V2L3.4 schema field vocabulary and closed enums as the single registry contract source
+      - registry/dependencies.yaml keys and license_review values as dependency cross-reference evidence
+      - existing exact identity semantics including lowercase SHA-256 and ModelIdentity rejection of floating latest
+    acceptance:
+      - The current empty schema_version 1 adapter-model registry validates successfully through validate_repository with no special-case bypass that would skip validation once entries exist.
+      - Missing unreadable malformed wrong-root-type or unsupported-schema-version adapter-model registry data fails closed with deterministic repository-validation errors rather than being ignored.
+      - Every registry entry must be a mapping with exactly the V2L3.4 required fields; missing or undeclared fields wrong scalar/container types invalid tokens closed-enum values blank required text and malformed checkpoint SHA-256 are rejected.
+      - adapter_id values are unique and the entries array is in canonical lexicographic adapter_id order; the validator never silently sorts or deduplicates input.
+      - capability.input_kinds capability.output_kinds dependency_refs failure_signals and metric_names are canonical lexicographically sorted unique token arrays; output_kinds remains non-empty while the other arrays may be empty as declared by their owning contracts.
+      - Every dependency_refs value must exactly name an existing registry/dependencies.yaml dependency key; unknown references fail closed and dependency metadata is never copied into the adapter registry.
+      - Producer and model version fields reject the case-insensitive floating alias latest; model/checkpoint structures preserve the exact V2L1.3 identity rules, including checkpoint requiring model and checkpoint SHA-256 being exactly 64 lowercase hexadecimal characters.
+      - shipping_status approved requires the entry license.review to be approved and every referenced dependency to have license_review approved; pending license review may remain experimental or benchmark-only but cannot be approved.
+      - An entry whose own license.review is blocked must have shipping_status blocked; validation reports the inconsistency and never promotes or mutates the entry.
+      - Validation is pure repository inspection; it performs no network filesystem discovery outside declared metadata files, model download environment probing adapter import execution routing selection or benchmark lookup.
+      - Existing roadmap component review and pull-request-template validation behavior remains unchanged and existing valid repository metadata still passes.
+      - V2L3.6 is expanded to a full executable contract before becoming the sole next ready item; this work item does not add any concrete registry baseline.
+    tests:
+      - current empty-registry repository validation regression
+      - valid synthetic registry-entry fixture covering native and optional model/checkpoint shapes without committing a real baseline entry
+      - malformed root schema-version missing/extra field wrong-type invalid-token enum blank-text and malformed-SHA negative cases
+      - duplicate and unsorted adapter_id plus duplicate/unsorted set-like collection rejection tests
+      - unknown dependency-reference and dependency evidence separation tests
+      - floating-latest and checkpoint-without-model negative tests
+      - approved shipping with pending or blocked entry/dependency license-review negative tests plus allowed experimental/benchmark-only pending-review cases
+      - regression tests for existing roadmap component review and active-work-item validation
+      - full fast CI
   - {id: V2L3.6, lot: V2L3, title: Register retained production baselines, status: planned, depends_on: [V2L3.5]}
   - {id: V2L4.1, lot: V2L4, title: Stable failure taxonomy, status: planned, depends_on: [V2L3.6]}
   - {id: V2L4.2, lot: V2L4, title: Multidimensional metric vector, status: planned, depends_on: [V2L4.1]}

@@ -106,7 +106,10 @@
         "artifact_key_hardware_policy",
         "license",
         "shipping_status",
-        "reproducibility_notes"
+        "reproducibility_notes",
+        "failure_signals",
+        "metric_names",
+        "resume_mode"
       ],
       "properties": {
         "adapter_id": {"$ref": "#/$defs/token"},
@@ -138,7 +141,21 @@
           "type": "string",
           "enum": ["approved", "experimental", "benchmark-only", "blocked"]
         },
-        "reproducibility_notes": {"$ref": "#/$defs/non_blank_string"}
+        "reproducibility_notes": {"$ref": "#/$defs/non_blank_string"},
+        "failure_signals": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/token"}
+        },
+        "metric_names": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"$ref": "#/$defs/token"}
+        },
+        "resume_mode": {
+          "type": "string",
+          "enum": ["unsupported", "checkpoint"]
+        }
       }
     }
   }

@@ -5,19 +5,19 @@ roadmap_version: '2.0'
 phase: implementation
 milestone: V2M0
 lot: V2L3
-active_work_item: V2L3.4
+active_work_item: V2L3.5
 status: ready
-last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3]
-last_merged_pr: 47
+last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4]
+last_merged_pr: 48
 current_goal: >-
-  Extend only the adapter/model registry declaration contract with adapter-local raw failure signals,
-  exposed metric names and an explicit resume mode, while keeping stable WRE failure taxonomy,
-  metric values/policies, checkpoint state and execution behavior in their later owning capabilities.
+  Add fail-closed production repository validation for the adapter/model registry: enforce the exact
+  V2L3.4 entry contract, canonical ordering and uniqueness, cross-check dependency references and
+  exact identities, and enforce minimal shipping/license consistency without selecting or executing adapters.
 next_action: >-
-  Complete only V2L3.4 from its executable contract in registry/work-items/v2m0.yaml: extend the closed
-  adapter-model entry schema and focused tests with failure_signals, metric_names and resume_mode,
-  preserve the empty registry, and do not implement V2L3.5 semantic validation, V2L3.6 baselines,
-  V2L4 failure/metric semantics, scheduler resources, checkpoint storage or execution.
+  Complete only V2L3.5 from its executable contract in registry/work-items/v2m0.yaml: extend the
+  existing repository validator and focused tests for adapter-model registry structural and semantic
+  checks, keep registry/adapter-models.yaml empty, and do not register V2L3.6 baselines or add routing,
+  benchmark, scheduling, model loading, checkpoint execution or V2L4 failure/metric policy behavior.
 blockers: []
 architecture:
   product_blueprint: docs/01_PRODUCT.md
