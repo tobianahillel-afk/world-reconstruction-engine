@@ -8,18 +8,26 @@ WRE is not defined by one algorithm or representation. It combines interchangeab
 
 The engine is independent of MONDE. Future external integration is optional and does not define the product or its roadmap.
 
-## Canonical blueprint
+## Canonical blueprint and execution context
 
-Start with:
+Start with [`docs/00_START_HERE.md`](docs/00_START_HERE.md), then follow its canonical reading order. The core documents include:
 
-1. [`docs/00_START_HERE.md`](docs/00_START_HERE.md)
-2. [`docs/01_PRODUCT.md`](docs/01_PRODUCT.md) — canonical product definition
-3. [`docs/02_ARCHITECTURE.md`](docs/02_ARCHITECTURE.md) — system layers, domain contracts and router architecture
-4. [`docs/03_PIPELINE.md`](docs/03_PIPELINE.md) — adaptive route graph for different data profiles
-5. [`docs/14_TECHNOLOGY_SELECTION.md`](docs/14_TECHNOLOGY_SELECTION.md) — current candidate technology/benchmark landscape
-6. [`docs/15_PRODUCTION_RUNTIME.md`](docs/15_PRODUCTION_RUNTIME.md) — artifact DAG, scheduling, runtime compilation, LOD and professional production behavior
+1. [`docs/01_PRODUCT.md`](docs/01_PRODUCT.md) — canonical product definition;
+2. [`docs/02_ARCHITECTURE.md`](docs/02_ARCHITECTURE.md) — system layers, domain contracts and router architecture;
+3. [`docs/03_PIPELINE.md`](docs/03_PIPELINE.md) — adaptive route graph for different data profiles;
+4. [`docs/14_TECHNOLOGY_SELECTION.md`](docs/14_TECHNOLOGY_SELECTION.md) — technology and benchmark landscape;
+5. [`docs/15_PRODUCTION_RUNTIME.md`](docs/15_PRODUCTION_RUNTIME.md) — artifact DAG, scheduling, runtime compilation, LOD and professional production behavior;
+6. [`docs/23_ENGINEERING_EXECUTION.md`](docs/23_ENGINEERING_EXECUTION.md) — deny-by-default, one-run work-item and integration protocol;
+7. [`docs/24_SYSTEM_INVARIANTS.md`](docs/24_SYSTEM_INVARIANTS.md) — cross-cutting product invariants;
+8. [`docs/25_V2_ROADMAP.md`](docs/25_V2_ROADMAP.md) — executable V2 capability sequence;
+9. [`docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md`](docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md) — frozen V2 product/architecture authority and V1 donor-only policy;
+10. [`docs/27_RESEARCH_CANDIDATE_COVERAGE.md`](docs/27_RESEARCH_CANDIDATE_COVERAGE.md) — living, non-frozen research-candidate coverage map.
 
-Canonical implementation state currently remains in [`PROJECT_STATE.yaml`](PROJECT_STATE.yaml) and [`registry/work-items.yaml`](registry/work-items.yaml). The product/architecture blueprint above is the target definition; a dedicated roadmap migration must reconcile the existing implementation sequence with it before old roadmap assumptions are treated as final product scope.
+The **V2 product/architecture is authoritative and frozen unless an explicit blueprint-change migration is approved**. Scientific solvers/models are intentionally not frozen: before an integration or promotion work item activates, the candidate/dependency landscape is refreshed and candidates are compared under stable WRE contracts.
+
+V1 is not a compatibility target and does not need to be finished. Legacy code is only an implementation donor and regression/reference source when it cleanly satisfies a V2 contract.
+
+Canonical implementation state is in [`PROJECT_STATE.yaml`](PROJECT_STATE.yaml) and the split machine roadmap rooted at [`registry/work-items.yaml`](registry/work-items.yaml). Planned future items may remain concise, but an item cannot become active until its complete deny-by-default contract is written and its scope passes the one-run complexity gate.
 
 ## Core principles
 
@@ -29,7 +37,9 @@ Canonical implementation state currently remains in [`PROJECT_STATE.yaml`](PROJE
 - **Measure quality per dimension.** Rendering quality does not substitute for geometry quality; temporal consistency is evaluated separately again.
 - **Preserve provenance classes.** Reconstructed, inferred and generated content remain distinguishable.
 - **Build production infrastructure as part of the product.** Artifact caching, resumability, model/benchmark registries, quality gates, human review, compression and runtime compilation are first-class concerns.
-- **Make algorithms replaceable.** New research enters the benchmark registry and can replace a default without redesigning the core.
+- **Make algorithms replaceable.** New research normally changes the candidate shortlist, benchmark evidence or default adapter rather than the frozen product architecture.
+- **Refresh before integration.** The method named in an old roadmap/conversation is never assumed to remain the best; exact code/checkpoint/license/hardware and current alternatives are rechecked immediately before integration.
+- **Keep work run-sized.** One work item should normally be one coherent PR a coding agent can implement, test and review in one development run; split independent integrations or failure domains before activation.
 
 ## Current development bootstrap
 
@@ -43,4 +53,4 @@ uv run pyright
 uv run pytest
 ```
 
-Fast pull-request checks intentionally exclude heavyweight GPU/reconstruction benchmarks.
+Fast pull-request checks intentionally exclude heavyweight GPU/reconstruction benchmarks. Native/external integrations and heavy quality benchmarks use dedicated lanes when the owning work item requires them.
