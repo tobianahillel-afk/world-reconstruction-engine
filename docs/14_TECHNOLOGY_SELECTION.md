@@ -69,6 +69,16 @@ Holdout views and independent geometry references should be used where available
 
 Do not build custom codecs.
 
+### Accelerated still-image candidates
+
+For large photo collections where representative profiling shows CPU decode/resize or host transfer is material, evaluate accelerated backends behind the same canonical decoded-image contract:
+
+- NVIDIA nvImageCodec / nvJPEG-class batch or device-resident decode on compatible NVIDIA systems;
+- CPU/reference decode remains the portability and semantic comparison path;
+- future accelerated backends from other vendors may enter through the same execution-profile boundary.
+
+Do not couple `FrameObservation` or canonical decoded-image identity to one vendor. Benchmark orientation/color behavior, pixel equivalence, CPU/GPU utilization, transfer overhead and end-to-end downstream reuse rather than decode throughput alone.
+
 ## Frame quality and keyframing
 
 Capabilities required:
@@ -179,6 +189,8 @@ The precision layer owns global consistency, not the appearance renderer.
 - GLUEMAP with scalable retrieval/submaps;
 - hierarchical/submap approaches built on mature SfM.
 
+For retrieval/index execution at very large scale, compare exact CPU, CPU ANN, quantized ANN, GPU ANN and hybrid routes where relevant. The product contract is retrieval/index semantics and recall; no one CPU/GPU library is frozen.
+
 License constraints may keep some methods benchmark-only until a compatible alternative is available.
 
 ## Sparse-view reconstruction
@@ -235,7 +247,13 @@ The shipping surface should be chosen by geometry/runtime benchmark, not by rend
 
 - higher-dimensional/view-dependent Gaussian/radiance methods such as 7DGS-class approaches where the use case justifies complexity.
 
-Appearance output is evaluated on held-out views and against geometry artifacts.
+### Motion/scale consistency references
+
+- Mip-Splatting-class antialiasing and multi-scale consistency;
+- StopThePop-class view-consistent sorting/rasterization;
+- later motion-stable or XR-specific splat renderers that beat them under the same camera-path quality/runtime contract.
+
+Appearance output is evaluated on held-out views, camera paths/scale changes where relevant, and against geometry artifacts.
 
 ## Dynamic/static decomposition
 
@@ -353,13 +371,16 @@ WRE should combine explicit `TemporalState`/`ChangeEvent` semantics with the bes
 
 ### Candidates / references
 
-- LoD-of-Gaussians and modern hierarchical Gaussian streaming;
+- LoD-of-Gaussians and modern hierarchical/multiscale Gaussian streaming;
 - SuperSplat streaming/LOD concepts;
 - SPZ/SOG-class compact splat formats;
+- PCGS-class progressive splat compression;
+- HAC++-class contextual entropy coding/adaptive quantization;
+- vector-quantized Gaussian compression families;
 - 4DGS-1K/ReCon-GS/HPC-class dynamic compression research;
 - mesh simplification, texture atlases and glTF/GLB for explicit geometry pipelines.
 
-Master formats and runtime formats remain separate.
+Benchmark rate-distortion, decode/init cost, time-to-first-useful-view, random/spatial access and renderer compatibility rather than compression ratio alone. Master formats and runtime formats remain separate.
 
 ## Viewer / runtime
 
@@ -373,6 +394,42 @@ Master formats and runtime formats remain separate.
 - evaluate mature Gaussian plugins such as YaGS-class integrations rather than writing a renderer first.
 
 The runtime must support separate collision/physics geometry even when splats drive visual appearance.
+
+## Execution profiles and profiling tooling
+
+These are runtime/tooling candidates, not new reconstruction contracts.
+
+### Learned inference/training execution
+
+- PyTorch eager/reference execution;
+- `torch.compile`, CUDA Graphs and current compiler/runtime acceleration where applicable;
+- TensorRT/Torch-TensorRT-class optimized execution for stable supported models/shapes;
+- mixed precision or stronger quantization only with explicit quality evidence.
+
+Execution profiles are compared under the same WRE input/output contract. Engine build/cold-start cost, fallback/unsupported operators, hardware/runtime compatibility and numerical/quality behavior are part of the benchmark.
+
+### Profiling evidence
+
+- solver-independent stage timers and CUDA events;
+- NVTX-class ranges and Nsight-class tracing on compatible NVIDIA systems;
+- equivalent vendor/platform profiling tools elsewhere.
+
+The benchmark record should retain or reference evidence; WRE does not make one profiler a core dependency.
+
+### Storage and locality acceleration
+
+- conventional buffered/direct I/O as portable references;
+- memory mapping/zero-copy where safe;
+- topology-aware device/storage placement on heterogeneous systems;
+- GPUDirect Storage/cuFile-class paths only on compatible systems where profiling shows I/O is material.
+
+Direct-storage acceleration is not a default merely because the hardware supports it.
+
+### Custom kernels
+
+Triton/custom CUDA fused kernels are last-mile candidates only after profiling demonstrates a durable hotspot and maintained framework/library implementations are inadequate. Require a reference path and end-to-end benefit.
+
+The development ownership/timing for these families is in `29_PERFORMANCE_INTEGRATION_MAP.md`.
 
 ## Professional external tool interoperability
 
@@ -401,6 +458,8 @@ For each capability:
 7. choose a default per data profile;
 8. retain meaningful fallback(s);
 9. periodically rerun the benchmark when new methods appear.
+
+For performance-sensitive candidates, first identify the actual end-to-end bottleneck and compare cold-start/steady-state, resource and quality effects. Do not promote a backend from an isolated microbenchmark.
 
 ## Replacement rule
 
