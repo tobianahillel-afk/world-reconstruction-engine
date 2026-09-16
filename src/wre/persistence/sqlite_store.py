@@ -5,8 +5,9 @@ from collections.abc import Callable, Mapping
 from pathlib import Path
 from typing import TypeVar
 
+from wre.domain.artifact_graph import ArtifactDependencyGraph
 from wre.domain.artifact_metadata import ArtifactMetadata
-from wre.domain.artifacts import ArtifactId
+from wre.domain.artifacts import ArtifactId, ArtifactRef
 from wre.domain.cameras import Camera, CameraId, ObservationMetadata
 from wre.domain.fragments import SpatialFragment, SpatialFragmentId
 from wre.domain.metadata import ObservationMetadataInterpretation
@@ -16,6 +17,7 @@ from wre.domain.runs import ReconstructionRun, ReconstructionRunId
 from wre.persistence.codec import (
     JsonObject,
     canonical_json,
+    decode_artifact_dependencies,
     decode_artifact_metadata,
     decode_camera,
     decode_metadata_interpretation,
@@ -24,6 +26,7 @@ from wre.persistence.codec import (
     decode_reconstruction_run,
     decode_scene_project,
     decode_spatial_fragment,
+    encode_artifact_dependencies,
     encode_artifact_metadata,
     encode_camera,
     encode_metadata_interpretation,
@@ -111,37 +114,55 @@ class SQLiteLocalStore:
             )
 
     def _put(self, record_type: str, record_id: str, payload: Mapping[str, object]) -> None:
-        payload_json = canonical_json(payload)
+        self._put_many(((record_type, record_id, payload),))
+
+    def _put_many(
+        self,
+        records: tuple[tuple[str, str, Mapping[str, object]], ...],
+    ) -> None:
+        canonical_records = tuple(
+            (record_type, record_id, canonical_json(payload))
+            for record_type, record_id, payload in records
+        )
+        if not canonical_records:
+            return
+
         with self._connect() as connection:
             connection.execute("BEGIN IMMEDIATE")
-            row = connection.execute(
-                """
-                SELECT schema_version, payload_json
-                FROM wre_records
-                WHERE record_type = ? AND record_id = ?
-                """,
-                (record_type, record_id),
-            ).fetchone()
-            if row is None:
-                connection.execute(
+            for record_type, record_id, payload_json in canonical_records:
+                row = connection.execute(
                     """
-                    INSERT INTO wre_records(record_type, record_id, schema_version, payload_json)
-                    VALUES(?, ?, ?, ?)
+                    SELECT schema_version, payload_json
+                    FROM wre_records
+                    WHERE record_type = ? AND record_id = ?
                     """,
-                    (record_type, record_id, RECORD_SCHEMA_VERSION, payload_json),
-                )
-                return
+                    (record_type, record_id),
+                ).fetchone()
+                if row is None:
+                    connection.execute(
+                        """
+                        INSERT INTO wre_records(
+                            record_type,
+                            record_id,
+                            schema_version,
+                            payload_json
+                        )
+                        VALUES(?, ?, ?, ?)
+                        """,
+                        (record_type, record_id, RECORD_SCHEMA_VERSION, payload_json),
+                    )
+                    continue
 
-            existing_version, existing_payload = row
-            if existing_version != RECORD_SCHEMA_VERSION:
-                raise UnsupportedSchemaVersionError(
-                    f"record schema version {existing_version} is unsupported for "
-                    f"{record_type}:{record_id}"
-                )
-            if existing_payload != payload_json:
-                raise PersistenceConflictError(
-                    f"record identity {record_type}:{record_id} already has different content"
-                )
+                existing_version, existing_payload = row
+                if existing_version != RECORD_SCHEMA_VERSION:
+                    raise UnsupportedSchemaVersionError(
+                        f"record schema version {existing_version} is unsupported for "
+                        f"{record_type}:{record_id}"
+                    )
+                if existing_payload != payload_json:
+                    raise PersistenceConflictError(
+                        f"record identity {record_type}:{record_id} already has different content"
+                    )
 
     def _get_payload(self, record_type: str, record_id: str) -> JsonObject | None:
         with self._connect() as connection:
@@ -309,3 +330,92 @@ class SQLiteLocalStore:
 
     def get_artifact_metadata(self, artifact_id: ArtifactId) -> ArtifactMetadata | None:
         return self._get("artifact_metadata", artifact_id.value, decode_artifact_metadata)
+
+    def put_artifact_dependency_graph(self, graph: ArtifactDependencyGraph) -> None:
+        if not isinstance(graph, ArtifactDependencyGraph):
+            raise TypeError("graph must be ArtifactDependencyGraph")
+
+        dependencies_by_node: dict[ArtifactRef, set[ArtifactRef]] = {
+            node: set() for node in graph.nodes
+        }
+        for edge in graph.edges:
+            dependencies_by_node[edge.artifact].add(edge.dependency)
+
+        records = tuple(
+            (
+                "artifact_dependencies",
+                node.artifact_id.value,
+                encode_artifact_dependencies(node, frozenset(dependencies_by_node[node])),
+            )
+            for node in sorted(
+                graph.nodes,
+                key=lambda item: (item.artifact_id.value, item.artifact_kind.value),
+            )
+        )
+        self._put_many(records)
+
+    def get_artifact_dependencies(
+        self,
+        artifact_ref: ArtifactRef,
+    ) -> frozenset[ArtifactRef] | None:
+        if not isinstance(artifact_ref, ArtifactRef):
+            raise TypeError("artifact_ref must be ArtifactRef")
+
+        stored = self._get(
+            "artifact_dependencies",
+            artifact_ref.artifact_id.value,
+            decode_artifact_dependencies,
+        )
+        if stored is None:
+            return None
+        stored_artifact_ref, dependencies = stored
+        if stored_artifact_ref != artifact_ref:
+            raise PersistenceError(
+                "artifact dependency record identity does not match the requested ArtifactRef"
+            )
+        return dependencies
+
+    def find_direct_artifact_dependents(
+        self,
+        dependency_ref: ArtifactRef,
+    ) -> frozenset[ArtifactRef]:
+        if not isinstance(dependency_ref, ArtifactRef):
+            raise TypeError("dependency_ref must be ArtifactRef")
+
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT record_id, schema_version, payload_json
+                FROM wre_records
+                WHERE record_type = 'artifact_dependencies'
+                ORDER BY record_id
+                """
+            ).fetchall()
+
+        dependents: set[ArtifactRef] = set()
+        for record_id, schema_version, payload_json in rows:
+            if schema_version != RECORD_SCHEMA_VERSION:
+                raise UnsupportedSchemaVersionError(
+                    f"record schema version {schema_version} is unsupported for "
+                    f"artifact_dependencies:{record_id}"
+                )
+            if not isinstance(record_id, str) or not isinstance(payload_json, str):
+                raise PersistenceError(
+                    "artifact dependency lookup encountered invalid storage data"
+                )
+            try:
+                artifact_ref, dependencies = decode_artifact_dependencies(
+                    parse_json_object(payload_json)
+                )
+            except (TypeError, ValueError) as exc:
+                raise PersistenceError(
+                    f"record payload cannot be decoded for artifact_dependencies:{record_id}"
+                ) from exc
+            if artifact_ref.artifact_id.value != record_id:
+                raise PersistenceError(
+                    f"record identity artifact_dependencies:{record_id} does not match its payload"
+                )
+            if dependency_ref in dependencies:
+                dependents.add(artifact_ref)
+
+        return frozenset(dependents)

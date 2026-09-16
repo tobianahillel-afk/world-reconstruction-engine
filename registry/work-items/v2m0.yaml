@@ -470,7 +470,7 @@ work_items:
   - id: V2L2.2
     lot: V2L2
     title: Artifact metadata store and dependency lookup
-    status: ready
+    status: done
     objective: Extend the retained local SQLite persistence boundary with deterministic immutable storage and exact lookup of validated direct artifact-dependency claims, while preserving V2L1 artifact metadata behavior and stopping before any cache lookup or invalidation policy.
     allowed_scope:
       - src/wre/persistence/codec.py
@@ -532,7 +532,67 @@ work_items:
       - malformed-record identity-kind and unsupported-version fail-closed tests
       - regression tests for V2L1 metadata persistence V2L2.1 graph behavior and retained V1 persistence
       - full fast CI
-  - {id: V2L2.3, lot: V2L2, title: Canonical cache lookup, status: planned, depends_on: [V2L2.2]}
+  - id: V2L2.3
+    lot: V2L2
+    title: Canonical cache lookup
+    status: ready
+    objective: Add deterministic exact candidate lookup for persisted ArtifactMetadata by canonical ArtifactKey so prior identical computations can be discovered without filename timestamp or fuzzy heuristics, while explicitly stopping before materialization verification reuse selection or invalidation.
+    allowed_scope:
+      - src/wre/persistence/sqlite_store.py
+      - src/wre/persistence/__init__.py only if focused public persistence exports require it
+      - tests/test_artifact_cache_lookup.py
+      - focused additions to tests/test_persistence.py if required for retained-regression coverage
+    out_of_scope:
+      - changing ArtifactKey ArtifactMetadata ArtifactRef producer identity provenance or dependency-DAG semantics
+      - recomputing deriving normalizing or partially matching ArtifactKey values inside the store
+      - selecting one candidate as the winner or declaring any candidate reusable merely because its key matches
+      - materialization path URI byte length output-content digest existence integrity or corruption verification owned by V2L2.5
+      - dependency-scoped invalidation traversal planning deletion garbage collection or destructive mutation owned by V2L2.4
+      - cache population side effects eviction ranking recency preference project preference or hidden mutable cache state
+      - filename path timestamp mtime producer-only model-only configuration-only or other fuzzy fallback lookup
+      - schema migration new table external database backend ORM or new dependency
+      - scheduler routing solver adapter-registry quality runtime or V2L2.4+ behavior
+    depends_on: [V2L2.2]
+    read_before:
+      - docs/02_ARCHITECTURE.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - src/wre/domain/artifact_keys.py
+      - src/wre/domain/artifact_metadata.py
+      - src/wre/domain/artifacts.py
+      - src/wre/persistence/sqlite_store.py
+      - tests/test_artifact_keys.py
+      - tests/test_artifact_metadata.py
+      - tests/test_artifact_dependencies.py
+      - tests/test_persistence.py
+    reuse:
+      - ArtifactKey as the only canonical computation-identity lookup input
+      - persisted ArtifactMetadata as the candidate record returned to callers without inventing a second cache-entry identity type
+      - retained SQLiteLocalStore generic wre_records table and strict ArtifactMetadata decoder
+      - deterministic ordering and fail-closed corrupted-record handling conventions from V2L1.6 and V2L2.2
+    acceptance:
+      - SQLiteLocalStore exposes one typed lookup accepting exactly ArtifactKey and returning all persisted ArtifactMetadata records whose stored ArtifactKey equals it exactly.
+      - No partial digest prefix filename timestamp project producer model checkpoint configuration provenance or ArtifactKind fallback matching is performed.
+      - Zero exact matches returns an empty immutable tuple rather than None or a synthesized miss record.
+      - Multiple exact matches are preserved rather than arbitrarily collapsed; candidates from different SceneProject values remain discoverable because ArtifactKey identity is computation-oriented rather than project-oriented.
+      - Returned candidates use a documented deterministic order by project identity then ArtifactId then ArtifactKind so result order does not depend on SQLite row order or insertion history.
+      - Lookup is read-only and does not create mutate repair rank evict or otherwise alter ArtifactMetadata dependency records projects or any other persisted state.
+      - A matching ArtifactKey is only a cache candidate discovery signal; this item does not claim that bytes exist are healthy are compatible for resume or are safe to reuse before later materialization and policy checks.
+      - Every artifact_metadata row inspected by the lookup is schema-version checked and decoded through the retained strict decoder; malformed payloads unsupported versions or record-id versus payload ArtifactId mismatches fail closed rather than being silently skipped.
+      - Raw strings Sha256Digest values or other untyped substitutes are rejected at the public lookup boundary instead of being coerced into ArtifactKey.
+      - Reopening SQLiteLocalStore preserves exact candidate lookup results and deterministic ordering.
+      - Existing ArtifactMetadata put/get direct dependency lookups V2L2.1 graph behavior and retained V1 persistence remain unchanged.
+      - No invalidation materialization scheduling routing solver adapter-registry quality or runtime behavior is introduced.
+    tests:
+      - exact-key no-match single-match and near-key non-match lookup tests
+      - multiple exact-match tests including cross-project candidates and deterministic ordering independent of insertion order
+      - reopen regression preserving lookup results
+      - negative untyped lookup-input tests
+      - malformed artifact_metadata unsupported-version and record-id/payload-identity mismatch fail-closed tests
+      - regression tests for existing ArtifactMetadata and dependency persistence APIs
+      - full fast CI
   - {id: V2L2.4, lot: V2L2, title: Dependency scoped invalidation planning, status: planned, depends_on: [V2L2.3]}
   - {id: V2L2.5, lot: V2L2, title: Artifact materialization verification metadata, status: planned, depends_on: [V2L2.4]}
   - {id: V2L2.6, lot: V2L2, title: Cache reuse and invalidation regression, status: planned, depends_on: [V2L2.5]}

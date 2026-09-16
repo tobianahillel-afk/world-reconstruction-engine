@@ -5,19 +5,19 @@ roadmap_version: '2.0'
 phase: implementation
 milestone: V2M0
 lot: V2L2
-active_work_item: V2L2.2
+active_work_item: V2L2.3
 status: ready
-last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1]
-last_merged_pr: 38
+last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2]
+last_merged_pr: 39
 current_goal: >-
-  Implement only the local persistence and exact direct-dependency lookup contract defined by
-  V2L2.2: persist validated ArtifactDependencyGraph claims through the retained SQLiteLocalStore
-  and expose immutable direct dependency/dependent lookup without cache semantics.
+  Implement only canonical cache-candidate lookup defined by V2L2.3: find persisted
+  ArtifactMetadata whose exact typed ArtifactKey matches the caller-supplied key, deterministically
+  and fail closed, without materialization verification or reuse-selection policy.
 next_action: >-
-  Complete only V2L2.2 from its executable contract in registry/work-items/v2m0.yaml: add
-  deterministic dependency-record codec/persistence, transactional graph writes, exact direct
-  dependency and direct-dependent lookup with fail-closed corruption/conflict handling, preserve
-  V2L1 metadata behavior, and stop before canonical ArtifactKey cache lookup in V2L2.3.
+  Complete only V2L2.3 from its executable contract in registry/work-items/v2m0.yaml: add exact
+  ArtifactKey metadata lookup with deterministic multi-match ordering and corruption handling,
+  preserve dependency and metadata persistence behavior, and stop before dependency-scoped
+  invalidation planning in V2L2.4 or materialization verification in V2L2.5.
 blockers: []
 architecture:
   product_blueprint: docs/01_PRODUCT.md
