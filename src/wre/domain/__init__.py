@@ -1,5 +1,6 @@
 """Core solver-independent domain models."""
 
+from wre.domain.artifact_graph import ArtifactDependencyEdge, ArtifactDependencyGraph
 from wre.domain.artifact_keys import (
     ARTIFACT_KEY_SCHEMA_VERSION,
     ArtifactInputFingerprint,
@@ -65,6 +66,8 @@ from wre.domain.runs import (
 
 __all__ = [
     "ARTIFACT_KEY_SCHEMA_VERSION",
+    "ArtifactDependencyEdge",
+    "ArtifactDependencyGraph",
     "ArtifactId",
     "ArtifactInputFingerprint",
     "ArtifactKey",

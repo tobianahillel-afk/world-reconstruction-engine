@@ -5,19 +5,19 @@ roadmap_version: '2.0'
 phase: implementation
 milestone: V2M0
 lot: V2L2
-active_work_item: V2L2.1
+active_work_item: V2L2.2
 status: ready
-last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6]
-last_merged_pr: 37
+last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1]
+last_merged_pr: 38
 current_goal: >-
-  Implement only the immutable in-memory artifact dependency DAG contract defined by V2L2.1:
-  exact ArtifactRef nodes and direct dependency edges with fail-closed structural validation and
-  cycle rejection, without persistence, cache lookup, invalidation or materialization behavior.
+  Implement only the local persistence and exact direct-dependency lookup contract defined by
+  V2L2.2: persist validated ArtifactDependencyGraph claims through the retained SQLiteLocalStore
+  and expose immutable direct dependency/dependent lookup without cache semantics.
 next_action: >-
-  Complete only V2L2.1 from its executable contract in registry/work-items/v2m0.yaml: define the
-  typed direct dependency edge and immutable DAG, reject undeclared endpoints self-dependencies
-  conflicting ArtifactKind declarations and directed cycles, add focused tests, and stop before
-  persisted dependency lookup in V2L2.2.
+  Complete only V2L2.2 from its executable contract in registry/work-items/v2m0.yaml: add
+  deterministic dependency-record codec/persistence, transactional graph writes, exact direct
+  dependency and direct-dependent lookup with fail-closed corruption/conflict handling, preserve
+  V2L1 metadata behavior, and stop before canonical ArtifactKey cache lookup in V2L2.3.
 blockers: []
 architecture:
   product_blueprint: docs/01_PRODUCT.md
