@@ -792,7 +792,7 @@ work_items:
   - id: V2L3.1
     lot: V2L3
     title: Adapter capability descriptor
-    status: ready
+    status: done
     objective: Define the minimal immutable solver-independent adapter capability descriptor with one open semantic capability identity plus explicit supported input and produced output ArtifactKind sets, without registry execution hardware model shipping failure metrics resume routing or quality behavior.
     allowed_scope:
       - src/wre/domain/adapter_capabilities.py
@@ -843,7 +843,65 @@ work_items:
       - negative invalid capability-token empty-output mutable-collection raw-string and wrong-member tests
       - regression proving ArtifactKind and ArtifactProducerIdentity semantics remain unchanged
       - full fast CI
-  - {id: V2L3.2, lot: V2L3, title: Model checkpoint hardware identity, status: planned, depends_on: [V2L3.1]}
+  - id: V2L3.2
+    lot: V2L3
+    title: Model checkpoint hardware identity
+    status: ready
+    objective: Reuse the exact ModelIdentity and CheckpointIdentity already owned by V2L1.3 and add only one immutable caller-supplied normalized HardwareRuntimeIdentity that can optionally participate in canonical ArtifactKeyMaterial when hardware/runtime can materially affect output bytes, while preserving existing key bytes when that identity is absent.
+    allowed_scope:
+      - src/wre/domain/hardware_identity.py
+      - src/wre/domain/artifact_keys.py
+      - focused public-domain exports only if required for the new contract
+      - tests/test_hardware_identity.py
+      - focused additions to tests/test_artifact_keys.py
+    out_of_scope:
+      - modifying or duplicating ModelIdentity CheckpointIdentity ConfigurationIdentity ProducerRef or ArtifactProducerIdentity semantics
+      - automatically detecting probing normalizing or hashing the current machine GPU driver CUDA runtime operating system Python environment or dependency set
+      - CPU core GPU count VRAM RAM scratch storage output storage network duration or scheduling resource declarations owned by later resource-scheduling capabilities
+      - supported-hardware compatibility matrices adapter registry membership defaults or route eligibility
+      - shipping license redistribution source-repository reproducibility-note or approval schema owned by V2L3.3
+      - adapter failure metric or resume declarations owned by V2L3.4
+      - registry validation default approval or candidate selection owned by V2L3.5
+      - registering retained COLMAP FFmpeg ExifRead or any concrete solver/tool baseline owned by V2L3.6
+      - changing ArtifactMetadata persistence codec SQLite cache lookup invalidation materialization routing quality benchmark or execution behavior
+      - filesystem process environment network model loading checkpoint download or solver invocation
+      - starting V2L3.3 implementation in this work item
+    depends_on: [V2L3.1]
+    read_before:
+      - docs/02_ARCHITECTURE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - src/wre/domain/producer_identity.py
+      - src/wre/domain/artifact_keys.py
+      - tests/test_producer_identity.py
+      - tests/test_artifact_keys.py
+    reuse:
+      - existing ModelIdentity and CheckpointIdentity as the only model/checkpoint identity primitives rather than creating V2L3 duplicates
+      - Sha256Digest as the exact digest vocabulary for an already-normalized hardware/runtime identity
+      - ArtifactKeyMaterial and canonical version-1 key serialization from V2L1.5
+      - frozen dataclass and fail-closed typed-value conventions
+    acceptance:
+      - HardwareRuntimeIdentity is a distinct immutable typed identity containing exactly one caller-supplied Sha256Digest of already-normalized hardware/runtime identity material; raw strings and wrong digest types are rejected.
+      - This work item defines no hardware/runtime normalization algorithm and performs no machine environment or registry lookup; callers supply the exact identity only when their adapter policy declares output hardware-sensitive.
+      - Existing ModelIdentity and CheckpointIdentity remain unchanged and are reused directly; no competing model or checkpoint type is added.
+      - ArtifactKeyMaterial gains one optional HardwareRuntimeIdentity field defaulting to None and rejects untyped non-None substitutes.
+      - When hardware-runtime identity is None, canonical artifact-key bytes and the existing V2L1.5 golden ArtifactKey remain byte-for-byte unchanged so previously derived hardware-insensitive keys are stable.
+      - When hardware-runtime identity is present, canonical serialization adds exactly one deterministic hardware-runtime digest field and otherwise preserves the version-1 preimage structure.
+      - Identical computation material plus identical HardwareRuntimeIdentity yields the same ArtifactKey; changing only the hardware-runtime digest changes the ArtifactKey.
+      - The core does not infer that an adapter is hardware-sensitive or hardware-insensitive, does not auto-populate the identity, and does not claim arbitrary cross-hardware equivalence.
+      - No scheduler resource requirement compatibility matrix registry shipping license failure metric resume routing quality benchmark persistence cache policy or execution behavior is introduced.
+      - Existing ArtifactKey candidate lookup V2L2 DAG/cache behavior ArtifactProducerIdentity and retained V1 behavior remain unchanged.
+    tests:
+      - focused HardwareRuntimeIdentity construction equality hashing immutability and wrong-type tests
+      - ArtifactKeyMaterial optional hardware-runtime typed-boundary tests
+      - regression proving None preserves the exact existing canonical golden bytes and ArtifactKey digest
+      - deterministic present-hardware canonical serialization test
+      - tests proving only hardware-runtime digest changes alter the key while identical identity remains stable
+      - regression proving ModelIdentity CheckpointIdentity and ArtifactProducerIdentity behavior remains unchanged
+      - full fast CI
   - {id: V2L3.3, lot: V2L3, title: Shipping license reproducibility registry schema, status: planned, depends_on: [V2L3.2]}
   - {id: V2L3.4, lot: V2L3, title: Adapter failure metrics resume declarations, status: planned, depends_on: [V2L3.3]}
   - {id: V2L3.5, lot: V2L3, title: Production registry validator, status: planned, depends_on: [V2L3.4]}
