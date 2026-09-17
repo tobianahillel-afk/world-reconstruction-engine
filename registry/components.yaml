@@ -84,12 +84,14 @@ components:
       - src/wre/domain/metrics.py
       - src/wre/domain/quality.py
       - src/wre/domain/benchmarks.py
+      - src/wre/domain/quality_policy.py
       - src/wre/domain/__init__.py
     tests:
       - tests/test_failure_taxonomy.py
       - tests/test_metrics.py
       - tests/test_quality_decisions.py
       - tests/test_benchmarks.py
+      - tests/test_quality_policy.py
     status: implementing
   media_profiling: {owner_lot: V2L5, implementation: [], tests: [], status: planned}
   adaptive_frame_selection: {owner_lot: V2L6, implementation: [], tests: [], status: planned}
