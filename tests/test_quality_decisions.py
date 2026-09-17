@@ -1,4 +1,4 @@
-from typing import Any, cast
+from typing import cast
 
 from wre.domain import (
     AdapterCapabilityName,
@@ -109,4 +109,4 @@ def test_metric_vector_and_adapter_capability_vocabulary_remain_independent() ->
     assert str(capability) == "quality.pass"
     assert not hasattr(vector, "decision")
     assert not hasattr(capability, "decision")
-    assert QualityDecision.PASS != cast(Any, capability)
+    assert QualityDecision.PASS != cast(object, capability)
