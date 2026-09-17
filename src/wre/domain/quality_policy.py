@@ -76,9 +76,7 @@ class QualityPolicyMetricRule:
         if type(self.required) is not bool:
             raise TypeError("quality_policy_metric_rule.required must be bool")
         if not isinstance(self.expected_direction, MetricDirection):
-            raise TypeError(
-                "quality_policy_metric_rule.expected_direction must be MetricDirection"
-            )
+            raise TypeError("quality_policy_metric_rule.expected_direction must be MetricDirection")
 
         if self.threshold is None:
             if self.violation_decision is not None:
@@ -96,9 +94,7 @@ class QualityPolicyMetricRule:
                 "quality_policy_metric_rule informational metrics cannot define a threshold"
             )
         if self.violation_decision is None:
-            raise ValueError(
-                "quality_policy_metric_rule.threshold requires violation_decision"
-            )
+            raise ValueError("quality_policy_metric_rule.threshold requires violation_decision")
         _require_non_pass_decision(
             self.violation_decision,
             "quality_policy_metric_rule.violation_decision",
@@ -114,9 +110,7 @@ class QualityPolicyFailureRule:
 
     def __post_init__(self) -> None:
         if not isinstance(self.failure_category, FailureCategory):
-            raise TypeError(
-                "quality_policy_failure_rule.failure_category must be FailureCategory"
-            )
+            raise TypeError("quality_policy_failure_rule.failure_category must be FailureCategory")
         _require_non_pass_decision(self.decision, "quality_policy_failure_rule.decision")
 
 
@@ -137,29 +131,21 @@ class QualityPolicy:
         if not isinstance(self.metric_rules, tuple):
             raise TypeError("quality_policy.metric_rules must be an immutable tuple")
         if any(not isinstance(rule, QualityPolicyMetricRule) for rule in self.metric_rules):
-            raise TypeError(
-                "quality_policy.metric_rules members must be QualityPolicyMetricRule"
-            )
+            raise TypeError("quality_policy.metric_rules members must be QualityPolicyMetricRule")
         if not isinstance(self.failure_rules, tuple):
             raise TypeError("quality_policy.failure_rules must be an immutable tuple")
         if any(not isinstance(rule, QualityPolicyFailureRule) for rule in self.failure_rules):
-            raise TypeError(
-                "quality_policy.failure_rules members must be QualityPolicyFailureRule"
-            )
+            raise TypeError("quality_policy.failure_rules members must be QualityPolicyFailureRule")
 
         metric_names = tuple(rule.metric_name.value for rule in self.metric_rules)
         if len(metric_names) != len(set(metric_names)):
             raise ValueError("quality_policy.metric_rules metric names must be unique")
         if metric_names != tuple(sorted(metric_names)):
-            raise ValueError(
-                "quality_policy.metric_rules must be in canonical MetricName order"
-            )
+            raise ValueError("quality_policy.metric_rules must be in canonical MetricName order")
 
         failure_categories = tuple(rule.failure_category.value for rule in self.failure_rules)
         if len(failure_categories) != len(set(failure_categories)):
-            raise ValueError(
-                "quality_policy.failure_rules failure categories must be unique"
-            )
+            raise ValueError("quality_policy.failure_rules failure categories must be unique")
         if failure_categories != tuple(sorted(failure_categories)):
             raise ValueError(
                 "quality_policy.failure_rules must be in canonical FailureCategory order"
@@ -274,7 +260,8 @@ class QualityEvaluationReason:
                 self.metric_name is None
                 or self.observed_value is None
                 or self.threshold is None
-                or self.expected_direction not in (
+                or self.expected_direction
+                not in (
                     MetricDirection.HIGHER_IS_BETTER,
                     MetricDirection.LOWER_IS_BETTER,
                 )
@@ -327,9 +314,7 @@ class QualityEvaluation:
         if not isinstance(self.reasons, tuple):
             raise TypeError("quality_evaluation.reasons must be an immutable tuple")
         if any(not isinstance(reason, QualityEvaluationReason) for reason in self.reasons):
-            raise TypeError(
-                "quality_evaluation.reasons members must be QualityEvaluationReason"
-            )
+            raise TypeError("quality_evaluation.reasons members must be QualityEvaluationReason")
         if self.reasons != tuple(sorted(self.reasons, key=_reason_sort_key)):
             raise ValueError("quality_evaluation.reasons must use canonical reason order")
         expected = _select_decision(self.reasons)
