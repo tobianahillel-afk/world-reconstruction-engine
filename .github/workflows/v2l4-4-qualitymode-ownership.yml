@@ -1,0 +1,83 @@
+name: v2l4-4-qualitymode-ownership
+
+on:
+  push:
+    branches:
+      - feature/v2l4-4-benchmark-record
+
+permissions:
+  contents: write
+
+jobs:
+  align:
+    if: ${{ !contains(github.event.head_commit.message, 'Record QualityMode ownership') }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: feature/v2l4-4-benchmark-record
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Align QualityMode ownership
+        shell: python
+        run: |
+          from pathlib import Path
+
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(f"{label} expected exactly once, found {count}")
+              return text.replace(old, new, 1)
+
+          roadmap = Path("docs/25_V2_ROADMAP.md")
+          text = roadmap.read_text(encoding="utf-8")
+          text = replace_once(
+              text,
+              "- `V2L4.4` — benchmark record schema with fixture, adapter/model/config, quality mode, hardware and metric vector; permit solver-independent references to retained performance evidence such as stage timing/trace artifacts without integrating a profiler here.",
+              "- `V2L4.4` — benchmark record schema with fixture, adapter/model/config, hardware and metric vector; establish the single canonical `QualityMode` vocabulary PREVIEW / FAST / QUALITY / MASTER needed by benchmark evidence, and permit solver-independent references to retained performance evidence such as stage timing/trace artifacts without integrating a profiler here.",
+              "V2L4.4 roadmap ownership",
+          )
+          text = replace_once(
+              text,
+              "- `V2L10.1` — `QualityMode` contract: PREVIEW / FAST / QUALITY / MASTER.",
+              "- `V2L10.1` — route-facing adoption and regression coverage for the canonical `QualityMode` contract established by V2L4.4; routing must reuse it rather than define a competing mode vocabulary.",
+              "V2L10.1 roadmap ownership",
+          )
+          roadmap.write_text(text, encoding="utf-8")
+
+          machine = Path("registry/work-items/v2m1.yaml")
+          text = machine.read_text(encoding="utf-8")
+          text = replace_once(
+              text,
+              "  - {id: V2L10.1, lot: V2L10, title: QualityMode PREVIEW FAST QUALITY MASTER contract, status: planned, depends_on: [V2L9.5]}",
+              "  - {id: V2L10.1, lot: V2L10, title: Adopt canonical QualityMode in routing contracts, status: planned, depends_on: [V2L9.5]}",
+              "V2L10.1 machine roadmap ownership",
+          )
+          machine.write_text(text, encoding="utf-8")
+
+          active = Path("registry/work-items/v2m0.yaml")
+          text = active.read_text(encoding="utf-8")
+          text = replace_once(
+              text,
+              "      - tests/test_benchmarks.py\n      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry after implementation evidence is green so V2L4.5 can be activated without implementing it",
+              "      - tests/test_benchmarks.py\n      - docs/25_V2_ROADMAP.md only for the focused QualityMode ownership correction required to keep one canonical product vocabulary\n      - registry/work-items/v2m1.yaml only for the matching V2L10.1 ownership correction\n      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry after implementation evidence is green so V2L4.5 can be activated without implementing it",
+              "V2L4.4 allowed ownership correction",
+          )
+          text = replace_once(
+              text,
+              "      - QualityMode is a closed StrEnum with exactly PREVIEW FAST QUALITY and MASTER and stable wire tokens preview fast quality and master; it remains distinct from QualityDecision.\n",
+              "      - QualityMode is a closed StrEnum with exactly PREVIEW FAST QUALITY and MASTER and stable wire tokens preview fast quality and master; it remains distinct from QualityDecision.\n      - V2L4.4 is the single canonical owner of the QualityMode vocabulary because benchmark evidence requires it here; V2L10.1 later reuses and regression-tests this same contract for routing and must not define a competing type.\n",
+              "V2L4.4 ownership acceptance",
+          )
+          active.write_text(text, encoding="utf-8")
+      - name: Commit ownership correction
+        run: |
+          if git diff --quiet; then
+            echo "No ownership changes to commit"
+            exit 0
+          fi
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add docs/25_V2_ROADMAP.md registry/work-items/v2m0.yaml registry/work-items/v2m1.yaml
+          git commit -m "[V2L4.4] Record QualityMode ownership"
+          git push origin HEAD:feature/v2l4-4-benchmark-record
