@@ -125,9 +125,7 @@ def test_policy_identity_and_revision_are_typed_immutable_and_hashable() -> None
     "value",
     ["", " leading", ".leading", "has/slash", "has space", "a" * 129],
 )
-def test_policy_identity_tokens_reject_invalid_values(
-    token_type: type[Any], value: str
-) -> None:
+def test_policy_identity_tokens_reject_invalid_values(token_type: type[Any], value: str) -> None:
     with pytest.raises(ValueError):
         token_type(value)
 
@@ -393,9 +391,7 @@ def test_metric_direction_mismatch_fails_closed_without_threshold_comparison() -
 
 
 def test_mapped_failure_returns_explicit_decision_without_executing_action() -> None:
-    policy = _policy(
-        failure_rules=(_failure_rule(FailureCategory.TIMEOUT, QualityDecision.RETRY),)
-    )
+    policy = _policy(failure_rules=(_failure_rule(FailureCategory.TIMEOUT, QualityDecision.RETRY),))
 
     result = evaluate_quality_policy(
         policy,
@@ -438,9 +434,7 @@ def test_precedence_is_unresolved_escalate_retry_warning_pass() -> None:
             _metric_rule("b.retry", decision=QualityDecision.RETRY),
             _metric_rule("c.escalate", decision=QualityDecision.ESCALATE),
         ),
-        failure_rules=(
-            _failure_rule(FailureCategory.TIMEOUT, QualityDecision.UNRESOLVED),
-        ),
+        failure_rules=(_failure_rule(FailureCategory.TIMEOUT, QualityDecision.UNRESOLVED),),
     )
     metrics = MetricVector(
         observations=(
