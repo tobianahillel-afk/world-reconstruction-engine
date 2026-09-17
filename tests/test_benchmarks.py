@@ -215,7 +215,8 @@ def test_comparison_baseline_is_optional_typed_and_cannot_reference_self() -> No
     record_id = BenchmarkRecordId("benchmark.record")
     baseline = BenchmarkRecordId("benchmark.baseline")
 
-    assert _record(record_id=record_id, comparison_baseline=baseline).comparison_baseline == baseline
+    record = _record(record_id=record_id, comparison_baseline=baseline)
+    assert record.comparison_baseline == baseline
     with pytest.raises(TypeError, match="must be BenchmarkRecordId when present"):
         _record(comparison_baseline=cast(Any, "benchmark.baseline"))
     with pytest.raises(ValueError, match="must not reference its own record"):
