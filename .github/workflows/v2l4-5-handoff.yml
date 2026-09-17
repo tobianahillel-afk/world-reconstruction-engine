@@ -1,0 +1,29 @@
+name: v2l4-5-handoff
+
+on:
+  push:
+    branches:
+      - feature/v2l4-5-quality-policy
+
+permissions:
+  contents: write
+
+jobs:
+  handoff:
+    if: ${{ !contains(github.event.head_commit.message, 'Activate V2L4.6') }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: feature/v2l4-5-quality-policy
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Apply lifecycle handoff
+        run: python .github/v2l4_5_handoff.py
+      - name: Commit lifecycle handoff
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "[V2L4.5] Activate V2L4.6"
+          git push origin HEAD:feature/v2l4-5-quality-policy
