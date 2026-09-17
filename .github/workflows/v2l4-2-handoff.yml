@@ -2,26 +2,29 @@ name: v2l4-2-handoff
 
 on:
   push:
-    branches: ["feature/v2l4-2-metric-vector"]
+    branches:
+      - feature/v2l4-2-metric-vector
 
 permissions:
   contents: write
 
 jobs:
   handoff:
+    if: ${{ !contains(github.event.head_commit.message, 'Record lifecycle handoff') }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: feature/v2l4-2-metric-vector
           fetch-depth: 0
+          persist-credentials: true
       - name: Apply lifecycle handoff
-        shell: python
         env:
-          CONTRACT_B64: ICAtIGlkOiBWMkw0LjMKICAgIGxvdDogVjJMNAogICAgdGl0bGU6IFF1YWxpdHkgZGVjaXNpb24gY29udHJhY3QKICAgIHN0YXR1czogcmVhZHkKICAgIG9iamVjdGl2ZTogRGVmaW5lIG9ubHkgdGhlIGNsb3NlZCBzdGFibGUgV1JFIHF1YWxpdHktZGVjaXNpb24gdm9jYWJ1bGFyeSBhbHJlYWR5IG5hbWVkIGJ5IHRoZSBwcm9kdWN0aW9uLXJ1bnRpbWUgcXVhbGl0eS1nYXRlIGJsdWVwcmludCBzbyBsYXRlciBwb2xpY3kgZXZhbHVhdGlvbiBhbmQgcm91dGluZyBjYW4gZXhjaGFuZ2UgYW4gZXhwbGljaXQgZGVjaXNpb24gd2l0aG91dCBjb25mbGF0aW5nIHRoYXQgZGVjaXNpb24gd2l0aCBtZXRyaWMgb2JzZXJ2YXRpb25zLCBmYWlsdXJlIGNhdGVnb3JpZXMsIHRocmVzaG9sZHMsIHJlYXNvbnMgb3IgZmFsbGJhY2sgZXhlY3V0aW9uLgogICAgYWxsb3dlZF9zY29wZToKICAgICAgLSBzcmMvd3JlL2RvbWFpbi9xdWFsaXR5LnB5CiAgICAgIC0gZm9jdXNlZCBwdWJsaWMtZG9tYWluIGV4cG9ydHMgb25seSBpZiByZXF1aXJlZCBmb3IgdGhlIG5ldyBjb250cmFjdAogICAgICAtIHRlc3RzL3Rlc3RfcXVhbGl0eV9kZWNpc2lvbnMucHkKICAgICAgLSBmb2N1c2VkIGxpZmVjeWNsZSB1cGRhdGVzIHRvIHJlZ2lzdHJ5L2NvbXBvbmVudHMueWFtbCBQUk9KRUNUX1NUQVRFLnlhbWwgYW5kIHRoaXMgd29yay1pdGVtIHJlZ2lzdHJ5IGFmdGVyIGltcGxlbWVudGF0aW9uIGV2aWRlbmNlIGlzIGdyZWVuIHNvIFYyTDQuNCBjYW4gYmUgYWN0aXZhdGVkIHdpdGhvdXQgaW1wbGVtZW50aW5nIGl0CiAgICBvdXRfb2Zfc2NvcGU6CiAgICAgIC0gY2hhbmdpbmcgTWV0cmljTmFtZSBNZXRyaWNEZXNjcmlwdG9yIE1ldHJpY1Byb3ZlbmFuY2UgTWV0cmljT2JzZXJ2YXRpb24gTWV0cmljVmVjdG9yIG9yIG90aGVyIFYyTDQuMiBzZW1hbnRpY3MKICAgICAgLSBjaGFuZ2luZyBGYWlsdXJlQ2F0ZWdvcnkgb3IgVjJMMyBhZGFwdGVyLWxvY2FsIGZhaWx1cmVfc2lnbmFscyBhbmQgbWV0cmljX25hbWVzIGRlY2xhcmF0aW9ucwogICAgICAtIHRocmVzaG9sZHMgcG9saWN5IHJldmlzaW9uIHdlaWdodGVkIHNjb3JlcyBub3JtYWxpemF0aW9uIHJlcXVpcmVkLW1ldHJpYyBydWxlcyBvciBkZXRlcm1pbmlzdGljIHF1YWxpdHktcG9saWN5IGV2YWx1YXRpb24gb3duZWQgYnkgVjJMNC41CiAgICAgIC0gaHVtYW4tcmVhZGFibGUgcmVhc29ucyBtYWNoaW5lLXJlYWRhYmxlIGVzY2FsYXRpb24gaGludHMgcmV0cnkgY291bnRzIHJvdXRlIGlkZW50aXRpZXMgZmFsbGJhY2sgdGFyZ2V0cyBvciBzY2hlZHVsZXIgYWN0aW9ucwogICAgICAtIGJlbmNobWFyayByZWNvcmQgc2NoZW1hIGZpeHR1cmUgY29tcGFyaXNvbiBiYXNlbGluZSBoYXJkd2FyZSBlbnZpcm9ubWVudCBvciBleGVjdXRpb24tcHJvZmlsZSByZWNvcmRzIG93bmVkIGJ5IFYyTDQuNAogICAgICAtIGF1dG9tYXRpYyBjb252ZXJzaW9uIGZyb20gRmFpbHVyZUNhdGVnb3J5IG1ldHJpYyB2YWx1ZXMgYWRhcHRlciBzaWduYWxzIGV4Y2VwdGlvbnMgbG9ncyBvciBiZW5jaG1hcmsgcmVzdWx0cyBpbnRvIGEgcXVhbGl0eSBkZWNpc2lvbgogICAgICAtIHJvdXRpbmcgZmFsbGJhY2sgcmV0cnkgZXNjYWxhdGlvbiBleGVjdXRpb24gcGVyc2lzdGVuY2UgcmVnaXN0cnkgbXV0YXRpb24gYXJ0aWZhY3Qta2V5IGNhY2hlIG9yIG1hdGVyaWFsaXphdGlvbiBiZWhhdmlvcgogICAgICAtIHN0YXJ0aW5nIFYyTDQuNCBwcm9kdWN0IGltcGxlbWVudGF0aW9uIGluIHRoaXMgd29yayBpdGVtCiAgICBkZXBlbmRzX29uOiBbVjJMNC4yXQogICAgcmVhZF9iZWZvcmU6CiAgICAgIC0gZG9jcy8wMl9BUkNISVRFQ1RVUkUubWQKICAgICAgLSBkb2NzLzE1X1BST0RVQ1RJT05fUlVOVElNRS5tZAogICAgICAtIGRvY3MvMjNfRU5HSU5FRVJJTkdfRVhFQ1VUSU9OLm1kCiAgICAgIC0gZG9jcy8yNF9TWVNURU1fSU5WQVJJQU5UUy5tZAogICAgICAtIGRvY3MvMjVfVjJfUk9BRE1BUC5tZAogICAgICAtIGRvY3MvMjhfUEVSRk9STUFOQ0VfT1BUSU1JWkFUSU9OX1BMQVlCT09LLm1kCiAgICAgIC0gZG9jcy8yOV9QRVJGT1JNQU5DRV9JTlRFR1JBVElPTl9NQVAubWQKICAgICAgLSBzcmMvd3JlL2RvbWFpbi9mYWlsdXJlcy5weQogICAgICAtIHNyYy93cmUvZG9tYWluL21ldHJpY3MucHkKICAgICAgLSB0ZXN0cy90ZXN0X2ZhaWx1cmVfdGF4b25vbXkucHkKICAgICAgLSB0ZXN0cy90ZXN0X21ldHJpY3MucHkKICAgIHJldXNlOgogICAgICAtIHRoZSBleGFjdCBmaXZlIHF1YWxpdHktZ2F0ZSBkZWNpc2lvbiBjb25jZXB0cyBhbHJlYWR5IGxpc3RlZCBpbiBkb2NzLzE1X1BST0RVQ1RJT05fUlVOVElNRS5tZCByYXRoZXIgdGhhbiBpbnZlbnRpbmcgYSBjb21wZXRpbmcgc3RhdHVzIG1vZGVsCiAgICAgIC0gZXhpc3RpbmcgU3RyRW51bSBjbG9zZWQgc3ltYm9saWMtZG9tYWluIHN0eWxlIHVzZWQgYnkgRmFpbHVyZUNhdGVnb3J5IFByb3ZlbmFuY2VDbGFzcyBhbmQgTWV0cmljRGlyZWN0aW9uCiAgICAgIC0gVjJMNC4yIE1ldHJpY1ZlY3RvciBhcyBpbmRlcGVuZGVudCBtZWFzdXJlbWVudCBldmlkZW5jZSB0aGF0IHJlbWFpbnMgb3V0c2lkZSB0aGUgZGVjaXNpb24gdm9jYWJ1bGFyeQogICAgICAtIGZhaWwtY2xvc2VkIGV4cGxpY2l0LXN0YXRlIHByaW5jaXBsZXMgZnJvbSBkb2NzLzI0X1NZU1RFTV9JTlZBUklBTlRTLm1kCiAgICBhY2NlcHRhbmNlOgogICAgICAtIFF1YWxpdHlEZWNpc2lvbiBpcyBhIGNsb3NlZCBTdHJFbnVtIHdpdGggZXhhY3RseSBQQVNTIEFDQ0VQVF9XSVRIX1dBUk5JTkdTIFJFVFJZIEVTQ0FMQVRFIGFuZCBVTlJFU09MVkVELgogICAgICAtIFN0YWJsZSB3aXJlIHRva2VucyBhcmUgZXhhY3RseSBwYXNzIGFjY2VwdF93aXRoX3dhcm5pbmdzIHJldHJ5IGVzY2FsYXRlIGFuZCB1bnJlc29sdmVkLgogICAgICAtIE5vIFNVQ0NFU1MgRkFJTFVSRSBGQUlMIFdBUk5JTkcgRVJST1IgUVVBTElUWV9HQVRFX0ZBSUxVUkUgVU5LTk9XTiBvciBzb2x2ZXItc3BlY2lmaWMgdmFsdWUgaXMgYSBRdWFsaXR5RGVjaXNpb24uCiAgICAgIC0gQ2FsbGVycyBzdXBwbHkgYSBRdWFsaXR5RGVjaXNpb24gZXhwbGljaXRseTsgY29yZSBwZXJmb3JtcyBubyBpbmZlcmVuY2UgZnJvbSBNZXRyaWNWZWN0b3IgdmFsdWVzIEZhaWx1cmVDYXRlZ29yeSBhZGFwdGVyLWxvY2FsIHNpZ25hbHMgZXhjZXB0aW9ucyBsb2dzIHJvdXRlcyByZXRyaWVzIGVudmlyb25tZW50IHN0YXRlIG9yIGJlbmNobWFyayByZWNvcmRzLgogICAgICAtIFF1YWxpdHlEZWNpc2lvbiBjYXJyaWVzIGRlY2lzaW9uIGlkZW50aXR5IG9ubHkgYW5kIGNvbnRhaW5zIG5vIG1ldHJpYyB2ZWN0b3IgdGhyZXNob2xkIHBvbGljeSByZXZpc2lvbiByZWFzb24gZXNjYWxhdGlvbiBoaW50IHJldHJ5IGNvdW50IHJvdXRlIGZhbGxiYWNrIHRpbWVzdGFtcCBwcm9kdWNlciBhcnRpZmFjdCBvciBjYXRjaC1hbGwgbWV0YWRhdGEuCiAgICAgIC0gVU5SRVNPTFZFRCBpcyBhbiBleHBsaWNpdCB2YWxpZCBkZWNpc2lvbiBhbmQgaXMgbm90IHBlcm1pc3Npb24gdG8gYWNjZXB0IGFyYml0cmFyeSB1bmtub3duIGRlY2lzaW9uIHN0cmluZ3MuCiAgICAgIC0gUXVhbGl0eURlY2lzaW9uIHJlbWFpbnMgZGlzdGluY3QgZnJvbSBGYWlsdXJlQ2F0ZWdvcnkgTWV0cmljRGlyZWN0aW9uIG1hdGVyaWFsaXphdGlvbiB2ZXJpZmljYXRpb24gYW5kIHByb3ZlbmFuY2Ugdm9jYWJ1bGFyaWVzIGV2ZW4gd2hlcmUgaHVtYW4tbGFuZ3VhZ2UgY29uY2VwdHMgbWF5IG92ZXJsYXAuCiAgICAgIC0gTm8gcGVyc2lzdGVuY2UgYmVuY2htYXJrIHJvdXRpbmcgc2NoZWR1bGluZyBxdWFsaXR5LXBvbGljeSBleGVjdXRpb24gbWV0cmljIGNvbXB1dGF0aW9uIGFkYXB0ZXIgZXhlY3V0aW9uIG9yIGV4dGVybmFsLWRlcGVuZGVuY3kgYmVoYXZpb3IgaXMgaW50cm9kdWNlZC4KICAgIHRlc3RzOgogICAgICAtIGV4YWN0IFF1YWxpdHlEZWNpc2lvbiBtZW1iZXItbmFtZSBhbmQgd2lyZS10b2tlbiBnb2xkZW4gc2V0IHRlc3RzCiAgICAgIC0gY29uc3RydWN0aW9uIGVxdWFsaXR5IGhhc2hpbmcgaXRlcmF0aW9uIGFuZCBzZXJpYWxpemF0aW9uLWZyaWVuZGx5IHN0cmluZyBiZWhhdmlvcgogICAgICAtIG5lZ2F0aXZlIGFyYml0cmFyeSB1bmtub3duIHN1Y2Nlc3MgZmFpbHVyZSB3YXJuaW5nIGVycm9yIHF1YWxpdHktZ2F0ZS1mYWlsdXJlIGFuZCBzb2x2ZXItc3BlY2lmaWMgdG9rZW4gdGVzdHMKICAgICAgLSByZWdyZXNzaW9uIHByb3ZpbmcgRmFpbHVyZUNhdGVnb3J5IE1ldHJpY0RpcmVjdGlvbiBhbmQgcmV0YWluZWQgZG9tYWluIHZvY2FidWxhcmllcyByZW1haW4gZGlzdGluY3QKICAgICAgLSByZWdyZXNzaW9uIHByb3Zpbmcgbm8gbWV0cmljIHRocmVzaG9sZCByZWFzb24gaGludCByb3V0ZSBvciBmYWxsYmFjayBmaWVsZHMgZW50ZXIgdGhlIGRlY2lzaW9uIHZvY2FidWxhcnkKICAgICAgLSBmdWxsIGZhc3QgQ0kK
+          CONTRACT_B64: ICAtIGlkOiBWMkw0LjMKICAgIGxvdDogVjJMNAogICAgdGl0bGU6IFF1YWxpdHkgZGVjaXNpb24gY29udHJhY3QKICAgIHN0YXR1czogcmVhZHkKICAgIG9iamVjdGl2ZTogRGVmaW5lIG9ubHkgdGhlIGNsb3NlZCBzdGFibGUgV1JFIHF1YWxpdHktZGVjaXNpb24gdm9jYWJ1bGFyeSBhbHJlYWR5IG5hbWVkIGJ5IHRoZSBwcm9kdWN0aW9uLXJ1bnRpbWUgcXVhbGl0eS1nYXRlIGJsdWVwcmludCBzbyBsYXRlciBwb2xpY3kgZXZhbHVhdGlvbiBhbmQgcm91dGluZyBjYW4gZXhjaGFuZ2Ugb25lIGV4cGxpY2l0IGRlY2lzaW9uIHdpdGhvdXQgY29uZmxhdGluZyB0aGF0IGRlY2lzaW9uIHdpdGggbWV0cmljIG9ic2VydmF0aW9ucywgZmFpbHVyZSBjYXRlZ29yaWVzLCB0aHJlc2hvbGRzLCByZWFzb25zIG9yIGZhbGxiYWNrIGV4ZWN1dGlvbi4KICAgIGFsbG93ZWRfc2NvcGU6CiAgICAgIC0gc3JjL3dyZS9kb21haW4vcXVhbGl0eS5weQogICAgICAtIGZvY3VzZWQgcHVibGljLWRvbWFpbiBleHBvcnRzIG9ubHkgaWYgcmVxdWlyZWQgZm9yIHRoZSBuZXcgY29udHJhY3QKICAgICAgLSB0ZXN0cy90ZXN0X3F1YWxpdHlfZGVjaXNpb25zLnB5CiAgICAgIC0gZm9jdXNlZCBsaWZlY3ljbGUgdXBkYXRlcyB0byByZWdpc3RyeS9jb21wb25lbnRzLnlhbWwgUFJPSkVDVF9TVEFURS55YW1sIGFuZCB0aGlzIHdvcmstaXRlbSByZWdpc3RyeSBhZnRlciBpbXBsZW1lbnRhdGlvbiBldmlkZW5jZSBpcyBncmVlbiBzbyBWMkw0LjQgY2FuIGJlIGFjdGl2YXRlZCB3aXRob3V0IGltcGxlbWVudGluZyBpdAogICAgb3V0X29mX3Njb3BlOgogICAgICAtIGNoYW5naW5nIE1ldHJpY05hbWUgTWV0cmljRGVzY3JpcHRvciBNZXRyaWNQcm92ZW5hbmNlIE1ldHJpY09ic2VydmF0aW9uIE1ldHJpY1ZlY3RvciBvciBvdGhlciBWMkw0LjIgc2VtYW50aWNzCiAgICAgIC0gY2hhbmdpbmcgRmFpbHVyZUNhdGVnb3J5IG9yIFYyTDMgYWRhcHRlci1sb2NhbCBmYWlsdXJlX3NpZ25hbHMgYW5kIG1ldHJpY19uYW1lcyBkZWNsYXJhdGlvbnMKICAgICAgLSB0aHJlc2hvbGRzIHBvbGljeSByZXZpc2lvbiB3ZWlnaHRlZCBzY29yZXMgbm9ybWFsaXphdGlvbiByZXF1aXJlZC1tZXRyaWMgcnVsZXMgb3IgZGV0ZXJtaW5pc3RpYyBxdWFsaXR5LXBvbGljeSBldmFsdWF0aW9uIG93bmVkIGJ5IFYyTDQuNQogICAgICAtIGh1bWFuLXJlYWRhYmxlIHJlYXNvbnMgbWFjaGluZS1yZWFkYWJsZSBlc2NhbGF0aW9uIGhpbnRzIHJldHJ5IGNvdW50cyByb3V0ZSBpZGVudGl0aWVzIGZhbGxiYWNrIHRhcmdldHMgc2NoZWR1bGVyIGFjdGlvbnMgb3IgZXhlY3V0aW9uIHN0YXRlCiAgICAgIC0gYmVuY2htYXJrIHJlY29yZCBzY2hlbWEgZml4dHVyZSBjb21wYXJpc29uIGJhc2VsaW5lIGhhcmR3YXJlIGVudmlyb25tZW50IG9yIGV4ZWN1dGlvbi1wcm9maWxlIHJlY29yZHMgb3duZWQgYnkgVjJMNC40CiAgICAgIC0gYXV0b21hdGljIGNvbnZlcnNpb24gZnJvbSBGYWlsdXJlQ2F0ZWdvcnkgbWV0cmljIHZhbHVlcyBhZGFwdGVyIHNpZ25hbHMgZXhjZXB0aW9ucyBsb2dzIHJvdXRlcyByZXRyaWVzIGVudmlyb25tZW50IHN0YXRlIG9yIGJlbmNobWFyayByZXN1bHRzIGludG8gYSBxdWFsaXR5IGRlY2lzaW9uCiAgICAgIC0gcm91dGluZyBmYWxsYmFjayByZXRyeSBlc2NhbGF0aW9uIGV4ZWN1dGlvbiBwZXJzaXN0ZW5jZSByZWdpc3RyeSBtdXRhdGlvbiBhcnRpZmFjdC1rZXkgY2FjaGUgb3IgbWF0ZXJpYWxpemF0aW9uIGJlaGF2aW9yCiAgICAgIC0gc3RhcnRpbmcgVjJMNC40IHByb2R1Y3QgaW1wbGVtZW50YXRpb24gaW4gdGhpcyB3b3JrIGl0ZW0KICAgIGRlcGVuZHNfb246IFtWMkw0LjJdCiAgICByZWFkX2JlZm9yZToKICAgICAgLSBkb2NzLzAyX0FSQ0hJVEVDVFVSRS5tZAogICAgICAtIGRvY3MvMTVfUFJPRFVDVElPTl9SVU5USU1FLm1kCiAgICAgIC0gZG9jcy8yM19FTkdJTkVFUklOR19FWEVDVVRJT04ubWQKICAgICAgLSBkb2NzLzI0X1NZU1RFTV9JTlZBUklBTlRTLm1kCiAgICAgIC0gZG9jcy8yNV9WMl9ST0FETUFQLm1kCiAgICAgIC0gc3JjL3dyZS9kb21haW4vZmFpbHVyZXMucHkKICAgICAgLSBzcmMvd3JlL2RvbWFpbi9tZXRyaWNzLnB5CiAgICAgIC0gdGVzdHMvdGVzdF9mYWlsdXJlX3RheG9ub215LnB5CiAgICAgIC0gdGVzdHMvdGVzdF9tZXRyaWNzLnB5CiAgICByZXVzZToKICAgICAgLSB0aGUgZXhhY3QgZml2ZSBxdWFsaXR5LWdhdGUgZGVjaXNpb24gY29uY2VwdHMgYWxyZWFkeSBsaXN0ZWQgaW4gZG9jcy8xNV9QUk9EVUNUSU9OX1JVTlRJTUUubWQgcmF0aGVyIHRoYW4gaW52ZW50aW5nIGEgY29tcGV0aW5nIHN0YXR1cyBtb2RlbAogICAgICAtIGV4aXN0aW5nIFN0ckVudW0gY2xvc2VkIHN5bWJvbGljLWRvbWFpbiBzdHlsZSB1c2VkIGJ5IEZhaWx1cmVDYXRlZ29yeSBQcm92ZW5hbmNlQ2xhc3MgYW5kIE1ldHJpY0RpcmVjdGlvbgogICAgICAtIFYyTDQuMiBNZXRyaWNWZWN0b3IgYXMgaW5kZXBlbmRlbnQgbWVhc3VyZW1lbnQgZXZpZGVuY2UgdGhhdCByZW1haW5zIG91dHNpZGUgdGhlIGRlY2lzaW9uIHZvY2FidWxhcnkKICAgICAgLSBmYWlsLWNsb3NlZCBleHBsaWNpdC1zdGF0ZSBwcmluY2lwbGVzIGZyb20gZG9jcy8yNF9TWVNURU1fSU5WQVJJQU5UUy5tZAogICAgYWNjZXB0YW5jZToKICAgICAgLSBRdWFsaXR5RGVjaXNpb24gaXMgYSBjbG9zZWQgU3RyRW51bSB3aXRoIGV4YWN0bHkgUEFTUyBBQ0NFUFRfV0lUSF9XQVJOSU5HUyBSRVRSWSBFU0NBTEFURSBhbmQgVU5SRVNPTFZFRC4KICAgICAgLSBTdGFibGUgd2lyZSB0b2tlbnMgYXJlIGV4YWN0bHkgcGFzcyBhY2NlcHRfd2l0aF93YXJuaW5ncyByZXRyeSBlc2NhbGF0ZSBhbmQgdW5yZXNvbHZlZC4KICAgICAgLSBObyBTVUNDRVNTIEZBSUxVUkUgRkFJTCBXQVJOSU5HIEVSUk9SIFFVQUxJVFlfR0FURV9GQUlMVVJFIFVOS05PV04gb3Igc29sdmVyLXNwZWNpZmljIHZhbHVlIGlzIGEgUXVhbGl0eURlY2lzaW9uLgogICAgICAtIENhbGxlcnMgc3VwcGx5IGEgUXVhbGl0eURlY2lzaW9uIGV4cGxpY2l0bHk7IGNvcmUgcGVyZm9ybXMgbm8gaW5mZXJlbmNlIGZyb20gTWV0cmljVmVjdG9yIHZhbHVlcyBGYWlsdXJlQ2F0ZWdvcnkgYWRhcHRlci1sb2NhbCBzaWduYWxzIGV4Y2VwdGlvbnMgbG9ncyByb3V0ZXMgcmV0cmllcyBlbnZpcm9ubWVudCBzdGF0ZSBvciBiZW5jaG1hcmsgcmVjb3Jkcy4KICAgICAgLSBRdWFsaXR5RGVjaXNpb24gY2FycmllcyBkZWNpc2lvbiBpZGVudGl0eSBvbmx5IGFuZCBjb250YWlucyBubyBtZXRyaWMgdmVjdG9yIHRocmVzaG9sZCBwb2xpY3kgcmV2aXNpb24gcmVhc29uIGVzY2FsYXRpb24gaGludCByZXRyeSBjb3VudCByb3V0ZSBmYWxsYmFjayB0aW1lc3RhbXAgcHJvZHVjZXIgYXJ0aWZhY3Qgb3IgY2F0Y2gtYWxsIG1ldGFkYXRhLgogICAgICAtIFVOUkVTT0xWRUQgaXMgYW4gZXhwbGljaXQgdmFsaWQgZGVjaXNpb24gYW5kIGlzIG5vdCBwZXJtaXNzaW9uIHRvIGFjY2VwdCBhcmJpdHJhcnkgdW5rbm93biBkZWNpc2lvbiBzdHJpbmdzLgogICAgICAtIFF1YWxpdHlEZWNpc2lvbiByZW1haW5zIGRpc3RpbmN0IGZyb20gRmFpbHVyZUNhdGVnb3J5IE1ldHJpY0RpcmVjdGlvbiBtYXRlcmlhbGl6YXRpb24gdmVyaWZpY2F0aW9uIGFuZCBwcm92ZW5hbmNlIHZvY2FidWxhcmllcyBldmVuIHdoZXJlIGh1bWFuLWxhbmd1YWdlIGNvbmNlcHRzIG1heSBvdmVybGFwLgogICAgICAtIE5vIHBlcnNpc3RlbmNlIGJlbmNobWFyayByb3V0aW5nIHNjaGVkdWxpbmcgcXVhbGl0eS1wb2xpY3kgZXhlY3V0aW9uIG1ldHJpYyBjb21wdXRhdGlvbiBhZGFwdGVyIGV4ZWN1dGlvbiBvciBleHRlcm5hbC1kZXBlbmRlbmN5IGJlaGF2aW9yIGlzIGludHJvZHVjZWQuCiAgICB0ZXN0czoKICAgICAgLSBleGFjdCBRdWFsaXR5RGVjaXNpb24gbWVtYmVyLW5hbWUgYW5kIHdpcmUtdG9rZW4gZ29sZGVuIHNldCB0ZXN0cwogICAgICAtIGNvbnN0cnVjdGlvbiBlcXVhbGl0eSBoYXNoaW5nIGl0ZXJhdGlvbiBhbmQgc2VyaWFsaXphdGlvbi1mcmllbmRseSBzdHJpbmcgYmVoYXZpb3IKICAgICAgLSBuZWdhdGl2ZSBhcmJpdHJhcnkgdW5rbm93biBzdWNjZXNzIGZhaWx1cmUgd2FybmluZyBlcnJvciBxdWFsaXR5LWdhdGUtZmFpbHVyZSBhbmQgc29sdmVyLXNwZWNpZmljIHRva2VuIHRlc3RzCiAgICAgIC0gcmVncmVzc2lvbiBwcm92aW5nIFF1YWxpdHlEZWNpc2lvbiByZW1haW5zIGRpc3RpbmN0IGZyb20gRmFpbHVyZUNhdGVnb3J5IE1ldHJpY0RpcmVjdGlvbiBtYXRlcmlhbGl6YXRpb24gdmVyaWZpY2F0aW9uIGFuZCBwcm92ZW5hbmNlIHZvY2FidWxhcmllcwogICAgICAtIHJlZ3Jlc3Npb24gcHJvdmluZyBNZXRyaWNWZWN0b3IgYW5kIFYyTDMgYWRhcHRlciByZWdpc3RyeSBzZW1hbnRpY3MgcmVtYWluIHVuY2hhbmdlZAogICAgICAtIGZ1bGwgZmFzdCBDSQo=
           COMPONENT_B64: ICBxdWFsaXR5X2ZhaWx1cmVfYmVuY2htYXJrczoKICAgIG93bmVyX2xvdDogVjJMNAogICAgaW1wbGVtZW50YXRpb246CiAgICAgIC0gc3JjL3dyZS9kb21haW4vZmFpbHVyZXMucHkKICAgICAgLSBzcmMvd3JlL2RvbWFpbi9tZXRyaWNzLnB5CiAgICAgIC0gc3JjL3dyZS9kb21haW4vX19pbml0X18ucHkKICAgIHRlc3RzOgogICAgICAtIHRlc3RzL3Rlc3RfZmFpbHVyZV90YXhvbm9teS5weQogICAgICAtIHRlc3RzL3Rlc3RfbWV0cmljcy5weQogICAgc3RhdHVzOiBpbXBsZW1lbnRpbmcK
-          STATE_B64: Y3VycmVudF9nb2FsOiA+LQogIERlZmluZSBvbmx5IHRoZSBjbG9zZWQgc3RhYmxlIFdSRSBxdWFsaXR5LWRlY2lzaW9uIHZvY2FidWxhcnkgYWxyZWFkeSBuYW1lZCBieSB0aGUgcXVhbGl0eS1nYXRlCiAgYmx1ZXByaW50LCBrZWVwaW5nIGRlY2lzaW9ucyBkaXN0aW5jdCBmcm9tIG1ldHJpY3MsIGZhaWx1cmVzLCB0aHJlc2hvbGRzLCByZWFzb25zLCBiZW5jaG1hcmtzIGFuZAogIHJvdXRpbmcgZXhlY3V0aW9uLgpuZXh0X2FjdGlvbjogPi0KICBDb21wbGV0ZSBvbmx5IFYyTDQuMyBmcm9tIGl0cyBleGVjdXRhYmxlIGNvbnRyYWN0IGluIHJlZ2lzdHJ5L3dvcmstaXRlbXMvdjJtMC55YW1sOiBhZGQgdGhlIGV4YWN0CiAgUXVhbGl0eURlY2lzaW9uIHZvY2FidWxhcnkgYW5kIGZvY3VzZWQgdGVzdHMsIHByZXNlcnZlIFYyTDQuMSBmYWlsdXJlIGFuZCBWMkw0LjIgbWV0cmljIHNlbWFudGljcwogIHVuY2hhbmdlZCwgYW5kIGRvIG5vdCBzdGFydCBWMkw0LjQgYmVuY2htYXJrLXJlY29yZCBpbXBsZW1lbnRhdGlvbiBlYXJseS4K
+          STATE_B64: Y3VycmVudF9nb2FsOiA+LQogIERlZmluZSBvbmx5IHRoZSBjbG9zZWQgc3RhYmxlIFdSRSBxdWFsaXR5LWRlY2lzaW9uIHZvY2FidWxhcnkgYWxyZWFkeSBuYW1lZCBieSB0aGUgcHJvZHVjdGlvbi1ydW50aW1lCiAgcXVhbGl0eS1nYXRlIGJsdWVwcmludDogUEFTUywgQUNDRVBUX1dJVEhfV0FSTklOR1MsIFJFVFJZLCBFU0NBTEFURSBhbmQgVU5SRVNPTFZFRCwgd2l0aG91dAogIHRocmVzaG9sZHMsIHJlYXNvbnMsIGJlbmNobWFyayByZWNvcmRzLCByb3V0aW5nIG9yIGZhbGxiYWNrIGV4ZWN1dGlvbi4KbmV4dF9hY3Rpb246ID4tCiAgQ29tcGxldGUgb25seSBWMkw0LjMgZnJvbSBpdHMgZXhlY3V0YWJsZSBjb250cmFjdCBpbiByZWdpc3RyeS93b3JrLWl0ZW1zL3YybTAueWFtbDogYWRkIHRoZQogIFF1YWxpdHlEZWNpc2lvbiB2b2NhYnVsYXJ5IGFuZCBmb2N1c2VkIHRlc3RzLCBwcmVzZXJ2ZSBNZXRyaWNWZWN0b3IgYW5kIEZhaWx1cmVDYXRlZ29yeSBhcyBzZXBhcmF0ZQogIGV2aWRlbmNlIHZvY2FidWxhcmllcywgYW5kIGRvIG5vdCBzdGFydCBWMkw0LjQgYmVuY2htYXJrLXJlY29yZCBpbXBsZW1lbnRhdGlvbiBlYXJseS4K
         run: |
+          python - <<'PY'
           import base64
           import os
           from pathlib import Path
@@ -29,14 +32,8 @@ jobs:
           def replace_once(text: str, old: str, new: str, label: str) -> str:
               count = text.count(old)
               if count != 1:
-                  raise SystemExit(f"expected exactly one {label}, found {count}")
+                  raise RuntimeError(f"{label} expected exactly once, found {count}")
               return text.replace(old, new, 1)
-
-          state = Path("PROJECT_STATE.yaml")
-          state_text = state.read_text(encoding="utf-8")
-          if "active_work_item: V2L4.3" in state_text:
-              print("handoff already applied")
-              raise SystemExit(0)
 
           roadmap = Path("registry/work-items/v2m0.yaml")
           roadmap_text = roadmap.read_text(encoding="utf-8")
@@ -53,33 +50,39 @@ jobs:
 
           components = Path("registry/components.yaml")
           components_text = components.read_text(encoding="utf-8")
-          old_component = """  quality_failure_benchmarks:
-    owner_lot: V2L4
-    implementation:
-      - src/wre/domain/failures.py
-      - src/wre/domain/__init__.py
-    tests:
-      - tests/test_failure_taxonomy.py
-    status: implementing
-"""
+          old_component = (
+              "  quality_failure_benchmarks:\n"
+              "    owner_lot: V2L4\n"
+              "    implementation:\n"
+              "      - src/wre/domain/failures.py\n"
+              "      - src/wre/domain/__init__.py\n"
+              "    tests:\n"
+              "      - tests/test_failure_taxonomy.py\n"
+              "    status: implementing\n"
+          )
           new_component = base64.b64decode(os.environ["COMPONENT_B64"]).decode("utf-8")
           components_text = replace_once(
               components_text, old_component, new_component, "V2L4 component block"
           )
           components.write_text(components_text, encoding="utf-8")
 
+          state = Path("PROJECT_STATE.yaml")
+          state_text = state.read_text(encoding="utf-8")
           state_text = replace_once(
               state_text, "active_work_item: V2L4.2", "active_work_item: V2L4.3", "active work item"
           )
           state_text = replace_once(
               state_text, "V2L4.1]", "V2L4.1, V2L4.2]", "last completed tail"
           )
-          state_text = replace_once(state_text, "last_merged_pr: 59", "last_merged_pr: 60", "last merged PR")
+          state_text = replace_once(
+              state_text, "last_merged_pr: 59", "last_merged_pr: 60", "last merged PR"
+          )
           start = state_text.index("current_goal: >-")
           end = state_text.index("blockers: []", start)
           replacement = base64.b64decode(os.environ["STATE_B64"]).decode("utf-8")
           state_text = state_text[:start] + replacement + state_text[end:]
           state.write_text(state_text, encoding="utf-8")
+          PY
       - name: Commit handoff metadata
         run: |
           if git diff --quiet; then
@@ -88,7 +91,6 @@ jobs:
           fi
           git config user.name github-actions[bot]
           git config user.email 41898282+github-actions[bot]@users.noreply.github.com
-          git add registry/work-items/v2m0.yaml registry/components.yaml PROJECT_STATE.yaml
-          git diff --cached --check
-          git commit -m "[V2L4.2] Record handoff to V2L4.3"
+          git add PROJECT_STATE.yaml registry/components.yaml registry/work-items/v2m0.yaml
+          git commit -m "[V2L4.2] Record lifecycle handoff"
           git push origin HEAD:feature/v2l4-2-metric-vector
