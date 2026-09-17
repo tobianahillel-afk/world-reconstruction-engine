@@ -1391,69 +1391,69 @@ work_items:
       - regression proving MetricVector ArtifactProducerIdentity HardwareRuntimeIdentity ArtifactRef QualityDecision and FailureCategory semantics remain unchanged
       - full fast CI
   - id: V2L4.5
-  lot: V2L4
-  title: Deterministic quality policy evaluator
-  status: ready
-  objective: Define a minimal immutable versioned quality-policy contract and pure deterministic evaluator that consumes one typed MetricVector plus explicitly supplied stable FailureCategory values and returns one QualityDecision with typed machine-readable evaluation reasons, while failing closed on missing required metrics or unmapped input and without executing retry fallback escalation routing scheduling or adapter behavior.
-  allowed_scope:
-    - src/wre/domain/quality_policy.py
-    - focused public-domain exports only if required for the new policy contracts
-    - tests/test_quality_policy.py
-    - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry after implementation evidence is green so V2L4.6 can be activated without implementing it
-  out_of_scope:
-    - changing QualityDecision QualityMode FailureCategory MetricName MetricDescriptor MetricObservation MetricVector or benchmark-record semantics
-    - metric computation normalization weighted scoring aggregation across records benchmark comparison ranking or default promotion
-    - adapter-local failure-signal parsing log exception stderr return-code inference or automatic mapping into FailureCategory
-    - retry execution fallback selection route identity route graph scheduler job execution checkpoint resume or resource allocation
-    - persistence database registry mutation dashboards free-form notes human-review workflow or external dependency behavior
-    - profiler NVTX Nsight TensorRT decode-backend ANN storage-path or other execution-profile integration described by docs/28 and docs/29
-    - silently accepting an input metric or failure category that the selected policy does not explicitly understand
-    - starting V2L4.6 product implementation in this work item
-  depends_on: [V2L4.4]
-  read_before:
-    - docs/01_PRODUCT.md
-    - docs/02_ARCHITECTURE.md
-    - docs/15_PRODUCTION_RUNTIME.md
-    - docs/23_ENGINEERING_EXECUTION.md
-    - docs/24_SYSTEM_INVARIANTS.md
-    - docs/25_V2_ROADMAP.md
-    - docs/28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md
-    - docs/29_PERFORMANCE_INTEGRATION_MAP.md
-    - src/wre/domain/failures.py
-    - src/wre/domain/metrics.py
-    - src/wre/domain/quality.py
-    - src/wre/domain/benchmarks.py
-    - tests/test_failure_taxonomy.py
-    - tests/test_metrics.py
-    - tests/test_quality_decisions.py
-    - tests/test_benchmarks.py
-  reuse:
-    - QualityDecision as the only evaluator decision vocabulary and QualityMode as a separate compute/product-mode vocabulary
-    - FailureCategory as stable caller-supplied cross-adapter failure meaning without parsing raw adapter signals
-    - MetricVector and MetricName as the complete typed measurement input without recomputation or flattening into one score
-    - immutable explicit identity and canonical tuple conventions already used throughout wre.domain
-    - fail-closed unresolved-state and bounded-escalation principles from docs/24_SYSTEM_INVARIANTS.md
-  acceptance:
-    - The quality policy is an immutable explicitly versioned caller-selected contract; evaluation never discovers a mutable latest policy from registry environment path filename or global state.
-    - Policy metric rules refer only to exact MetricName values and declare whether a metric is required or optional plus any explicit finite threshold comparison and non-PASS decision produced when that threshold is violated; informational known metrics can be admitted without a threshold.
-    - Policy failure rules map exact FailureCategory values to explicit non-PASS QualityDecision values; a stable failure category is never silently treated as success merely because no metric rule fires.
-    - Metric and failure rule collections are immutable unique and canonically ordered; duplicate mutable raw or untyped collections fail closed rather than being sorted deduplicated or coerced silently.
-    - Evaluation accepts exactly a typed policy MetricVector and immutable tuple of explicit FailureCategory values and performs no metric calculation adapter execution registry lookup logging parse filesystem network or environment inspection.
-    - Every required policy metric must be present exactly once through MetricVector semantics; a missing required metric yields QualityDecision.UNRESOLVED with a typed reason rather than PASS.
-    - Every supplied metric must be explicitly admitted by the policy as a thresholded or informational metric; an unknown metric yields UNRESOLVED rather than being ignored.
-    - Every supplied FailureCategory must have an exact policy mapping; an unmapped failure yields UNRESOLVED rather than being ignored or inferred.
-    - Threshold comparisons use the supplied finite MetricObservation value exactly with no normalization rounding weighting or unit conversion; policy construction requires explicit compatible MetricDirection expectations rather than guessing semantics.
-    - If no failure rule or metric threshold produces a non-PASS decision and all required/known-input checks succeed the result is PASS.
-    - When multiple rules produce decisions the evaluator uses one documented fixed deterministic precedence local to quality evaluation, with UNRESOLVED strongest followed by ESCALATE RETRY ACCEPT_WITH_WARNINGS and PASS; this precedence selects a returned decision only and executes no action.
-    - Evaluation output is immutable and contains the selected QualityDecision policy identity/revision and a canonical tuple of typed machine-readable reasons sufficient to audit which missing unknown failure or threshold condition determined the result; no free-form catch-all metadata route target retry count or scheduler action is included.
-    - QualityMode benchmark records failure taxonomy metric contracts adapter registry persistence routing and retained V1 behavior remain unchanged.
-  tests:
-    - policy identity/revision rule construction immutability canonical-order uniqueness and wrong-type negative tests
-    - PASS case with all required metrics present and all thresholds satisfied
-    - explicit threshold violations producing ACCEPT_WITH_WARNINGS RETRY ESCALATE and UNRESOLVED decisions
-    - explicit mapped FailureCategory decision cases and deterministic multi-rule precedence tests
-    - missing required metric unknown input metric and unmapped failure fail-closed UNRESOLVED tests
-    - optional and informational known metric cases proving absence or presence is deterministic and does not affect unrelated thresholds
-    - regression proving evaluator does not mutate MetricVector infer failures execute retry fallback routing scheduling or change benchmark and QualityMode semantics
-    - full fast CI
+    lot: V2L4
+    title: Deterministic quality policy evaluator
+    status: ready
+    objective: Define a minimal immutable versioned quality-policy contract and pure deterministic evaluator that consumes one typed MetricVector plus explicitly supplied stable FailureCategory values and returns one QualityDecision with typed machine-readable evaluation reasons, while failing closed on missing required metrics or unmapped input and without executing retry fallback escalation routing scheduling or adapter behavior.
+    allowed_scope:
+      - src/wre/domain/quality_policy.py
+      - focused public-domain exports only if required for the new policy contracts
+      - tests/test_quality_policy.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry after implementation evidence is green so V2L4.6 can be activated without implementing it
+    out_of_scope:
+      - changing QualityDecision QualityMode FailureCategory MetricName MetricDescriptor MetricObservation MetricVector or benchmark-record semantics
+      - metric computation normalization weighted scoring aggregation across records benchmark comparison ranking or default promotion
+      - adapter-local failure-signal parsing log exception stderr return-code inference or automatic mapping into FailureCategory
+      - retry execution fallback selection route identity route graph scheduler job execution checkpoint resume or resource allocation
+      - persistence database registry mutation dashboards free-form notes human-review workflow or external dependency behavior
+      - profiler NVTX Nsight TensorRT decode-backend ANN storage-path or other execution-profile integration described by docs/28 and docs/29
+      - silently accepting an input metric or failure category that the selected policy does not explicitly understand
+      - starting V2L4.6 product implementation in this work item
+    depends_on: [V2L4.4]
+    read_before:
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md
+      - docs/29_PERFORMANCE_INTEGRATION_MAP.md
+      - src/wre/domain/failures.py
+      - src/wre/domain/metrics.py
+      - src/wre/domain/quality.py
+      - src/wre/domain/benchmarks.py
+      - tests/test_failure_taxonomy.py
+      - tests/test_metrics.py
+      - tests/test_quality_decisions.py
+      - tests/test_benchmarks.py
+    reuse:
+      - QualityDecision as the only evaluator decision vocabulary and QualityMode as a separate compute/product-mode vocabulary
+      - FailureCategory as stable caller-supplied cross-adapter failure meaning without parsing raw adapter signals
+      - MetricVector and MetricName as the complete typed measurement input without recomputation or flattening into one score
+      - immutable explicit identity and canonical tuple conventions already used throughout wre.domain
+      - fail-closed unresolved-state and bounded-escalation principles from docs/24_SYSTEM_INVARIANTS.md
+    acceptance:
+      - The quality policy is an immutable explicitly versioned caller-selected contract; evaluation never discovers a mutable latest policy from registry environment path filename or global state.
+      - Policy metric rules refer only to exact MetricName values and declare whether a metric is required or optional plus any explicit finite threshold comparison and non-PASS decision produced when that threshold is violated; informational known metrics can be admitted without a threshold.
+      - Policy failure rules map exact FailureCategory values to explicit non-PASS QualityDecision values; a stable failure category is never silently treated as success merely because no metric rule fires.
+      - Metric and failure rule collections are immutable unique and canonically ordered; duplicate mutable raw or untyped collections fail closed rather than being sorted deduplicated or coerced silently.
+      - Evaluation accepts exactly a typed policy MetricVector and immutable tuple of explicit FailureCategory values and performs no metric calculation adapter execution registry lookup logging parse filesystem network or environment inspection.
+      - Every required policy metric must be present exactly once through MetricVector semantics; a missing required metric yields QualityDecision.UNRESOLVED with a typed reason rather than PASS.
+      - Every supplied metric must be explicitly admitted by the policy as a thresholded or informational metric; an unknown metric yields UNRESOLVED rather than being ignored.
+      - Every supplied FailureCategory must have an exact policy mapping; an unmapped failure yields UNRESOLVED rather than being ignored or inferred.
+      - Threshold comparisons use the supplied finite MetricObservation value exactly with no normalization rounding weighting or unit conversion; policy construction requires explicit compatible MetricDirection expectations rather than guessing semantics.
+      - If no failure rule or metric threshold produces a non-PASS decision and all required/known-input checks succeed the result is PASS.
+      - When multiple rules produce decisions the evaluator uses one documented fixed deterministic precedence local to quality evaluation, with UNRESOLVED strongest followed by ESCALATE RETRY ACCEPT_WITH_WARNINGS and PASS; this precedence selects a returned decision only and executes no action.
+      - Evaluation output is immutable and contains the selected QualityDecision policy identity/revision and a canonical tuple of typed machine-readable reasons sufficient to audit which missing unknown failure or threshold condition determined the result; no free-form catch-all metadata route target retry count or scheduler action is included.
+      - QualityMode benchmark records failure taxonomy metric contracts adapter registry persistence routing and retained V1 behavior remain unchanged.
+    tests:
+      - policy identity/revision rule construction immutability canonical-order uniqueness and wrong-type negative tests
+      - PASS case with all required metrics present and all thresholds satisfied
+      - explicit threshold violations producing ACCEPT_WITH_WARNINGS RETRY ESCALATE and UNRESOLVED decisions
+      - explicit mapped FailureCategory decision cases and deterministic multi-rule precedence tests
+      - missing required metric unknown input metric and unmapped failure fail-closed UNRESOLVED tests
+      - optional and informational known metric cases proving absence or presence is deterministic and does not affect unrelated thresholds
+      - regression proving evaluator does not mutate MetricVector infer failures execute retry fallback routing scheduling or change benchmark and QualityMode semantics
+      - full fast CI
   - {id: V2L4.6, lot: V2L4, title: Unknown metric and failure negative tests, status: planned, depends_on: [V2L4.5]}
