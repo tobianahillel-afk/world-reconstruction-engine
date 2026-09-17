@@ -84,8 +84,7 @@ class BenchmarkRecord:
             raise TypeError("benchmark_record.performance_evidence members must be ArtifactRef")
 
         evidence_keys = [
-            (item.artifact_id.value, item.artifact_kind.value)
-            for item in self.performance_evidence
+            (item.artifact_id.value, item.artifact_kind.value) for item in self.performance_evidence
         ]
         if len(set(self.performance_evidence)) != len(self.performance_evidence):
             raise ValueError("benchmark_record.performance_evidence members must be unique")
