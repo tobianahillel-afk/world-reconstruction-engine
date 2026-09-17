@@ -5,18 +5,18 @@ roadmap_version: '2.0'
 phase: implementation
 milestone: V2M0
 lot: V2L4
-active_work_item: V2L4.2
+active_work_item: V2L4.3
 status: ready
-last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5, V2L3.6, V2L4.1]
-last_merged_pr: 59
+last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5, V2L3.6, V2L4.1, V2L4.2]
+last_merged_pr: 60
 current_goal: >-
-  Define only the solver-independent immutable multidimensional metric observation/vector contract:
-  open typed metric semantics, finite numeric values and exact evaluator/input provenance, without
-  computing metrics or pulling quality decisions, thresholds, benchmarks, routing or execution profiles forward.
+  Define only the closed stable WRE quality-decision vocabulary already named by the production-runtime
+  quality-gate blueprint: PASS, ACCEPT_WITH_WARNINGS, RETRY, ESCALATE and UNRESOLVED, without
+  thresholds, reasons, benchmark records, routing or fallback execution.
 next_action: >-
-  Complete only V2L4.2 from its executable contract in registry/work-items/v2m0.yaml: add the typed
-  metric vocabulary/vector and focused tests, preserve V2L3 adapter-local metric_names as a separate
-  concern, and do not start V2L4.3 QualityDecision implementation early.
+  Complete only V2L4.3 from its executable contract in registry/work-items/v2m0.yaml: add the
+  QualityDecision vocabulary and focused tests, preserve MetricVector and FailureCategory as separate
+  evidence vocabularies, and do not start V2L4.4 benchmark-record implementation early.
 blockers: []
 architecture:
   product_blueprint: docs/01_PRODUCT.md

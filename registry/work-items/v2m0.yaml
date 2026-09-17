@@ -1209,7 +1209,7 @@ work_items:
   - id: V2L4.2
     lot: V2L4
     title: Multidimensional metric vector
-    status: ready
+    status: done
     objective: Define the minimal immutable solver-independent metric observation and vector vocabulary needed to carry multidimensional numeric quality and resource measurements with explicit semantic identity and exact evaluator/input provenance, while deferring metric computation, quality decisions, threshold policy, benchmark records and routing behavior.
     allowed_scope:
       - src/wre/domain/metrics.py
@@ -1270,7 +1270,57 @@ work_items:
       - MetricVector empty single and multidimensional canonical-order cases plus unsorted duplicate-name mutable-collection raw-member negative tests
       - regression proving FailureCategory V2L3 metric_names ArtifactRef and ArtifactProducerIdentity semantics remain unchanged
       - full fast CI
-  - {id: V2L4.3, lot: V2L4, title: Quality decision contract, status: planned, depends_on: [V2L4.2]}
+  - id: V2L4.3
+    lot: V2L4
+    title: Quality decision contract
+    status: ready
+    objective: Define only the closed stable WRE quality-decision vocabulary already named by the production-runtime quality-gate blueprint so later policy evaluation and routing can exchange one explicit decision without conflating that decision with metric observations, failure categories, thresholds, reasons or fallback execution.
+    allowed_scope:
+      - src/wre/domain/quality.py
+      - focused public-domain exports only if required for the new contract
+      - tests/test_quality_decisions.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry after implementation evidence is green so V2L4.4 can be activated without implementing it
+    out_of_scope:
+      - changing MetricName MetricDescriptor MetricProvenance MetricObservation MetricVector or other V2L4.2 semantics
+      - changing FailureCategory or V2L3 adapter-local failure_signals and metric_names declarations
+      - thresholds policy revision weighted scores normalization required-metric rules or deterministic quality-policy evaluation owned by V2L4.5
+      - human-readable reasons machine-readable escalation hints retry counts route identities fallback targets scheduler actions or execution state
+      - benchmark record schema fixture comparison baseline hardware environment or execution-profile records owned by V2L4.4
+      - automatic conversion from FailureCategory metric values adapter signals exceptions logs routes retries environment state or benchmark results into a quality decision
+      - routing fallback retry escalation execution persistence registry mutation artifact-key cache or materialization behavior
+      - starting V2L4.4 product implementation in this work item
+    depends_on: [V2L4.2]
+    read_before:
+      - docs/02_ARCHITECTURE.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - src/wre/domain/failures.py
+      - src/wre/domain/metrics.py
+      - tests/test_failure_taxonomy.py
+      - tests/test_metrics.py
+    reuse:
+      - the exact five quality-gate decision concepts already listed in docs/15_PRODUCTION_RUNTIME.md rather than inventing a competing status model
+      - existing StrEnum closed symbolic-domain style used by FailureCategory ProvenanceClass and MetricDirection
+      - V2L4.2 MetricVector as independent measurement evidence that remains outside the decision vocabulary
+      - fail-closed explicit-state principles from docs/24_SYSTEM_INVARIANTS.md
+    acceptance:
+      - QualityDecision is a closed StrEnum with exactly PASS ACCEPT_WITH_WARNINGS RETRY ESCALATE and UNRESOLVED.
+      - Stable wire tokens are exactly pass accept_with_warnings retry escalate and unresolved.
+      - No SUCCESS FAILURE FAIL WARNING ERROR QUALITY_GATE_FAILURE UNKNOWN or solver-specific value is a QualityDecision.
+      - Callers supply a QualityDecision explicitly; core performs no inference from MetricVector values FailureCategory adapter-local signals exceptions logs routes retries environment state or benchmark records.
+      - QualityDecision carries decision identity only and contains no metric vector threshold policy revision reason escalation hint retry count route fallback timestamp producer artifact or catch-all metadata.
+      - UNRESOLVED is an explicit valid decision and is not permission to accept arbitrary unknown decision strings.
+      - QualityDecision remains distinct from FailureCategory MetricDirection materialization verification and provenance vocabularies even where human-language concepts may overlap.
+      - No persistence benchmark routing scheduling quality-policy execution metric computation adapter execution or external-dependency behavior is introduced.
+    tests:
+      - exact QualityDecision member-name and wire-token golden set tests
+      - construction equality hashing iteration and serialization-friendly string behavior
+      - negative arbitrary unknown success failure warning error quality-gate-failure and solver-specific token tests
+      - regression proving QualityDecision remains distinct from FailureCategory MetricDirection materialization verification and provenance vocabularies
+      - regression proving MetricVector and V2L3 adapter registry semantics remain unchanged
+      - full fast CI
   - {id: V2L4.4, lot: V2L4, title: Benchmark record schema, status: planned, depends_on: [V2L4.3]}
   - {id: V2L4.5, lot: V2L4, title: Deterministic quality policy evaluator, status: planned, depends_on: [V2L4.4]}
   - {id: V2L4.6, lot: V2L4, title: Unknown metric and failure negative tests, status: planned, depends_on: [V2L4.5]}
