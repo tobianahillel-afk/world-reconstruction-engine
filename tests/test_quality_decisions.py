@@ -71,9 +71,7 @@ def test_quality_decision_is_distinct_from_other_domain_vocabularies() -> None:
     decisions = {member.value for member in QualityDecision}
     failure_tokens = {member.value for member in FailureCategory}
     metric_direction_tokens = {member.value for member in MetricDirection}
-    materialization_tokens = {
-        member.value for member in ArtifactMaterializationVerificationStatus
-    }
+    materialization_tokens = {member.value for member in ArtifactMaterializationVerificationStatus}
     provenance_tokens = {member.value for member in ProvenanceClass}
 
     assert decisions.isdisjoint(failure_tokens)
