@@ -1331,6 +1331,8 @@ work_items:
       - src/wre/domain/quality.py only for the canonical product QualityMode vocabulary required by benchmark records
       - focused public-domain exports only if required for the new contracts
       - tests/test_benchmarks.py
+      - docs/25_V2_ROADMAP.md only for the focused QualityMode ownership correction required to keep one canonical product vocabulary
+      - registry/work-items/v2m1.yaml only for the matching V2L10.1 ownership correction
       - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry after implementation evidence is green so V2L4.5 can be activated without implementing it
     out_of_scope:
       - changing QualityDecision FailureCategory MetricDescriptor MetricObservation MetricVector ArtifactProducerIdentity HardwareRuntimeIdentity ArtifactRef or Sha256Digest semantics
@@ -1369,6 +1371,7 @@ work_items:
       - existing immutable typed fail-closed domain conventions
     acceptance:
       - QualityMode is a closed StrEnum with exactly PREVIEW FAST QUALITY and MASTER and stable wire tokens preview fast quality and master; it remains distinct from QualityDecision.
+      - V2L4.4 is the single canonical owner of the QualityMode vocabulary because benchmark evidence requires it here; V2L10.1 later reuses and regression-tests this same contract for routing and must not define a competing type.
       - BenchmarkRecordId and BenchmarkFixtureId are distinct immutable opaque identities following the established WRE 1-128 character identifier lexical contract and are not aliases of artifact project run scene or observation identities.
       - BenchmarkFixtureIdentity is immutable and contains exactly BenchmarkFixtureId plus exact Sha256Digest content identity; benchmark fixtures are never identified only by a mutable name path or timestamp.
       - BenchmarkRecord is immutable and contains exactly BenchmarkRecordId fixture BenchmarkFixtureIdentity producer ArtifactProducerIdentity quality_mode QualityMode hardware HardwareRuntimeIdentity metrics MetricVector performance_evidence tuple of ArtifactRef values and optional comparison_baseline BenchmarkRecordId.
