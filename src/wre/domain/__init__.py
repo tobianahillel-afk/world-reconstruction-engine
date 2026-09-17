@@ -81,6 +81,7 @@ from wre.domain.producer_identity import (
 )
 from wre.domain.projects import SceneProject, SceneProjectId
 from wre.domain.provenance import ProvenanceClass
+from wre.domain.quality import QualityDecision
 from wre.domain.runs import (
     DerivedArtifactProvenance,
     ProducerRef,
@@ -146,6 +147,7 @@ __all__ = [
     "Point3DEstimate",
     "ProducerRef",
     "ProvenanceClass",
+    "QualityDecision",
     "RawMetadataEntry",
     "ReconstructionRun",
     "ReconstructionRunId",

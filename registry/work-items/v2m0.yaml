@@ -1273,7 +1273,7 @@ work_items:
   - id: V2L4.3
     lot: V2L4
     title: Quality decision contract
-    status: ready
+    status: done
     objective: Define only the closed stable WRE quality-decision vocabulary already named by the production-runtime quality-gate blueprint so later policy evaluation and routing can exchange one explicit decision without conflating that decision with metric observations, failure categories, thresholds, reasons or fallback execution.
     allowed_scope:
       - src/wre/domain/quality.py
@@ -1321,6 +1321,71 @@ work_items:
       - regression proving QualityDecision remains distinct from FailureCategory MetricDirection materialization verification and provenance vocabularies
       - regression proving MetricVector and V2L3 adapter registry semantics remain unchanged
       - full fast CI
-  - {id: V2L4.4, lot: V2L4, title: Benchmark record schema, status: planned, depends_on: [V2L4.3]}
+  - id: V2L4.4
+    lot: V2L4
+    title: Benchmark record schema
+    status: ready
+    objective: Define the minimal immutable solver-independent benchmark record needed to retain reproducible comparison evidence for one exact fixture, producer/model/configuration, product quality mode and hardware/runtime identity together with a MetricVector and optional exact performance-evidence artifacts, without computing metrics, running profilers, ranking candidates or selecting defaults.
+    allowed_scope:
+      - src/wre/domain/benchmarks.py
+      - src/wre/domain/quality.py only for the canonical product QualityMode vocabulary required by benchmark records
+      - focused public-domain exports only if required for the new contracts
+      - tests/test_benchmarks.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry after implementation evidence is green so V2L4.5 can be activated without implementing it
+    out_of_scope:
+      - changing QualityDecision FailureCategory MetricDescriptor MetricObservation MetricVector ArtifactProducerIdentity HardwareRuntimeIdentity ArtifactRef or Sha256Digest semantics
+      - metric computation fixture execution benchmark orchestration profiler integration NVTX Nsight TensorRT tracing or external tool invocation
+      - comparing ranking scoring normalizing promoting or selecting adapters models configurations hardware execution profiles or defaults from benchmark records
+      - threshold policy required-metric rules weighted scores quality-gate evaluation retry fallback escalation or routing owned by V2L4.5 and later routing lots
+      - benchmark persistence database registry mutation index queries dashboards reports aggregation across records or retention policy
+      - embedding raw trace bytes logs screenshots environment dictionaries free-form metadata or arbitrary catch-all fields inside the benchmark record
+      - inferring fixture producer quality mode hardware metric or baseline identity from paths filenames environment state registry state or mutable latest aliases
+      - starting V2L4.5 product implementation in this work item
+    depends_on: [V2L4.3]
+    read_before:
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md
+      - docs/29_PERFORMANCE_INTEGRATION_MAP.md
+      - src/wre/domain/quality.py
+      - src/wre/domain/metrics.py
+      - src/wre/domain/producer_identity.py
+      - src/wre/domain/hardware_identity.py
+      - src/wre/domain/artifacts.py
+      - src/wre/domain/observations.py
+      - tests/test_quality_decisions.py
+      - tests/test_metrics.py
+    reuse:
+      - PREVIEW FAST QUALITY and MASTER as the already-frozen product quality modes rather than inventing benchmark-private mode strings
+      - ArtifactProducerIdentity as exact adapter implementation configuration and optional model/checkpoint identity
+      - HardwareRuntimeIdentity as exact caller-supplied hardware/runtime-sensitive identity
+      - MetricVector as the complete typed multidimensional measurement payload
+      - ArtifactRef for optional retained timing trace or other performance-evidence artifacts without integrating a profiler
+      - Sha256Digest for exact benchmark-fixture content identity
+      - existing immutable typed fail-closed domain conventions
+    acceptance:
+      - QualityMode is a closed StrEnum with exactly PREVIEW FAST QUALITY and MASTER and stable wire tokens preview fast quality and master; it remains distinct from QualityDecision.
+      - BenchmarkRecordId and BenchmarkFixtureId are distinct immutable opaque identities following the established WRE 1-128 character identifier lexical contract and are not aliases of artifact project run scene or observation identities.
+      - BenchmarkFixtureIdentity is immutable and contains exactly BenchmarkFixtureId plus exact Sha256Digest content identity; benchmark fixtures are never identified only by a mutable name path or timestamp.
+      - BenchmarkRecord is immutable and contains exactly BenchmarkRecordId fixture BenchmarkFixtureIdentity producer ArtifactProducerIdentity quality_mode QualityMode hardware HardwareRuntimeIdentity metrics MetricVector performance_evidence tuple of ArtifactRef values and optional comparison_baseline BenchmarkRecordId.
+      - performance_evidence may be empty; when present it is an immutable tuple of unique ArtifactRef values supplied in canonical lexicographic ArtifactId then ArtifactKind order. Mutable unsorted duplicate raw or untyped collections fail closed rather than being normalized.
+      - comparison_baseline may be absent; when present it is only an exact BenchmarkRecordId reference and cannot equal the record own ID. The contract performs no lookup comparison ranking or score computation.
+      - The record carries no pass/fail threshold quality decision failure category winner rank promotion status timestamp mutable environment dictionary raw trace payload free-form notes or catch-all metadata.
+      - MetricVector values are retained exactly as supplied and are not recomputed normalized aggregated collapsed into one score or interpreted by this contract.
+      - Performance trace or stage-timing evidence is referenced only through ArtifactRef and remains optional; no profiler runtime dependency or trace parser is introduced.
+      - No persistence benchmark execution comparison default selection routing scheduling quality-policy execution or external-dependency behavior is introduced.
+    tests:
+      - exact QualityMode member-name and wire-token golden set plus QualityDecision distinctness tests
+      - BenchmarkRecordId and BenchmarkFixtureId construction equality hashing immutability lexical validation and cross-identity distinctness tests
+      - BenchmarkFixtureIdentity typed construction exact digest immutability equality hashing tests
+      - BenchmarkRecord typed construction immutability equality and hashing tests with empty and populated performance evidence and absent or present baseline
+      - canonical performance-evidence ordering uniqueness mutable-collection raw-member and wrong-type negative tests
+      - self-baseline and wrong baseline producer hardware metric fixture quality-mode negative tests
+      - regression proving MetricVector ArtifactProducerIdentity HardwareRuntimeIdentity ArtifactRef QualityDecision and FailureCategory semantics remain unchanged
+      - full fast CI
   - {id: V2L4.5, lot: V2L4, title: Deterministic quality policy evaluator, status: planned, depends_on: [V2L4.4]}
   - {id: V2L4.6, lot: V2L4, title: Unknown metric and failure negative tests, status: planned, depends_on: [V2L4.5]}
