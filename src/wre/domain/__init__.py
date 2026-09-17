@@ -50,6 +50,17 @@ from wre.domain.metadata import (
     GpsMetadataInterpretation,
     ObservationMetadataInterpretation,
 )
+from wre.domain.metrics import (
+    MetricAggregation,
+    MetricDescriptor,
+    MetricDimension,
+    MetricDirection,
+    MetricName,
+    MetricObservation,
+    MetricProvenance,
+    MetricUnit,
+    MetricVector,
+)
 from wre.domain.observations import (
     ImageObservation,
     MediaAssetRef,
@@ -117,6 +128,15 @@ __all__ = [
     "LocalFrameId",
     "LocalScaleStatus",
     "MediaAssetRef",
+    "MetricAggregation",
+    "MetricDescriptor",
+    "MetricDimension",
+    "MetricDirection",
+    "MetricName",
+    "MetricObservation",
+    "MetricProvenance",
+    "MetricUnit",
+    "MetricVector",
     "ModelIdentity",
     "Observation",
     "ObservationId",
