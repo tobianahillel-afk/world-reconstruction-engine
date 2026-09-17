@@ -397,7 +397,11 @@ def test_mapped_failure_returns_explicit_decision_without_executing_action() -> 
         failure_rules=(_failure_rule(FailureCategory.TIMEOUT, QualityDecision.RETRY),)
     )
 
-    result = evaluate_quality_policy(policy, MetricVector(observations=()), (FailureCategory.TIMEOUT,))
+    result = evaluate_quality_policy(
+        policy,
+        MetricVector(observations=()),
+        (FailureCategory.TIMEOUT,),
+    )
 
     assert result.decision is QualityDecision.RETRY
     assert result.reasons == (
