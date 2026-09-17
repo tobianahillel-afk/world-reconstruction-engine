@@ -390,7 +390,9 @@ def evaluate_quality_policy(
 
     metric_rules = {rule.metric_name: rule for rule in policy.metric_rules}
     failure_rules = {rule.failure_category: rule for rule in policy.failure_rules}
-    observations = {observation.descriptor.name: observation for observation in metrics.observations}
+    observations = {
+        observation.descriptor.name: observation for observation in metrics.observations
+    }
 
     reasons: list[QualityEvaluationReason] = []
 
