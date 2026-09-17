@@ -3,6 +3,15 @@ from __future__ import annotations
 from enum import StrEnum
 
 
+class QualityMode(StrEnum):
+    """Canonical product quality level requested from WRE."""
+
+    PREVIEW = "preview"
+    FAST = "fast"
+    QUALITY = "quality"
+    MASTER = "master"
+
+
 class QualityDecision(StrEnum):
     """Stable explicit decision emitted by WRE quality evaluation."""
 
