@@ -91,7 +91,8 @@ class BenchmarkRecord:
             raise ValueError("benchmark_record.performance_evidence members must be unique")
         if evidence_keys != sorted(evidence_keys):
             raise ValueError(
-                "benchmark_record.performance_evidence must use canonical ArtifactId/ArtifactKind order"
+                "benchmark_record.performance_evidence must use canonical "
+                "ArtifactId/ArtifactKind order"
             )
 
         if self.comparison_baseline is not None and not isinstance(
@@ -101,4 +102,6 @@ class BenchmarkRecord:
                 "benchmark_record.comparison_baseline must be BenchmarkRecordId when present"
             )
         if self.comparison_baseline == self.record_id:
-            raise ValueError("benchmark_record.comparison_baseline must not reference its own record")
+            raise ValueError(
+                "benchmark_record.comparison_baseline must not reference its own record"
+            )
