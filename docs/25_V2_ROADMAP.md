@@ -66,7 +66,7 @@ Purpose: create one common language for gates, escalation and comparison.
 - `V2L4.1` — stable failure taxonomy contract.
 - `V2L4.2` — typed multidimensional metric vector/metric provenance contract.
 - `V2L4.3` — quality decision contract: PASS / ACCEPT_WITH_WARNINGS / RETRY / ESCALATE / UNRESOLVED.
-- `V2L4.4` — benchmark record schema with fixture, adapter/model/config, quality mode, hardware and metric vector; permit solver-independent references to retained performance evidence such as stage timing/trace artifacts without integrating a profiler here.
+- `V2L4.4` — benchmark record schema with fixture, adapter/model/config, hardware and metric vector; establish the single canonical `QualityMode` vocabulary PREVIEW / FAST / QUALITY / MASTER needed by benchmark evidence, and permit solver-independent references to retained performance evidence such as stage timing/trace artifacts without integrating a profiler here.
 - `V2L4.5` — deterministic quality-policy evaluation baseline.
 - `V2L4.6` — negative tests proving unknown metrics/failures do not silently pass and lot review.
 
@@ -117,7 +117,7 @@ Purpose: create one common language for gates, escalation and comparison.
 
 ### V2L10 — Quality modes and route graph
 
-- `V2L10.1` — `QualityMode` contract: PREVIEW / FAST / QUALITY / MASTER.
+- `V2L10.1` — route-facing adoption and regression coverage for the canonical `QualityMode` contract established by V2L4.4; routing must reuse it rather than define a competing mode vocabulary.
 - `V2L10.2` — route-node/route-graph contract with explicit adapter capability requirements.
 - `V2L10.3` — deterministic router inputs from data profile, budget, existing artifacts and prior failures.
 - `V2L10.4` — allowlisted fallback/escalation policy with bounded termination.

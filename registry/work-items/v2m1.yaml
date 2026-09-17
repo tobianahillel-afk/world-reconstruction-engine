@@ -29,7 +29,7 @@ work_items:
   - {id: V2L9.3, lot: V2L9, title: Audio correlation synchronization adapter, status: planned, depends_on: [V2L9.2]}
   - {id: V2L9.4, lot: V2L9, title: Visual event synchronization interface, status: planned, depends_on: [V2L9.3]}
   - {id: V2L9.5, lot: V2L9, title: Synchronization ambiguity contradiction fixtures, status: planned, depends_on: [V2L9.4]}
-  - {id: V2L10.1, lot: V2L10, title: QualityMode PREVIEW FAST QUALITY MASTER contract, status: planned, depends_on: [V2L9.5]}
+  - {id: V2L10.1, lot: V2L10, title: Adopt canonical QualityMode in routing contracts, status: planned, depends_on: [V2L9.5]}
   - {id: V2L10.2, lot: V2L10, title: Route node and route graph contract, status: planned, depends_on: [V2L10.1]}
   - {id: V2L10.3, lot: V2L10, title: Deterministic router input contract, status: planned, depends_on: [V2L10.2]}
   - {id: V2L10.4, lot: V2L10, title: Bounded allowlisted fallback escalation policy, status: planned, depends_on: [V2L10.3]}
