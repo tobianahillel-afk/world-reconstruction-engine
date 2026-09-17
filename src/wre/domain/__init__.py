@@ -22,6 +22,12 @@ from wre.domain.artifact_materialization import (
 )
 from wre.domain.artifact_metadata import ArtifactMetadata
 from wre.domain.artifacts import ArtifactId, ArtifactKind, ArtifactRef
+from wre.domain.benchmarks import (
+    BenchmarkFixtureId,
+    BenchmarkFixtureIdentity,
+    BenchmarkRecord,
+    BenchmarkRecordId,
+)
 from wre.domain.cameras import (
     Camera,
     CameraId,
@@ -81,7 +87,7 @@ from wre.domain.producer_identity import (
 )
 from wre.domain.projects import SceneProject, SceneProjectId
 from wre.domain.provenance import ProvenanceClass
-from wre.domain.quality import QualityDecision
+from wre.domain.quality import QualityDecision, QualityMode
 from wre.domain.runs import (
     DerivedArtifactProvenance,
     ProducerRef,
@@ -108,6 +114,10 @@ __all__ = [
     "ArtifactMetadata",
     "ArtifactProducerIdentity",
     "ArtifactRef",
+    "BenchmarkFixtureId",
+    "BenchmarkFixtureIdentity",
+    "BenchmarkRecord",
+    "BenchmarkRecordId",
     "Camera",
     "CameraCalibrationEstimate",
     "CameraCalibrationEstimateId",
@@ -148,6 +158,7 @@ __all__ = [
     "ProducerRef",
     "ProvenanceClass",
     "QualityDecision",
+    "QualityMode",
     "RawMetadataEntry",
     "ReconstructionRun",
     "ReconstructionRunId",
