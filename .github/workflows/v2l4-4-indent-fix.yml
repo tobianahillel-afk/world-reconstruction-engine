@@ -1,0 +1,45 @@
+name: v2l4-4-indent-fix
+
+on:
+  push:
+    branches:
+      - feature/v2l4-4-benchmark-record
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: ${{ startsWith(github.event.head_commit.message, '[V2L4.4] Fix V2L4.5 handoff indentation') }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: feature/v2l4-4-benchmark-record
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Fix lifecycle indentation
+        shell: python
+        run: |
+          from pathlib import Path
+
+          path = Path("registry/work-items/v2m0.yaml")
+          text = path.read_text(encoding="utf-8")
+          start = "  - id: V2L4.5\n"
+          end = "  - {id: V2L4.6, lot: V2L4, title: Unknown metric and failure negative tests, status: planned, depends_on: [V2L4.5]}"
+          if text.count(start) != 1 or text.count(end) != 1:
+              raise RuntimeError("unexpected V2L4.5/V2L4.6 markers")
+          prefix, tail = text.split(start, 1)
+          block, suffix = tail.split(end, 1)
+          if not block.startswith("  lot: V2L4\n"):
+              raise RuntimeError("V2L4.5 block is not in the expected mis-indented state")
+          fixed = "".join(("  " + line) if line.strip() else line for line in block.splitlines(keepends=True))
+          path.write_text(prefix + start + fixed + end + suffix, encoding="utf-8")
+          Path(".github/workflows/v2l4-4-indent-fix.yml").unlink()
+      - name: Commit corrected lifecycle metadata
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email 41898282+github-actions[bot]@users.noreply.github.com
+          git add -A
+          git commit -m "[V2L4.4] Correct V2L4.5 lifecycle indentation"
+          git push origin HEAD:feature/v2l4-4-benchmark-record
