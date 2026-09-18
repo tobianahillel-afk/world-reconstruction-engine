@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import FrozenInstanceError, fields
 from inspect import signature
+from itertools import pairwise
 from typing import Any, cast
 
 import pytest
@@ -212,7 +213,7 @@ def test_combined_bounds_apply_spacing_before_hard_cap() -> None:
     assert len(selected) == 3
     assert all(
         right.frame_time_us - left.frame_time_us >= 500
-        for left, right in zip(selected, selected[1:], strict=True)
+        for left, right in pairwise(selected)
     )
 
 
