@@ -327,7 +327,10 @@ def _frame_observation_id(
 def _verified_source_path(video: VideoObservation, source_path: Path) -> Path:
     resolved = source_path.expanduser().resolve(strict=True)
     source_hash = hash_file_content(resolved)
-    if source_hash.sha256 != video.asset.sha256 or source_hash.byte_length != video.asset.byte_length:
+    if (
+        source_hash.sha256 != video.asset.sha256
+        or source_hash.byte_length != video.asset.byte_length
+    ):
         raise ValueError("source video bytes do not match the persisted VideoObservation asset")
     return resolved
 
