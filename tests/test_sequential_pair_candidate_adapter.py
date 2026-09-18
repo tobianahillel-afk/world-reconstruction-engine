@@ -18,9 +18,9 @@ from wre.domain import (
 )
 from wre.domain.runs import ProducerRef, ReconstructionRun, ReconstructionRunId
 from wre.retrieval import (
+    SEQUENTIAL_PAIR_CANDIDATE_SOURCE_ID,
     SEQUENTIAL_PAIRING_IMPLEMENTATION,
     SEQUENTIAL_PAIRING_VERSION,
-    SEQUENTIAL_PAIR_CANDIDATE_SOURCE_ID,
     SequentialPairCandidateAdapterInput,
     SequentialPairingConfig,
     SequentialPairingResult,
