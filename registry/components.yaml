@@ -109,7 +109,8 @@ components:
       - tests/test_visual_similarity.py
       - tests/test_input_classification.py
       - tests/test_profile_summary.py
-    status: implementing
+      - tests/test_media_profile_fixture_matrix.py
+    status: implemented
   adaptive_frame_selection: {owner_lot: V2L6, implementation: [], tests: [], status: planned}
   pair_candidate_retrieval: {owner_lot: V2L7, implementation: [], tests: [], status: planned}
   scene_identity_clustering: {owner_lot: V2L8, implementation: [], tests: [], status: planned}
