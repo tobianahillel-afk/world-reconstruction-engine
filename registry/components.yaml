@@ -92,7 +92,7 @@ components:
       - tests/test_quality_decisions.py
       - tests/test_benchmarks.py
       - tests/test_quality_policy.py
-    status: implementing
+    status: implemented
   media_profiling: {owner_lot: V2L5, implementation: [], tests: [], status: planned}
   adaptive_frame_selection: {owner_lot: V2L6, implementation: [], tests: [], status: planned}
   pair_candidate_retrieval: {owner_lot: V2L7, implementation: [], tests: [], status: planned}

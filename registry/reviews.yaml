@@ -33,7 +33,11 @@ lot_reviews:
     reviewed_at: '2026-09-16'
     evidence:
       - docs/reviews/V2L3-adapter-model-registry-review.md
-  V2L4: {status: pending, reviewed_at: null, evidence: []}
+  V2L4:
+    status: passed
+    reviewed_at: '2026-09-18'
+    evidence:
+      - docs/reviews/V2L4-quality-failure-benchmark-review.md
   V2L5: {status: pending, reviewed_at: null, evidence: []}
   V2L6: {status: pending, reviewed_at: null, evidence: []}
   V2L7: {status: pending, reviewed_at: null, evidence: []}
@@ -82,7 +86,11 @@ lot_reviews:
   V2L50: {status: pending, reviewed_at: null, evidence: []}
   V2L51: {status: pending, reviewed_at: null, evidence: []}
 milestone_reviews:
-  V2M0: {status: pending, reviewed_at: null, evidence: []}
+  V2M0:
+    status: passed
+    reviewed_at: '2026-09-18'
+    evidence:
+      - docs/reviews/V2L4-quality-failure-benchmark-review.md
   V2M1: {status: pending, reviewed_at: null, evidence: []}
   V2M2: {status: pending, reviewed_at: null, evidence: []}
   V2M3: {status: pending, reviewed_at: null, evidence: []}
