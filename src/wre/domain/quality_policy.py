@@ -253,6 +253,10 @@ class QualityEvaluationReason:
                 )
             ):
                 raise ValueError("metric_direction_mismatch reason has invalid fields")
+            if self.expected_direction is self.actual_direction:
+                raise ValueError(
+                    "metric_direction_mismatch reason requires different expected and actual directions"
+                )
             return
 
         if self.kind is QualityEvaluationReasonKind.METRIC_THRESHOLD_VIOLATION:
@@ -269,6 +273,14 @@ class QualityEvaluationReason:
                 or self.actual_direction is not None
             ):
                 raise ValueError("metric_threshold_violation reason has invalid fields")
+            if not _threshold_is_violated(
+                self.observed_value,
+                self.threshold,
+                self.expected_direction,
+            ):
+                raise ValueError(
+                    "metric_threshold_violation reason requires an observed value that violates threshold"
+                )
             return
 
         if self.kind in (
