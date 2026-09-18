@@ -168,19 +168,30 @@ def test_specialist_hints_coexist_only_as_candidates_beside_observed_kind() -> N
 
 def test_video_sequence_metrics_remain_informational_evidence_not_labels() -> None:
     provenance = _provenance("video-sequence")
+    black = LumaRaster(width=8, height=8, pixels=bytes([0] * 64))
+    white = LumaRaster(width=8, height=8, pixels=bytes([255] * 64))
+    static_distance = _metric_values(
+        evaluate_visual_similarity(black, black, provenance)
+    )["media.visual.grid_luma_mae"]
+    changed_distance = _metric_values(
+        evaluate_visual_similarity(black, white, provenance)
+    )["media.visual.grid_luma_mae"]
+
     classes = evaluate_input_classification(ObservationKind.VIDEO_FRAME)
     summary = evaluate_profile_summary(
         ProfileSummaryInput(
             observation_count=12,
             distinct_source_count=2,
             video_duration_us=5_000_000,
-            temporal_grid_luma_changes=(0.2, 0.8),
-            coverage_grid_luma_distances=(0.1, 0.9),
+            temporal_grid_luma_changes=(static_distance, changed_distance),
+            coverage_grid_luma_distances=(static_distance, changed_distance),
         ),
         provenance,
     )
     values = _metric_values(summary)
 
+    assert static_distance == 0.0
+    assert changed_distance == 1.0
     assert tuple(item.input_class for item in classes) == (InputClass.VIDEO,)
     assert classes[0].evidence_kind is InputClassEvidenceKind.OBSERVED
     assert values == {
