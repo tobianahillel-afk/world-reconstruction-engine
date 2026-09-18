@@ -121,14 +121,17 @@ components:
       - src/wre/frame_selection/quality_diversity.py
       - src/wre/frame_selection/density_bounds.py
       - src/wre/ingestion/keyframes.py
+      - src/wre/ingestion/decoded_images.py
       - src/wre/ingestion/__init__.py
+      - src/wre/domain/decoded_images.py
     tests:
       - tests/test_frame_selection_policy.py
       - tests/test_interval_frame_selection_adapter.py
       - tests/test_quality_diversity_frame_selection.py
       - tests/test_frame_selection_density_bounds.py
       - tests/test_frame_selection_extraction_regression.py
-    status: implementing
+      - tests/test_decoded_image_pyramids.py
+    status: implemented
   pair_candidate_retrieval: {owner_lot: V2L7, implementation: [], tests: [], status: planned}
   scene_identity_clustering: {owner_lot: V2L8, implementation: [], tests: [], status: planned}
   temporal_grouping_sync: {owner_lot: V2L9, implementation: [], tests: [], status: planned}

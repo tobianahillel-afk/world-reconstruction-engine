@@ -35,6 +35,15 @@ from wre.domain.cameras import (
     ObservationMetadata,
     RawMetadataEntry,
 )
+from wre.domain.decoded_images import (
+    DECODED_IMAGE_PYRAMID_KIND,
+    DecodedImageLevelDescriptor,
+    DecodedImageOrientationPolicy,
+    DecodedImagePixelLayout,
+    DecodedImagePyramidManifest,
+    DecodedImagePyramidSpec,
+    build_decoded_image_level_descriptors,
+)
 from wre.domain.estimated_geometry import (
     CameraCalibrationEstimate,
     CameraCalibrationEstimateId,
@@ -114,6 +123,7 @@ from wre.domain.runs import (
 
 __all__ = [
     "ARTIFACT_KEY_SCHEMA_VERSION",
+    "DECODED_IMAGE_PYRAMID_KIND",
     "AdapterCapabilityDescriptor",
     "AdapterCapabilityName",
     "ArtifactDependencyEdge",
@@ -144,6 +154,11 @@ __all__ = [
     "CaptureTimeInterpretationStatus",
     "CheckpointIdentity",
     "ConfigurationIdentity",
+    "DecodedImageLevelDescriptor",
+    "DecodedImageOrientationPolicy",
+    "DecodedImagePixelLayout",
+    "DecodedImagePyramidManifest",
+    "DecodedImagePyramidSpec",
     "DerivedArtifactProvenance",
     "EstimatedPoint3DId",
     "EstimatedTrackElement",
@@ -202,6 +217,7 @@ __all__ = [
     "SpatialFragmentId",
     "VideoFrameObservation",
     "VideoObservation",
+    "build_decoded_image_level_descriptors",
     "canonical_artifact_key_bytes",
     "derive_artifact_key",
     "evaluate_quality_policy",

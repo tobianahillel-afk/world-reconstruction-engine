@@ -1,5 +1,10 @@
 """Media-ingestion services built on the solver-independent domain contracts."""
 
+from wre.ingestion.decoded_images import (
+    DecodedImagePyramidMaterializationRequest,
+    DecodedImagePyramidMaterializationResult,
+    FFmpegDecodedImagePyramidMaterializer,
+)
 from wre.ingestion.exif import (
     EXIF_NAMESPACE,
     ExifMetadataIngestor,
@@ -48,9 +53,12 @@ __all__ = [
     "DEFAULT_HASH_CHUNK_SIZE",
     "EXIF_NAMESPACE",
     "SUPPORTED_FFMPEG_VERSION",
+    "DecodedImagePyramidMaterializationRequest",
+    "DecodedImagePyramidMaterializationResult",
     "DuplicateObservationLookup",
     "ExifMetadataIngestRequest",
     "ExifMetadataIngestor",
+    "FFmpegDecodedImagePyramidMaterializer",
     "FFmpegExecutionError",
     "FFmpegToolchain",
     "FFmpegToolchainIdentity",

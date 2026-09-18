@@ -21,6 +21,7 @@ DEPENDENCIES_PATH = ROOT / "registry" / "dependencies.yaml"
 _EXPECTED_ADAPTER_IDS = (
     "colmap.sparse_sfm",
     "exifread.raw_exif",
+    "ffmpeg.decoded_image_pyramid",
     "ffmpeg.keyframe_extraction",
 )
 
@@ -43,7 +44,7 @@ def _entries_by_id() -> dict[str, dict[str, Any]]:
     return {entry["adapter_id"]: entry for entry in typed_entries}
 
 
-def test_registry_contains_exactly_the_three_retained_baselines() -> None:
+def test_registry_contains_exactly_the_four_retained_baselines() -> None:
     registry = _load_mapping(REGISTRY_PATH)
     entries = registry["entries"]
     assert isinstance(entries, list)
@@ -78,6 +79,14 @@ def test_baseline_versions_and_dependency_refs_match_retained_evidence() -> None
     assert exifread["dependency_refs"] == ["exifread"]
     assert dependencies["exifread"]["pinned_version"] == distribution_version("ExifRead") == "3.5.1"
 
+    ffmpeg_pyramid = entries["ffmpeg.decoded_image_pyramid"]
+    assert ffmpeg_pyramid["producer"] == {
+        "implementation": "wre.ingestion.decoded_images.FFmpegDecodedImagePyramidMaterializer",
+        "version": SUPPORTED_FFMPEG_VERSION,
+        "revision": None,
+    }
+    assert ffmpeg_pyramid["dependency_refs"] == ["ffmpeg"]
+
     ffmpeg = entries["ffmpeg.keyframe_extraction"]
     assert ffmpeg["producer"] == {
         "implementation": "wre.ingestion.keyframes.LocalKeyframeExtractor",
@@ -100,6 +109,11 @@ def test_baseline_capabilities_are_conservative_and_existing_only() -> None:
         "name": "metadata.raw_exif",
         "input_kinds": ["image.observation"],
         "output_kinds": ["observation.metadata"],
+    }
+    assert entries["ffmpeg.decoded_image_pyramid"]["capability"] == {
+        "name": "media.decoded_image_pyramid",
+        "input_kinds": ["image.observation", "video.frame_observation"],
+        "output_kinds": ["media.decoded_image_pyramid"],
     }
     assert entries["ffmpeg.keyframe_extraction"]["capability"] == {
         "name": "media.keyframe_extraction",
@@ -131,6 +145,7 @@ def test_baseline_shipping_license_and_hardware_policy_match_approved_evidence()
     expected_hardware_policy = {
         "colmap.sparse_sfm": "required",
         "exifread.raw_exif": "omitted",
+        "ffmpeg.decoded_image_pyramid": "omitted",
         "ffmpeg.keyframe_extraction": "omitted",
     }
 
