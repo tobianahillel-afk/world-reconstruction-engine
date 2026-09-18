@@ -94,7 +94,7 @@ dependencies:
     license_review: pending
   ffmpeg:
     status: core
-    role: [video_io, deterministic_frame_extraction]
+    role: [video_io, deterministic_frame_extraction, decoded_image_pyramid_reference]
     integration: subprocess_cli
     version_policy: pin_exact_system_package
     pinned_version: 6.1.1-3ubuntu5

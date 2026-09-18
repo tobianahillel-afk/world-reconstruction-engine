@@ -46,6 +46,29 @@ entries:
     failure_signals: []
     metric_names: []
     resume_mode: unsupported
+  - adapter_id: ffmpeg.decoded_image_pyramid
+    capability:
+      name: media.decoded_image_pyramid
+      input_kinds: [image.observation, video.frame_observation]
+      output_kinds: [media.decoded_image_pyramid]
+    producer:
+      implementation: wre.ingestion.decoded_images.FFmpegDecodedImagePyramidMaterializer
+      version: 6.1.1-3ubuntu5
+      revision: null
+    dependency_refs: [ffmpeg]
+    model: null
+    checkpoint: null
+    artifact_key_hardware_policy: omitted
+    license:
+      direct: GPL-2.0-or-later
+      review: approved
+      transitive_notes: "The retained Ubuntu Noble FFmpeg package is already reviewed as an external GPL-2.0-or-later subprocess dependency; this reference decode capability does not change that build composition."
+      redistribution_notes: "WRE invokes the exact ffmpeg/ffprobe package as external subprocesses and does not link or bundle the binaries; alternate builds, redistribution, or accelerated backends require fresh review."
+    shipping_status: approved
+    reproducibility_notes: "The reference materializer requires matching ffmpeg and ffprobe 6.1.1-3ubuntu5 identities, disables WRE autorotation semantics, emits packed RGB8 raw pyramid levels and records exact source/configuration identity."
+    failure_signals: []
+    metric_names: []
+    resume_mode: unsupported
   - adapter_id: ffmpeg.keyframe_extraction
     capability:
       name: media.keyframe_extraction
