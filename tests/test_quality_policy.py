@@ -352,15 +352,24 @@ def test_missing_required_metric_fails_closed_unresolved() -> None:
     )
 
 
-def test_unknown_supplied_metric_fails_closed_unresolved() -> None:
+@pytest.mark.parametrize(
+    "metric_name",
+    ("unknown.metric", "runtime.unregistered", "geometry.future_metric"),
+)
+def test_unknown_supplied_metric_fails_closed_unresolved(metric_name: str) -> None:
     policy = _policy()
-    metrics = MetricVector(observations=(_metric("unknown.metric", 1.0),))
+    metrics = MetricVector(observations=(_metric(metric_name, 1.0),))
 
     result = evaluate_quality_policy(policy, metrics, ())
 
     assert result.decision is QualityDecision.UNRESOLVED
-    assert result.reasons[0].kind is QualityEvaluationReasonKind.UNKNOWN_METRIC
-    assert result.reasons[0].metric_name == MetricName("unknown.metric")
+    assert result.reasons == (
+        QualityEvaluationReason(
+            kind=QualityEvaluationReasonKind.UNKNOWN_METRIC,
+            decision=QualityDecision.UNRESOLVED,
+            metric_name=MetricName(metric_name),
+        ),
+    )
 
 
 def test_reason_rejects_false_direction_mismatch_and_false_threshold_violation() -> None:
@@ -433,16 +442,24 @@ def test_mapped_failure_returns_explicit_decision_without_executing_action() -> 
     assert not hasattr(result, "fallback")
 
 
-def test_unmapped_failure_fails_closed_unresolved() -> None:
+@pytest.mark.parametrize("failure", tuple(FailureCategory))
+def test_every_unmapped_stable_failure_fails_closed_unresolved(
+    failure: FailureCategory,
+) -> None:
     result = evaluate_quality_policy(
         _policy(),
         MetricVector(observations=()),
-        (FailureCategory.TIMEOUT,),
+        (failure,),
     )
 
     assert result.decision is QualityDecision.UNRESOLVED
-    assert result.reasons[0].kind is QualityEvaluationReasonKind.UNMAPPED_FAILURE
-    assert result.reasons[0].failure_category is FailureCategory.TIMEOUT
+    assert result.reasons == (
+        QualityEvaluationReason(
+            kind=QualityEvaluationReasonKind.UNMAPPED_FAILURE,
+            decision=QualityDecision.UNRESOLVED,
+            failure_category=failure,
+        ),
+    )
 
 
 def test_precedence_is_unresolved_escalate_retry_warning_pass() -> None:
@@ -474,6 +491,59 @@ def test_precedence_is_unresolved_escalate_retry_warning_pass() -> None:
         QualityDecision.RETRY,
         QualityDecision.ACCEPT_WITH_WARNINGS,
     ]
+
+
+def test_unresolved_evidence_dominates_mapped_retry_and_escalate_conditions() -> None:
+    policy = _policy(
+        metric_rules=(
+            _metric_rule(
+                "a.missing",
+                decision=QualityDecision.ACCEPT_WITH_WARNINGS,
+            ),
+            _metric_rule(
+                "b.mismatch",
+                direction=MetricDirection.HIGHER_IS_BETTER,
+                decision=QualityDecision.RETRY,
+            ),
+            _metric_rule("c.escalate", decision=QualityDecision.ESCALATE),
+        ),
+        failure_rules=(
+            _failure_rule(FailureCategory.TIMEOUT, QualityDecision.RETRY),
+        ),
+    )
+    metrics = MetricVector(
+        observations=(
+            _metric("b.mismatch", 0.5),
+            _metric("c.escalate", 2.0),
+            _metric("z.unknown", 1.0),
+        )
+    )
+
+    result = evaluate_quality_policy(
+        policy,
+        metrics,
+        (FailureCategory.MEMORY_EXHAUSTION, FailureCategory.TIMEOUT),
+    )
+
+    assert result.decision is QualityDecision.UNRESOLVED
+    assert {
+        reason.kind for reason in result.reasons if reason.decision is QualityDecision.UNRESOLVED
+    } == {
+        QualityEvaluationReasonKind.MISSING_REQUIRED_METRIC,
+        QualityEvaluationReasonKind.METRIC_DIRECTION_MISMATCH,
+        QualityEvaluationReasonKind.UNKNOWN_METRIC,
+        QualityEvaluationReasonKind.UNMAPPED_FAILURE,
+    }
+    assert any(
+        reason.kind is QualityEvaluationReasonKind.METRIC_THRESHOLD_VIOLATION
+        and reason.decision is QualityDecision.ESCALATE
+        for reason in result.reasons
+    )
+    assert any(
+        reason.kind is QualityEvaluationReasonKind.MAPPED_FAILURE
+        and reason.decision is QualityDecision.RETRY
+        for reason in result.reasons
+    )
 
 
 def test_optional_absent_and_informational_present_are_deterministic() -> None:
