@@ -13,6 +13,7 @@ import wre.ingestion.decoded_images as decoded_images_module
 from wre.domain import (
     ArtifactId,
     ArtifactKind,
+    ArtifactMaterializationVerificationStatus,
     ArtifactRef,
     DecodedImageLevelDescriptor,
     DecodedImageOrientationPolicy,
@@ -39,7 +40,6 @@ from wre.ingestion import (
     inspect_toolchain,
 )
 from wre.materialization import verify_local_artifact_materialization
-from wre.domain import ArtifactMaterializationVerificationStatus
 
 NOW = datetime(2026, 9, 18, 17, 30, tzinfo=UTC)
 
@@ -187,6 +187,17 @@ def test_manifest_is_typed_and_rejects_video_or_noncanonical_levels() -> None:
         levels=levels,
     )
     assert manifest.levels == levels
+
+    with pytest.raises(TypeError, match="source_kind must be ObservationKind"):
+        DecodedImagePyramidManifest(
+            source_observation_id=ObservationId("obs:string-kind"),
+            source_kind=cast(Any, "image"),
+            source_asset_sha256=Sha256Digest("a" * 64),
+            pixel_layout=DecodedImagePixelLayout.RGB8_PACKED,
+            orientation_policy=DecodedImageOrientationPolicy.SOURCE_PIXELS,
+            spec=spec,
+            levels=levels,
+        )
 
     with pytest.raises(ValueError, match="image or video_frame"):
         DecodedImagePyramidManifest(
