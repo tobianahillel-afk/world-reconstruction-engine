@@ -14,8 +14,7 @@ class FrameSelectionDensityBounds:
 
     def __post_init__(self) -> None:
         if self.maximum_selected_frames is not None and (
-            type(self.maximum_selected_frames) is not int
-            or self.maximum_selected_frames <= 0
+            type(self.maximum_selected_frames) is not int or self.maximum_selected_frames <= 0
         ):
             raise ValueError(
                 "frame_selection_density.maximum_selected_frames must be a positive integer or None"
@@ -42,13 +41,9 @@ def _validate_frames(frames: object) -> tuple[ProbedVideoFrame, ...]:
     previous_time = -1
     for frame in frames:
         if frame.frame_index <= previous_index:
-            raise ValueError(
-                "frame_selection_density frame indices must be strictly increasing"
-            )
+            raise ValueError("frame_selection_density frame indices must be strictly increasing")
         if frame.frame_time_us < previous_time:
-            raise ValueError(
-                "frame_selection_density frame timestamps must be non-decreasing"
-            )
+            raise ValueError("frame_selection_density frame timestamps must be non-decreasing")
         previous_index = frame.frame_index
         previous_time = frame.frame_time_us
 
@@ -97,9 +92,7 @@ def apply_frame_selection_density_bounds(
 
     validated_frames = _validate_frames(frames)
     if not isinstance(bounds, FrameSelectionDensityBounds):
-        raise TypeError(
-            "frame_selection_density.bounds must be FrameSelectionDensityBounds"
-        )
+        raise TypeError("frame_selection_density.bounds must be FrameSelectionDensityBounds")
 
     bounded = validated_frames
     if bounds.minimum_selected_interval_us is not None:
