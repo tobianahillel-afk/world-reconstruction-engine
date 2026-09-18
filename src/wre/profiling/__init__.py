@@ -7,6 +7,7 @@ from wre.profiling.input_classification import (
     InputClassEvidenceKind,
     evaluate_input_classification,
 )
+from wre.profiling.profile_summary import ProfileSummaryInput, evaluate_profile_summary
 from wre.profiling.visual_similarity import evaluate_visual_similarity
 
 __all__ = [
@@ -14,7 +15,9 @@ __all__ = [
     "InputClassEvidence",
     "InputClassEvidenceKind",
     "LumaRaster",
+    "ProfileSummaryInput",
     "evaluate_image_quality",
     "evaluate_input_classification",
+    "evaluate_profile_summary",
     "evaluate_visual_similarity",
 ]
