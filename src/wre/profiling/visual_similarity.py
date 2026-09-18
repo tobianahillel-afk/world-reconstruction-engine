@@ -41,11 +41,7 @@ def _sample_grid(raster: LumaRaster) -> tuple[int, ...]:
         ((2 * grid_index + 1) * raster.height) // (2 * _GRID_SIZE)
         for grid_index in range(_GRID_SIZE)
     )
-    return tuple(
-        raster.pixels[y * raster.width + x]
-        for y in y_coordinates
-        for x in x_coordinates
-    )
+    return tuple(raster.pixels[y * raster.width + x] for y in y_coordinates for x in x_coordinates)
 
 
 def _average_hash_bits(samples: tuple[int, ...]) -> tuple[bool, ...]:
@@ -74,18 +70,14 @@ def evaluate_visual_similarity(
     right_hash = _average_hash_bits(right_samples)
     hamming_fraction = (
         sum(
-            left_bit != right_bit
-            for left_bit, right_bit in zip(left_hash, right_hash, strict=True)
+            left_bit != right_bit for left_bit, right_bit in zip(left_hash, right_hash, strict=True)
         )
         / _GRID_SAMPLE_COUNT
     )
-    grid_luma_mae = (
-        sum(
-            abs(left_sample - right_sample)
-            for left_sample, right_sample in zip(left_samples, right_samples, strict=True)
-        )
-        / (255.0 * _GRID_SAMPLE_COUNT)
-    )
+    grid_luma_mae = sum(
+        abs(left_sample - right_sample)
+        for left_sample, right_sample in zip(left_samples, right_samples, strict=True)
+    ) / (255.0 * _GRID_SAMPLE_COUNT)
 
     return MetricVector(
         observations=(
