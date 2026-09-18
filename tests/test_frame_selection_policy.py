@@ -226,9 +226,7 @@ def test_retained_interval_keyframe_donor_behavior_is_unchanged() -> None:
         frames[2],
         frames[3],
     )
-    assert tuple(field.name for field in fields(KeyframeSelectionPolicy)) == (
-        "min_interval_us",
-    )
+    assert tuple(field.name for field in fields(KeyframeSelectionPolicy)) == ("min_interval_us",)
     assert tuple(field.name for field in fields(VideoObservation)) == (
         "observation_id",
         "asset",
