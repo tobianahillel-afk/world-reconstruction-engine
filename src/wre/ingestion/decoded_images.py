@@ -187,9 +187,7 @@ def _reference_artifact_identity(
         configuration=_configuration_identity(spec),
     )
     input_kind = (
-        _IMAGE_INPUT_KIND
-        if source.kind is ObservationKind.IMAGE
-        else _VIDEO_FRAME_INPUT_KIND
+        _IMAGE_INPUT_KIND if source.kind is ObservationKind.IMAGE else _VIDEO_FRAME_INPUT_KIND
     )
     artifact_key = derive_artifact_key(
         ArtifactKeyMaterial(
