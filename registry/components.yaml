@@ -111,7 +111,14 @@ components:
       - tests/test_profile_summary.py
       - tests/test_media_profile_fixture_matrix.py
     status: implemented
-  adaptive_frame_selection: {owner_lot: V2L6, implementation: [], tests: [], status: planned}
+  adaptive_frame_selection:
+    owner_lot: V2L6
+    implementation:
+      - src/wre/domain/frame_selection.py
+      - src/wre/domain/__init__.py
+    tests:
+      - tests/test_frame_selection_policy.py
+    status: implementing
   pair_candidate_retrieval: {owner_lot: V2L7, implementation: [], tests: [], status: planned}
   scene_identity_clustering: {owner_lot: V2L8, implementation: [], tests: [], status: planned}
   temporal_grouping_sync: {owner_lot: V2L9, implementation: [], tests: [], status: planned}
