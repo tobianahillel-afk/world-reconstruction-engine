@@ -1,7 +1,67 @@
 schema_version: 1
 milestone: V2M1
 work_items:
-  - {id: V2L5.1, lot: V2L5, title: MediaProfile contract, status: planned, depends_on: [V2L4.6]}
+  - id: V2L5.1
+    lot: V2L5
+    title: MediaProfile contract
+    status: ready
+    objective: Define the minimal immutable MediaProfile value contract that binds one existing ObservationId to an explicit canonical tuple of exact ArtifactRef evidence links, establishing the media-profile aggregation boundary without computing guessing or embedding any blur exposure duplicate diversity camera-class dynamic sequence sparse-coverage frame-selection or routing semantics.
+    allowed_scope:
+      - src/wre/domain/media_profiles.py
+      - focused public-domain exports only if required for the new MediaProfile contract
+      - tests/test_media_profiles.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry after implementation evidence is green so V2L5.2 can be activated without implementing it
+    out_of_scope:
+      - changing retained Observation ObservationId MediaAssetRef ImageObservation VideoObservation VideoFrameObservation or ingestion semantics
+      - defining or computing blur sharpness exposure clipping or other concrete image-quality metrics owned by V2L5.2
+      - duplicate near-duplicate visual-diversity relationship or embedding semantics owned by V2L5.3
+      - still video 360 drone fisheye rolling-shutter or other input-class flags owned by V2L5.4
+      - dynamic-likelihood long-sequence sparse-coverage or other specialist profile signals owned by V2L5.5
+      - fixture-matrix or lot-review behavior owned by V2L5.6
+      - frame selection keyframe policy media decode reusable decoded-image pyramids or accelerated decode owned by V2L6
+      - pair retrieval scene clustering temporal synchronization route selection retry fallback or quality-policy execution
+      - persistence DAG cache materialization registry mutation filesystem media decoding metadata parsing network or external dependency behavior
+      - generic dictionaries arbitrary signal/value bags placeholder future fields inferred classifications or automatic evidence discovery
+      - starting V2L5.2 implementation in this work item
+    depends_on: [V2L4.6]
+    read_before:
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md
+      - docs/29_PERFORMANCE_INTEGRATION_MAP.md
+      - registry/v1-v2-migration.yaml
+      - src/wre/domain/observations.py
+      - src/wre/domain/artifacts.py
+      - src/wre/domain/artifact_metadata.py
+      - tests/test_observations.py
+      - tests/test_artifacts.py
+    reuse:
+      - retained ObservationId as the exact subject identity instead of creating a competing media source identifier
+      - existing ArtifactRef as the exact derived-evidence link instead of filenames paths timestamps or generic strings
+      - existing immutable frozen slots dataclass and canonical tuple validation conventions in wre.domain
+      - retained image/video ingestion and fail-closed raw metadata semantics as evidence donors without rewriting them
+    acceptance:
+      - MediaProfile is an immutable typed value whose subject is exactly one existing ObservationId; it does not duplicate URI byte hash mime type ObservationKind camera identity or mutable source metadata.
+      - MediaProfile carries an immutable tuple of exact ArtifactRef evidence links and no untyped dictionary list raw path filename timestamp free-form note or catch-all metadata field.
+      - An empty evidence tuple is an explicit valid contract state because V2L5.1 establishes the profile boundary before later signal producers exist; it does not imply positive or negative quality claims.
+      - Populated evidence is caller supplied in canonical ArtifactId/ArtifactKind order, contains unique exact references and rejects duplicate unsorted mutable raw-string or wrong-type members rather than silently sorting deduplicating or coercing them.
+      - One logical ArtifactId may not appear with conflicting ArtifactKind declarations inside one profile evidence set.
+      - MediaProfile equality and hashing are deterministic from typed immutable subject identity and exact evidence links only and perform no registry filesystem database environment media-decode or network lookup.
+      - The contract does not infer ObservationKind specialist class blur exposure duplicate dynamic coverage or routing state from the subject or evidence artifact kinds.
+      - No MetricVector QualityDecision FailureCategory QualityPolicy benchmark score or route is embedded merely to anticipate later profile consumers.
+      - Existing observations ingestion artifact identity artifact metadata V2L4 quality contracts and retained V1 donor behavior remain unchanged.
+    tests:
+      - focused construction equality hashing and immutability tests for empty and populated MediaProfile values
+      - exact ObservationId subject typing and wrong-type negative tests
+      - canonical evidence ordering uniqueness conflicting-ArtifactId-kind mutable-collection raw-string and wrong-member-type negative tests
+      - regression proving no generic signal dictionary quality decision failure policy route filename path timestamp or inferred ObservationKind fields exist
+      - regression proving retained ImageObservation VideoObservation and VideoFrameObservation contracts are unchanged and remain valid MediaProfile subjects through ObservationId only
+      - full fast CI
   - {id: V2L5.2, lot: V2L5, title: Blur sharpness exposure clipping metrics, status: planned, depends_on: [V2L5.1]}
   - {id: V2L5.3, lot: V2L5, title: Near duplicate and visual diversity signals, status: planned, depends_on: [V2L5.2]}
   - {id: V2L5.4, lot: V2L5, title: Camera and specialist input class signals, status: planned, depends_on: [V2L5.3]}

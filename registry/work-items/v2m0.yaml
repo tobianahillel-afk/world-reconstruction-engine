@@ -1459,7 +1459,7 @@ work_items:
   - id: V2L4.6
     lot: V2L4
     title: Unknown metric and failure negative tests
-    status: ready
+    status: done
     objective: Close V2L4 by stress-testing the fail-closed composition of the stable failure taxonomy, typed metric vector, quality-decision vocabulary, immutable benchmark records and deterministic quality-policy evaluator; prove unknown missing unmapped malformed or contradictory inputs never silently PASS, record the V2L4 lot review, and prepare V2L5.1 without adding new quality or routing functionality.
     allowed_scope:
       - tests/test_quality_policy.py for focused cross-contract negative and precedence regressions
