@@ -229,9 +229,7 @@ def test_merge_unions_multiple_sources_without_losing_evidence() -> None:
         "visual",
     )
     assert tuple(
-        ref.artifact_id.value
-        for source in candidate.sources
-        for ref in source.evidence_refs
+        ref.artifact_id.value for source in candidate.sources for ref in source.evidence_refs
     ) == ("artifact:gps", "artifact:seq", "artifact:visual")
 
 
