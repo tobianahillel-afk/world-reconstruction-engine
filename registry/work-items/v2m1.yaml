@@ -740,6 +740,7 @@ work_items:
       - registry/adapter-models.yaml for one retained FFmpeg decoded-image-pyramid reference capability using the already approved dependency and license posture
       - registry/dependencies.yaml only if required to record the existing FFmpeg dependency's additional still-image decode reference role without changing its version license integration mode or shipping approval
       - tests/test_decoded_image_pyramids.py
+      - focused update to tests/test_adapter_model_registry_baselines.py required by the new approved FFmpeg reference capability registration
       - focused reuse of generic artifact metadata key materialization and verifier tests where required without changing their semantics
       - docs/reviews/V2L6-adaptive-frame-selection-review.md and focused lifecycle updates to registry/reviews.yaml registry/components.yaml PROJECT_STATE.yaml and this work-item registry after implementation evidence is green so the V2L6 lot can close and V2L7.1 can be activated without implementing it
     out_of_scope:
