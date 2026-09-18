@@ -506,6 +506,10 @@ def test_unresolved_evidence_dominates_mapped_retry_and_escalate_conditions() ->
                 decision=QualityDecision.RETRY,
             ),
             _metric_rule("c.escalate", decision=QualityDecision.ESCALATE),
+            _metric_rule(
+                "d.warning",
+                decision=QualityDecision.ACCEPT_WITH_WARNINGS,
+            ),
         ),
         failure_rules=(_failure_rule(FailureCategory.TIMEOUT, QualityDecision.RETRY),),
     )
@@ -513,6 +517,7 @@ def test_unresolved_evidence_dominates_mapped_retry_and_escalate_conditions() ->
         observations=(
             _metric("b.mismatch", 0.5),
             _metric("c.escalate", 2.0),
+            _metric("d.warning", 2.0),
             _metric("z.unknown", 1.0),
         )
     )
@@ -540,6 +545,11 @@ def test_unresolved_evidence_dominates_mapped_retry_and_escalate_conditions() ->
     assert any(
         reason.kind is QualityEvaluationReasonKind.MAPPED_FAILURE
         and reason.decision is QualityDecision.RETRY
+        for reason in result.reasons
+    )
+    assert any(
+        reason.kind is QualityEvaluationReasonKind.METRIC_THRESHOLD_VIOLATION
+        and reason.decision is QualityDecision.ACCEPT_WITH_WARNINGS
         for reason in result.reasons
     )
 
