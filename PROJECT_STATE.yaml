@@ -5,17 +5,17 @@ roadmap_version: '2.0'
 phase: implementation
 milestone: V2M1
 lot: V2L6
-active_work_item: V2L6.2
+active_work_item: V2L6.3
 status: ready
-last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5, V2L3.6, V2L4.1, V2L4.2, V2L4.3, V2L4.4, V2L4.5, V2L4.6, V2L5.1, V2L5.2, V2L5.3, V2L5.4, V2L5.5, V2L5.6, V2L6.1]
-last_merged_pr: 71
+last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5, V2L3.6, V2L4.1, V2L4.2, V2L4.3, V2L4.4, V2L4.5, V2L4.6, V2L5.1, V2L5.2, V2L5.3, V2L5.4, V2L5.5, V2L5.6, V2L6.1, V2L6.2]
+last_merged_pr: 72
 current_goal: >-
-  Wrap only the retained deterministic minimum-interval keyframe donor behind a small V2 adapter boundary with an
-  explicit typed interval configuration, while keeping metric-aware quality diversity and resource logic absent.
+  Add only a deterministic quality-diversity frame-selection baseline over explicit precomputed V2L5 MetricVector
+  evidence, using local thresholds and adjacent visual-diversity evidence without global scores or density budgets.
 next_action: >-
-  Complete only V2L6.2 from its executable contract in registry/work-items/v2m1.yaml: implement the interval donor
-  adapter and parity tests against retained select_keyframes behavior; do not start quality-diversity selection,
-  density budgets, extraction provenance or decoded-image artifact work early.
+  Complete only V2L6.3 from its executable contract in registry/work-items/v2m1.yaml: implement typed candidate and
+  adjacent-diversity evidence values plus the threshold baseline; do not start long-video density budgets,
+  provenance artifacts, extraction I-O or decoded-image pyramid work early.
 blockers: []
 architecture:
   product_blueprint: docs/01_PRODUCT.md
