@@ -254,7 +254,7 @@ work_items:
   - id: V2L5.5
     lot: V2L5
     title: Dynamic long sequence sparse coverage signals
-    status: ready
+    status: done
     objective: Implement a deterministic threshold-free media-profile summary baseline that exposes exact collection size and source count plus optional video duration temporal visual-change and coverage-diversity aggregates as typed MetricVector evidence for later dynamic long-sequence and sparse-coverage routing, without emitting dynamic static long sparse-overlap or route labels.
     allowed_scope:
       - src/wre/profiling/__init__.py
@@ -313,7 +313,87 @@ work_items:
       - canonical metric ordering finite-float shared-provenance and deterministic repeatability assertions
       - regression proving no dynamic static long sparse-overlap threshold route frame-selection retrieval tracking geometry solver or external-I-O surface is introduced
       - full fast CI
-  - {id: V2L5.6, lot: V2L5, title: Media profile fixture matrix, status: planned, depends_on: [V2L5.5]}
+  - id: V2L5.6
+    lot: V2L5
+    title: Media profile fixture matrix
+    status: ready
+    objective: Close V2L5 with a deterministic synthetic fixture matrix and lot review that exercises the accepted MediaProfile evidence-link boundary image-quality metrics pairwise visual-similarity metrics input-class evidence and threshold-free profile-summary metrics together, proving these independently typed signals compose without creating hidden scene truth duplicate truth specialist certainty routing frame selection or generic catch-all profile semantics.
+    allowed_scope:
+      - tests/test_media_profile_fixture_matrix.py
+      - focused changes to existing V2L5 tests only when a matrix regression belongs more precisely at an owning boundary
+      - narrowly evidenced fixes to src/wre/domain/media_profiles.py src/wre/profiling/image_quality.py src/wre/profiling/visual_similarity.py src/wre/profiling/input_classification.py or src/wre/profiling/profile_summary.py only when a V2L5.6 acceptance fixture demonstrates a contract defect
+      - docs/reviews/V2L5-media-profiling-review.md
+      - registry/reviews.yaml
+      - registry/components.yaml
+      - PROJECT_STATE.yaml
+      - this work-item registry
+      - registry/work-items/v2m1.yaml only to expand V2L6.1 into a complete executable contract after V2L5 review evidence is green and without implementing V2L6.1
+    out_of_scope:
+      - new MediaProfile fields generic signal dictionaries aggregate profile objects combined scores or cross-signal truth inference
+      - new image-quality visual-similarity input-class profile-summary metrics classes thresholds labels confidence scores rankings or policies
+      - decoding image or video files color conversion orientation correction image pyramids hardware decode or reusable decoded-image artifacts
+      - frame-selection policies interval extraction quality-diversity selection density controls or any V2L6 implementation
+      - duplicate collapsing source deletion collection clustering retrieval embeddings ANN scene identity temporal synchronization routing retry fallback escalation or QualityDecision production
+      - camera calibration projection solving dynamic segmentation tracking optical flow sparse-overlap estimation geometry or reconstruction
+      - external services learned models new runtime dependencies or research-candidate integration
+      - changing the accepted V2L5 contracts merely to make the fixture matrix easier to write
+    depends_on: [V2L5.5]
+    read_before:
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - registry/reviews.yaml
+      - registry/components.yaml
+      - src/wre/domain/media_profiles.py
+      - src/wre/domain/metrics.py
+      - src/wre/domain/observations.py
+      - src/wre/domain/cameras.py
+      - src/wre/profiling/image_quality.py
+      - src/wre/profiling/visual_similarity.py
+      - src/wre/profiling/input_classification.py
+      - src/wre/profiling/profile_summary.py
+      - tests/test_media_profiles.py
+      - tests/test_image_quality.py
+      - tests/test_visual_similarity.py
+      - tests/test_input_classification.py
+      - tests/test_profile_summary.py
+    reuse:
+      - the exact immutable V2L5.1 MediaProfile ArtifactRef evidence-link contract with no embedded signal bag
+      - the V2L5.2 LumaRaster and deterministic image-quality MetricVector baseline
+      - the V2L5.3 threshold-free pairwise visual-similarity MetricVector baseline while retained SHA-256 plus byte length remains the separate exact-content duplicate donor
+      - the V2L5.4 observed-versus-candidate InputClassEvidence contract and fail-closed specialist heuristics
+      - the V2L5.5 ProfileSummaryInput and informational collection sequence temporal-change and coverage-diversity metrics
+      - the existing repository validator fast CI CodeQL native COLMAP integration evidence model and established lot-review format
+    acceptance:
+      - Add one deterministic fixture matrix that composes existing V2L5 public contracts without introducing a new production orchestrator class or aggregate profile schema.
+      - An ordinary still fixture with no specialist metadata proves exact STILL observed evidence image-quality measurements and available collection summary counts can coexist while no 360 drone fisheye rolling-shutter dynamic long sparse route or selection claim is fabricated.
+      - A specialist-hint fixture proves exact two-to-one dimensions plus explicit fisheye rolling-shutter and recognized UAV-family metadata may coexist only as candidate evidence while still/video observation kind remains separately observed and no candidate is promoted to camera truth.
+      - A sequence fixture proves VIDEO or VIDEO_FRAME observed evidence can coexist with explicit duration temporal grid-luma change and coverage grid-luma diversity metrics while those numeric values remain INFORMATIONAL and produce no dynamic static long-sequence sparse-coverage or overlap label.
+      - A missing-evidence fixture proves absent metadata duration temporal-change and coverage-diversity inputs remain absent rather than being converted to zero negative false unsupported or rejected semantic claims.
+      - A visual-similarity fixture proves identical raster evidence is exactly zero while black-versus-white can retain zero average-hash Hamming and maximal grid-luma MAE, and neither case becomes an exact-duplicate near-duplicate diversity threshold or selection decision.
+      - MediaProfile remains exactly an ObservationId plus canonical ArtifactRef evidence links and does not absorb MetricVector InputClassEvidence ProfileSummaryInput raw metadata paths timestamps route state or generic dictionaries during composition.
+      - Every composed output preserves its owning provenance and immutable input values; fixture evaluation performs no persistence registry environment filesystem media-decode or network mutation.
+      - Cross-signal composition does not create a total quality score confidence score truth rank QualityDecision route graph frame-selection decision or solver choice.
+      - Existing exact-content SHA-256 plus byte-length duplicate handling raw EXIF interpretation observation semantics quality contracts and retained ingestion behavior remain unchanged.
+      - A V2L5 lot review audits V2L5.1 through V2L5.6 together for promised capability composition fail-closed semantics regression risk exact CI evidence and absence of premature V2L6 retrieval routing or geometry behavior; registry/reviews.yaml may mark V2L5 passed only when that evidence supports PASS.
+      - After a PASS lot review media_profiling becomes implemented and V2L6.1 is expanded into a complete one-run deny-by-default frame-selection policy contract and becomes the sole active ready item without implementing it.
+    tests:
+      - ordinary-still matrix row covering MediaProfile image-quality input-class and summary evidence without fabricated specialist or routing semantics
+      - specialist-candidate matrix row covering simultaneous 360 UAV fisheye and rolling-shutter hints with observed-kind separation
+      - video-sequence matrix row covering duration temporal-change coverage-diversity and informational-only semantics
+      - missing-evidence matrix row proving omission remains omission rather than a zero or false semantic claim
+      - complementary visual-similarity matrix row proving metric evidence is not an exact near-duplicate or frame-selection decision
+      - exact MediaProfile field-set and no-generic-signal-bag regression across the composed matrix
+      - non-mutation provenance and no external-I-O regression
+      - repository validator and full fast CI
+      - native COLMAP integration regression
+      - CodeQL
+      - V2L5 lot review checklist and lifecycle handoff validation
   - {id: V2L6.1, lot: V2L6, title: Frame selection policy contract, status: planned, depends_on: [V2L5.6]}
   - {id: V2L6.2, lot: V2L6, title: Existing interval keyframe donor adapter, status: planned, depends_on: [V2L6.1]}
   - {id: V2L6.3, lot: V2L6, title: Quality diversity aware frame selection baseline, status: planned, depends_on: [V2L6.2]}
