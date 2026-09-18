@@ -216,20 +216,14 @@ def test_selection_config_is_exact_immutable_and_validated() -> None:
 
     for value in (0, True, 1, "0.5"):
         with pytest.raises(TypeError, match="must be float or None"):
-            QualityDiversitySelectionConfig(
-                minimum_sharpness_laplacian_variance=cast(Any, value)
-            )
+            QualityDiversitySelectionConfig(minimum_sharpness_laplacian_variance=cast(Any, value))
 
     for value in (float("nan"), float("inf"), float("-inf")):
         with pytest.raises(ValueError, match="must be finite"):
-            QualityDiversitySelectionConfig(
-                minimum_sharpness_laplacian_variance=value
-            )
+            QualityDiversitySelectionConfig(minimum_sharpness_laplacian_variance=value)
 
     with pytest.raises(ValueError, match=r"must be >= 0\.0"):
-        QualityDiversitySelectionConfig(
-            minimum_sharpness_laplacian_variance=-0.01
-        )
+        QualityDiversitySelectionConfig(minimum_sharpness_laplacian_variance=-0.01)
 
     for field_name in (
         "maximum_black_clip_fraction",
@@ -257,29 +251,19 @@ def test_selector_signature_candidate_collection_and_types_are_exact() -> None:
             MetricDirection.HIGHER_IS_BETTER,
         ),
     )
-    config = QualityDiversitySelectionConfig(
-        minimum_sharpness_laplacian_variance=0.5
-    )
+    config = QualityDiversitySelectionConfig(minimum_sharpness_laplacian_variance=0.5)
     policy = _policy("media.sharpness.laplacian_variance")
 
     with pytest.raises(TypeError, match="immutable tuple"):
-        select_quality_diversity_frames(
-            cast(Any, [candidate]), policy, config
-        )
+        select_quality_diversity_frames(cast(Any, [candidate]), policy, config)
     with pytest.raises(ValueError, match="must not be empty"):
         select_quality_diversity_frames((), policy, config)
     with pytest.raises(TypeError, match="members must be FrameSelectionCandidate"):
-        select_quality_diversity_frames(
-            (cast(Any, candidate.frame),), policy, config
-        )
+        select_quality_diversity_frames((cast(Any, candidate.frame),), policy, config)
     with pytest.raises(TypeError, match="policy must be FrameSelectionPolicy"):
-        select_quality_diversity_frames(
-            (candidate,), cast(Any, "policy"), config
-        )
+        select_quality_diversity_frames((candidate,), cast(Any, "policy"), config)
     with pytest.raises(TypeError, match="config must be QualityDiversitySelectionConfig"):
-        select_quality_diversity_frames(
-            (candidate,), policy, cast(Any, {})
-        )
+        select_quality_diversity_frames((candidate,), policy, cast(Any, {}))
 
 
 def test_candidates_must_remain_in_source_order() -> None:
@@ -331,9 +315,9 @@ def test_policy_must_exactly_declare_configured_metric_names() -> None:
         "media.sharpness.laplacian_variance",
     )
 
-    assert select_quality_diversity_frames(
-        (candidate,), expected_policy, config
-    ) == (candidate.frame,)
+    assert select_quality_diversity_frames((candidate,), expected_policy, config) == (
+        candidate.frame,
+    )
 
     with pytest.raises(ValueError, match="must exactly match"):
         select_quality_diversity_frames(
@@ -364,9 +348,7 @@ def test_sharpness_threshold_is_inclusive_and_quality_only_preserves_order() -> 
     selected = select_quality_diversity_frames(
         candidates,
         _policy(name),
-        QualityDiversitySelectionConfig(
-            minimum_sharpness_laplacian_variance=0.50
-        ),
+        QualityDiversitySelectionConfig(minimum_sharpness_laplacian_variance=0.50),
     )
 
     assert selected == (candidates[1].frame, candidates[2].frame)
@@ -489,9 +471,7 @@ def test_adjacent_diversity_rejects_missing_extra_and_wrong_pairs() -> None:
         _candidate(4, 200),
     )
     policy = _policy(diversity)
-    config = QualityDiversitySelectionConfig(
-        minimum_adjacent_grid_luma_mae=0.5
-    )
+    config = QualityDiversitySelectionConfig(minimum_adjacent_grid_luma_mae=0.5)
 
     with pytest.raises(ValueError, match="exactly one entry"):
         select_quality_diversity_frames(
@@ -534,9 +514,7 @@ def test_adjacent_evidence_is_rejected_when_diversity_threshold_is_disabled() ->
         select_quality_diversity_frames(
             candidates,
             _policy(sharpness),
-            QualityDiversitySelectionConfig(
-                minimum_sharpness_laplacian_variance=0.5
-            ),
+            QualityDiversitySelectionConfig(minimum_sharpness_laplacian_variance=0.5),
             (_adjacent(0, 1, 1.0),),
         )
 
@@ -583,9 +561,7 @@ def test_metric_semantic_ranges_fail_closed() -> None:
                 ),
             ),
             _policy("media.sharpness.laplacian_variance"),
-            QualityDiversitySelectionConfig(
-                minimum_sharpness_laplacian_variance=0.0
-            ),
+            QualityDiversitySelectionConfig(minimum_sharpness_laplacian_variance=0.0),
         )
 
     with pytest.raises(ValueError, match=r"within \[0, 1\]"):
@@ -602,9 +578,7 @@ def test_metric_semantic_ranges_fail_closed() -> None:
                 ),
             ),
             _policy("media.exposure.black_clip_fraction"),
-            QualityDiversitySelectionConfig(
-                maximum_black_clip_fraction=1.0
-            ),
+            QualityDiversitySelectionConfig(maximum_black_clip_fraction=1.0),
         )
 
 
