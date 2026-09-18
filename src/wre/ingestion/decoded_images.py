@@ -26,7 +26,12 @@ from wre.domain.decoded_images import (
     DecodedImagePyramidSpec,
     build_decoded_image_level_descriptors,
 )
-from wre.domain.observations import ImageObservation, ObservationKind, VideoFrameObservation
+from wre.domain.observations import (
+    ImageObservation,
+    ObservationKind,
+    Sha256Digest,
+    VideoFrameObservation,
+)
 from wre.domain.producer_identity import ArtifactProducerIdentity, ConfigurationIdentity
 from wre.domain.runs import ProducerRef
 from wre.ingestion.hashing import hash_file_content
@@ -159,8 +164,6 @@ def _configuration_identity(spec: DecodedImagePyramidSpec) -> ConfigurationIdent
         sort_keys=True,
         separators=(",", ":"),
     ).encode("utf-8")
-    from wre.domain.observations import Sha256Digest
-
     return ConfigurationIdentity(sha256=Sha256Digest(hashlib.sha256(encoded).hexdigest()))
 
 
