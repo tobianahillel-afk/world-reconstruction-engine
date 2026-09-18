@@ -1393,7 +1393,7 @@ work_items:
   - id: V2L4.5
     lot: V2L4
     title: Deterministic quality policy evaluator
-    status: ready
+    status: done
     objective: Define a minimal immutable versioned quality-policy contract and pure deterministic evaluator that consumes one typed MetricVector plus explicitly supplied stable FailureCategory values and returns one QualityDecision with typed machine-readable evaluation reasons, while failing closed on missing required metrics or unmapped input and without executing retry fallback escalation routing scheduling or adapter behavior.
     allowed_scope:
       - src/wre/domain/quality_policy.py
@@ -1456,4 +1456,77 @@ work_items:
       - optional and informational known metric cases proving absence or presence is deterministic and does not affect unrelated thresholds
       - regression proving evaluator does not mutate MetricVector infer failures execute retry fallback routing scheduling or change benchmark and QualityMode semantics
       - full fast CI
-  - {id: V2L4.6, lot: V2L4, title: Unknown metric and failure negative tests, status: planned, depends_on: [V2L4.5]}
+  - id: V2L4.6
+    lot: V2L4
+    title: Unknown metric and failure negative tests
+    status: ready
+    objective: Close V2L4 by stress-testing the fail-closed composition of the stable failure taxonomy, typed metric vector, quality-decision vocabulary, immutable benchmark records and deterministic quality-policy evaluator; prove unknown missing unmapped malformed or contradictory inputs never silently PASS, record the V2L4 lot review, and prepare V2L5.1 without adding new quality or routing functionality.
+    allowed_scope:
+      - tests/test_quality_policy.py for focused cross-contract negative and precedence regressions
+      - tests/test_failure_taxonomy.py tests/test_metrics.py tests/test_quality_decisions.py and tests/test_benchmarks.py only when a focused cross-contract regression belongs at the owning boundary
+      - src/wre/domain/quality_policy.py only for a narrowly evidenced fail-closed defect exposed by an acceptance test in this work item
+      - docs/reviews/V2L4-quality-failure-benchmark-review.md
+      - registry/reviews.yaml
+      - registry/components.yaml
+      - PROJECT_STATE.yaml
+      - this work-item registry
+      - registry/work-items/v2m1.yaml only to expand V2L5.1 into a complete executable contract after V2L4 review evidence is green and without implementing V2L5.1
+    out_of_scope:
+      - new failure categories metric semantics QualityDecision values QualityMode values benchmark fields policy capabilities or scoring algorithms
+      - raw adapter failure-signal parsing automatic failure inference metric computation normalization weighted scoring benchmark ranking or default promotion
+      - retry fallback escalation routing scheduling checkpoint execution resource allocation persistence dashboards or registry runtime mutation
+      - profiler NVTX Nsight TensorRT decode backend ANN storage-path or other execution-profile integration
+      - broad refactors of V2L4.1 through V2L4.5 contracts when no acceptance regression demonstrates a fail-closed defect
+      - adding new external dependencies models adapters or research candidates
+      - implementing V2L5.1 media profiling in this work item
+    depends_on: [V2L4.5]
+    read_before:
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md
+      - docs/29_PERFORMANCE_INTEGRATION_MAP.md
+      - registry/reviews.yaml
+      - registry/components.yaml
+      - src/wre/domain/failures.py
+      - src/wre/domain/metrics.py
+      - src/wre/domain/quality.py
+      - src/wre/domain/benchmarks.py
+      - src/wre/domain/quality_policy.py
+      - tests/test_failure_taxonomy.py
+      - tests/test_metrics.py
+      - tests/test_quality_decisions.py
+      - tests/test_benchmarks.py
+      - tests/test_quality_policy.py
+    reuse:
+      - the exact stable FailureCategory MetricVector QualityDecision QualityMode BenchmarkRecord and QualityPolicy contracts already implemented by V2L4.1 through V2L4.5
+      - the existing repository validator fast CI CodeQL and native COLMAP integration evidence model
+      - the established lot-review format and registry review gate used by V2L0 through V2L3
+      - fail-closed unknown-input and bounded-escalation invariants from docs/24_SYSTEM_INVARIANTS.md
+    acceptance:
+      - Every valid but policy-unknown MetricName supplied in MetricVector yields QualityDecision.UNRESOLVED with UNKNOWN_METRIC and can never silently PASS or be dropped from evaluation.
+      - Every stable FailureCategory lacking an exact selected-policy mapping yields UNRESOLVED with UNMAPPED_FAILURE and can never silently PASS or be inferred into another category.
+      - Missing required metrics direction mismatches unknown metrics and unmapped failures retain UNRESOLVED precedence over mapped ESCALATE RETRY or ACCEPT_WITH_WARNINGS conditions in mixed evidence.
+      - Duplicate unsorted mutable raw-string or otherwise untyped policy rules failure inputs and metric-vector inputs continue to fail closed rather than being sorted deduplicated coerced or ignored silently.
+      - Unknown QualityDecision tokens unknown FailureCategory tokens and malformed metric identities remain rejected by their owning closed or validated contracts; no generic unknown-to-success coercion exists across the V2L4 composition.
+      - Optional absent metrics and explicitly admitted informational metrics remain deterministic valid cases and do not create false negative failures merely to make the negative suite pass.
+      - BenchmarkRecord remains descriptive evidence only and still contains no quality decision threshold policy route winner rank default-promotion or execution behavior.
+      - Adapter-local failure_signals and metric_names remain distinct declarations and are not automatically mapped into stable FailureCategory or MetricVector semantics by V2L4.
+      - The deterministic evaluator remains pure non-mutating and side-effect free and returned RETRY or ESCALATE values still execute no routing fallback scheduler or retry action.
+      - A V2L4 lot review audits V2L4.1 through V2L4.6 together for composition boundaries regressions exact CI evidence and absence of premature routing/default-selection behavior; registry/reviews.yaml may mark V2L4 passed only when that evidence supports PASS.
+      - After a PASS lot review V2L5.1 is expanded into a complete one-run deny-by-default MediaProfile contract and becomes the sole active ready item without implementing it.
+    tests:
+      - parameterized unknown-policy MetricName cases proving UNRESOLVED and typed UNKNOWN_METRIC reasons
+      - parameterized unmapped stable FailureCategory cases covering the complete current FailureCategory vocabulary
+      - mixed missing unknown direction-mismatch mapped-failure and unmapped-failure precedence regressions
+      - duplicate unsorted mutable raw-string and wrong-type negative regressions across QualityPolicy and evaluator inputs
+      - closed-vocabulary regressions for QualityDecision and FailureCategory plus malformed MetricName rejection
+      - optional and informational metric regressions proving valid absence/presence remains PASS when no failure condition exists
+      - BenchmarkRecord and adapter-registry separation regressions proving no policy routing or automatic mapping leakage
+      - repository validator and full fast CI
+      - native COLMAP integration regression
+      - CodeQL
+      - V2L4 lot review checklist and lifecycle handoff validation

@@ -88,6 +88,17 @@ from wre.domain.producer_identity import (
 from wre.domain.projects import SceneProject, SceneProjectId
 from wre.domain.provenance import ProvenanceClass
 from wre.domain.quality import QualityDecision, QualityMode
+from wre.domain.quality_policy import (
+    QualityEvaluation,
+    QualityEvaluationReason,
+    QualityEvaluationReasonKind,
+    QualityPolicy,
+    QualityPolicyFailureRule,
+    QualityPolicyId,
+    QualityPolicyMetricRule,
+    QualityPolicyRevision,
+    evaluate_quality_policy,
+)
 from wre.domain.runs import (
     DerivedArtifactProvenance,
     ProducerRef,
@@ -158,7 +169,15 @@ __all__ = [
     "ProducerRef",
     "ProvenanceClass",
     "QualityDecision",
+    "QualityEvaluation",
+    "QualityEvaluationReason",
+    "QualityEvaluationReasonKind",
     "QualityMode",
+    "QualityPolicy",
+    "QualityPolicyFailureRule",
+    "QualityPolicyId",
+    "QualityPolicyMetricRule",
+    "QualityPolicyRevision",
     "RawMetadataEntry",
     "ReconstructionRun",
     "ReconstructionRunId",
@@ -175,5 +194,6 @@ __all__ = [
     "VideoObservation",
     "canonical_artifact_key_bytes",
     "derive_artifact_key",
+    "evaluate_quality_policy",
     "plan_artifact_invalidation",
 ]
