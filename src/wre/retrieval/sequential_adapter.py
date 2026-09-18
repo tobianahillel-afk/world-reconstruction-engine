@@ -23,9 +23,7 @@ class SequentialPairCandidateAdapterInput:
 
     def __post_init__(self) -> None:
         if not isinstance(self.result, SequentialPairingResult):
-            raise TypeError(
-                "sequential_pair_adapter.result must be SequentialPairingResult"
-            )
+            raise TypeError("sequential_pair_adapter.result must be SequentialPairingResult")
         if not isinstance(self.evidence_ref, ArtifactRef):
             raise TypeError("sequential_pair_adapter.evidence_ref must be ArtifactRef")
 
@@ -36,9 +34,7 @@ def adapt_sequential_pairing_result(
     """Translate an already-produced sequential donor result into canonical pair proposals."""
 
     if not isinstance(adapter_input, SequentialPairCandidateAdapterInput):
-        raise TypeError(
-            "adapter_input must be SequentialPairCandidateAdapterInput"
-        )
+        raise TypeError("adapter_input must be SequentialPairCandidateAdapterInput")
 
     candidates = tuple(
         PairCandidate(
