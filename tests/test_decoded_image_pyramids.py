@@ -55,17 +55,23 @@ def _asset(path: Path) -> MediaAssetRef:
 
 
 def _source(path: Path, *, video_frame: bool = False) -> ImageObservation | VideoFrameObservation:
-    common = dict(
-        observation_id=ObservationId("obs:decoded-pyramid"),
-        asset=_asset(path),
-        source=SourceRef(source_id=SourceId("source:decoded-pyramid")),
+    observation_id = ObservationId("obs:decoded-pyramid")
+    asset = _asset(path)
+    source = SourceRef(source_id=SourceId("source:decoded-pyramid"))
+    if not video_frame:
+        return ImageObservation(
+            observation_id=observation_id,
+            asset=asset,
+            source=source,
+            received_at=NOW,
+            captured_at=NOW,
+        )
+    return VideoFrameObservation(
+        observation_id=observation_id,
+        asset=asset,
+        source=source,
         received_at=NOW,
         captured_at=NOW,
-    )
-    if not video_frame:
-        return ImageObservation(**common)
-    return VideoFrameObservation(
-        **common,
         video_asset=MediaAssetRef(
             uri="file:///parent-video.mkv",
             sha256=Sha256Digest("f" * 64),
