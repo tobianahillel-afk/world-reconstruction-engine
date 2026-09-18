@@ -261,15 +261,16 @@ class QualityEvaluationReason:
             return
 
         if self.kind is QualityEvaluationReasonKind.METRIC_THRESHOLD_VIOLATION:
+            if self.expected_direction is MetricDirection.HIGHER_IS_BETTER:
+                direction = MetricDirection.HIGHER_IS_BETTER
+            elif self.expected_direction is MetricDirection.LOWER_IS_BETTER:
+                direction = MetricDirection.LOWER_IS_BETTER
+            else:
+                raise ValueError("metric_threshold_violation reason has invalid fields")
             if (
                 self.metric_name is None
                 or self.observed_value is None
                 or self.threshold is None
-                or self.expected_direction
-                not in (
-                    MetricDirection.HIGHER_IS_BETTER,
-                    MetricDirection.LOWER_IS_BETTER,
-                )
                 or self.failure_category is not None
                 or self.actual_direction is not None
             ):
@@ -277,7 +278,7 @@ class QualityEvaluationReason:
             if not _threshold_is_violated(
                 self.observed_value,
                 self.threshold,
-                self.expected_direction,
+                direction,
             ):
                 raise ValueError(
                     "metric_threshold_violation reason requires an observed value "
