@@ -212,8 +212,7 @@ def test_combined_bounds_apply_spacing_before_hard_cap() -> None:
     )
     assert len(selected) == 3
     assert all(
-        right.frame_time_us - left.frame_time_us >= 500
-        for left, right in pairwise(selected)
+        right.frame_time_us - left.frame_time_us >= 500 for left, right in pairwise(selected)
     )
 
 
