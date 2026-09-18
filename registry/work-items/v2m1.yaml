@@ -595,7 +595,7 @@ work_items:
   - id: V2L6.4
     lot: V2L6
     title: Long video frame density resource bounds
-    status: ready
+    status: done
     objective: Implement a pure deterministic post-selection density/resource-bound reducer over an immutable ordered tuple of already selected ProbedVideoFrame values, enforcing an optional minimum temporal spacing and/or hard maximum selected-frame count without re-reading quality metrics reranking frames inferring budgets from hardware or performing extraction side effects.
     allowed_scope:
       - src/wre/frame_selection/__init__.py
@@ -658,7 +658,75 @@ work_items:
       - original ProbedVideoFrame object identity and timestamp preservation regression
       - regression proving no MetricVector score rank quality threshold hardware budget scheduler route QualityDecision FFmpeg extraction persistence or V2L6.5 surface is introduced
       - full fast CI
-  - {id: V2L6.5, lot: V2L6, title: Frame selection provenance timing regression, status: planned, depends_on: [V2L6.4]}
+  - id: V2L6.5
+    lot: V2L6
+    title: Frame selection provenance timing regression
+    status: ready
+    objective: Establish the V2 selected-frame extraction regression boundary by allowing the retained local FFmpeg extractor to materialize an explicit immutable tuple of already selected ProbedVideoFrame values while preserving parent VideoObservation provenance exact source frame index and microsecond timing deterministic VideoFrameObservation identity output byte integrity and idempotent persistence without probing or selecting frames again.
+    allowed_scope:
+      - src/wre/ingestion/keyframes.py
+      - src/wre/ingestion/__init__.py
+      - tests/test_frame_selection_extraction_regression.py
+      - focused updates to tests/test_keyframe_extraction.py only when required to prove the retained donor extraction behavior remains unchanged
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry after implementation evidence is green so V2L6.6 can be activated without implementing it
+    out_of_scope:
+      - changing FrameSelectionPolicy IntervalFrameSelectionConfig QualityDiversitySelectionConfig FrameSelectionDensityBounds or any interval quality diversity or density selection semantics
+      - re-reading MetricVector evidence applying thresholds scoring ranking or deriving any new selection decision during extraction
+      - probing the source video to discover replacement frames or silently re-running interval quality diversity or density selection inside the explicit selected-frame extraction path
+      - changing the retained FFmpeg and ffprobe version pin toolchain identity policy frame timestamp parsing or Issue 54 freshness decision
+      - canonical decoded-image reusable image-frame artifact multiresolution-pyramid color-preprocess orientation resize cache or accelerated decode behavior owned by V2L6.6
+      - adding GPU hardware decode nvImageCodec nvJPEG NVDEC libvips PyAV Pillow OpenCV or any new runtime dependency
+      - introducing routing retry fallback QualityDecision retrieval clustering synchronization geometry resource estimation scheduling or runtime budgets
+      - generic job execution provenance checkpointing distributed execution or new scheduler semantics
+      - starting V2L6.6 implementation in this work item
+    depends_on: [V2L6.4]
+    read_before:
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md
+      - docs/29_PERFORMANCE_INTEGRATION_MAP.md
+      - registry/v1-v2-migration.yaml
+      - src/wre/domain/observations.py
+      - src/wre/ingestion/keyframes.py
+      - src/wre/frame_selection/interval.py
+      - src/wre/frame_selection/quality_diversity.py
+      - src/wre/frame_selection/density_bounds.py
+      - src/wre/persistence/sqlite_store.py
+      - tests/test_keyframe_extraction.py
+      - tests/test_interval_frame_selection_adapter.py
+      - tests/test_quality_diversity_frame_selection.py
+      - tests/test_frame_selection_density_bounds.py
+      - tests/test_persistence.py
+    reuse:
+      - ProbedVideoFrame as the exact already selected source frame index and microsecond timing value with no replacement selection representation
+      - VideoObservation and VideoFrameObservation as the retained source and extracted-frame provenance identities rather than inventing a competing video-frame domain type before V2L6.6
+      - the retained source-byte verification FFmpeg toolchain inspection select-filter PNG extraction hashing deterministic frame-observation identity and ObservationSink persistence behavior from LocalKeyframeExtractor
+      - SQLiteLocalStore identical-write idempotence and conflict rejection as the retained persistence donor
+      - the current policy-based LocalKeyframeExtractor.extract path as regression evidence which may delegate internally only if its externally observed behavior remains unchanged
+    acceptance:
+      - Add one explicit selected-frame extraction request or equivalent typed boundary containing exactly the source VideoObservation source path output directory and immutable tuple of already selected ProbedVideoFrame values; no frame-selection policy threshold score or hardware budget is required by this boundary.
+      - The selected frame tuple must be immutable contain only ProbedVideoFrame values use strictly increasing frame_index and non-decreasing frame_time_us and contain at least one frame when an extraction job is requested; malformed tuples fail closed rather than being reordered deduplicated or reselected.
+      - The explicit selected-frame extraction path verifies source video bytes against the persisted VideoObservation asset before invoking the external toolchain and preserves the retained exact FFmpeg toolchain identity checks.
+      - The explicit path extracts exactly the supplied source frame indices in source order and performs no ffprobe frame discovery and no interval quality diversity or density selection.
+      - Each produced VideoFrameObservation preserves the exact supplied frame_index and frame_time_us uses the exact parent video asset and source provenance retains captured_at as None and uses the retained deterministic observation identity derived from parent observation asset frame index and frame timing.
+      - Each extracted PNG records its exact SHA-256 byte length URI and image/png MIME type and persisted observations round-trip through the existing ObservationSink without hidden mutable selection state.
+      - Repeating the same selected-frame extraction request over the same source bytes selected frames and output directory is idempotent and returns equal result values while retained persistence rejects conflicting identity reuse.
+      - The existing policy-based LocalKeyframeExtractor.extract path preserves its current externally observed deterministic behavior including the synthetic 500000 microsecond interval fixture and may reuse the explicit selected-frame materialization path only after its donor selection step.
+      - An upstream empty selection remains a valid V2 selection result but is represented as no extraction job; the selected-frame extraction request itself fails closed on an empty frame tuple rather than invoking FFmpeg with an empty select expression.
+      - No canonical decoded-image artifact image pyramid ArtifactKind runtime cache accelerated decode route QualityDecision retrieval or geometry behavior is introduced.
+    tests:
+      - typed selected-frame extraction request immutability wrong-type empty-tuple index-order and timestamp-order negative tests
+      - regression proving explicit selected-frame extraction does not invoke ffprobe or any frame-selection function and materializes exactly the supplied indices
+      - real pinned-FFmpeg synthetic fixture proving exact parent video provenance frame indices microsecond timings captured_at behavior output hashes and persisted VideoFrameObservation round-trip
+      - idempotent repeated extraction fixture over the same source selected frames and output directory
+      - retained LocalKeyframeExtractor.extract regression proving the existing interval donor still selects and extracts indices 0 2 4 6 at 0 500000 1000000 and 1500000 microseconds on the existing synthetic fixture
+      - regression proving no quality metric threshold density budget decoded-image pyramid accelerated decode routing scheduler or V2L6.6 surface is introduced
+      - full fast CI
   - {id: V2L6.6, lot: V2L6, title: Canonical reusable decoded image pyramid artifacts, status: planned, depends_on: [V2L6.5]}
   - {id: V2L7.1, lot: V2L7, title: Canonical PairCandidate contract, status: planned, depends_on: [V2L6.6]}
   - {id: V2L7.2, lot: V2L7, title: Sequential pairing donor adapter, status: planned, depends_on: [V2L7.1]}
