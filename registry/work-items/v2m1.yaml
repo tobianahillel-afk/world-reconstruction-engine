@@ -316,7 +316,7 @@ work_items:
   - id: V2L5.6
     lot: V2L5
     title: Media profile fixture matrix
-    status: ready
+    status: done
     objective: Close V2L5 with a deterministic synthetic fixture matrix and lot review that exercises the accepted MediaProfile evidence-link boundary image-quality metrics pairwise visual-similarity metrics input-class evidence and threshold-free profile-summary metrics together, proving these independently typed signals compose without creating hidden scene truth duplicate truth specialist certainty routing frame selection or generic catch-all profile semantics.
     allowed_scope:
       - tests/test_media_profile_fixture_matrix.py
@@ -394,7 +394,69 @@ work_items:
       - native COLMAP integration regression
       - CodeQL
       - V2L5 lot review checklist and lifecycle handoff validation
-  - {id: V2L6.1, lot: V2L6, title: Frame selection policy contract, status: planned, depends_on: [V2L5.6]}
+  - id: V2L6.1
+    lot: V2L6
+    title: Frame selection policy contract
+    status: ready
+    objective: Define the minimal immutable solver-independent frame-selection policy contract that gives one policy an explicit typed identity revision and canonical required-versus-optional MetricName evidence declaration, separating selection-policy semantics from raw video ingestion interval-adapter configuration quality-diversity algorithms density budgets and selected-frame execution.
+    allowed_scope:
+      - src/wre/domain/frame_selection.py
+      - focused public-domain exports in src/wre/domain/__init__.py
+      - tests/test_frame_selection_policy.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry after implementation evidence is green so V2L6.2 can be activated without implementing it
+    out_of_scope:
+      - changing VideoObservation VideoFrameObservation MediaProfile MetricVector MetricName raw video ingestion or retained keyframe-extraction semantics
+      - moving wrapping modifying or invoking KeyframeSelectionPolicy ProbedVideoFrame select_keyframes LocalKeyframeExtractor FFmpegToolchain or KeyframeExtractionRequest
+      - minimum interval maximum interval first-frame last-frame cadence duration frame-index or timestamp selection algorithms
+      - quality sharpness exposure duplicate diversity thresholds weights ranking scoring tie-breaking or actual candidate evaluation owned by V2L6.3
+      - maximum frame count frames-per-second chunk window storage compute memory or other long-video density/resource controls owned by V2L6.4
+      - selected-frame result artifacts provenance timing persistence idempotence or regression behavior owned by V2L6.5
+      - media decoding image pyramids decode backends GPU acceleration or reusable materialized pixels owned by V2L6.6
+      - route selection retrieval clustering synchronization geometry reconstruction retry fallback escalation or QualityDecision execution
+      - generic dictionaries arbitrary parameter bags callable hooks adapter identities source paths filesystem network or environment lookup
+      - starting V2L6.2 implementation in this work item
+    depends_on: [V2L5.6]
+    read_before:
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md
+      - docs/29_PERFORMANCE_INTEGRATION_MAP.md
+      - registry/v1-v2-migration.yaml
+      - src/wre/domain/metrics.py
+      - src/wre/domain/observations.py
+      - src/wre/ingestion/keyframes.py
+      - tests/test_keyframe_extraction.py
+      - tests/test_metrics.py
+    reuse:
+      - MetricName as the exact open solver-independent identity for quality or diversity evidence a later selector may require or optionally consume
+      - immutable frozen slots dataclass and explicit typed identifier conventions already used by WRE domain contracts
+      - retained deterministic KeyframeSelectionPolicy and select_keyframes implementation only as a future V2L6.2 donor behind the new v2 contract, not as the V2L6.1 public API
+      - V2L5 evidence producers remain independent producers and are referenced only by MetricName declarations rather than embedded values
+    acceptance:
+      - Define FrameSelectionPolicyId as an immutable typed non-blank opaque policy identity with deterministic equality hashing string conversion and fail-closed validation.
+      - Define FrameSelectionPolicyRevision as an immutable typed positive integer revision; booleans zero negative non-integer and string coercions are rejected.
+      - Define FrameSelectionPolicy as an immutable value containing exactly policy_id revision required_metric_names and optional_metric_names.
+      - required_metric_names and optional_metric_names are immutable tuples containing only MetricName values in canonical MetricName lexical order with no duplicates; mutable raw-string wrong-type unsorted or duplicate members fail closed.
+      - The required and optional metric sets must be disjoint; the same MetricName cannot be simultaneously required and optional.
+      - Empty required and optional metric tuples are valid and make no claim that a selector ignores time spacing or other adapter-local configuration; this permits the future deterministic interval donor to exist without inventing fake metric dependencies.
+      - Policy equality and hashing depend only on typed policy identity revision and exact canonical metric declarations and perform no registry persistence environment filesystem media decode or network lookup.
+      - The contract contains no frame candidates selected-frame list source path VideoObservation mutation interval threshold weight score budget route QualityDecision adapter identifier generic configuration dictionary or callable execution hook.
+      - V2L5 MetricName producers remain unchanged and FrameSelectionPolicy stores only names not MetricObservation values MetricVector objects MediaProfile objects or InputClassEvidence.
+      - Existing raw video ingestion retained keyframe donor image/video observations media profiling quality contracts and exact FFmpeg integration behavior remain unchanged.
+    tests:
+      - FrameSelectionPolicyId construction equality hashing string conversion blank wrong-type and invalid-form negative tests
+      - FrameSelectionPolicyRevision positive integer equality hashing and boolean zero negative float string negative tests
+      - empty policy construction equality hashing immutability and exact field-set tests
+      - required and optional MetricName canonical-order uniqueness mutable raw-string wrong-member-type and cross-set-overlap negative tests
+      - populated policy fixture using current V2L5 MetricName values without embedding MetricVector or metric scalar values
+      - regression proving no interval cadence frame list selection threshold score weight budget route adapter path I-O or execution surface is introduced
+      - regression proving retained KeyframeSelectionPolicy select_keyframes and VideoObservation contracts remain unchanged
+      - full fast CI
   - {id: V2L6.2, lot: V2L6, title: Existing interval keyframe donor adapter, status: planned, depends_on: [V2L6.1]}
   - {id: V2L6.3, lot: V2L6, title: Quality diversity aware frame selection baseline, status: planned, depends_on: [V2L6.2]}
   - {id: V2L6.4, lot: V2L6, title: Long video frame density resource bounds, status: planned, depends_on: [V2L6.3]}
