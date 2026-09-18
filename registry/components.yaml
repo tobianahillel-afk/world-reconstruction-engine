@@ -118,9 +118,11 @@ components:
       - src/wre/domain/__init__.py
       - src/wre/frame_selection/__init__.py
       - src/wre/frame_selection/interval.py
+      - src/wre/frame_selection/quality_diversity.py
     tests:
       - tests/test_frame_selection_policy.py
       - tests/test_interval_frame_selection_adapter.py
+      - tests/test_quality_diversity_frame_selection.py
     status: implementing
   pair_candidate_retrieval: {owner_lot: V2L7, implementation: [], tests: [], status: planned}
   scene_identity_clustering: {owner_lot: V2L8, implementation: [], tests: [], status: planned}
