@@ -37,7 +37,7 @@ No item was allowed to execute routing, retry, fallback, scheduling or default p
 - `BenchmarkRecord` is descriptive reproducibility evidence only. It carries no threshold, policy, route, rank, winner or promoted default.
 - `QualityPolicy` is explicit, immutable and versioned. It admits exact metric names and failure mappings rather than discovering mutable global policy.
 - Missing required metrics, unknown input metrics, direction contradictions and unmapped failures return `UNRESOLVED` instead of being ignored.
-- V2L4.6 exhaustively verifies every current `FailureCategory` as unmapped under an empty policy, exercises multiple valid-but-unknown `MetricName` values and proves unresolved evidence dominates simultaneous mapped `RETRY` / `ESCALATE` conditions.
+- V2L4.6 exhaustively verifies every current `FailureCategory` as unmapped under an empty policy, exercises multiple valid-but-unknown `MetricName` values and proves unresolved evidence dominates simultaneous `ACCEPT_WITH_WARNINGS`, mapped `RETRY` and `ESCALATE` conditions.
 - Optional absent metrics and explicitly admitted informational metrics remain valid; the negative suite does not manufacture failure for otherwise valid input.
 - Exported audit reasons reject impossible states: a direction-mismatch reason cannot carry equal directions and a threshold-violation reason cannot carry a non-violating value.
 - The lot introduces no metric computation, raw failure parser, benchmark runner, profiler, routing graph, scheduler, persistence rewrite or external dependency.
@@ -90,6 +90,8 @@ Exact merged V2L4 work-item heads:
 - V2L4.4 / PR #62 / `fe6083342a501495da3d1b322f39e877bfd50702`: fast-ci #482, native COLMAP #232, CodeQL #420 — **PASS**.
 - V2L4.5 / PR #63 / `2c4baa7bc57f99b9a65d276cf2f06708b137be92`: fast-ci #495, native COLMAP #238, CodeQL #433 — **PASS**. Two P2 findings on impossible audit-reason states were fixed with focused negative regressions before merge and both review threads were resolved.
 - V2L4.6 negative-regression implementation / PR #64 / `0008e5cc9255b3d679dacabc21de4090f0074aec`: fast-ci #498 and CodeQL #436 — **PASS**.
+
+Closing PR review then identified that the mixed-precedence regression needed an actually emitted `ACCEPT_WITH_WARNINGS` branch, not merely a warning decision attached to an absent metric. The fixture was strengthened before final handoff validation; no product contract changed.
 
 V2M0 also inherits the accepted lot-composition evidence from:
 
