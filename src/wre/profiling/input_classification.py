@@ -31,23 +31,17 @@ class InputClassEvidence:
         if not isinstance(self.input_class, InputClass):
             raise TypeError("input_class_evidence.input_class must be InputClass")
         if not isinstance(self.evidence_kind, InputClassEvidenceKind):
-            raise TypeError(
-                "input_class_evidence.evidence_kind must be InputClassEvidenceKind"
-            )
+            raise TypeError("input_class_evidence.evidence_kind must be InputClassEvidenceKind")
         if not isinstance(self.evidence_keys, tuple):
             raise TypeError("input_class_evidence.evidence_keys must be an immutable tuple")
         if not self.evidence_keys:
             raise ValueError("input_class_evidence.evidence_keys must not be empty")
         if any(not isinstance(key, str) or not key.strip() for key in self.evidence_keys):
-            raise ValueError(
-                "input_class_evidence.evidence_keys must contain non-blank strings"
-            )
+            raise ValueError("input_class_evidence.evidence_keys must contain non-blank strings")
         if len(set(self.evidence_keys)) != len(self.evidence_keys):
             raise ValueError("input_class_evidence.evidence_keys must be unique")
         if self.evidence_keys != tuple(sorted(self.evidence_keys)):
-            raise ValueError(
-                "input_class_evidence.evidence_keys must use canonical lexical order"
-            )
+            raise ValueError("input_class_evidence.evidence_keys must use canonical lexical order")
 
 
 _INPUT_CLASS_ORDER = (
@@ -72,10 +66,9 @@ def _normalized_text(value: str) -> str:
 
 def _entry_contains_phrase(entry: RawMetadataEntry, phrase: str) -> bool:
     normalized_phrase = _normalized_text(phrase)
-    return (
-        normalized_phrase in _normalized_text(entry.key)
-        or normalized_phrase in _normalized_text(entry.value)
-    )
+    return normalized_phrase in _normalized_text(
+        entry.key
+    ) or normalized_phrase in _normalized_text(entry.value)
 
 
 def _drone_evidence_keys(metadata: ObservationMetadata) -> tuple[str, ...]:
@@ -118,9 +111,7 @@ def evaluate_input_classification(
     by_class: dict[InputClass, InputClassEvidence] = {}
 
     observed_class = (
-        InputClass.STILL
-        if observation_kind is ObservationKind.IMAGE
-        else InputClass.VIDEO
+        InputClass.STILL if observation_kind is ObservationKind.IMAGE else InputClass.VIDEO
     )
     by_class[observed_class] = InputClassEvidence(
         input_class=observed_class,
@@ -164,7 +155,5 @@ def evaluate_input_classification(
             )
 
     return tuple(
-        by_class[input_class]
-        for input_class in _INPUT_CLASS_ORDER
-        if input_class in by_class
+        by_class[input_class] for input_class in _INPUT_CLASS_ORDER if input_class in by_class
     )
