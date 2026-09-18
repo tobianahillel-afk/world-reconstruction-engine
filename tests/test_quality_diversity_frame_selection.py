@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 from dataclasses import FrozenInstanceError, fields
 from inspect import signature
 from typing import Any, cast
@@ -227,7 +226,7 @@ def test_selection_config_is_exact_immutable_and_validated() -> None:
                 minimum_sharpness_laplacian_variance=value
             )
 
-    with pytest.raises(ValueError, match="must be >= 0.0"):
+    with pytest.raises(ValueError, match=r"must be >= 0\.0"):
         QualityDiversitySelectionConfig(
             minimum_sharpness_laplacian_variance=-0.01
         )
