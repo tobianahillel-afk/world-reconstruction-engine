@@ -123,6 +123,7 @@ from wre.domain.runs import (
 
 __all__ = [
     "ARTIFACT_KEY_SCHEMA_VERSION",
+    "DECODED_IMAGE_PYRAMID_KIND",
     "AdapterCapabilityDescriptor",
     "AdapterCapabilityName",
     "ArtifactDependencyEdge",
@@ -153,7 +154,6 @@ __all__ = [
     "CaptureTimeInterpretationStatus",
     "CheckpointIdentity",
     "ConfigurationIdentity",
-    "DECODED_IMAGE_PYRAMID_KIND",
     "DecodedImageLevelDescriptor",
     "DecodedImageOrientationPolicy",
     "DecodedImagePixelLayout",
