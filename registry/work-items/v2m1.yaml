@@ -730,7 +730,7 @@ work_items:
   - id: V2L6.6
     lot: V2L6
     title: Canonical reusable decoded image pyramid artifacts
-    status: ready
+    status: done
     objective: Define and materialize the first canonical reusable decoded-image multiresolution-pyramid artifact for existing ImageObservation and VideoFrameObservation source assets, with vendor-neutral RGB8 byte semantics exact source/decoder/preprocess computation identity generic artifact materialization verification and one retained FFmpeg software reference path so later retrieval matching and geometry adapters can reuse equivalent decode/resize work without coupling core contracts to one accelerated backend.
     allowed_scope:
       - src/wre/domain/decoded_images.py
@@ -819,7 +819,79 @@ work_items:
       - regression proving no new runtime dependency GPU decode color-normalization retrieval routing geometry scheduler eviction or V2L7 behavior is introduced
       - retained FFmpeg 8 compatibility lane and full fast CI
       - V2L6 lot review and repository-validator evidence before activating V2L7.1
-  - {id: V2L7.1, lot: V2L7, title: Canonical PairCandidate contract, status: planned, depends_on: [V2L6.6]}
+  - id: V2L7.1
+    lot: V2L7
+    title: Canonical PairCandidate contract
+    status: ready
+    objective: Define the minimal immutable solver-independent PairCandidate identity candidate-source evidence contract and deterministic deduplication semantics so sequential GPS classical vocabulary modern visual and future retrieval adapters can propose the same unordered observation relationship without promoting source-specific scores distances geolocation time or geometric claims into scene identity truth.
+    allowed_scope:
+      - src/wre/domain/pair_candidates.py
+      - focused public exports through src/wre/domain/__init__.py
+      - tests/test_pair_candidates.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry after implementation evidence is green so V2L7.2 can be activated without implementing it
+    out_of_scope:
+      - changing raw ImageObservation VideoObservation VideoFrameObservation MediaProfile FrameSelectionPolicy decoded-image pyramid or artifact identity/materialization semantics
+      - changing or wrapping src/wre/retrieval/sequential.py SequentialPairCandidate SequentialPairingConfig SequentialPairingRequest SequentialPairingResult or generate_sequential_candidates owned by V2L7.2
+      - changing or wrapping src/wre/retrieval/gps.py GpsPairCandidate GpsPairingConfig GpsPairingEligibility GpsPairingRequest GpsPairingResult or generate_gps_candidates owned by V2L7.3
+      - classical vocabulary tree index construction descriptor extraction image retrieval or COLMAP vocabulary retrieval owned by V2L7.4
+      - learned place retrieval embeddings geolocation time inference model or checkpoint integration owned by V2L7.5
+      - retrieval recall benchmarking large candidate-set union performance ANN backend selection or lot review owned by V2L7.6 and later large-scale work
+      - local feature matching CorrespondenceSet geometric verification overlap acceptance scene identity SceneCluster or repeated-structure disambiguation owned by V2L8
+      - temporal grouping synchronization route selection QualityDecision geometry reconstruction resource scheduling or runtime compilation
+      - generic score confidence probability distance rank weight metadata dictionary arbitrary scalar bag callable hook filesystem network or model execution in the canonical PairCandidate contract
+      - starting V2L7.2 implementation in this work item
+    depends_on: [V2L6.6]
+    read_before:
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/27_RESEARCH_CANDIDATE_COVERAGE.md
+      - docs/28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md
+      - docs/29_PERFORMANCE_INTEGRATION_MAP.md
+      - registry/v1-v2-migration.yaml
+      - src/wre/domain/observations.py
+      - src/wre/domain/artifacts.py
+      - src/wre/domain/artifact_metadata.py
+      - src/wre/retrieval/sequential.py
+      - src/wre/retrieval/gps.py
+      - tests/test_sequential_pairing.py
+      - tests/test_gps_pairing.py
+    reuse:
+      - ObservationId as the exact stable endpoint identity; PairCandidate does not introduce image filenames paths database IDs or solver-private image IDs
+      - ArtifactRef as the exact link to source-specific candidate evidence so sequence distance GPS distance retrieval rank similarity geolocation or time evidence remains owned by the producing artifact rather than flattened into generic pair fields
+      - immutable frozen slots dataclass conventions and fail-closed canonical tuple validation already used by WRE domain contracts
+      - retained SequentialPairCandidate and GpsPairCandidate implementations only as future donors wrapped in V2L7.2 and V2L7.3 rather than compatibility targets
+      - deterministic lexical ordering conventions used by existing artifact and observation contracts
+    acceptance:
+      - Define PairCandidateSourceId as an immutable typed lowercase opaque token of 1 to 128 characters using letters digits dot underscore colon or hyphen with deterministic equality hashing string conversion and fail-closed wrong-type invalid-form validation.
+      - Define PairCandidateSource as an immutable value containing exactly source_id and evidence_refs where evidence_refs is a non-empty immutable tuple of ArtifactRef values in canonical order by artifact kind then artifact id with no duplicates; mutable wrong-type empty unsorted or duplicate evidence fails closed.
+      - Define PairCandidate as an immutable value containing exactly observation_id1 observation_id2 and sources.
+      - PairCandidate observation endpoints must be distinct ObservationId values in canonical ascending ObservationId.value order; reversed equal raw-string or wrong-type endpoints fail closed rather than being silently reordered or coerced.
+      - PairCandidate sources must be a non-empty immutable tuple of PairCandidateSource values in canonical PairCandidateSourceId lexical order with no duplicate source_id; mutable wrong-type empty unsorted or duplicate source entries fail closed.
+      - PairCandidate contains no score confidence probability rank distance sequence index GPS coordinate geolocation time overlap match count inlier count scene identity route QualityDecision generic dictionary or adapter/model private state.
+      - Define one pure deterministic merge_pair_candidates function over an immutable tuple of PairCandidate values. Empty input returns an empty tuple and wrong-type containers or members fail closed.
+      - merge_pair_candidates deduplicates only by the unordered canonical observation pair identity, never by source score or evidence content; output pairs are sorted lexically by observation_id1 then observation_id2.
+      - When duplicate pair identities come from different sources the merged candidate contains the canonical union of all source IDs. When the same source ID contributes multiple candidates for the same pair its ArtifactRef evidence sets are unioned deterministically and canonically without dropping provenance.
+      - Merging is deterministic idempotent and independent of input candidate order; merging an already merged output returns an equal value.
+      - An empty source-specific retrieval result is represented by an empty candidate tuple outside the PairCandidate value; PairCandidate itself always represents at least one explicit source contribution.
+      - Candidate existence means only that downstream work may consider the pair. It does not claim common scene overlap geometric consistency temporal relation exact geolocation capture time or reconstruction suitability.
+      - Existing sequential GPS media profiling frame-selection decoded-image artifact persistence and geometry donor behavior remains unchanged.
+    tests:
+      - PairCandidateSourceId valid equality hashing string conversion and uppercase whitespace empty overlength illegal-character wrong-type negative tests
+      - PairCandidateSource exact field-set immutability canonical ArtifactRef order uniqueness non-empty mutable and wrong-member-type tests
+      - PairCandidate exact field-set immutability canonical endpoint order distinctness source ordering source uniqueness and wrong-type tests
+      - regression proving no score confidence rank distance GPS sequence geolocation time overlap scene route geometry or generic config field exists
+      - merge fixture combining sequential-like GPS-like and visual-like source IDs for one pair while preserving every evidence ArtifactRef
+      - same-source multi-evidence merge fixture proving canonical evidence union with no provenance loss
+      - multiple-pair fixture proving deterministic lexical output order input-order independence idempotence and empty-input behavior
+      - regression proving retained SequentialPairCandidate GpsPairCandidate generate_sequential_candidates and generate_gps_candidates APIs and behavior are untouched
+      - regression proving no retrieval execution matching geometric verification clustering routing scheduler or V2L7.2 surface is introduced
+      - full fast CI
   - {id: V2L7.2, lot: V2L7, title: Sequential pairing donor adapter, status: planned, depends_on: [V2L7.1]}
   - {id: V2L7.3, lot: V2L7, title: GPS pairing donor adapter, status: planned, depends_on: [V2L7.2]}
   - {id: V2L7.4, lot: V2L7, title: Classical vocabulary retrieval baseline, status: planned, depends_on: [V2L7.3]}

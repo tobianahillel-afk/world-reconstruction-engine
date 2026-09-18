@@ -43,7 +43,11 @@ lot_reviews:
     reviewed_at: '2026-09-18'
     evidence:
       - docs/reviews/V2L5-media-profiling-review.md
-  V2L6: {status: pending, reviewed_at: null, evidence: []}
+  V2L6:
+    status: passed
+    reviewed_at: '2026-09-18'
+    evidence:
+      - docs/reviews/V2L6-adaptive-frame-selection-review.md
   V2L7: {status: pending, reviewed_at: null, evidence: []}
   V2L8: {status: pending, reviewed_at: null, evidence: []}
   V2L9: {status: pending, reviewed_at: null, evidence: []}
