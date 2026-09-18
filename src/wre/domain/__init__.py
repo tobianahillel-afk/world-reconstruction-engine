@@ -47,6 +47,11 @@ from wre.domain.estimated_geometry import (
     SparseReconstructionEstimateId,
 )
 from wre.domain.failures import FailureCategory
+from wre.domain.frame_selection import (
+    FrameSelectionPolicy,
+    FrameSelectionPolicyId,
+    FrameSelectionPolicyRevision,
+)
 from wre.domain.fragments import LocalFrameId, SpatialFragment, SpatialFragmentId
 from wre.domain.hardware_identity import HardwareRuntimeIdentity
 from wre.domain.media_profiles import MediaProfile
@@ -143,6 +148,9 @@ __all__ = [
     "EstimatedPoint3DId",
     "EstimatedTrackElement",
     "FailureCategory",
+    "FrameSelectionPolicy",
+    "FrameSelectionPolicyId",
+    "FrameSelectionPolicyRevision",
     "GpsInterpretationStatus",
     "GpsMetadataInterpretation",
     "HardwareRuntimeIdentity",
