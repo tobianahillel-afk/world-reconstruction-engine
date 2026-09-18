@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from enum import StrEnum
 
@@ -52,7 +53,16 @@ _INPUT_CLASS_ORDER = (
     InputClass.FISHEYE,
     InputClass.ROLLING_SHUTTER,
 )
-_UAV_FAMILY_TOKENS = ("dji", "autel robotics", "skydio", "parrot")
+_UAV_FAMILY_PATTERNS = (
+    re.compile(r"\bmavic\b"),
+    re.compile(r"\bphantom\b"),
+    re.compile(r"\binspire\b"),
+    re.compile(r"\bmatrice\b"),
+    re.compile(r"\bavata\b"),
+    re.compile(r"\banafi\b"),
+    re.compile(r"\bskydio\s+(?:2\+?|x2|x10)\b"),
+    re.compile(r"\bautel(?:\s+robotics)?\s+evo\b"),
+)
 _EXIF_CAMERA_KEYS = frozenset({"image make", "image model"})
 
 
@@ -77,7 +87,10 @@ def _drone_evidence_keys(metadata: ObservationMetadata) -> tuple[str, ...]:
         for entry in metadata.raw_entries
         if entry.namespace.casefold() == "exif"
         and entry.key.casefold() in _EXIF_CAMERA_KEYS
-        and any(token in entry.value.casefold() for token in _UAV_FAMILY_TOKENS)
+        and any(
+            pattern.search(_normalized_text(entry.value))
+            for pattern in _UAV_FAMILY_PATTERNS
+        )
     }
     return tuple(sorted(keys))
 
