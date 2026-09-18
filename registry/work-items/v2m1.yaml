@@ -65,7 +65,7 @@ work_items:
   - id: V2L5.2
     lot: V2L5
     title: Blur sharpness exposure clipping metrics
-    status: ready
+    status: done
     objective: Implement the first deterministic solver-independent image-quality measurement baseline over an explicit immutable caller-supplied 8-bit luma raster, returning one canonical MetricVector containing sharpness via normalized-luma discrete-Laplacian variance plus mean-luma exact-black-clipping and exact-white-clipping measurements with caller-supplied MetricProvenance, without decoding media files or making quality decisions.
     allowed_scope:
       - src/wre/profiling/__init__.py
@@ -122,7 +122,68 @@ work_items:
       - deterministic repeatability and no input mutation regression
       - regression proving no filesystem decode external dependency threshold QualityDecision route or MediaProfile mutation surface is introduced
       - full fast CI
-  - {id: V2L5.3, lot: V2L5, title: Near duplicate and visual diversity signals, status: planned, depends_on: [V2L5.2]}
+  - id: V2L5.3
+    lot: V2L5
+    title: Near duplicate and visual diversity signals
+    status: ready
+    objective: Implement the first deterministic threshold-free pairwise perceptual similarity and diversity baseline over two explicit LumaRaster values, returning a canonical MetricVector with fixed-grid normalized luma mean-absolute difference and average-hash Hamming fraction while retaining SHA-256 plus byte length as the separate exact-content duplicate mechanism.
+    allowed_scope:
+      - src/wre/profiling/__init__.py
+      - src/wre/profiling/visual_similarity.py
+      - tests/test_visual_similarity.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry after implementation evidence is green so V2L5.4 can be activated without implementing it
+    out_of_scope:
+      - changing LumaRaster image-quality MediaProfile Observation MediaAssetRef MetricVector MetricProvenance or exact-content hashing semantics
+      - file path URI database registry artifact-store network or environment lookup
+      - JPEG PNG video RGB or other media decode color conversion orientation correction resizing cache or image-pyramid materialization
+      - reimplementing hash_file_content DuplicateObservationLookup LocalImageIngestor exact SHA-256 matching or persisted exact-duplicate lookup
+      - returning is_duplicate is_near_duplicate diverse-enough labels thresholds scores rankings selection decisions or quality decisions
+      - learned perceptual embeddings foundation models retrieval indexes ANN or same-scene discovery owned by later retrieval work
+      - collection clustering grouping deduplication destructive collapse or source-observation deletion
+      - camera and specialist input-class signals owned by V2L5.4
+      - dynamic long-sequence sparse-coverage signals owned by V2L5.5
+      - frame-selection quality-diversity policy owned by V2L6
+      - adding Pillow OpenCV numpy scipy torch or any new runtime dependency
+      - starting V2L5.4 implementation in this work item
+    depends_on: [V2L5.2]
+    read_before:
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - src/wre/domain/metrics.py
+      - src/wre/profiling/image_quality.py
+      - src/wre/ingestion/hashing.py
+      - tests/test_image_quality.py
+      - tests/test_hashing_duplicates.py
+    reuse:
+      - retained SHA-256 plus byte-length duplicate lookup as the only exact-content duplicate mechanism
+      - LumaRaster as the explicit already-decoded 8-bit luma input boundary
+      - MetricName MetricDescriptor MetricDimension MetricUnit MetricDirection MetricAggregation MetricObservation MetricProvenance and MetricVector as the only signal vocabulary
+      - pure Python standard-library arithmetic so perceptual comparison remains independent from decode and learned retrieval dependencies
+    acceptance:
+      - Define one pure evaluator taking exactly left LumaRaster right LumaRaster and typed caller-supplied MetricProvenance; wrong input types fail closed and no external lookup occurs.
+      - Sample each raster into exactly 64 luma values on an 8 by 8 grid using source coordinate floor of open parenthesis 2 times grid index plus 1 close parenthesis times source size divided by 16 for each axis.
+      - Compute media.visual.grid_luma_mae as the arithmetic mean absolute difference of corresponding 8 by 8 samples normalized by 255, yielding a finite float in the closed interval zero to one.
+      - Compute media.visual.average_hash_hamming_fraction by thresholding each raster's 64 sampled values against that raster's own arithmetic sample mean with a bit set when sample is greater than or equal to the mean, then dividing mismatched bits by 64.
+      - Return exactly two MetricObservation values in canonical MetricName order, media.visual.average_hash_hamming_fraction followed by media.visual.grid_luma_mae.
+      - Both metrics use dimension visual_similarity and direction INFORMATIONAL; Hamming uses unit fraction aggregation fraction and grid luma distance uses unit normalized_luma aggregation mean.
+      - Both produced observations reuse the exact caller-supplied MetricProvenance object and all values satisfy the existing finite MetricVector contract.
+      - Pair evaluation is symmetric and deterministic; comparing a raster with itself yields exactly zero for both metrics.
+      - Uniform black versus uniform white yields zero average-hash Hamming fraction but grid luma MAE exactly one, proving the two threshold-free signals carry complementary evidence rather than one silently substituting for the other.
+      - A structural synthetic contrast fixture yields positive Hamming and grid-luma distance without converting either value into a duplicate or diversity decision.
+      - Existing SHA-256 exact duplicate handling remains unchanged and no exact-content boolean is recomputed from luma pixels.
+      - No threshold duplicate label ranking selection route QualityDecision clustering or MediaProfile mutation is returned.
+    tests:
+      - exact public function signature and wrong-type negative tests for both rasters and MetricProvenance
+      - identical raster deterministic zero-distance and symmetry tests
+      - uniform black versus white complementary-signal regression
+      - structural synthetic fixture with exact or tolerance-bounded positive Hamming and grid-luma distances
+      - exact metric names canonical order descriptor semantics finite interval bounds and shared provenance assertions
+      - regression proving no filesystem decode exact-hash reimplementation threshold duplicate label selection route clustering learned-model or MediaProfile mutation surface is introduced
+      - full fast CI
   - {id: V2L5.4, lot: V2L5, title: Camera and specialist input class signals, status: planned, depends_on: [V2L5.3]}
   - {id: V2L5.5, lot: V2L5, title: Dynamic long sequence sparse coverage signals, status: planned, depends_on: [V2L5.4]}
   - {id: V2L5.6, lot: V2L5, title: Media profile fixture matrix, status: planned, depends_on: [V2L5.5]}
