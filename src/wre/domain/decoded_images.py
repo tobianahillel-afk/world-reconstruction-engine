@@ -28,9 +28,7 @@ class DecodedImagePyramidSpec:
 
     def __post_init__(self) -> None:
         if type(self.minimum_max_edge_px) is not int or self.minimum_max_edge_px <= 0:
-            raise ValueError(
-                "decoded_image_pyramid.minimum_max_edge_px must be a positive integer"
-            )
+            raise ValueError("decoded_image_pyramid.minimum_max_edge_px must be a positive integer")
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,17 +72,14 @@ class DecodedImagePyramidManifest:
         if not isinstance(self.source_kind, ObservationKind):
             raise TypeError("decoded_image_manifest.source_kind must be ObservationKind")
         if self.source_kind not in (ObservationKind.IMAGE, ObservationKind.VIDEO_FRAME):
-            raise ValueError(
-                "decoded_image_manifest.source_kind must be image or video_frame"
-            )
+            raise ValueError("decoded_image_manifest.source_kind must be image or video_frame")
         if not isinstance(self.source_asset_sha256, Sha256Digest):
             raise TypeError("decoded_image_manifest.source_asset_sha256 must be Sha256Digest")
         if not isinstance(self.pixel_layout, DecodedImagePixelLayout):
             raise TypeError("decoded_image_manifest.pixel_layout must be DecodedImagePixelLayout")
         if not isinstance(self.orientation_policy, DecodedImageOrientationPolicy):
             raise TypeError(
-                "decoded_image_manifest.orientation_policy must be "
-                "DecodedImageOrientationPolicy"
+                "decoded_image_manifest.orientation_policy must be DecodedImageOrientationPolicy"
             )
         if not isinstance(self.spec, DecodedImagePyramidSpec):
             raise TypeError("decoded_image_manifest.spec must be DecodedImagePyramidSpec")
