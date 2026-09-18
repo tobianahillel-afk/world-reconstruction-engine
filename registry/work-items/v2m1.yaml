@@ -460,7 +460,7 @@ work_items:
   - id: V2L6.2
     lot: V2L6
     title: Existing interval keyframe donor adapter
-    status: ready
+    status: done
     objective: Wrap the retained deterministic minimum-interval select_keyframes donor behind one small V2 adapter boundary that accepts an explicit immutable interval configuration plus a metric-free FrameSelectionPolicy and exact ProbedVideoFrame candidates, delegates selection without changing donor semantics, and returns the selected ProbedVideoFrame tuple without media extraction FFmpeg execution or legacy API compatibility promises.
     allowed_scope:
       - src/wre/frame_selection/__init__.py
@@ -520,7 +520,78 @@ work_items:
       - regression proving no source path FFmpeg extraction threshold score weight budget QualityDecision route persistence registry or V2L6.3 surface is introduced
       - regression proving retained KeyframeSelectionPolicy select_keyframes and tests/test_keyframe_extraction.py behavior remain unchanged
       - full fast CI
-  - {id: V2L6.3, lot: V2L6, title: Quality diversity aware frame selection baseline, status: planned, depends_on: [V2L6.2]}
+  - id: V2L6.3
+    lot: V2L6
+    title: Quality diversity aware frame selection baseline
+    status: ready
+    objective: Implement the first deterministic quality-diversity frame-selection baseline over an immutable ordered tuple of ProbedVideoFrame candidates with explicit per-candidate MetricVector evidence and optional adjacent-pair visual-similarity MetricVector evidence, applying only named V2L5 sharpness clipping and grid-luma diversity thresholds without weighted scores global ranking density budgets media decode or extraction side effects.
+    allowed_scope:
+      - src/wre/frame_selection/__init__.py
+      - src/wre/frame_selection/quality_diversity.py
+      - tests/test_quality_diversity_frame_selection.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry after implementation evidence is green so V2L6.4 can be activated without implementing it
+    out_of_scope:
+      - changing FrameSelectionPolicy MetricVector MetricObservation MetricDescriptor ProbedVideoFrame interval adapter retained keyframe donor or V2L5 metric producer semantics
+      - file paths FFmpeg ffprobe media decode image conversion extraction persistence registries environment network or clocks
+      - arbitrary generic scoring formula weighted metric sum normalization learned ranking or opaque quality score
+      - near-duplicate truth duplicate truth dynamic truth sparse-overlap truth or specialist-class inference
+      - maximum frame count target frames-per-second duration-dependent chunking window sizes storage compute memory or other density/resource controls owned by V2L6.4
+      - selected-frame artifact identity execution provenance timing persistence idempotence or extraction regression behavior owned by V2L6.5
+      - decoded-image or pyramid materialization accelerated decode or execution profiles owned by V2L6.6
+      - route selection retry fallback escalation QualityDecision retrieval clustering synchronization or geometry
+      - starting V2L6.4 implementation in this work item
+    depends_on: [V2L6.2]
+    read_before:
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - src/wre/domain/frame_selection.py
+      - src/wre/domain/metrics.py
+      - src/wre/profiling/image_quality.py
+      - src/wre/profiling/visual_similarity.py
+      - src/wre/frame_selection/interval.py
+      - src/wre/ingestion/keyframes.py
+      - tests/test_frame_selection_policy.py
+      - tests/test_image_quality.py
+      - tests/test_visual_similarity.py
+      - tests/test_interval_frame_selection_adapter.py
+    reuse:
+      - ProbedVideoFrame as the immutable timestamped candidate identity already used by the retained donor adapter
+      - FrameSelectionPolicy required_metric_names as the exact declaration of evidence this baseline consumes
+      - MetricVector and MetricObservation as the only per-candidate and adjacent-pair scalar evidence containers
+      - current V2L5 metric names media.sharpness.laplacian_variance media.exposure.black_clip_fraction media.exposure.white_clip_fraction and media.visual.grid_luma_mae
+      - pure deterministic Python comparison without new runtime dependencies
+    acceptance:
+      - Define FrameSelectionCandidate as an immutable value containing exactly frame ProbedVideoFrame and metrics MetricVector with strict type validation and no source path image bytes labels scores or mutable metadata.
+      - Define AdjacentFrameDiversityEvidence as an immutable value containing exactly left_frame_index right_frame_index and metrics MetricVector; indices are non-negative exact integers with left strictly less than right and booleans coercions or wrong metric types fail closed.
+      - Define QualityDiversitySelectionConfig with exactly minimum_sharpness_laplacian_variance maximum_black_clip_fraction maximum_white_clip_fraction and minimum_adjacent_grid_luma_mae as optional finite float thresholds; at least one threshold must be configured.
+      - Sharpness minimum when present is finite and non-negative; black clipping white clipping and adjacent grid-luma thresholds when present are finite floats in the closed interval zero to one; booleans integers NaN infinities and silent clamping are rejected.
+      - Define one public selector accepting exactly candidates FrameSelectionPolicy QualityDiversitySelectionConfig and adjacent_diversity_evidence, returning tuple[ProbedVideoFrame, ...] without external lookup or mutation.
+      - candidates must be an immutable non-empty tuple of FrameSelectionCandidate values with strictly increasing frame_index and non-decreasing frame_time_us; unsorted duplicate or wrong-type candidates fail closed rather than being reordered.
+      - The baseline derives its exact consumed MetricName set from configured thresholds and requires policy.required_metric_names to equal that canonical set; policy.optional_metric_names must be empty so no declared evidence is silently ignored.
+      - Each configured per-candidate quality threshold requires the corresponding MetricObservation to exist exactly once through MetricVector and to retain its expected V2L5 MetricDirection and finite scalar semantics; missing or direction-incompatible evidence fails closed.
+      - When minimum_adjacent_grid_luma_mae is configured adjacent_diversity_evidence must contain exactly one immutable entry for every consecutive candidate pair and no extra pair; each entry must carry media.visual.grid_luma_mae with INFORMATIONAL direction.
+      - Quality acceptance is conjunctive, so a candidate passes only when all configured sharpness and clipping thresholds pass; no weighted score ranking normalization or tradeoff between failed thresholds is introduced.
+      - With no adjacent-diversity threshold candidate selection depends only on quality thresholds and preserves original candidate order.
+      - With adjacent diversity enabled the first quality-passing candidate is selectable without a predecessor diversity check and each later quality-passing candidate is selected only when the fixed adjacent source-candidate grid-luma evidence for its immediately preceding candidate meets or exceeds the configured threshold.
+      - Adjacent diversity is explicitly a simple deterministic baseline and does not claim near-duplicate truth global selected-set diversity geometric baseline or scene overlap.
+      - Returned frames are exact original ProbedVideoFrame objects from accepted candidates in source order and no VideoFrameObservation ArtifactRef persistence record or extraction output is created.
+      - Existing interval adapter retained donor V2L5 metric producers and V2L6.1 policy contracts remain unchanged.
+    tests:
+      - FrameSelectionCandidate and AdjacentFrameDiversityEvidence exact field-set equality hashing immutability type index-order and wrong-type negative tests
+      - QualityDiversitySelectionConfig exact field-set threshold range finite-float at-least-one and immutable negative tests
+      - public selector exact signature candidate tuple ordering uniqueness policy and config type validation tests
+      - required MetricName derivation and exact policy declaration match plus non-empty optional-metric rejection tests
+      - sharpness-only clipping-only combined-quality threshold fixtures with exact pass fail boundary behavior
+      - adjacent grid-luma diversity threshold fixture using actual V2L5 MetricVector descriptors and exact boundary behavior
+      - missing metric wrong metric direction missing adjacent pair extra adjacent pair and malformed-pair fail-closed tests
+      - deterministic order and original ProbedVideoFrame identity preservation tests
+      - regression proving no weighted score rank budget max-frame fps chunk route QualityDecision decode extraction persistence or V2L6.4 surface is introduced
+      - full fast CI
   - {id: V2L6.4, lot: V2L6, title: Long video frame density resource bounds, status: planned, depends_on: [V2L6.3]}
   - {id: V2L6.5, lot: V2L6, title: Frame selection provenance timing regression, status: planned, depends_on: [V2L6.4]}
   - {id: V2L6.6, lot: V2L6, title: Canonical reusable decoded image pyramid artifacts, status: planned, depends_on: [V2L6.5]}
