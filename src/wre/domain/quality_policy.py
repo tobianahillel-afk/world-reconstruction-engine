@@ -255,7 +255,8 @@ class QualityEvaluationReason:
                 raise ValueError("metric_direction_mismatch reason has invalid fields")
             if self.expected_direction is self.actual_direction:
                 raise ValueError(
-                    "metric_direction_mismatch reason requires different expected and actual directions"
+                    "metric_direction_mismatch reason requires different expected "
+                    "and actual directions"
                 )
             return
 
@@ -279,7 +280,8 @@ class QualityEvaluationReason:
                 self.expected_direction,
             ):
                 raise ValueError(
-                    "metric_threshold_violation reason requires an observed value that violates threshold"
+                    "metric_threshold_violation reason requires an observed value "
+                    "that violates threshold"
                 )
             return
 
