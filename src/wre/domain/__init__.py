@@ -49,6 +49,7 @@ from wre.domain.estimated_geometry import (
 from wre.domain.failures import FailureCategory
 from wre.domain.fragments import LocalFrameId, SpatialFragment, SpatialFragmentId
 from wre.domain.hardware_identity import HardwareRuntimeIdentity
+from wre.domain.media_profiles import MediaProfile
 from wre.domain.metadata import (
     CaptureTimeInterpretation,
     CaptureTimeInterpretationStatus,
@@ -150,6 +151,7 @@ __all__ = [
     "LocalFrameId",
     "LocalScaleStatus",
     "MediaAssetRef",
+    "MediaProfile",
     "MetricAggregation",
     "MetricDescriptor",
     "MetricDimension",
