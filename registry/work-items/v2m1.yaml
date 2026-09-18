@@ -187,7 +187,7 @@ work_items:
   - id: V2L5.4
     lot: V2L5
     title: Camera and specialist input class signals
-    status: ready
+    status: done
     objective: Define and implement the first deterministic evidence-preserving input-class profiling baseline that records exact still or video observation-kind evidence separately from candidate equirectangular-360 drone-aerial fisheye and rolling-shutter hints derived only from explicit dimensions and raw metadata, without converting heuristics into camera truth or specialist routing decisions.
     allowed_scope:
       - src/wre/profiling/__init__.py
@@ -251,7 +251,68 @@ work_items:
       - multi-signal fixture proving specialist candidate classes can coexist in canonical order
       - regression proving no camera mutation projection solve route threshold QualityDecision learned model network lookup or V2L5.5 behavior is introduced
       - full fast CI
-  - {id: V2L5.5, lot: V2L5, title: Dynamic long sequence sparse coverage signals, status: planned, depends_on: [V2L5.4]}
+  - id: V2L5.5
+    lot: V2L5
+    title: Dynamic long sequence sparse coverage signals
+    status: ready
+    objective: Implement a deterministic threshold-free media-profile summary baseline that exposes exact collection size and source count plus optional video duration temporal visual-change and coverage-diversity aggregates as typed MetricVector evidence for later dynamic long-sequence and sparse-coverage routing, without emitting dynamic static long sparse-overlap or route labels.
+    allowed_scope:
+      - src/wre/profiling/__init__.py
+      - src/wre/profiling/profile_summary.py
+      - tests/test_profile_summary.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry after implementation evidence is green so V2L5.6 can be activated without implementing it
+    out_of_scope:
+      - changing Observation MediaProfile InputClassEvidence LumaRaster visual-similarity MetricVector MetricProvenance or retained ingestion semantics
+      - reading files paths URIs databases registries artifact stores environment variables network resources or invoking ffprobe FFmpeg decode retrieval or geometry
+      - inferring dynamic content directly from video kind temporal image difference camera motion or scene appearance
+      - claiming sparse spatial overlap from observation count visual diversity or temporal sampling density
+      - hard-coding long-sequence sparse-coverage dynamic-likelihood route thresholds or returning boolean class labels
+      - frame selection keyframe density routing fallback retry escalation clustering synchronization tracking segmentation optical flow geometry or solver selection
+      - learned motion models embeddings retrieval indexes or new runtime dependencies
+      - starting V2L5.6 implementation in this work item
+    depends_on: [V2L5.4]
+    read_before:
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - src/wre/domain/metrics.py
+      - src/wre/domain/observations.py
+      - src/wre/profiling/visual_similarity.py
+      - src/wre/profiling/input_classification.py
+      - tests/test_metrics.py
+      - tests/test_visual_similarity.py
+      - tests/test_input_classification.py
+    reuse:
+      - MetricName MetricDescriptor MetricDimension MetricUnit MetricDirection MetricAggregation MetricObservation MetricProvenance and MetricVector as the only summary-metric vocabulary
+      - V2L5.3 normalized grid-luma visual-distance values as caller-supplied temporal-change or collection-diversity evidence rather than recomputing image comparisons
+      - caller-supplied MetricProvenance for exact evaluator and source-evidence identity
+      - pure Python standard-library arithmetic with no media decode or external dependency
+    acceptance:
+      - Define one immutable ProfileSummaryInput value containing positive integer observation_count positive integer distinct_source_count not exceeding observation_count optional non-negative integer video_duration_us and immutable tuples temporal_grid_luma_changes and coverage_grid_luma_distances.
+      - Boolean non-integer negative inconsistent mutable non-finite or out-of-range input values fail closed; visual-distance members must be finite floats in the closed interval zero to one and are never silently clamped sorted or deduplicated.
+      - Empty temporal or coverage distance tuples are valid and mean that aggregate evidence is unavailable rather than zero change or complete coverage.
+      - Define one pure evaluator accepting exactly ProfileSummaryInput plus typed caller-supplied MetricProvenance and performing no external lookup.
+      - Return media.collection.observation_count and media.collection.distinct_source_count for every input as INFORMATIONAL count metrics.
+      - When video_duration_us is present return media.sequence.duration_seconds as an INFORMATIONAL second metric using exact microsecond-to-second conversion and do not convert duration into a long-sequence label.
+      - When temporal_grid_luma_changes is non-empty return media.temporal.grid_luma_change_mean as the arithmetic mean of those normalized V2L5.3 distances using INFORMATIONAL normalized_luma units.
+      - When coverage_grid_luma_distances is non-empty return media.coverage.grid_luma_diversity_mean as the arithmetic mean of those normalized V2L5.3 distances using INFORMATIONAL normalized_luma units.
+      - Omit optional metrics whose evidence tuple or duration is absent instead of fabricating zero evidence and return observations in canonical MetricName order.
+      - All produced values are finite floats reuse the exact caller-supplied MetricProvenance object and satisfy existing MetricVector uniqueness and ordering contracts.
+      - High temporal visual change remains only an input to later dynamic reasoning because camera motion illumination and viewpoint change can cause the same signal.
+      - High visual diversity remains only an input to later sparse-coverage reasoning because it does not prove low geometric overlap or disconnected scene structure.
+      - No dynamic static long-sequence sparse-coverage duplicate specialist route QualityDecision threshold ranking selection or MediaProfile mutation is returned.
+      - Existing V2L5.1 through V2L5.4 contracts exact duplicate handling EXIF semantics and ingestion behavior remain unchanged.
+    tests:
+      - exact ProfileSummaryInput field set equality hashing immutability scalar typing range and mutable-collection negative tests
+      - always-present observation and distinct-source count metric descriptor and value tests
+      - optional video-duration exact conversion plus absent-duration omission regression
+      - temporal visual-change mean and coverage visual-diversity mean exact synthetic fixtures plus empty-evidence omission tests
+      - canonical metric ordering finite-float shared-provenance and deterministic repeatability assertions
+      - regression proving no dynamic static long sparse-overlap threshold route frame-selection retrieval tracking geometry solver or external-I-O surface is introduced
+      - full fast CI
   - {id: V2L5.6, lot: V2L5, title: Media profile fixture matrix, status: planned, depends_on: [V2L5.5]}
   - {id: V2L6.1, lot: V2L6, title: Frame selection policy contract, status: planned, depends_on: [V2L5.6]}
   - {id: V2L6.2, lot: V2L6, title: Existing interval keyframe donor adapter, status: planned, depends_on: [V2L6.1]}
