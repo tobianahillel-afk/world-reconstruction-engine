@@ -107,7 +107,7 @@ work_items:
     acceptance:
       - Define one immutable local luma-raster input value with positive integer width and height at least 3 pixels each and exact immutable bytes payload length width times height; booleans non-integers mutable buffers and inconsistent dimensions fail closed.
       - The evaluator performs no file media observation artifact registry persistence environment or network lookup and accepts only the explicit luma raster plus typed MetricProvenance supplied by the caller.
-      - Return exactly four MetricObservation values in canonical MetricName order: media.exposure.black_clip_fraction media.exposure.mean_luma media.exposure.white_clip_fraction and media.sharpness.laplacian_variance.
+      - Return exactly four MetricObservation values in canonical MetricName order, namely media.exposure.black_clip_fraction media.exposure.mean_luma media.exposure.white_clip_fraction and media.sharpness.laplacian_variance.
       - Mean luma is the arithmetic mean of 8-bit samples normalized by 255 and is INFORMATIONAL; exact black and white clipping fractions count only samples equal to 0 and 255 respectively and are LOWER_IS_BETTER.
       - Sharpness uses population variance of the four-neighbour discrete Laplacian evaluated on normalized luma over interior pixels only and is HIGHER_IS_BETTER; no border padding interpolation or hidden smoothing is introduced.
       - Metric descriptor dimension unit direction and aggregation tokens are fixed explicitly by this baseline and all observations reuse the exact caller-supplied MetricProvenance object.
