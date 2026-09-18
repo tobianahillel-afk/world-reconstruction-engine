@@ -49,9 +49,7 @@ class FrameSelectionPolicy:
         if not isinstance(self.policy_id, FrameSelectionPolicyId):
             raise TypeError("frame_selection_policy.policy_id must be FrameSelectionPolicyId")
         if not isinstance(self.revision, FrameSelectionPolicyRevision):
-            raise TypeError(
-                "frame_selection_policy.revision must be FrameSelectionPolicyRevision"
-            )
+            raise TypeError("frame_selection_policy.revision must be FrameSelectionPolicyRevision")
 
         self._validate_metric_names(
             self.required_metric_names,
