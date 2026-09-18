@@ -12,6 +12,7 @@ from wre.domain import (
     MediaProfile,
     MetricDirection,
     MetricProvenance,
+    MetricVector,
     ObservationId,
     ObservationKind,
     ObservationMetadata,
@@ -76,11 +77,10 @@ def _entry(key: str, value: str) -> RawMetadataEntry:
     return RawMetadataEntry(namespace="exif", key=key, value=value)
 
 
-def _metric_values(vector: object) -> dict[str, float]:
-    observations = getattr(vector, "observations")
+def _metric_values(vector: MetricVector) -> dict[str, float]:
     return {
         observation.descriptor.name.value: observation.value
-        for observation in observations
+        for observation in vector.observations
     }
 
 
