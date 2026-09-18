@@ -109,6 +109,56 @@ class KeyframeExtractionResult:
     frames: tuple[VideoFrameObservation, ...]
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class SelectedFrameExtractionRequest:
+    """Materialize an explicit already-selected source-frame set."""
+
+    video: VideoObservation
+    source_path: Path
+    output_dir: Path
+    selected_frames: tuple[ProbedVideoFrame, ...]
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.video, VideoObservation):
+            raise TypeError("selected_frame_extraction.video must be VideoObservation")
+        if not isinstance(self.source_path, Path):
+            raise TypeError("selected_frame_extraction.source_path must be Path")
+        if not isinstance(self.output_dir, Path):
+            raise TypeError("selected_frame_extraction.output_dir must be Path")
+        _validate_selected_frames(self.selected_frames)
+
+
+@dataclass(frozen=True, slots=True)
+class SelectedFrameExtractionResult:
+    source_observation_id: ObservationId
+    toolchain: FFmpegToolchainIdentity
+    selected_frames: tuple[ProbedVideoFrame, ...]
+    frames: tuple[VideoFrameObservation, ...]
+
+
+def _validate_selected_frames(frames: object) -> tuple[ProbedVideoFrame, ...]:
+    if not isinstance(frames, tuple):
+        raise TypeError("selected_frame_extraction.selected_frames must be an immutable tuple")
+    if not frames:
+        raise ValueError("selected_frame_extraction.selected_frames must not be empty")
+    if any(not isinstance(frame, ProbedVideoFrame) for frame in frames):
+        raise TypeError(
+            "selected_frame_extraction.selected_frames members must be ProbedVideoFrame"
+        )
+
+    previous_index = -1
+    previous_time = -1
+    for frame in frames:
+        if frame.frame_index <= previous_index:
+            raise ValueError("selected_frame_extraction frame indices must be strictly increasing")
+        if frame.frame_time_us < previous_time:
+            raise ValueError("selected_frame_extraction frame timestamps must be non-decreasing")
+        previous_index = frame.frame_index
+        previous_time = frame.frame_time_us
+
+    return frames
+
+
 def select_keyframes(
     frames: tuple[ProbedVideoFrame, ...],
     policy: KeyframeSelectionPolicy,
@@ -270,6 +320,17 @@ def _frame_observation_id(
     return ObservationId(f"vf:{hashlib.sha256(material).hexdigest()}")
 
 
+def _verified_source_path(video: VideoObservation, source_path: Path) -> Path:
+    resolved = source_path.expanduser().resolve(strict=True)
+    source_hash = hash_file_content(resolved)
+    if (
+        source_hash.sha256 != video.asset.sha256
+        or source_hash.byte_length != video.asset.byte_length
+    ):
+        raise ValueError("source video bytes do not match the persisted VideoObservation asset")
+    return resolved
+
+
 class LocalKeyframeExtractor:
     """Extract deterministic source-frame samples through an external FFmpeg CLI."""
 
@@ -277,19 +338,15 @@ class LocalKeyframeExtractor:
         self._sink = sink
         self._toolchain = toolchain
 
-    def extract(self, request: KeyframeExtractionRequest) -> KeyframeExtractionResult:
-        source_path = request.source_path.expanduser().resolve(strict=True)
-        source_hash = hash_file_content(source_path)
-        if (
-            source_hash.sha256 != request.video.asset.sha256
-            or source_hash.byte_length != request.video.asset.byte_length
-        ):
-            raise ValueError("source video bytes do not match the persisted VideoObservation asset")
-
-        identity = inspect_toolchain(self._toolchain)
-        probed = probe_video_frames(source_path, self._toolchain)
-        selected = select_keyframes(probed, request.policy)
-        output_dir = request.output_dir.expanduser().resolve()
+    def _materialize_selected_frames(
+        self,
+        *,
+        video: VideoObservation,
+        source_path: Path,
+        output_dir: Path,
+        selected: tuple[ProbedVideoFrame, ...],
+    ) -> tuple[VideoFrameObservation, ...]:
+        output_dir = output_dir.expanduser().resolve()
         output_dir.mkdir(parents=True, exist_ok=True)
 
         with tempfile.TemporaryDirectory(prefix="wre-keyframes-", dir=output_dir) as temp_name:
@@ -334,26 +391,66 @@ class LocalKeyframeExtractor:
                 temporary_path.replace(final_path)
                 frame_hash = hash_file_content(final_path)
                 observation = VideoFrameObservation(
-                    observation_id=_frame_observation_id(request.video, frame),
+                    observation_id=_frame_observation_id(video, frame),
                     asset=MediaAssetRef(
                         uri=final_path.as_uri(),
                         sha256=Sha256Digest(frame_hash.sha256.value),
                         byte_length=frame_hash.byte_length,
                         mime_type="image/png",
                     ),
-                    source=request.video.source,
-                    received_at=request.video.received_at,
+                    source=video.source,
+                    received_at=video.received_at,
                     captured_at=None,
-                    video_asset=request.video.asset,
+                    video_asset=video.asset,
                     frame_index=frame.frame_index,
                     frame_time_us=frame.frame_time_us,
                 )
                 self._sink.put_observation(observation)
                 observations.append(observation)
 
+        return tuple(observations)
+
+    def extract_selected(
+        self,
+        request: SelectedFrameExtractionRequest,
+    ) -> SelectedFrameExtractionResult:
+        """Materialize exactly the supplied selected source frames without probing or selection."""
+
+        if not isinstance(request, SelectedFrameExtractionRequest):
+            raise TypeError(
+                "selected_frame_extraction.request must be SelectedFrameExtractionRequest"
+            )
+
+        source_path = _verified_source_path(request.video, request.source_path)
+        identity = inspect_toolchain(self._toolchain)
+        selected = _validate_selected_frames(request.selected_frames)
+        observations = self._materialize_selected_frames(
+            video=request.video,
+            source_path=source_path,
+            output_dir=request.output_dir,
+            selected=selected,
+        )
+        return SelectedFrameExtractionResult(
+            source_observation_id=request.video.observation_id,
+            toolchain=identity,
+            selected_frames=selected,
+            frames=observations,
+        )
+
+    def extract(self, request: KeyframeExtractionRequest) -> KeyframeExtractionResult:
+        source_path = _verified_source_path(request.video, request.source_path)
+        identity = inspect_toolchain(self._toolchain)
+        probed = probe_video_frames(source_path, self._toolchain)
+        selected = select_keyframes(probed, request.policy)
+        observations = self._materialize_selected_frames(
+            video=request.video,
+            source_path=source_path,
+            output_dir=request.output_dir,
+            selected=selected,
+        )
         return KeyframeExtractionResult(
             source_observation_id=request.video.observation_id,
             toolchain=identity,
             policy=request.policy,
-            frames=tuple(observations),
+            frames=observations,
         )

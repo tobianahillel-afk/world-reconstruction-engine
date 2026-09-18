@@ -661,7 +661,7 @@ work_items:
   - id: V2L6.5
     lot: V2L6
     title: Frame selection provenance timing regression
-    status: ready
+    status: done
     objective: Establish the V2 selected-frame extraction regression boundary by allowing the retained local FFmpeg extractor to materialize an explicit immutable tuple of already selected ProbedVideoFrame values while preserving parent VideoObservation provenance exact source frame index and microsecond timing deterministic VideoFrameObservation identity output byte integrity and idempotent persistence without probing or selecting frames again.
     allowed_scope:
       - src/wre/ingestion/keyframes.py
@@ -727,7 +727,97 @@ work_items:
       - retained LocalKeyframeExtractor.extract regression proving the existing interval donor still selects and extracts indices 0 2 4 6 at 0 500000 1000000 and 1500000 microseconds on the existing synthetic fixture
       - regression proving no quality metric threshold density budget decoded-image pyramid accelerated decode routing scheduler or V2L6.6 surface is introduced
       - full fast CI
-  - {id: V2L6.6, lot: V2L6, title: Canonical reusable decoded image pyramid artifacts, status: planned, depends_on: [V2L6.5]}
+  - id: V2L6.6
+    lot: V2L6
+    title: Canonical reusable decoded image pyramid artifacts
+    status: ready
+    objective: Define and materialize the first canonical reusable decoded-image multiresolution-pyramid artifact for existing ImageObservation and VideoFrameObservation source assets, with vendor-neutral RGB8 byte semantics exact source/decoder/preprocess computation identity generic artifact materialization verification and one retained FFmpeg software reference path so later retrieval matching and geometry adapters can reuse equivalent decode/resize work without coupling core contracts to one accelerated backend.
+    allowed_scope:
+      - src/wre/domain/decoded_images.py
+      - focused public exports through src/wre/domain/__init__.py
+      - src/wre/ingestion/decoded_images.py
+      - focused public exports through src/wre/ingestion/__init__.py
+      - registry/adapter-models.yaml for one retained FFmpeg decoded-image-pyramid reference capability using the already approved dependency and license posture
+      - registry/dependencies.yaml only if required to record the existing FFmpeg dependency's additional still-image decode reference role without changing its version license integration mode or shipping approval
+      - tests/test_decoded_image_pyramids.py
+      - focused reuse of generic artifact metadata key materialization and verifier tests where required without changing their semantics
+      - docs/reviews/V2L6-adaptive-frame-selection-review.md and focused lifecycle updates to registry/reviews.yaml registry/components.yaml PROJECT_STATE.yaml and this work-item registry after implementation evidence is green so the V2L6 lot can close and V2L7.1 can be activated without implementing it
+    out_of_scope:
+      - changing ImageObservation VideoFrameObservation MediaAssetRef ProbedVideoFrame frame-selection policy interval quality-diversity density or selected-frame extraction semantics
+      - GPU or vendor-specific decode backends including nvImageCodec nvJPEG NVDEC CUDA ROCm Metal DirectML or other accelerated execution profiles
+      - migrating the official FFmpeg 6.1.1-3ubuntu5 baseline to FFmpeg 8 or closing Issue 54
+      - adding Pillow OpenCV PyAV libvips numpy torch or any new runtime dependency for the reference path
+      - JPEG PNG video codec implementation custom codec ownership or replacing mature FFmpeg decode and scale internals
+      - color-profile interpretation white-balance exposure normalization HDR working-color-space conversion or photometric normalization owned by V2L17
+      - learned preprocessing model input normalization tensor batching H2D transfer compiler precision or GPU execution profiles owned by later learned-adapter and performance work
+      - artifact residency tiering eviction topology direct-I-O resource scheduling or storage-pressure policy owned by V2L46
+      - retrieval PairCandidate matching clustering synchronization routing geometry depth surface appearance or downstream consumer implementation
+      - runtime compression exchange formats image delivery formats or viewer texture pipelines
+      - starting V2L7.1 implementation in this work item
+    depends_on: [V2L6.5]
+    read_before:
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/27_RESEARCH_CANDIDATE_COVERAGE.md
+      - docs/28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md
+      - docs/29_PERFORMANCE_INTEGRATION_MAP.md
+      - registry/adapter-models.yaml
+      - registry/dependencies.yaml
+      - src/wre/domain/observations.py
+      - src/wre/domain/artifacts.py
+      - src/wre/domain/artifact_keys.py
+      - src/wre/domain/artifact_metadata.py
+      - src/wre/domain/artifact_materialization.py
+      - src/wre/domain/producer_identity.py
+      - src/wre/ingestion/hashing.py
+      - src/wre/ingestion/images.py
+      - src/wre/ingestion/keyframes.py
+      - src/wre/profiling/image_quality.py
+      - src/wre/materialization.py
+      - tests/test_artifact_keys.py
+      - tests/test_artifact_materialization.py
+      - tests/test_image_ingestion.py
+      - tests/test_keyframe_extraction.py
+      - tests/test_frame_selection_extraction_regression.py
+    reuse:
+      - existing ImageObservation and VideoFrameObservation plus their MediaAssetRef SHA-256 and byte length as immutable source evidence rather than introducing a competing media identity
+      - existing ArtifactKind ArtifactRef ArtifactInputFingerprint ArtifactKeyMaterial derive_artifact_key ArtifactMetadata and ArtifactMaterializationMetadata contracts for logical computation and local-byte identity rather than creating a second cache-key or manifest system
+      - existing Sha256Digest and streamed file hashing helpers for exact byte identity
+      - the already approved external FFmpeg subprocess dependency and exact toolchain identity as the first portable software reference decoder and scaler; no codec or resampler is reimplemented
+      - generic verify_local_artifact_materialization for exact on-disk verification
+      - existing LumaRaster remains a profiling input contract and is not mutated into the canonical decoded-image artifact type merely for convenience
+    acceptance:
+      - Define one immutable DecodedImagePyramidSpec containing exactly minimum_max_edge_px as an exact positive integer; booleans floats strings zero negatives and silent coercion fail closed.
+      - Define a closed canonical pixel layout for this first artifact version as packed unsigned 8-bit RGB with exactly three bytes per pixel in row-major top-to-bottom scanline order and an explicit source-pixel-orientation policy with no WRE EXIF or display autorotation; this representation makes no sRGB ICC white-balance exposure HDR or photometric-normalization truth claim.
+      - Define immutable DecodedImageLevelDescriptor values containing exactly level_index width_px height_px and canonical relative_path; indices start at zero are contiguous dimensions are positive and paths are canonical safe POSIX-relative level paths.
+      - Define an immutable DecodedImagePyramidManifest linking exactly one ImageObservation or VideoFrameObservation identity and source-asset SHA-256 to the fixed pixel/orientation semantics the DecodedImagePyramidSpec and an ordered non-empty tuple of level descriptors; VideoObservation is rejected because frame selection/extraction owns conversion of video streams into frame observations first.
+      - Level zero represents the source decoder's native pixel dimensions. While the current level maximum edge is greater than minimum_max_edge_px create the next level using positive floor-halved dimensions max of one and floor previous dimension divided by two; stop once the current level maximum edge is less than or equal to the configured minimum. No level upscales the source and identical dimensions are never duplicated.
+      - The portable reference materializer accepts exactly a supported source observation source path output root typed ArtifactRef and DecodedImagePyramidSpec, verifies source bytes against MediaAssetRef before external execution and requires the retained exact FFmpeg toolchain identity.
+      - The reference path requests no autorotation and materializes every level as exact packed rgb24 bytes at the manifest dimensions using the retained external FFmpeg decode/scale capability; it performs no WRE photometric normalization learned preprocessing or quality decision.
+      - Each level byte length is exactly width_px times height_px times three and its SHA-256 and canonical relative path are represented through existing ArtifactMaterializationEntry values; the resulting ArtifactMaterializationMetadata contains the exact ArtifactRef and all level entries in canonical path order and verifies as VERIFIED through the existing generic verifier.
+      - Artifact computation identity reuses ArtifactKeyMaterial with one source-content ArtifactInputFingerprint derived from the exact source asset SHA-256 plus an existing image-observation or video-frame-observation input kind and an ArtifactProducerIdentity that records the exact retained FFmpeg implementation/version and a ConfigurationIdentity covering the canonical pixel orientation pyramid and scaling configuration; no filename mtime or hardware identity is required for this software reference path.
+      - Identical source bytes observation kind spec decoder identity and configuration derive the same artifact key and byte-identical reference materialization; changing source bytes spec decoder identity or material decode/preprocess configuration changes computation identity.
+      - A materialization request is explicit and opt-in; V2L6.6 does not automatically cache every media item and does not add eviction or retention policy.
+      - Existing raw observations selected-frame extraction MediaProfile LumaRaster artifact/cache contracts and retained FFmpeg keyframe behavior remain unchanged.
+      - The lot review composes V2L6.1 through V2L6.6 and proves frame policy interval donor quality-diversity selection density bounds selected-frame provenance and reusable decoded-image artifacts remain separately owned without routing retrieval geometry or accelerated decode leakage.
+    tests:
+      - DecodedImagePyramidSpec exact field immutability equality hashing and positive-integer validation tests
+      - pixel layout orientation level descriptor manifest typing canonical path contiguous-index positive-dimension source-kind and wrong-type negative tests
+      - deterministic pyramid-dimension fixtures for even odd portrait landscape tiny and source-already-below-minimum cases
+      - artifact-key regression proving stability for identical inputs and change on source bytes minimum edge producer version or decode/preprocess configuration
+      - source-byte mismatch regression proving failure before FFmpeg execution
+      - real pinned-FFmpeg reference fixture materializing a synthetic still image into native and halved raw rgb24 levels with exact dimensions byte lengths hashes manifest entries and VERIFIED generic materialization status
+      - VideoFrameObservation source fixture proving parent-frame observations can use the same canonical decoded-image artifact contract without re-probing or re-selecting video
+      - idempotent reference materialization regression proving repeated identical requests return equal manifest metadata key and exact bytes
+      - regression proving no new runtime dependency GPU decode color-normalization retrieval routing geometry scheduler eviction or V2L7 behavior is introduced
+      - retained FFmpeg 8 compatibility lane and full fast CI
+      - V2L6 lot review and repository-validator evidence before activating V2L7.1
   - {id: V2L7.1, lot: V2L7, title: Canonical PairCandidate contract, status: planned, depends_on: [V2L6.6]}
   - {id: V2L7.2, lot: V2L7, title: Sequential pairing donor adapter, status: planned, depends_on: [V2L7.1]}
   - {id: V2L7.3, lot: V2L7, title: GPS pairing donor adapter, status: planned, depends_on: [V2L7.2]}
