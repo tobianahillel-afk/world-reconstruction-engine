@@ -104,11 +104,14 @@ def test_video_duration_must_be_non_negative_integer_when_present(value: object)
             video_duration_us=cast(Any, value),
         )
 
-    assert ProfileSummaryInput(
-        observation_count=2,
-        distinct_source_count=1,
-        video_duration_us=0,
-    ).video_duration_us == 0
+    assert (
+        ProfileSummaryInput(
+            observation_count=2,
+            distinct_source_count=1,
+            video_duration_us=0,
+        ).video_duration_us
+        == 0
+    )
 
 
 @pytest.mark.parametrize(
@@ -195,8 +198,7 @@ def test_empty_optional_evidence_emits_only_exact_collection_counts() -> None:
         "count",
     )
     assert all(
-        item.descriptor.direction is MetricDirection.INFORMATIONAL
-        for item in result.observations
+        item.descriptor.direction is MetricDirection.INFORMATIONAL for item in result.observations
     )
     assert all(item.provenance is provenance for item in result.observations)
 
@@ -219,16 +221,10 @@ def test_video_duration_is_exactly_converted_and_absent_duration_is_omitted() ->
         provenance,
     )
 
-    by_name = {
-        item.descriptor.name.value: item
-        for item in present.observations
-    }
+    by_name = {item.descriptor.name.value: item for item in present.observations}
     assert by_name["media.sequence.duration_seconds"].value == 1.5
     assert by_name["media.sequence.duration_seconds"].descriptor.unit.value == "second"
-    assert (
-        by_name["media.sequence.duration_seconds"].descriptor.aggregation.value
-        == "duration"
-    )
+    assert by_name["media.sequence.duration_seconds"].descriptor.aggregation.value == "duration"
     assert "media.sequence.duration_seconds" not in {
         item.descriptor.name.value for item in absent.observations
     }
@@ -246,28 +242,18 @@ def test_temporal_and_coverage_aggregates_are_exact_threshold_free_means() -> No
         provenance,
     )
 
-    by_name = {
-        item.descriptor.name.value: item
-        for item in result.observations
-    }
+    by_name = {item.descriptor.name.value: item for item in result.observations}
     assert by_name["media.temporal.grid_luma_change_mean"].value == 0.5
     assert by_name["media.coverage.grid_luma_diversity_mean"].value == 0.5
     assert (
-        by_name["media.temporal.grid_luma_change_mean"].descriptor.unit.value
-        == "normalized_luma"
+        by_name["media.temporal.grid_luma_change_mean"].descriptor.unit.value == "normalized_luma"
     )
     assert (
         by_name["media.coverage.grid_luma_diversity_mean"].descriptor.unit.value
         == "normalized_luma"
     )
-    assert (
-        by_name["media.temporal.grid_luma_change_mean"].descriptor.aggregation.value
-        == "mean"
-    )
-    assert (
-        by_name["media.coverage.grid_luma_diversity_mean"].descriptor.aggregation.value
-        == "mean"
-    )
+    assert by_name["media.temporal.grid_luma_change_mean"].descriptor.aggregation.value == "mean"
+    assert by_name["media.coverage.grid_luma_diversity_mean"].descriptor.aggregation.value == "mean"
 
 
 def test_all_metrics_use_canonical_name_order_finite_values_and_shared_provenance() -> None:
@@ -292,13 +278,11 @@ def test_all_metrics_use_canonical_name_order_finite_values_and_shared_provenanc
         "media.temporal.grid_luma_change_mean",
     )
     assert all(
-        type(item.value) is float and math.isfinite(item.value)
-        for item in first.observations
+        type(item.value) is float and math.isfinite(item.value) for item in first.observations
     )
     assert all(item.provenance is provenance for item in first.observations)
     assert all(
-        item.descriptor.direction is MetricDirection.INFORMATIONAL
-        for item in first.observations
+        item.descriptor.direction is MetricDirection.INFORMATIONAL for item in first.observations
     )
 
 
