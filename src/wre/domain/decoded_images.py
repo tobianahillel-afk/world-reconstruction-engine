@@ -71,6 +71,8 @@ class DecodedImagePyramidManifest:
     def __post_init__(self) -> None:
         if not isinstance(self.source_observation_id, ObservationId):
             raise TypeError("decoded_image_manifest.source_observation_id must be ObservationId")
+        if not isinstance(self.source_kind, ObservationKind):
+            raise TypeError("decoded_image_manifest.source_kind must be ObservationKind")
         if self.source_kind not in (ObservationKind.IMAGE, ObservationKind.VIDEO_FRAME):
             raise ValueError(
                 "decoded_image_manifest.source_kind must be image or video_frame"
