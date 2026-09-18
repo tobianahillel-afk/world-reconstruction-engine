@@ -273,9 +273,7 @@ def test_candidates_must_remain_in_source_order() -> None:
         MetricDirection.HIGHER_IS_BETTER,
     )
     policy = _policy("media.sharpness.laplacian_variance")
-    config = QualityDiversitySelectionConfig(
-        minimum_sharpness_laplacian_variance=0.5
-    )
+    config = QualityDiversitySelectionConfig(minimum_sharpness_laplacian_variance=0.5)
 
     with pytest.raises(ValueError, match="indices must be strictly increasing"):
         select_quality_diversity_frames(
@@ -522,9 +520,7 @@ def test_adjacent_evidence_is_rejected_when_diversity_threshold_is_disabled() ->
 def test_missing_and_direction_incompatible_metrics_fail_closed() -> None:
     sharpness = "media.sharpness.laplacian_variance"
     policy = _policy(sharpness)
-    config = QualityDiversitySelectionConfig(
-        minimum_sharpness_laplacian_variance=0.5
-    )
+    config = QualityDiversitySelectionConfig(minimum_sharpness_laplacian_variance=0.5)
 
     with pytest.raises(ValueError, match="metric is missing"):
         select_quality_diversity_frames(
