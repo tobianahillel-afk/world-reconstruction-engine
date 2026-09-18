@@ -94,6 +94,12 @@ from wre.domain.observations import (
     VideoFrameObservation,
     VideoObservation,
 )
+from wre.domain.pair_candidates import (
+    PairCandidate,
+    PairCandidateSource,
+    PairCandidateSourceId,
+    merge_pair_candidates,
+)
 from wre.domain.producer_identity import (
     ArtifactProducerIdentity,
     CheckpointIdentity,
@@ -190,6 +196,9 @@ __all__ = [
     "ObservationKind",
     "ObservationMetadata",
     "ObservationMetadataInterpretation",
+    "PairCandidate",
+    "PairCandidateSource",
+    "PairCandidateSourceId",
     "Point3DEstimate",
     "ProducerRef",
     "ProvenanceClass",
@@ -221,5 +230,6 @@ __all__ = [
     "canonical_artifact_key_bytes",
     "derive_artifact_key",
     "evaluate_quality_policy",
+    "merge_pair_candidates",
     "plan_artifact_invalidation",
 ]
