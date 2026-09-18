@@ -22,15 +22,13 @@ class MediaProfile:
             raise TypeError("media_profile.evidence_artifacts members must be ArtifactRef")
 
         evidence_keys = [
-            (item.artifact_id.value, item.artifact_kind.value)
-            for item in self.evidence_artifacts
+            (item.artifact_id.value, item.artifact_kind.value) for item in self.evidence_artifacts
         ]
         if len(set(self.evidence_artifacts)) != len(self.evidence_artifacts):
             raise ValueError("media_profile.evidence_artifacts members must be unique")
         if evidence_keys != sorted(evidence_keys):
             raise ValueError(
-                "media_profile.evidence_artifacts must use canonical "
-                "ArtifactId/ArtifactKind order"
+                "media_profile.evidence_artifacts must use canonical ArtifactId/ArtifactKind order"
             )
 
         kinds_by_artifact_id: dict[str, str] = {}
