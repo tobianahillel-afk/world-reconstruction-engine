@@ -132,7 +132,14 @@ components:
       - tests/test_frame_selection_extraction_regression.py
       - tests/test_decoded_image_pyramids.py
     status: implemented
-  pair_candidate_retrieval: {owner_lot: V2L7, implementation: [], tests: [], status: planned}
+  pair_candidate_retrieval:
+    owner_lot: V2L7
+    implementation:
+      - src/wre/domain/pair_candidates.py
+      - src/wre/domain/__init__.py
+    tests:
+      - tests/test_pair_candidates.py
+    status: implementing
   scene_identity_clustering: {owner_lot: V2L8, implementation: [], tests: [], status: planned}
   temporal_grouping_sync: {owner_lot: V2L9, implementation: [], tests: [], status: planned}
   route_graph: {owner_lot: V2L10, implementation: [], tests: [], status: planned}

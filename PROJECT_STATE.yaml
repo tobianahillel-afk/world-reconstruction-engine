@@ -5,17 +5,17 @@ roadmap_version: '2.0'
 phase: implementation
 milestone: V2M1
 lot: V2L7
-active_work_item: V2L7.1
+active_work_item: V2L7.2
 status: ready
-last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5, V2L3.6, V2L4.1, V2L4.2, V2L4.3, V2L4.4, V2L4.5, V2L4.6, V2L5.1, V2L5.2, V2L5.3, V2L5.4, V2L5.5, V2L5.6, V2L6.1, V2L6.2, V2L6.3, V2L6.4, V2L6.5, V2L6.6]
-last_merged_pr: 76
+last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5, V2L3.6, V2L4.1, V2L4.2, V2L4.3, V2L4.4, V2L4.5, V2L4.6, V2L5.1, V2L5.2, V2L5.3, V2L5.4, V2L5.5, V2L5.6, V2L6.1, V2L6.2, V2L6.3, V2L6.4, V2L6.5, V2L6.6, V2L7.1]
+last_merged_pr: 77
 current_goal: >-
-  Define only the canonical solver-independent PairCandidate identity, candidate-source evidence references and
-  deterministic deduplication semantics, keeping proposal evidence separate from scene identity and verification.
+  Adapt only the retained deterministic sequential-pairing donor into canonical PairCandidate values while keeping
+  sequence indices distances configuration and donor provenance in an explicitly referenced source evidence artifact.
 next_action: >-
-  Complete only V2L7.1 from its executable contract in registry/work-items/v2m1.yaml: implement the immutable
-  pair/source evidence contracts and pure deterministic merge semantics; do not wrap sequential or GPS donors,
-  run retrieval, perform matching/verification or begin V2L7.2 early.
+  Complete only V2L7.2 from its executable contract in registry/work-items/v2m1.yaml: add the pure sequential
+  result-to-PairCandidate adapter and focused donor-regression tests; do not change donor generation semantics,
+  persist new evidence formats, add GPS adaptation or begin V2L7.3 early.
 blockers: []
 architecture:
   product_blueprint: docs/01_PRODUCT.md

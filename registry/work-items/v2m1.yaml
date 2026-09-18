@@ -822,7 +822,7 @@ work_items:
   - id: V2L7.1
     lot: V2L7
     title: Canonical PairCandidate contract
-    status: ready
+    status: done
     objective: Define the minimal immutable solver-independent PairCandidate identity candidate-source evidence contract and deterministic deduplication semantics so sequential GPS classical vocabulary modern visual and future retrieval adapters can propose the same unordered observation relationship without promoting source-specific scores distances geolocation time or geometric claims into scene identity truth.
     allowed_scope:
       - src/wre/domain/pair_candidates.py
@@ -892,7 +892,74 @@ work_items:
       - regression proving retained SequentialPairCandidate GpsPairCandidate generate_sequential_candidates and generate_gps_candidates APIs and behavior are untouched
       - regression proving no retrieval execution matching geometric verification clustering routing scheduler or V2L7.2 surface is introduced
       - full fast CI
-  - {id: V2L7.2, lot: V2L7, title: Sequential pairing donor adapter, status: planned, depends_on: [V2L7.1]}
+  - id: V2L7.2
+    lot: V2L7
+    title: Sequential pairing donor adapter
+    status: ready
+    objective: Wrap the retained deterministic SequentialPairingResult donor behind the canonical PairCandidate contract without changing sequence-pair generation semantics, by translating each donor pair into a source-neutral canonical observation pair whose only sequential-specific link is one explicit ArtifactRef to the exact donor evidence artifact.
+    allowed_scope:
+      - src/wre/retrieval/sequential_adapter.py
+      - focused public exports through src/wre/retrieval/__init__.py
+      - tests/test_sequential_pair_candidate_adapter.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry after implementation evidence is green so V2L7.3 can be activated without implementing it
+    out_of_scope:
+      - changing src/wre/retrieval/sequential.py SequentialPairCandidate SequentialPairingConfig SequentialPairingRequest SequentialPairingResult generate_sequential_candidates COLMAP sequential reference semantics overlap offsets sequence ordering or donor provenance
+      - changing PairCandidate PairCandidateSource PairCandidateSourceId merge_pair_candidates ArtifactRef ObservationId or any V2L7.1 canonical contract semantics
+      - invoking generate_sequential_candidates inside the adapter; V2L7.2 adapts an explicit already-produced donor result and does not hide candidate generation behind a second execution API
+      - serializing persisting hashing materializing or inventing a new source-evidence payload format; the caller supplies the exact ArtifactRef that already identifies the donor evidence
+      - copying sequence_index1 sequence_index2 sequence_distance overlap quadratic_overlap COLMAP version configuration SHA run ID or other donor-private/source-specific values into PairCandidate fields
+      - GPS pairing adaptation eligibility WGS84 distances or metadata interpretation owned by V2L7.3
+      - classical vocabulary retrieval descriptor/index/query behavior owned by V2L7.4
+      - learned visual place geo-time retrieval models embeddings checkpoints scores or ranking owned by V2L7.5
+      - retrieval union recall benchmarking ANN large-scale performance or lot review owned by V2L7.6 and later scale work
+      - local matching geometric verification CorrespondenceSet SceneCluster scene identity synchronization routing geometry resource scheduling or runtime behavior
+      - starting V2L7.3 implementation in this work item
+    depends_on: [V2L7.1]
+    read_before:
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/27_RESEARCH_CANDIDATE_COVERAGE.md
+      - registry/v1-v2-migration.yaml
+      - src/wre/domain/pair_candidates.py
+      - src/wre/domain/artifacts.py
+      - src/wre/domain/observations.py
+      - src/wre/retrieval/sequential.py
+      - tests/test_pair_candidates.py
+      - tests/test_sequential_pairing.py
+    reuse:
+      - SequentialPairingResult and SequentialPairCandidate as the retained donor evidence/result types without modifying or reimplementing their deterministic COLMAP 4.2-compatible pairing semantics
+      - PairCandidate PairCandidateSource PairCandidateSourceId and merge_pair_candidates as the only canonical V2 pair proposal representation
+      - ArtifactRef as the exact reference to source-specific sequential evidence rather than flattening sequence distance indices configuration or run provenance into PairCandidate
+      - PairCandidateSourceId value sequential as the stable source-family identity; exact donor implementation/version/configuration remains in the referenced evidence artifact rather than the source-family token
+    acceptance:
+      - Define one immutable SequentialPairCandidateAdapterInput containing exactly result and evidence_ref where result is SequentialPairingResult and evidence_ref is ArtifactRef; wrong-type values fail closed.
+      - Define one stable SEQUENTIAL_PAIR_CANDIDATE_SOURCE_ID equal to PairCandidateSourceId sequential.
+      - adapt_sequential_pairing_result accepts only SequentialPairCandidateAdapterInput and returns an immutable tuple of canonical PairCandidate values.
+      - An empty SequentialPairingResult.candidates tuple returns an empty PairCandidate tuple without fabricating work or a placeholder candidate.
+      - Each donor SequentialPairCandidate maps to exactly one PairCandidate with the same two already-canonical ObservationId endpoints and exactly one PairCandidateSource whose source_id is sequential and whose evidence_refs tuple contains exactly the supplied evidence_ref.
+      - sequence_index1 sequence_index2 sequence_distance donor configuration SHA COLMAP reference version run provenance and ordered sequence membership are not copied into the canonical PairCandidate; they remain available only through the explicit donor result/evidence reference.
+      - The adapter neither invokes generate_sequential_candidates nor mutates reorders or reconstructs the donor SequentialPairingResult.
+      - Output is canonicalized only at the PairCandidate collection boundary using merge_pair_candidates so output ordering is lexical by pair identity and any impossible repeated donor pair is safely evidence-preserving rather than source-score driven.
+      - Repeated adaptation of the same donor result and evidence_ref returns equal values and does not access filesystem network environment persistence model registry or external solver state.
+      - Changing only evidence_ref changes PairCandidate source evidence but never the observation pair identity.
+      - Existing sequential donor config generation result tests and real PyCOLMAP 4.2 equivalence remain unchanged and continue to pass.
+      - No GPS distance retrieval score geometric verification scene identity route QualityDecision geometry or V2L7.3 behavior is introduced.
+    tests:
+      - adapter input exact field-set immutability result/evidence_ref wrong-type tests
+      - stable sequential PairCandidateSourceId regression
+      - one-pair translation fixture proving exact endpoints single sequential source and exact supplied ArtifactRef
+      - multi-pair donor fixture proving PairCandidate output lexical ordering while the retained donor result remains unchanged in its own deterministic sequence order
+      - empty donor candidate result fixture producing an empty canonical tuple
+      - repeated adaptation equality and evidence-ref substitution fixture
+      - regression proving sequence indices distance config COLMAP version and run provenance are absent from PairCandidate and remain present on the donor result
+      - monkeypatch regression proving adapt_sequential_pairing_result never invokes generate_sequential_candidates or external execution
+      - full existing tests/test_sequential_pairing.py regression including dedicated COLMAP lane when triggered
+      - regression proving no GPS visual retrieval matching verification clustering routing geometry scheduler or V2L7.3 surface is introduced
+      - full fast CI
   - {id: V2L7.3, lot: V2L7, title: GPS pairing donor adapter, status: planned, depends_on: [V2L7.2]}
   - {id: V2L7.4, lot: V2L7, title: Classical vocabulary retrieval baseline, status: planned, depends_on: [V2L7.3]}
   - {id: V2L7.5, lot: V2L7, title: Modern visual retrieval first candidate, status: planned, depends_on: [V2L7.4]}
