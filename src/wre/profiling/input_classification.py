@@ -87,10 +87,7 @@ def _drone_evidence_keys(metadata: ObservationMetadata) -> tuple[str, ...]:
         for entry in metadata.raw_entries
         if entry.namespace.casefold() == "exif"
         and entry.key.casefold() in _EXIF_CAMERA_KEYS
-        and any(
-            pattern.search(_normalized_text(entry.value))
-            for pattern in _UAV_FAMILY_PATTERNS
-        )
+        and any(pattern.search(_normalized_text(entry.value)) for pattern in _UAV_FAMILY_PATTERNS)
     }
     return tuple(sorted(keys))
 
