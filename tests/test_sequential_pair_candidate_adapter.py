@@ -146,8 +146,7 @@ def test_multi_pair_output_is_pair_lexical_while_donor_result_is_unchanged() -> 
         for candidate in result.candidates
     ) == (("obs:a", "obs:z"), ("obs:a", "obs:m"))
     assert tuple(
-        (candidate.observation_id1.value, candidate.observation_id2.value)
-        for candidate in adapted
+        (candidate.observation_id1.value, candidate.observation_id2.value) for candidate in adapted
     ) == (("obs:a", "obs:m"), ("obs:a", "obs:z"))
 
 
@@ -186,19 +185,11 @@ def test_adaptation_is_repeatable_and_evidence_ref_is_the_only_changed_source_li
 
     assert first == repeated
     assert tuple(
-        (candidate.observation_id1, candidate.observation_id2)
-        for candidate in changed_evidence
-    ) == tuple(
-        (candidate.observation_id1, candidate.observation_id2)
-        for candidate in first
-    )
+        (candidate.observation_id1, candidate.observation_id2) for candidate in changed_evidence
+    ) == tuple((candidate.observation_id1, candidate.observation_id2) for candidate in first)
+    assert all(candidate.sources[0].evidence_refs == (first_ref,) for candidate in first)
     assert all(
-        candidate.sources[0].evidence_refs == (first_ref,)
-        for candidate in first
-    )
-    assert all(
-        candidate.sources[0].evidence_refs == (second_ref,)
-        for candidate in changed_evidence
+        candidate.sources[0].evidence_refs == (second_ref,) for candidate in changed_evidence
     )
 
 
