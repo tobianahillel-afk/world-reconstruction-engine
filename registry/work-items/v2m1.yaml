@@ -4,7 +4,7 @@ work_items:
   - id: V2L5.1
     lot: V2L5
     title: MediaProfile contract
-    status: ready
+    status: done
     objective: Define the minimal immutable MediaProfile value contract that binds one existing ObservationId to an explicit canonical tuple of exact ArtifactRef evidence links, establishing the media-profile aggregation boundary without computing guessing or embedding any blur exposure duplicate diversity camera-class dynamic sequence sparse-coverage frame-selection or routing semantics.
     allowed_scope:
       - src/wre/domain/media_profiles.py
@@ -62,7 +62,66 @@ work_items:
       - regression proving no generic signal dictionary quality decision failure policy route filename path timestamp or inferred ObservationKind fields exist
       - regression proving retained ImageObservation VideoObservation and VideoFrameObservation contracts are unchanged and remain valid MediaProfile subjects through ObservationId only
       - full fast CI
-  - {id: V2L5.2, lot: V2L5, title: Blur sharpness exposure clipping metrics, status: planned, depends_on: [V2L5.1]}
+  - id: V2L5.2
+    lot: V2L5
+    title: Blur sharpness exposure clipping metrics
+    status: ready
+    objective: Implement the first deterministic solver-independent image-quality measurement baseline over an explicit immutable caller-supplied 8-bit luma raster, returning one canonical MetricVector containing sharpness via normalized-luma discrete-Laplacian variance plus mean-luma exact-black-clipping and exact-white-clipping measurements with caller-supplied MetricProvenance, without decoding media files or making quality decisions.
+    allowed_scope:
+      - src/wre/profiling/__init__.py
+      - src/wre/profiling/image_quality.py
+      - tests/test_image_quality.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry after implementation evidence is green so V2L5.3 can be activated without implementing it
+    out_of_scope:
+      - changing MediaProfile Observation MediaAssetRef MetricVector MetricDescriptor MetricObservation MetricProvenance QualityDecision QualityPolicy or benchmark semantics
+      - reading image files paths URIs observations artifact storage databases registries environment variables or network resources
+      - JPEG PNG video or other media decode RGB-to-luma color conversion orientation correction resizing reusable decoded-image artifacts pyramids GPU decode or accelerated image I/O
+      - adding Pillow OpenCV libvips numpy scipy torch CUDA or any new runtime dependency merely for this deterministic baseline
+      - learned blur exposure quality aesthetic or no-reference IQA models
+      - adaptive thresholds pass/fail labels quality decisions routing retry fallback or specialist-route selection
+      - duplicate near-duplicate or visual-diversity signals owned by V2L5.3
+      - camera/input-class specialist flags owned by V2L5.4
+      - dynamic long-sequence sparse-coverage signals owned by V2L5.5
+      - frame selection decode caching and image pyramids owned by V2L6
+      - starting V2L5.3 implementation in this work item
+    depends_on: [V2L5.1]
+    read_before:
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md
+      - docs/29_PERFORMANCE_INTEGRATION_MAP.md
+      - src/wre/domain/media_profiles.py
+      - src/wre/domain/metrics.py
+      - src/wre/domain/observations.py
+      - tests/test_media_profiles.py
+      - tests/test_metrics.py
+    reuse:
+      - MetricName MetricDescriptor MetricDimension MetricUnit MetricDirection MetricAggregation MetricObservation MetricProvenance and MetricVector as the only measurement vocabulary
+      - caller-supplied MetricProvenance for exact evaluator and input-artifact identity rather than hidden global producer metadata
+      - pure Python standard-library arithmetic for the first deterministic baseline so decode and accelerated execution remain separately owned
+      - MediaProfile remains an evidence-link boundary and is not expanded to embed this metric vector
+    acceptance:
+      - Define one immutable local luma-raster input value with positive integer width and height at least 3 pixels each and exact immutable bytes payload length width times height; booleans non-integers mutable buffers and inconsistent dimensions fail closed.
+      - The evaluator performs no file media observation artifact registry persistence environment or network lookup and accepts only the explicit luma raster plus typed MetricProvenance supplied by the caller.
+      - Return exactly four MetricObservation values in canonical MetricName order: media.exposure.black_clip_fraction media.exposure.mean_luma media.exposure.white_clip_fraction and media.sharpness.laplacian_variance.
+      - Mean luma is the arithmetic mean of 8-bit samples normalized by 255 and is INFORMATIONAL; exact black and white clipping fractions count only samples equal to 0 and 255 respectively and are LOWER_IS_BETTER.
+      - Sharpness uses population variance of the four-neighbour discrete Laplacian evaluated on normalized luma over interior pixels only and is HIGHER_IS_BETTER; no border padding interpolation or hidden smoothing is introduced.
+      - Metric descriptor dimension unit direction and aggregation tokens are fixed explicitly by this baseline and all observations reuse the exact caller-supplied MetricProvenance object.
+      - All produced metric scalars are finite floats and satisfy the existing MetricVector canonical uniqueness contract.
+      - Constant luma produces zero Laplacian variance; a non-flat synthetic pattern produces a positive value; all-black and all-white fixtures produce exact clipping fractions and normalized means.
+      - No threshold class blur label exposure label warning decision quality score route or MediaProfile mutation is returned.
+      - Existing MediaProfile observations metrics quality contracts and retained ingestion behavior remain unchanged.
+    tests:
+      - luma-raster dimension payload-type payload-length immutability and wrong-type negative tests
+      - exact flat black flat white mid-gray and structured-edge synthetic fixtures for mean luma clipping and sharpness
+      - exact four metric names canonical order descriptor semantics finite-float values and shared provenance assertions
+      - deterministic repeatability and no input mutation regression
+      - regression proving no filesystem decode external dependency threshold QualityDecision route or MediaProfile mutation surface is introduced
+      - full fast CI
   - {id: V2L5.3, lot: V2L5, title: Near duplicate and visual diversity signals, status: planned, depends_on: [V2L5.2]}
   - {id: V2L5.4, lot: V2L5, title: Camera and specialist input class signals, status: planned, depends_on: [V2L5.3]}
   - {id: V2L5.5, lot: V2L5, title: Dynamic long sequence sparse coverage signals, status: planned, depends_on: [V2L5.4]}
