@@ -5,17 +5,17 @@ roadmap_version: '2.0'
 phase: implementation
 milestone: V2M1
 lot: V2L5
-active_work_item: V2L5.5
+active_work_item: V2L5.6
 status: ready
-last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5, V2L3.6, V2L4.1, V2L4.2, V2L4.3, V2L4.4, V2L4.5, V2L4.6, V2L5.1, V2L5.2, V2L5.3, V2L5.4]
-last_merged_pr: 68
+last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5, V2L3.6, V2L4.1, V2L4.2, V2L4.3, V2L4.4, V2L4.5, V2L4.6, V2L5.1, V2L5.2, V2L5.3, V2L5.4, V2L5.5]
+last_merged_pr: 69
 current_goal: >-
-  Add only deterministic threshold-free collection sequence and visual-change summary signals that can inform later
-  dynamic long-sequence and sparse-coverage routing without turning weak media evidence into scene truth.
+  Close V2L5 with a deterministic cross-profile fixture matrix and lot review that proves MediaProfile image-quality
+  visual-similarity input-class and summary evidence compose without becoming hidden truth routing or selection.
 next_action: >-
-  Complete only V2L5.5 from its executable contract in registry/work-items/v2m1.yaml: implement the immutable
-  summary-input contract and canonical MetricVector aggregation baseline; do not add dynamic labels sparse-overlap
-  claims route thresholds frame selection retrieval clustering geometry or solver work early.
+  Complete only V2L5.6 from its executable contract in registry/work-items/v2m1.yaml: add the bounded fixture matrix,
+  audit V2L5.1 through V2L5.6, record PASS evidence only if justified, and then activate V2L6.1 without implementing
+  frame-selection behavior early.
 blockers: []
 architecture:
   product_blueprint: docs/01_PRODUCT.md
