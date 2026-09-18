@@ -67,7 +67,9 @@ def _laplacian_variance(raster: LumaRaster) -> float:
     width = raster.width
     height = raster.height
     pixels = raster.pixels
-    values: list[float] = []
+    sample_count = 0
+    mean = 0.0
+    squared_deviation_sum = 0.0
 
     for y in range(1, height - 1):
         row = y * width
@@ -81,10 +83,13 @@ def _laplacian_variance(raster: LumaRaster) -> float:
                 - pixels[index - width] / 255.0
                 - pixels[index + width] / 255.0
             )
-            values.append(laplacian)
 
-    mean = sum(values) / len(values)
-    return sum((value - mean) ** 2 for value in values) / len(values)
+            sample_count += 1
+            delta = laplacian - mean
+            mean += delta / sample_count
+            squared_deviation_sum += delta * (laplacian - mean)
+
+    return squared_deviation_sum / sample_count
 
 
 def evaluate_image_quality(
