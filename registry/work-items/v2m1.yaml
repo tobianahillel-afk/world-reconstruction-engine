@@ -639,7 +639,7 @@ work_items:
       - Define one public apply_frame_selection_density_bounds function accepting exactly frames and bounds and returning tuple of original ProbedVideoFrame objects with no external lookup or mutation.
       - frames must be an immutable tuple containing only ProbedVideoFrame values with strictly increasing frame_index and non-decreasing frame_time_us; malformed input fails closed rather than being reordered or deduplicated.
       - An empty input tuple is valid and returns an empty tuple because upstream quality selection may legitimately accept no frames.
-      - When minimum_selected_interval_us is configured first apply deterministic greedy source-order spacing: retain the first frame then retain a later frame only when its timestamp minus the last retained timestamp is greater than or equal to the configured interval.
+      - When minimum_selected_interval_us is configured first apply deterministic greedy source-order spacing by retaining the first frame then retaining a later frame only when its timestamp minus the last retained timestamp is greater than or equal to the configured interval.
       - Equal timestamps are valid source evidence but cannot both survive a positive minimum interval.
       - When maximum_selected_frames is absent the spacing result is returned unchanged; when the spacing result length is within the maximum it is also returned unchanged.
       - When a hard maximum requires thinning and the maximum is one return exactly the first spacing-surviving frame.
