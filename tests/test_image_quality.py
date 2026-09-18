@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import math
+import tracemalloc
 from dataclasses import FrozenInstanceError, fields
 from inspect import signature
 from typing import Any, cast
@@ -181,6 +182,24 @@ def test_metric_vector_contract_is_exact_canonical_and_reuses_provenance() -> No
     assert all(
         type(item.value) is float and math.isfinite(item.value) for item in result.observations
     )
+
+
+def test_sharpness_metric_uses_bounded_temporary_memory() -> None:
+    raster = LumaRaster(
+        width=256,
+        height=256,
+        pixels=bytes((index * 37) % 256 for index in range(256 * 256)),
+    )
+    provenance = _provenance()
+
+    tracemalloc.start()
+    try:
+        evaluate_image_quality(raster, provenance)
+        _, peak_bytes = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+
+    assert peak_bytes < 1_000_000
 
 
 def test_evaluation_is_deterministic_and_does_not_mutate_input() -> None:
