@@ -507,9 +507,7 @@ def test_unresolved_evidence_dominates_mapped_retry_and_escalate_conditions() ->
             ),
             _metric_rule("c.escalate", decision=QualityDecision.ESCALATE),
         ),
-        failure_rules=(
-            _failure_rule(FailureCategory.TIMEOUT, QualityDecision.RETRY),
-        ),
+        failure_rules=(_failure_rule(FailureCategory.TIMEOUT, QualityDecision.RETRY),),
     )
     metrics = MetricVector(
         observations=(
