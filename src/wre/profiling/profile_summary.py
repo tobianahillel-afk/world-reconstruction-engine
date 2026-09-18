@@ -74,9 +74,7 @@ class ProfileSummaryInput:
         if type(self.observation_count) is not int or self.observation_count <= 0:
             raise ValueError("profile_summary.observation_count must be a positive integer")
         if type(self.distinct_source_count) is not int or self.distinct_source_count <= 0:
-            raise ValueError(
-                "profile_summary.distinct_source_count must be a positive integer"
-            )
+            raise ValueError("profile_summary.distinct_source_count must be a positive integer")
         if self.distinct_source_count > self.observation_count:
             raise ValueError(
                 "profile_summary.distinct_source_count must not exceed observation_count"
