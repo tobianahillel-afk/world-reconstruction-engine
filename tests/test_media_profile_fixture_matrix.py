@@ -49,9 +49,7 @@ def _provenance(revision: str) -> MetricProvenance:
             ),
             configuration=ConfigurationIdentity(sha256=Sha256Digest("d" * 64)),
         ),
-        input_artifacts=(
-            _artifact_ref("artifact:fixture:input", "media.fixture_input"),
-        ),
+        input_artifacts=(_artifact_ref("artifact:fixture:input", "media.fixture_input"),),
     )
 
 
@@ -79,8 +77,7 @@ def _entry(key: str, value: str) -> RawMetadataEntry:
 
 def _metric_values(vector: MetricVector) -> dict[str, float]:
     return {
-        observation.descriptor.name.value: observation.value
-        for observation in vector.observations
+        observation.descriptor.name.value: observation.value for observation in vector.observations
     }
 
 
@@ -160,10 +157,7 @@ def test_specialist_hints_coexist_only_as_candidates_beside_observed_kind() -> N
         InputClass.ROLLING_SHUTTER,
     )
     assert result[0].evidence_kind is InputClassEvidenceKind.OBSERVED
-    assert all(
-        item.evidence_kind is InputClassEvidenceKind.CANDIDATE
-        for item in result[1:]
-    )
+    assert all(item.evidence_kind is InputClassEvidenceKind.CANDIDATE for item in result[1:])
     assert metadata.dimensions == ImageDimensions(width_px=4096, height_px=2048)
     assert metadata.raw_entries == (
         _entry("Image Model", "DJI Mavic 3 Pro"),
@@ -197,8 +191,7 @@ def test_video_sequence_metrics_remain_informational_evidence_not_labels() -> No
         "media.temporal.grid_luma_change_mean": 0.5,
     }
     assert all(
-        item.descriptor.direction is MetricDirection.INFORMATIONAL
-        for item in summary.observations
+        item.descriptor.direction is MetricDirection.INFORMATIONAL for item in summary.observations
     )
     assert all(item.provenance is provenance for item in summary.observations)
 
@@ -229,12 +222,8 @@ def test_visual_similarity_remains_complementary_measurement_not_duplicate_decis
     black = LumaRaster(width=8, height=8, pixels=bytes([0] * 64))
     white = LumaRaster(width=8, height=8, pixels=bytes([255] * 64))
 
-    identical = _metric_values(
-        evaluate_visual_similarity(black, black, provenance)
-    )
-    complementary = _metric_values(
-        evaluate_visual_similarity(black, white, provenance)
-    )
+    identical = _metric_values(evaluate_visual_similarity(black, black, provenance))
+    complementary = _metric_values(evaluate_visual_similarity(black, white, provenance))
 
     assert identical == {
         "media.visual.average_hash_hamming_fraction": 0.0,
