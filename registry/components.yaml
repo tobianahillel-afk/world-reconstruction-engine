@@ -100,9 +100,11 @@ components:
       - src/wre/domain/__init__.py
       - src/wre/profiling/__init__.py
       - src/wre/profiling/image_quality.py
+      - src/wre/profiling/visual_similarity.py
     tests:
       - tests/test_media_profiles.py
       - tests/test_image_quality.py
+      - tests/test_visual_similarity.py
     status: implementing
   adaptive_frame_selection: {owner_lot: V2L6, implementation: [], tests: [], status: planned}
   pair_candidate_retrieval: {owner_lot: V2L7, implementation: [], tests: [], status: planned}
