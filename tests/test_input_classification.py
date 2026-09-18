@@ -173,12 +173,10 @@ def test_no_metadata_and_ordinary_phone_metadata_do_not_fabricate_specialists() 
     )
 
     assert tuple(
-        item.input_class
-        for item in evaluate_input_classification(ObservationKind.IMAGE)
+        item.input_class for item in evaluate_input_classification(ObservationKind.IMAGE)
     ) == (InputClass.STILL,)
     assert tuple(
-        item.input_class
-        for item in evaluate_input_classification(ObservationKind.IMAGE, ordinary)
+        item.input_class for item in evaluate_input_classification(ObservationKind.IMAGE, ordinary)
     ) == (InputClass.STILL,)
 
 
@@ -228,10 +226,7 @@ def test_explicit_fisheye_and_rolling_shutter_phrases_emit_candidates() -> None:
     )
     assert result[1].evidence_keys == ("exif:Lens Model",)
     assert result[2].evidence_keys == ("exif:Camera Mode",)
-    assert all(
-        item.evidence_kind is InputClassEvidenceKind.CANDIDATE
-        for item in result[1:]
-    )
+    assert all(item.evidence_kind is InputClassEvidenceKind.CANDIDATE for item in result[1:])
 
 
 def test_generic_focal_length_and_exposure_time_do_not_imply_specialists() -> None:
