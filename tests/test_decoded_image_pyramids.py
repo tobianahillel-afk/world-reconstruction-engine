@@ -287,6 +287,57 @@ def test_reference_identity_is_content_config_and_producer_sensitive(tmp_path: P
     assert producer_changed != first_key
 
 
+def test_reference_identity_reuses_same_content_across_observation_ids_and_separates_kinds(
+    tmp_path: Path,
+) -> None:
+    source_path = tmp_path / "shared.ppm"
+    _write_ppm(source_path, width=6, height=4)
+    first = _source(source_path)
+    assert isinstance(first, ImageObservation)
+    same_content_other_id = ImageObservation(
+        observation_id=ObservationId("obs:decoded-pyramid-copy"),
+        asset=first.asset,
+        source=first.source,
+        received_at=first.received_at,
+        captured_at=first.captured_at,
+    )
+    same_content_video_frame = VideoFrameObservation(
+        observation_id=ObservationId("obs:decoded-pyramid-frame"),
+        asset=first.asset,
+        source=first.source,
+        received_at=first.received_at,
+        captured_at=first.captured_at,
+        video_asset=MediaAssetRef(
+            uri="file:///parent-video.mkv",
+            sha256=Sha256Digest("e" * 64),
+            byte_length=321,
+            mime_type="video/x-matroska",
+        ),
+        frame_index=3,
+        frame_time_us=750_000,
+    )
+    spec = DecodedImagePyramidSpec(minimum_max_edge_px=2)
+    identity = FFmpegToolchainIdentity(
+        ffmpeg_version=SUPPORTED_FFMPEG_VERSION,
+        ffprobe_version=SUPPORTED_FFMPEG_VERSION,
+    )
+
+    _, first_key = decoded_images_module._reference_artifact_identity(first, spec, identity)
+    _, duplicate_key = decoded_images_module._reference_artifact_identity(
+        same_content_other_id,
+        spec,
+        identity,
+    )
+    _, different_kind_key = decoded_images_module._reference_artifact_identity(
+        same_content_video_frame,
+        spec,
+        identity,
+    )
+
+    assert duplicate_key == first_key
+    assert different_kind_key != first_key
+
+
 def test_source_mismatch_fails_before_external_tool_execution(tmp_path: Path) -> None:
     source_path = tmp_path / "source.ppm"
     _write_ppm(source_path, width=4, height=4)
