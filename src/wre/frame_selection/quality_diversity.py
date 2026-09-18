@@ -118,12 +118,9 @@ class QualityDiversitySelectionConfig:
             raise ValueError(f"quality_diversity_selection.{name} must be finite")
         if value < lower_bound or (upper_bound is not None and value > upper_bound):
             if upper_bound is None:
-                raise ValueError(
-                    f"quality_diversity_selection.{name} must be >= {lower_bound}"
-                )
+                raise ValueError(f"quality_diversity_selection.{name} must be >= {lower_bound}")
             raise ValueError(
-                f"quality_diversity_selection.{name} must be within "
-                f"[{lower_bound}, {upper_bound}]"
+                f"quality_diversity_selection.{name} must be within [{lower_bound}, {upper_bound}]"
             )
 
 
@@ -148,11 +145,7 @@ def _metric(
     expected_direction: MetricDirection,
 ) -> MetricObservation:
     observation = next(
-        (
-            item
-            for item in metrics.observations
-            if item.descriptor.name == name
-        ),
+        (item for item in metrics.observations if item.descriptor.name == name),
         None,
     )
     if observation is None:
@@ -188,8 +181,7 @@ def _passes_quality(
         ).value
         if sharpness < 0.0:
             raise ValueError(
-                "frame-selection metric media.sharpness.laplacian_variance "
-                "must be non-negative"
+                "frame-selection metric media.sharpness.laplacian_variance must be non-negative"
             )
         if sharpness < config.minimum_sharpness_laplacian_variance:
             return False
@@ -232,13 +224,11 @@ def _validate_candidates(
     for candidate in candidates:
         if candidate.frame.frame_index <= previous_index:
             raise ValueError(
-                "quality_diversity_selection candidate frame indices "
-                "must be strictly increasing"
+                "quality_diversity_selection candidate frame indices must be strictly increasing"
             )
         if candidate.frame.frame_time_us < previous_time:
             raise ValueError(
-                "quality_diversity_selection candidate timestamps "
-                "must be non-decreasing"
+                "quality_diversity_selection candidate timestamps must be non-decreasing"
             )
         previous_index = candidate.frame.frame_index
         previous_time = candidate.frame.frame_time_us
@@ -253,8 +243,7 @@ def _validate_adjacent_diversity(
 ) -> tuple[float, ...]:
     if not isinstance(evidence, tuple):
         raise TypeError(
-            "quality_diversity_selection.adjacent_diversity_evidence "
-            "must be an immutable tuple"
+            "quality_diversity_selection.adjacent_diversity_evidence must be an immutable tuple"
         )
     if any(not isinstance(item, AdjacentFrameDiversityEvidence) for item in evidence):
         raise TypeError(
@@ -281,10 +270,7 @@ def _validate_adjacent_diversity(
     for index, item in enumerate(evidence):
         expected_left = candidates[index].frame.frame_index
         expected_right = candidates[index + 1].frame.frame_index
-        if (
-            item.left_frame_index != expected_left
-            or item.right_frame_index != expected_right
-        ):
+        if item.left_frame_index != expected_left or item.right_frame_index != expected_right:
             raise ValueError(
                 "adjacent diversity evidence must match consecutive candidate "
                 "frame-index pairs exactly"
@@ -309,17 +295,13 @@ def select_quality_diversity_frames(
 
     validated_candidates = _validate_candidates(candidates)
     if not isinstance(policy, FrameSelectionPolicy):
-        raise TypeError(
-            "quality_diversity_selection.policy must be FrameSelectionPolicy"
-        )
+        raise TypeError("quality_diversity_selection.policy must be FrameSelectionPolicy")
     if not isinstance(config, QualityDiversitySelectionConfig):
         raise TypeError(
             "quality_diversity_selection.config must be QualityDiversitySelectionConfig"
         )
     if policy.optional_metric_names:
-        raise ValueError(
-            "quality-diversity selection requires empty optional_metric_names"
-        )
+        raise ValueError("quality-diversity selection requires empty optional_metric_names")
 
     expected_metric_names = _required_metric_names(config)
     if policy.required_metric_names != expected_metric_names:
