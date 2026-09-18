@@ -150,13 +150,9 @@ def _validate_selected_frames(frames: object) -> tuple[ProbedVideoFrame, ...]:
     previous_time = -1
     for frame in frames:
         if frame.frame_index <= previous_index:
-            raise ValueError(
-                "selected_frame_extraction frame indices must be strictly increasing"
-            )
+            raise ValueError("selected_frame_extraction frame indices must be strictly increasing")
         if frame.frame_time_us < previous_time:
-            raise ValueError(
-                "selected_frame_extraction frame timestamps must be non-decreasing"
-            )
+            raise ValueError("selected_frame_extraction frame timestamps must be non-decreasing")
         previous_index = frame.frame_index
         previous_time = frame.frame_time_us
 
