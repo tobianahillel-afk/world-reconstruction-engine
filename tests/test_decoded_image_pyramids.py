@@ -329,9 +329,11 @@ def test_reference_materialization_is_verified_and_idempotent(tmp_path: Path) ->
     assert first.manifest.source_asset_sha256 == source.asset.sha256
     assert first.manifest.pixel_layout is DecodedImagePixelLayout.RGB8_PACKED
     assert first.manifest.orientation_policy is DecodedImageOrientationPolicy.SOURCE_PIXELS
-    assert tuple(
-        (level.width_px, level.height_px) for level in first.manifest.levels
-    ) == ((7, 5), (3, 2), (1, 1))
+    assert tuple((level.width_px, level.height_px) for level in first.manifest.levels) == (
+        (7, 5),
+        (3, 2),
+        (1, 1),
+    )
 
     for level, entry in zip(
         first.manifest.levels,
