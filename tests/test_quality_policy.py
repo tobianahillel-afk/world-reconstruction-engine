@@ -363,6 +363,27 @@ def test_unknown_supplied_metric_fails_closed_unresolved() -> None:
     assert result.reasons[0].metric_name == MetricName("unknown.metric")
 
 
+def test_reason_rejects_false_direction_mismatch_and_false_threshold_violation() -> None:
+    with pytest.raises(ValueError, match="different expected and actual directions"):
+        QualityEvaluationReason(
+            kind=QualityEvaluationReasonKind.METRIC_DIRECTION_MISMATCH,
+            decision=QualityDecision.UNRESOLVED,
+            metric_name=MetricName("geometry.error"),
+            expected_direction=MetricDirection.LOWER_IS_BETTER,
+            actual_direction=MetricDirection.LOWER_IS_BETTER,
+        )
+
+    with pytest.raises(ValueError, match="requires an observed value that violates threshold"):
+        QualityEvaluationReason(
+            kind=QualityEvaluationReasonKind.METRIC_THRESHOLD_VIOLATION,
+            decision=QualityDecision.RETRY,
+            metric_name=MetricName("geometry.error"),
+            observed_value=0.5,
+            threshold=1.0,
+            expected_direction=MetricDirection.LOWER_IS_BETTER,
+        )
+
+
 def test_metric_direction_mismatch_fails_closed_without_threshold_comparison() -> None:
     policy = _policy(
         metric_rules=(
