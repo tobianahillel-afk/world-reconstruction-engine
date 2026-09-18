@@ -179,8 +179,7 @@ def test_metric_vector_contract_is_exact_canonical_and_reuses_provenance() -> No
     )
     assert all(item.provenance is provenance for item in result.observations)
     assert all(
-        type(item.value) is float and math.isfinite(item.value)
-        for item in result.observations
+        type(item.value) is float and math.isfinite(item.value) for item in result.observations
     )
 
 
