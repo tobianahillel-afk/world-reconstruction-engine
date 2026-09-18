@@ -170,12 +170,12 @@ def test_video_sequence_metrics_remain_informational_evidence_not_labels() -> No
     provenance = _provenance("video-sequence")
     black = LumaRaster(width=8, height=8, pixels=bytes([0] * 64))
     white = LumaRaster(width=8, height=8, pixels=bytes([255] * 64))
-    static_distance = _metric_values(
-        evaluate_visual_similarity(black, black, provenance)
-    )["media.visual.grid_luma_mae"]
-    changed_distance = _metric_values(
-        evaluate_visual_similarity(black, white, provenance)
-    )["media.visual.grid_luma_mae"]
+    static_distance = _metric_values(evaluate_visual_similarity(black, black, provenance))[
+        "media.visual.grid_luma_mae"
+    ]
+    changed_distance = _metric_values(evaluate_visual_similarity(black, white, provenance))[
+        "media.visual.grid_luma_mae"
+    ]
 
     classes = evaluate_input_classification(ObservationKind.VIDEO_FRAME)
     summary = evaluate_profile_summary(
