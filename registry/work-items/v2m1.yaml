@@ -125,7 +125,7 @@ work_items:
   - id: V2L5.3
     lot: V2L5
     title: Near duplicate and visual diversity signals
-    status: ready
+    status: done
     objective: Implement the first deterministic threshold-free pairwise perceptual similarity and diversity baseline over two explicit LumaRaster values, returning a canonical MetricVector with fixed-grid normalized luma mean-absolute difference and average-hash Hamming fraction while retaining SHA-256 plus byte length as the separate exact-content duplicate mechanism.
     allowed_scope:
       - src/wre/profiling/__init__.py
@@ -184,7 +184,73 @@ work_items:
       - exact metric names canonical order descriptor semantics finite interval bounds and shared provenance assertions
       - regression proving no filesystem decode exact-hash reimplementation threshold duplicate label selection route clustering learned-model or MediaProfile mutation surface is introduced
       - full fast CI
-  - {id: V2L5.4, lot: V2L5, title: Camera and specialist input class signals, status: planned, depends_on: [V2L5.3]}
+  - id: V2L5.4
+    lot: V2L5
+    title: Camera and specialist input class signals
+    status: ready
+    objective: Define and implement the first deterministic evidence-preserving input-class profiling baseline that records exact still or video observation-kind evidence separately from candidate equirectangular-360 drone-aerial fisheye and rolling-shutter hints derived only from explicit dimensions and raw metadata, without converting heuristics into camera truth or specialist routing decisions.
+    allowed_scope:
+      - src/wre/profiling/__init__.py
+      - src/wre/profiling/input_classification.py
+      - tests/test_input_classification.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry after implementation evidence is green so V2L5.5 can be activated without implementing it
+    out_of_scope:
+      - changing Observation ObservationKind ObservationMetadata RawMetadataEntry ImageDimensions Camera CameraId MediaProfile MetricVector or retained ingestion semantics
+      - mutating raw EXIF metadata or persisting inferred camera make model lens projection shutter type or specialist class back into ObservationMetadata
+      - claiming exact 360 drone fisheye or rolling-shutter truth from aspect ratio manufacturer model names or other heuristics
+      - learned image classifiers visual-language models EXIF web lookups manufacturer databases device fingerprint services or network access
+      - camera intrinsics calibration lens-distortion estimation projection solving rolling-shutter parameter estimation or trajectory estimation
+      - specialist route selection fallback retry escalation solver choice or QualityDecision production
+      - dynamic-likelihood long-sequence sparse-coverage signals owned by V2L5.5
+      - frame selection decode cache image pyramids retrieval clustering synchronization or geometry
+      - adding a new runtime dependency
+      - starting V2L5.5 implementation in this work item
+    depends_on: [V2L5.3]
+    read_before:
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - src/wre/domain/observations.py
+      - src/wre/domain/cameras.py
+      - src/wre/ingestion/exif.py
+      - src/wre/ingestion/metadata_interpretation.py
+      - src/wre/profiling/image_quality.py
+      - src/wre/profiling/visual_similarity.py
+      - tests/test_observations.py
+      - tests/test_exif_metadata.py
+      - tests/test_metadata_interpretation.py
+    reuse:
+      - ObservationKind as the exact source for still-versus-video observation evidence instead of guessing from MIME type filename or dimensions
+      - ObservationMetadata ImageDimensions and canonical RawMetadataEntry values as caller-supplied evidence only
+      - immutable frozen slots dataclass and StrEnum conventions already used by wre domain values
+      - raw metadata preservation and fail-closed interpretation rules without changing existing GPS capture-time or camera semantics
+    acceptance:
+      - Define a closed InputClass enum with still video equirectangular_360 drone_aerial fisheye and rolling_shutter values and a closed InputClassEvidenceKind enum with observed and candidate values only.
+      - Define an immutable InputClassEvidence value containing exactly one InputClass one InputClassEvidenceKind and an immutable canonical tuple of non-blank evidence keys; duplicate unsorted mutable or wrong-type evidence fails closed.
+      - Define one pure evaluator accepting exactly ObservationKind and optional ObservationMetadata and returning a canonical immutable tuple of unique InputClassEvidence values with no external lookup.
+      - ObservationKind IMAGE emits exactly one observed still signal and ObservationKind VIDEO or VIDEO_FRAME emits exactly one observed video signal using observation.kind as its evidence key.
+      - Missing optional metadata is valid and produces no specialist candidate merely because evidence is unavailable.
+      - An exact two-to-one ImageDimensions ratio may emit only an equirectangular_360 candidate and never an observed 360 claim.
+      - Raw metadata may emit fisheye or rolling_shutter candidates only when a canonical key or value contains an explicit case-insensitive fisheye or rolling-shutter phrase; generic focal length exposure time or lens distortion values do not imply either class.
+      - Raw EXIF Image Make or Image Model may emit a drone_aerial candidate only for a small explicit baseline allowlist of unambiguous UAV-family tokens documented in the module; GPS presence altitude absence or ordinary camera metadata alone must not imply drone capture.
+      - Specialist candidate evidence records exact contributing metadata keys and never rewrites ObservationMetadata Camera or MediaProfile.
+      - Multiple independent candidate signals may coexist because 360 fisheye drone and rolling-shutter properties are not mutually exclusive.
+      - No false negative is asserted from missing evidence; the evaluator returns only positive observed or candidate evidence and has no absent false rejected or unsupported class state.
+      - Returned evidence uses a fixed canonical InputClass order and contains no confidence score threshold route solver QualityDecision or inferred camera model.
+      - Existing raw EXIF ingestion GPS and capture-time interpretation image-quality visual-similarity and exact-duplicate behavior remain unchanged.
+    tests:
+      - exact enum value set evidence construction equality hashing immutability canonical-order and wrong-type negative tests
+      - image video and video-frame observation-kind fixtures proving exact still-versus-video observed evidence
+      - no-metadata and ordinary-phone-metadata fixtures proving no specialist candidate is fabricated
+      - exact two-to-one dimensions fixture proving equirectangular_360 is candidate only plus non-two-to-one negative fixture
+      - explicit fisheye and rolling-shutter raw metadata phrase fixtures plus generic focal-length and exposure-time negative fixtures
+      - allowlisted UAV make or model fixture plus GPS-only and ordinary-camera negative fixtures
+      - multi-signal fixture proving specialist candidate classes can coexist in canonical order
+      - regression proving no camera mutation projection solve route threshold QualityDecision learned model network lookup or V2L5.5 behavior is introduced
+      - full fast CI
   - {id: V2L5.5, lot: V2L5, title: Dynamic long sequence sparse coverage signals, status: planned, depends_on: [V2L5.4]}
   - {id: V2L5.6, lot: V2L5, title: Media profile fixture matrix, status: planned, depends_on: [V2L5.5]}
   - {id: V2L6.1, lot: V2L6, title: Frame selection policy contract, status: planned, depends_on: [V2L5.6]}
