@@ -24,6 +24,11 @@ from wre.retrieval.sequential import (
     SequentialPairingResult,
     generate_sequential_candidates,
 )
+from wre.retrieval.sequential_adapter import (
+    SEQUENTIAL_PAIR_CANDIDATE_SOURCE_ID,
+    SequentialPairCandidateAdapterInput,
+    adapt_sequential_pairing_result,
+)
 
 __all__ = [
     "COLMAP_SEQUENTIAL_REFERENCE_VERSION",
@@ -33,6 +38,7 @@ __all__ = [
     "GPS_PAIRING_IMPLEMENTATION",
     "GPS_PAIRING_VERSION",
     "SEQUENTIAL_PAIRING_IMPLEMENTATION",
+    "SEQUENTIAL_PAIR_CANDIDATE_SOURCE_ID",
     "SEQUENTIAL_PAIRING_VERSION",
     "GpsPairCandidate",
     "GpsPairingConfig",
@@ -41,9 +47,11 @@ __all__ = [
     "GpsPairingRequest",
     "GpsPairingResult",
     "SequentialPairCandidate",
+    "SequentialPairCandidateAdapterInput",
     "SequentialPairingConfig",
     "SequentialPairingRequest",
     "SequentialPairingResult",
+    "adapt_sequential_pairing_result",
     "generate_gps_candidates",
     "generate_sequential_candidates",
 ]
