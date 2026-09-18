@@ -246,13 +246,14 @@ def test_generic_focal_length_and_exposure_time_do_not_imply_specialists() -> No
 @pytest.mark.parametrize(
     ("key", "value"),
     [
-        ("Image Make", "DJI"),
-        ("Image Make", "Autel Robotics"),
-        ("Image Model", "Skydio 2+"),
-        ("Image Make", "Parrot"),
+        ("Image Model", "DJI Mavic 3 Pro"),
+        ("Image Model", "DJI Phantom 4 Pro"),
+        ("Image Model", "Autel Robotics EVO II"),
+        ("Image Model", "Skydio X10"),
+        ("Image Model", "Parrot ANAFI"),
     ],
 )
-def test_allowlisted_uav_make_or_model_emits_drone_candidate(
+def test_allowlisted_uav_family_model_emits_drone_candidate(
     key: str,
     value: str,
 ) -> None:
@@ -268,13 +269,26 @@ def test_allowlisted_uav_make_or_model_emits_drone_candidate(
     )
 
 
-def test_gps_only_and_ordinary_camera_metadata_do_not_imply_drone_capture() -> None:
+@pytest.mark.parametrize(
+    ("make", "model"),
+    [
+        ("Canon", "EOS R5"),
+        ("DJI", "Osmo Action 5 Pro"),
+        ("DJI", "Pocket 3"),
+        ("DJI", "Ronin 4D"),
+        ("ACME", "adjimaviclike-camera"),
+    ],
+)
+def test_ordinary_or_ambiguous_camera_metadata_does_not_imply_drone_capture(
+    make: str,
+    model: str,
+) -> None:
     metadata = _metadata(
         entries=(
             _entry("GPS GPSLatitude", "[48, 51, 0]"),
             _entry("GPS GPSAltitude", "120"),
-            _entry("Image Make", "Canon"),
-            _entry("Image Model", "EOS R5"),
+            _entry("Image Make", make),
+            _entry("Image Model", model),
         )
     )
 
@@ -288,7 +302,7 @@ def test_specialist_candidates_can_coexist_in_fixed_canonical_order() -> None:
         width=4096,
         height=2048,
         entries=(
-            _entry("Image Make", "DJI"),
+            _entry("Image Model", "DJI Mavic 3 Pro"),
             _entry("Lens Model", "Fisheye"),
             _entry("Sensor Mode", "rolling_shutter"),
         ),
