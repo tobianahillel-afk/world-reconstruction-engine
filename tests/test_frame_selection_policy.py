@@ -232,9 +232,5 @@ def test_retained_interval_keyframe_donor_behavior_is_unchanged() -> None:
         "asset",
         "source",
         "received_at",
-        "camera_id",
-        "metadata",
-        "gps",
-        "capture_time",
-        "kind",
+        "captured_at",
     )
