@@ -72,8 +72,9 @@ def _normalized_text(value: str) -> str:
 
 def _entry_contains_phrase(entry: RawMetadataEntry, phrase: str) -> bool:
     normalized_phrase = _normalized_text(phrase)
-    return normalized_phrase in _normalized_text(entry.key) or normalized_phrase in _normalized_text(
-        entry.value
+    return (
+        normalized_phrase in _normalized_text(entry.key)
+        or normalized_phrase in _normalized_text(entry.value)
     )
 
 
@@ -162,4 +163,8 @@ def evaluate_input_classification(
                 evidence_keys=rolling_shutter_keys,
             )
 
-    return tuple(by_class[input_class] for input_class in _INPUT_CLASS_ORDER if input_class in by_class)
+    return tuple(
+        by_class[input_class]
+        for input_class in _INPUT_CLASS_ORDER
+        if input_class in by_class
+    )
