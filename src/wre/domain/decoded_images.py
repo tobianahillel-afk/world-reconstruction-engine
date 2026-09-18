@@ -99,7 +99,9 @@ class DecodedImagePyramidManifest:
 
         for expected_index, level in enumerate(self.levels):
             if level.level_index != expected_index:
-                raise ValueError("decoded_image_manifest level indices must be contiguous from zero")
+                raise ValueError(
+                    "decoded_image_manifest level indices must be contiguous from zero"
+                )
             if expected_index == 0:
                 continue
             previous = self.levels[expected_index - 1]
