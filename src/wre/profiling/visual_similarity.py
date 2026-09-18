@@ -73,7 +73,10 @@ def evaluate_visual_similarity(
     left_hash = _average_hash_bits(left_samples)
     right_hash = _average_hash_bits(right_samples)
     hamming_fraction = (
-        sum(left_bit != right_bit for left_bit, right_bit in zip(left_hash, right_hash, strict=True))
+        sum(
+            left_bit != right_bit
+            for left_bit, right_bit in zip(left_hash, right_hash, strict=True)
+        )
         / _GRID_SAMPLE_COUNT
     )
     grid_luma_mae = (
