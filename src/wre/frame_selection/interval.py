@@ -35,13 +35,9 @@ def select_interval_frames(
     if not isinstance(policy, FrameSelectionPolicy):
         raise TypeError("interval_frame_selection.policy must be FrameSelectionPolicy")
     if not isinstance(config, IntervalFrameSelectionConfig):
-        raise TypeError(
-            "interval_frame_selection.config must be IntervalFrameSelectionConfig"
-        )
+        raise TypeError("interval_frame_selection.config must be IntervalFrameSelectionConfig")
     if policy.required_metric_names or policy.optional_metric_names:
-        raise ValueError(
-            "interval frame selection requires a policy with no metric declarations"
-        )
+        raise ValueError("interval frame selection requires a policy with no metric declarations")
 
     return select_keyframes(
         frames,
