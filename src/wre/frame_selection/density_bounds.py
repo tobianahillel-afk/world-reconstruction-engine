@@ -25,7 +25,8 @@ class FrameSelectionDensityBounds:
             or self.minimum_selected_interval_us <= 0
         ):
             raise ValueError(
-                "frame_selection_density.minimum_selected_interval_us must be a positive integer or None"
+                "frame_selection_density.minimum_selected_interval_us must be "
+                "a positive integer or None"
             )
         if self.maximum_selected_frames is None and self.minimum_selected_interval_us is None:
             raise ValueError("frame_selection_density requires at least one bound")
