@@ -523,7 +523,7 @@ work_items:
   - id: V2L6.3
     lot: V2L6
     title: Quality diversity aware frame selection baseline
-    status: ready
+    status: done
     objective: Implement the first deterministic quality-diversity frame-selection baseline over an immutable ordered tuple of ProbedVideoFrame candidates with explicit per-candidate MetricVector evidence and optional adjacent-pair visual-similarity MetricVector evidence, applying only named V2L5 sharpness clipping and grid-luma diversity thresholds without weighted scores global ranking density budgets media decode or extraction side effects.
     allowed_scope:
       - src/wre/frame_selection/__init__.py
@@ -592,7 +592,72 @@ work_items:
       - deterministic order and original ProbedVideoFrame identity preservation tests
       - regression proving no weighted score rank budget max-frame fps chunk route QualityDecision decode extraction persistence or V2L6.4 surface is introduced
       - full fast CI
-  - {id: V2L6.4, lot: V2L6, title: Long video frame density resource bounds, status: planned, depends_on: [V2L6.3]}
+  - id: V2L6.4
+    lot: V2L6
+    title: Long video frame density resource bounds
+    status: ready
+    objective: Implement a pure deterministic post-selection density/resource-bound reducer over an immutable ordered tuple of already selected ProbedVideoFrame values, enforcing an optional minimum temporal spacing and/or hard maximum selected-frame count without re-reading quality metrics reranking frames inferring budgets from hardware or performing extraction side effects.
+    allowed_scope:
+      - src/wre/frame_selection/__init__.py
+      - src/wre/frame_selection/density_bounds.py
+      - tests/test_frame_selection_density_bounds.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry after implementation evidence is green so V2L6.5 can be activated without implementing it
+    out_of_scope:
+      - changing ProbedVideoFrame FrameSelectionPolicy IntervalFrameSelectionConfig FrameSelectionCandidate QualityDiversitySelectionConfig AdjacentFrameDiversityEvidence or retained keyframe donor semantics
+      - MetricVector quality-diversity thresholds weighted scores ranking duplicate or scene-truth inference
+      - deriving frame budgets from RAM VRAM disk compute runtime target hardware model quality mode or scheduler state
+      - byte-size GPU-memory scratch-space throughput latency or resource-estimator modeling owned by later production scheduling work
+      - file paths FFmpeg ffprobe decode extraction persistence registry environment network clocks or media probing
+      - selected-frame artifact identity execution provenance timing persistence idempotence or extraction regression behavior owned by V2L6.5
+      - decoded-image or multiresolution-pyramid materialization accelerated decode or execution profiles owned by V2L6.6
+      - route selection retry fallback escalation QualityDecision retrieval clustering synchronization or geometry
+      - starting V2L6.5 implementation in this work item
+    depends_on: [V2L6.3]
+    read_before:
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md
+      - src/wre/ingestion/keyframes.py
+      - src/wre/frame_selection/interval.py
+      - src/wre/frame_selection/quality_diversity.py
+      - tests/test_interval_frame_selection_adapter.py
+      - tests/test_quality_diversity_frame_selection.py
+    reuse:
+      - ProbedVideoFrame as the exact selected-frame identity and source timing value
+      - the retained deterministic interval selection semantics as reference for inclusive minimum temporal spacing while keeping this post-selection reducer independent from FFmpeg and extraction
+      - immutable frozen slots dataclass conventions and pure Python standard-library arithmetic
+      - source order and original ProbedVideoFrame object identity rather than manufacturing replacement frame values
+    acceptance:
+      - Define FrameSelectionDensityBounds as an immutable value containing exactly maximum_selected_frames and minimum_selected_interval_us optional fields with at least one bound configured.
+      - maximum_selected_frames when present is an exact positive integer and minimum_selected_interval_us when present is an exact positive integer; booleans floats strings zero negatives and silent coercion fail closed.
+      - Define one public apply_frame_selection_density_bounds function accepting exactly frames and bounds and returning tuple of original ProbedVideoFrame objects with no external lookup or mutation.
+      - frames must be an immutable tuple containing only ProbedVideoFrame values with strictly increasing frame_index and non-decreasing frame_time_us; malformed input fails closed rather than being reordered or deduplicated.
+      - An empty input tuple is valid and returns an empty tuple because upstream quality selection may legitimately accept no frames.
+      - When minimum_selected_interval_us is configured first apply deterministic greedy source-order spacing by retaining the first frame then retaining a later frame only when its timestamp minus the last retained timestamp is greater than or equal to the configured interval.
+      - Equal timestamps are valid source evidence but cannot both survive a positive minimum interval.
+      - When maximum_selected_frames is absent the spacing result is returned unchanged; when the spacing result length is within the maximum it is also returned unchanged.
+      - When a hard maximum requires thinning and the maximum is one return exactly the first spacing-surviving frame.
+      - When a hard maximum of at least two requires thinning preserve the first and last spacing-surviving frames and choose exactly maximum_selected_frames source-order entries by deterministic floor quantiles using index floor of k times open parenthesis n minus one close parenthesis divided by open parenthesis maximum minus one close parenthesis for k from zero through maximum minus one.
+      - Combined bounds apply spacing first and count thinning second so count is a hard upper bound without weakening the configured minimum temporal spacing.
+      - The reducer never promotes a frame rejected upstream, never re-evaluates quality/diversity metrics and never creates scores ranks quality decisions or route state.
+      - Returned values are exact original ProbedVideoFrame objects and preserve original frame_index and frame_time_us.
+      - Existing interval donor quality-diversity baseline frame-selection policy and ingestion/extraction behavior remain unchanged.
+    tests:
+      - FrameSelectionDensityBounds exact field-set equality hashing immutability at-least-one and exact-positive-integer validation tests
+      - public reducer exact signature immutable tuple member-type source-index and timestamp-order validation tests
+      - empty singleton and no-op bound fixtures
+      - minimum-interval inclusive-boundary repeated-timestamp and source-order fixtures
+      - maximum-one and deterministic floor-quantile hard-cap fixtures proving exact selected indices and first-last preservation for caps of at least two
+      - combined spacing then hard-cap fixture proving both invariants hold simultaneously
+      - original ProbedVideoFrame object identity and timestamp preservation regression
+      - regression proving no MetricVector score rank quality threshold hardware budget scheduler route QualityDecision FFmpeg extraction persistence or V2L6.5 surface is introduced
+      - full fast CI
   - {id: V2L6.5, lot: V2L6, title: Frame selection provenance timing regression, status: planned, depends_on: [V2L6.4]}
   - {id: V2L6.6, lot: V2L6, title: Canonical reusable decoded image pyramid artifacts, status: planned, depends_on: [V2L6.5]}
   - {id: V2L7.1, lot: V2L7, title: Canonical PairCandidate contract, status: planned, depends_on: [V2L6.6]}
