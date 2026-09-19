@@ -56,11 +56,131 @@ SELAVPR_PLUS_NUMPY_VERSION = "2.5.3"
 SELAVPR_PLUS_FAISS_CPU_VERSION = "1.15.1"
 SELAVPR_PLUS_TQDM_VERSION = "4.68.2"
 
-_MODEL_REQUIRED_PATHS = (
-    "model/network.py",
-    "model/vision_transformer.py",
+_SOURCE_PYTHON_PATHS = (
+    "commons.py",
+    "dataloaders/train/GSVCitiesDataset.py",
+    "datasets_ws.py",
+    "eval.py",
+    "eval_hashing.py",
+    "eval_rerank.py",
+    "hubconf.py",
+    "model/adapter.py",
     "model/aggregation.py",
+    "model/dinov2/__init__.py",
+    "model/dinov2/attention.py",
+    "model/dinov2/block.py",
+    "model/dinov2/dino_head.py",
+    "model/dinov2/drop_path.py",
+    "model/dinov2/layer_scale.py",
+    "model/dinov2/mlp.py",
+    "model/dinov2/patch_embed.py",
+    "model/dinov2/swiglu_ffn.py",
+    "model/functional.py",
+    "model/network.py",
+    "model/normalization.py",
+    "model/sync_batchnorm/__init__.py",
+    "model/sync_batchnorm/batchnorm.py",
+    "model/sync_batchnorm/batchnorm_reimpl.py",
+    "model/sync_batchnorm/comm.py",
+    "model/sync_batchnorm/replicate.py",
+    "model/sync_batchnorm/unittest.py",
+    "model/vision_transformer.py",
+    "parser.py",
+    "test.py",
+    "test_hashing.py",
+    "test_rerank.py",
+    "train.py",
+    "train_hashing.py",
+    "train_rerank.py",
+    "util.py",
 )
+_MODEL_SOURCE_SHA256 = (
+    (
+        "model/adapter.py",
+        Sha256Digest("6a68312be436cff3e3b0653053da7a0fa842d974acfe81b83851e0dacf4166c4"),
+    ),
+    (
+        "model/aggregation.py",
+        Sha256Digest("61e651675165b420c3fe3693442dc4c25bab455d674e670460d59961a47ea17e"),
+    ),
+    (
+        "model/dinov2/__init__.py",
+        Sha256Digest("6dbf9db5fd20e694d01c7c6f4bb2709890b65d17d03f666df0fddc1c77a7af28"),
+    ),
+    (
+        "model/dinov2/attention.py",
+        Sha256Digest("d749724c4633df03c16191fbc52d3d672198f20c4b2fda6ae637fdec2b4eb48a"),
+    ),
+    (
+        "model/dinov2/block.py",
+        Sha256Digest("21ca1d6fd4747d42f0ad4fa030eb32bd0f97bad7a8d693d0fe5f7ec082efee45"),
+    ),
+    (
+        "model/dinov2/dino_head.py",
+        Sha256Digest("1a8dfb966458a85ba4807604a0842ed22e3ee69e0c20cebcdac99559cbd838a0"),
+    ),
+    (
+        "model/dinov2/drop_path.py",
+        Sha256Digest("949100aac4d9c19c9d65319dbd362886c5d46a72d7586ba4fd500e9f1d51570c"),
+    ),
+    (
+        "model/dinov2/layer_scale.py",
+        Sha256Digest("356817b5d1390737128cbcc03a5333fd3060b73beae478772282ccb851d0ef85"),
+    ),
+    (
+        "model/dinov2/mlp.py",
+        Sha256Digest("c18c5b3f021408597a473bb710070ec3fb3b39f5a2e42e88ae83ced425a608b5"),
+    ),
+    (
+        "model/dinov2/patch_embed.py",
+        Sha256Digest("b3f82e19926c9cfb63f10136aca5e8a723bde1ad62dae1d04f90d405f9439baf"),
+    ),
+    (
+        "model/dinov2/swiglu_ffn.py",
+        Sha256Digest("df81d9901240214edc1831ce1b77558dcd6227b29a2f000fc5f546df55d2d09a"),
+    ),
+    (
+        "model/functional.py",
+        Sha256Digest("4cc526b7f1fe71d97764fb817b20dbe0dd1913a85850851d8c6e3b788b92ecf4"),
+    ),
+    (
+        "model/network.py",
+        Sha256Digest("827969b66b20396c880dcee67cb4a6a3690e5c912145aa85b1929151ba571111"),
+    ),
+    (
+        "model/normalization.py",
+        Sha256Digest("53a885b0a24a042ea7fdeae80b1f0417c363ce72b9e0e16d3ffddff9ae960691"),
+    ),
+    (
+        "model/sync_batchnorm/__init__.py",
+        Sha256Digest("a1f7cc6f55fd49f93f7ef3f62031cac39ed26c0f75b5e1b2e9ac5205ebdeaff0"),
+    ),
+    (
+        "model/sync_batchnorm/batchnorm.py",
+        Sha256Digest("1ef5146b1f1c45dd3da6a6fa6a1a587b9fb76a7685b8b3dc5f8bc38f8642e34f"),
+    ),
+    (
+        "model/sync_batchnorm/batchnorm_reimpl.py",
+        Sha256Digest("773e9c388fecbaff9347fae66e6009b266e10f08c926d05c3a5394cc82c3553b"),
+    ),
+    (
+        "model/sync_batchnorm/comm.py",
+        Sha256Digest("9d2e776a0398e5ac29ce13d43b7475300f70f409e56f3c38428029000557a57a"),
+    ),
+    (
+        "model/sync_batchnorm/replicate.py",
+        Sha256Digest("4498b873404fce05202d4f891262e249a95733816d3877e3aee3d2401138a6af"),
+    ),
+    (
+        "model/sync_batchnorm/unittest.py",
+        Sha256Digest("d662a67e0410b645eef87bfb26d9e3ba0fdcff33fb685db97fe1cd6bd6ba7b3f"),
+    ),
+    (
+        "model/vision_transformer.py",
+        Sha256Digest("3d69186bd2269367dcfdc5863af5995ed7e57f6e883adef4f59c91584e5f7292"),
+    ),
+)
+_SOURCE_EXECUTABLE_SUFFIXES = (".dll", ".dylib", ".pyd", ".pyc", ".pyo", ".so")
 _NETWORK_PREFIXES = ("http:", "https:", "ftp:", "s3:", "gs:")
 _DESCRIPTOR_NORM_TOLERANCE = 1e-4
 
@@ -378,6 +498,53 @@ def _revision_from_git_dir(git_dir: Path) -> str:
     raise SelaVprPlusRetrievalError("cannot resolve SelaVPR++ git HEAD ref")
 
 
+def _source_python_and_executable_paths(
+    source_root: Path,
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    python_paths: list[str] = []
+    executable_paths: list[str] = []
+    try:
+        for directory, directory_names, file_names in source_root.walk():
+            directory_names[:] = [name for name in directory_names if name != ".git"]
+            for file_name in file_names:
+                candidate = directory / file_name
+                relative = candidate.relative_to(source_root).as_posix()
+                suffix = candidate.suffix.lower()
+                if suffix == ".py":
+                    python_paths.append(relative)
+                if suffix in _SOURCE_EXECUTABLE_SUFFIXES:
+                    executable_paths.append(relative)
+    except OSError as exc:
+        raise SelaVprPlusRetrievalError(
+            "cannot enumerate SelaVPR++ source files"
+        ) from exc
+    return tuple(sorted(python_paths)), tuple(sorted(executable_paths))
+
+
+def _verify_reviewed_source_tree(source_root: Path) -> None:
+    python_paths, executable_paths = _source_python_and_executable_paths(source_root)
+    if python_paths != _SOURCE_PYTHON_PATHS:
+        raise SelaVprPlusRetrievalError(
+            "SelaVPR++ Python source file set does not match reviewed code"
+        )
+    if executable_paths:
+        raise SelaVprPlusRetrievalError(
+            "SelaVPR++ source contains unreviewed executable or bytecode files"
+        )
+
+    for relative_path, expected_sha256 in _MODEL_SOURCE_SHA256:
+        candidate = source_root.joinpath(*relative_path.split("/"))
+        if not candidate.is_file():
+            raise SelaVprPlusRetrievalError(
+                f"SelaVPR++ source is missing reviewed file {relative_path!r}"
+            )
+        content = hash_file_content(candidate)
+        if content.sha256 != expected_sha256:
+            raise SelaVprPlusRetrievalError(
+                f"SelaVPR++ source SHA-256 mismatch for {relative_path!r}"
+            )
+
+
 def _verify_source_root(source_root: Path) -> Path:
     if _uri_like(source_root):
         raise SelaVprPlusRetrievalError("SelaVPR++ source must be an explicit local path")
@@ -404,12 +571,7 @@ def _verify_source_root(source_root: Path) -> Path:
     if revision != SELAVPR_PLUS_SOURCE_REVISION:
         raise SelaVprPlusRetrievalError("SelaVPR++ source revision does not match reviewed code")
 
-    for relative_path in _MODEL_REQUIRED_PATHS:
-        candidate = resolved / relative_path
-        if not candidate.is_file():
-            raise SelaVprPlusRetrievalError(
-                f"SelaVPR++ source is missing required file {relative_path!r}"
-            )
+    _verify_reviewed_source_tree(resolved)
     return resolved
 
 
