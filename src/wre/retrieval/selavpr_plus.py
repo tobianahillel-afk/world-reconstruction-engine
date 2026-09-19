@@ -36,9 +36,7 @@ from wre.materialization import verify_local_artifact_materialization
 SELAVPR_PLUS_SOURCE_REVISION = "56bd921cbd3d53e9c5f91d0aafff147f95fb362a"
 SELAVPR_PLUS_RETRIEVAL_IMPLEMENTATION = "wre.retrieval.selavpr_plus"
 SELAVPR_PLUS_RETRIEVAL_VERSION = "1"
-SELAVPR_PLUS_CHECKPOINT_IDENTIFIER = (
-    "fenglu96/SelaVPRplusplus/SelaVPRplusplus_base.pth"
-)
+SELAVPR_PLUS_CHECKPOINT_IDENTIFIER = "fenglu96/SelaVPRplusplus/SelaVPRplusplus_base.pth"
 SELAVPR_PLUS_CHECKPOINT_SHA256 = Sha256Digest(
     "b048490dbd1c27dee67fce6faaec7bec267d19a044c85877af94b8588e596a62"
 )
@@ -286,8 +284,7 @@ class SelaVprPlusRetrievalResult:
         if any(not isinstance(pair, SelaVprPlusPair) for pair in self.pairs):
             raise TypeError("selavpr_plus result pairs contain an invalid member")
         keys = tuple(
-            (pair.observation_id1.value, pair.observation_id2.value)
-            for pair in self.pairs
+            (pair.observation_id1.value, pair.observation_id2.value) for pair in self.pairs
         )
         if len(keys) != len(set(keys)):
             raise ValueError("selavpr_plus result pairs must be unique")
@@ -447,10 +444,7 @@ def _verified_rgb_image(item: SelaVprPlusImageInput) -> _VerifiedRgbImage:
     if manifest.orientation_policy is not DecodedImageOrientationPolicy.SOURCE_PIXELS:
         raise SelaVprPlusRetrievalError("SelaVPR++ requires source-pixel orientation")
     level = manifest.levels[0]
-    entries = {
-        entry.relative_path: entry
-        for entry in result.materialization.entries
-    }
+    entries = {entry.relative_path: entry for entry in result.materialization.entries}
     entry = entries.get(level.relative_path)
     if entry is None:
         raise SelaVprPlusRetrievalError("decoded-image level zero is not materialized")
