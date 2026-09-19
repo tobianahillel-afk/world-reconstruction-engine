@@ -110,9 +110,7 @@ class ColmapVocabTreeRetrievalRequest:
         if not isinstance(self.run, ReconstructionRun):
             raise TypeError("vocab_tree_retrieval.run must be ReconstructionRun")
         if not isinstance(self.features, ColmapFeatureExtractionResult):
-            raise TypeError(
-                "vocab_tree_retrieval.features must be ColmapFeatureExtractionResult"
-            )
+            raise TypeError("vocab_tree_retrieval.features must be ColmapFeatureExtractionResult")
         if not isinstance(self.vocab_tree_path, Path):
             raise TypeError("vocab_tree_retrieval.vocab_tree_path must be pathlib.Path")
         if not isinstance(self.vocab_tree_sha256, Sha256Digest):
@@ -135,8 +133,7 @@ class ColmapVocabTreeRetrievalRequest:
             )
         if self.run.producer.implementation != COLMAP_VOCAB_TREE_RETRIEVAL_IMPLEMENTATION:
             raise ValueError(
-                "ReconstructionRun producer must be "
-                f"{COLMAP_VOCAB_TREE_RETRIEVAL_IMPLEMENTATION!r}"
+                f"ReconstructionRun producer must be {COLMAP_VOCAB_TREE_RETRIEVAL_IMPLEMENTATION!r}"
             )
         if self.run.producer.version != COLMAP_VOCAB_TREE_RETRIEVAL_VERSION:
             raise ValueError(
@@ -182,9 +179,7 @@ class ColmapVocabTreeRetrievalResult:
         if not isinstance(self.configuration_sha256, Sha256Digest):
             raise TypeError("vocab tree result configuration_sha256 must be Sha256Digest")
         if not isinstance(self.source_feature_database_sha256, Sha256Digest):
-            raise TypeError(
-                "vocab tree result source_feature_database_sha256 must be Sha256Digest"
-            )
+            raise TypeError("vocab tree result source_feature_database_sha256 must be Sha256Digest")
         if not isinstance(self.vocab_tree_sha256, Sha256Digest):
             raise TypeError("vocab tree result vocab_tree_sha256 must be Sha256Digest")
         if (
@@ -211,9 +206,7 @@ class ColmapVocabTreePairCandidateAdapterInput:
 
     def __post_init__(self) -> None:
         if not isinstance(self.result, ColmapVocabTreeRetrievalResult):
-            raise TypeError(
-                "vocab_tree_pair_adapter.result must be ColmapVocabTreeRetrievalResult"
-            )
+            raise TypeError("vocab_tree_pair_adapter.result must be ColmapVocabTreeRetrievalResult")
         if not isinstance(self.evidence_ref, ArtifactRef):
             raise TypeError("vocab_tree_pair_adapter.evidence_ref must be ArtifactRef")
 
@@ -484,9 +477,7 @@ def adapt_colmap_vocab_tree_retrieval_result(
     """Translate classical retrieval evidence into canonical pair proposals."""
 
     if not isinstance(adapter_input, ColmapVocabTreePairCandidateAdapterInput):
-        raise TypeError(
-            "adapter_input must be ColmapVocabTreePairCandidateAdapterInput"
-        )
+        raise TypeError("adapter_input must be ColmapVocabTreePairCandidateAdapterInput")
 
     candidates = tuple(
         PairCandidate(
