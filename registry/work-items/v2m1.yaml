@@ -1127,6 +1127,7 @@ work_items:
       - src/wre/retrieval/selavpr_plus.py
       - focused public exports through src/wre/retrieval/__init__.py
       - tests/test_selavpr_plus_retrieval.py
+      - focused extension of tests/test_adapter_model_registry_baselines.py to preserve the four approved baseline assertions while admitting this explicitly experimental learned candidate
       - one optional dedicated learned-retrieval integration workflow or fixture that remains separate from the core WRE environment and does not require the 483 MB production checkpoint for ordinary fast CI
       - registry/dependencies.yaml for exact SelaVPR++ DINOv2 PyTorch and preprocessing dependency records after concrete environment/version/license review
       - registry/adapter-models.yaml for one experimental exact SelaVPR++ Base/GeM/float adapter registration only after its executable producer model checkpoint and license identities are complete
