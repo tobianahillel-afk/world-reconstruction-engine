@@ -117,7 +117,7 @@ entries:
       redistribution_notes: "Experimental evaluation accepts an already-local exact source checkout and checkpoint only; WRE does not bundle or implicitly download the upstream source, checkpoint, or optional ML environment."
     shipping_status: experimental
     reproducibility_notes: "Exact source revision, checkpoint SHA-256, canonical 322x322 ImageNet preprocessing, CPU device, safe weights-only loading and exact-search proposal semantics are fixed by V2L7.5; default promotion is deferred to V2L7.6."
-    failure_signals: [dependency_unavailable, checkpoint_incompatibility]
+    failure_signals: [checkpoint_incompatibility, dependency_unavailable]
     metric_names: []
     resume_mode: unsupported
 
