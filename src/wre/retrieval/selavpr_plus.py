@@ -458,6 +458,9 @@ def _verified_rgb_image(item: SelaVprPlusImageInput) -> _VerifiedRgbImage:
         raise SelaVprPlusRetrievalError("cannot read verified decoded-image level zero") from exc
     if len(rgb8) != expected_length:
         raise SelaVprPlusRetrievalError("decoded-image level zero byte count changed after verify")
+    actual_sha256 = Sha256Digest(hashlib.sha256(rgb8).hexdigest())
+    if actual_sha256 != entry.sha256:
+        raise SelaVprPlusRetrievalError("decoded-image level zero bytes changed after verify")
     return _VerifiedRgbImage(
         observation_id=manifest.source_observation_id,
         width_px=level.width_px,
@@ -493,6 +496,31 @@ def _validate_descriptors(
             raise SelaVprPlusRetrievalError("SelaVPR++ descriptors must be L2-normalized")
         validated.append(tuple(values))
     return tuple(validated)
+
+
+def _validate_environment_identity(
+    environment: SelaVprPlusEnvironmentIdentity,
+) -> SelaVprPlusEnvironmentIdentity:
+    if not isinstance(environment, SelaVprPlusEnvironmentIdentity):
+        raise SelaVprPlusRetrievalError(
+            "SelaVPR++ runtime returned invalid environment identity"
+        )
+    if not environment.python_version.startswith("3.12."):
+        raise SelaVprPlusRetrievalError(
+            "SelaVPR++ runtime Python version must be an exact Python 3.12 release"
+        )
+    expected_versions = (
+        (environment.torch_version, SELAVPR_PLUS_TORCH_VERSION, "torch"),
+        (environment.numpy_version, SELAVPR_PLUS_NUMPY_VERSION, "numpy"),
+        (environment.faiss_cpu_version, SELAVPR_PLUS_FAISS_CPU_VERSION, "faiss-cpu"),
+        (environment.tqdm_version, SELAVPR_PLUS_TQDM_VERSION, "tqdm"),
+    )
+    for actual, expected, name in expected_versions:
+        if actual != expected:
+            raise SelaVprPlusRetrievalError(
+                f"SelaVPR++ runtime {name} version must be exactly {expected!r}"
+            )
+    return environment
 
 
 def propose_selavpr_plus_pairs(
@@ -621,6 +649,43 @@ def _package_version(distribution: str) -> str:
         ) from exc
 
 
+def _normalization_tensors(torch_module: Any) -> tuple[Any, Any]:
+    mean = torch_module.tensor(
+        [0.485, 0.456, 0.406],
+        dtype=torch_module.float32,
+    ).view(1, 3, 1, 1)
+    std = torch_module.tensor(
+        [0.229, 0.224, 0.225],
+        dtype=torch_module.float32,
+    ).view(1, 3, 1, 1)
+    return mean, std
+
+
+def _preprocess_rgb8_image(
+    torch_module: Any,
+    image: _VerifiedRgbImage,
+    config: SelaVprPlusRetrievalConfig,
+    *,
+    mean: Any,
+    std: Any,
+) -> Any:
+    tensor = torch_module.frombuffer(
+        memoryview(image.rgb8),
+        dtype=torch_module.uint8,
+    ).clone()
+    tensor = tensor.reshape(image.height_px, image.width_px, 3)
+    tensor = tensor.permute(2, 0, 1).unsqueeze(0).to(dtype=torch_module.float32)
+    tensor = tensor.div(255.0)
+    tensor = tensor.sub(mean).div(std)
+    return torch_module.nn.functional.interpolate(
+        tensor,
+        size=(config.image_height_px, config.image_width_px),
+        mode="bilinear",
+        align_corners=False,
+        antialias=True,
+    )
+
+
 class _TorchSelaVprPlusRuntime:
     def _environment(self) -> SelaVprPlusEnvironmentIdentity:
         versions = {
@@ -697,30 +762,15 @@ class _TorchSelaVprPlusRuntime:
                     model = model.to("cpu")
                     model.eval()
 
-                    mean = torch.tensor(
-                        [0.485, 0.456, 0.406],
-                        dtype=torch.float32,
-                    ).view(1, 3, 1, 1)
-                    std = torch.tensor(
-                        [0.229, 0.224, 0.225],
-                        dtype=torch.float32,
-                    ).view(1, 3, 1, 1)
+                    mean, std = _normalization_tensors(torch)
                     with torch.no_grad():
                         for image in images:
-                            tensor = torch.frombuffer(
-                                memoryview(image.rgb8),
-                                dtype=torch.uint8,
-                            ).clone()
-                            tensor = tensor.reshape(image.height_px, image.width_px, 3)
-                            tensor = tensor.permute(2, 0, 1).unsqueeze(0).to(dtype=torch.float32)
-                            tensor = tensor.div(255.0)
-                            tensor = tensor.sub(mean).div(std)
-                            tensor = torch.nn.functional.interpolate(
-                                tensor,
-                                size=(config.image_height_px, config.image_width_px),
-                                mode="bilinear",
-                                align_corners=False,
-                                antialias=True,
+                            tensor = _preprocess_rgb8_image(
+                                torch,
+                                image,
+                                config,
+                                mean=mean,
+                                std=std,
                             )
                             output = model(tensor)
                             if getattr(output, "shape", None) != (
@@ -762,8 +812,7 @@ def retrieve_selavpr_plus_pairs(
         images=images,
         config=request.config,
     )
-    if not isinstance(environment, SelaVprPlusEnvironmentIdentity):
-        raise SelaVprPlusRetrievalError("SelaVPR++ runtime returned invalid environment identity")
+    environment = _validate_environment_identity(environment)
     descriptors = _validate_descriptors(
         raw_descriptors,
         expected_count=len(images),
