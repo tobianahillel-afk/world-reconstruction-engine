@@ -1175,7 +1175,7 @@ work_items:
       - ModelIdentity CheckpointIdentity ArtifactProducerIdentity ConfigurationIdentity and Sha256Digest for exact model/checkpoint/configuration identity rather than floating model names URLs or latest tags
       - the reviewed upstream SelaVPR++ repository Lu-Feng/SelaVPRplusplus at exact revision 56bd921cbd3d53e9c5f91d0aafff147f95fb362a as the first source-code candidate; upstream code is MIT but concrete transitive runtime packages remain separately reviewed
       - the reviewed official SelaVPR++ Base standard checkpoint identifier fenglu96/SelaVPRplusplus/SelaVPRplusplus_base.pth with exact SHA-256 b048490dbd1c27dee67fce6faaec7bec267d19a044c85877af94b8588e596a62 as the only production-weight candidate for this work item; execution receives an already-local file and never downloads it
-      - SelaVPR++ Base with GeM standard non-hashing non-rerank output as the learned representation: upstream semantics are 322x322 hard resize, ImageNet RGB normalization, seed zero, 2048-dimensional L2-normalized floating-point global descriptors
+      - SelaVPR++ Base with GeM standard non-hashing non-rerank output is the learned representation using upstream 322x322 hard resize ImageNet RGB normalization seed zero and 2048-dimensional L2-normalized floating-point global descriptors
       - PairCandidate PairCandidateSource PairCandidateSourceId merge_pair_candidates and ArtifactRef as the only canonical pair-proposal boundary; learned similarities remain source-specific evidence
       - exact deterministic lexical ordering and fail-closed validation conventions already used by classical vocabulary retrieval
     acceptance:
