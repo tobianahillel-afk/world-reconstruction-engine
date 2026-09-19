@@ -963,7 +963,7 @@ work_items:
   - id: V2L7.3
     lot: V2L7
     title: GPS pairing donor adapter
-    status: ready
+    status: done
     objective: Wrap the retained deterministic GpsPairingResult donor behind the canonical PairCandidate contract without changing resolved-WGS84 eligibility or spatial-neighbor semantics, by translating each donor candidate into a source-neutral canonical observation pair whose only GPS-specific link is one explicit ArtifactRef to the exact donor evidence artifact.
     allowed_scope:
       - src/wre/retrieval/gps_adapter.py
@@ -1031,7 +1031,93 @@ work_items:
       - full existing tests/test_gps_pairing.py regression including dedicated PyCOLMAP 4.2 equivalence lane when triggered
       - regression proving no classical or learned visual retrieval matching verification clustering routing geometry scheduler or V2L7.4 surface is introduced
       - full fast CI
-  - {id: V2L7.4, lot: V2L7, title: Classical vocabulary retrieval baseline, status: planned, depends_on: [V2L7.3]}
+  - id: V2L7.4
+    lot: V2L7
+    title: Classical vocabulary retrieval baseline
+    status: ready
+    objective: Implement the first deterministic classical visual-retrieval PairCandidate source by reusing the retained verified COLMAP SIFT feature database and exact external PyCOLMAP 4.2 VocabTreePairGenerator with an explicitly caller-supplied local content-identified vocabulary-tree file, producing auditable source-specific proposal evidence without re-decoding media re-extracting features local feature matching geometric verification network downloads or scene-identity claims.
+    allowed_scope:
+      - src/wre/retrieval/vocab_tree.py
+      - focused public exports through src/wre/retrieval/__init__.py
+      - tests/test_vocab_tree_retrieval.py
+      - focused extension of the existing native COLMAP integration fixture only when required to exercise the exact PyCOLMAP 4.2 vocabulary-tree path
+      - registry/adapter-models.yaml only for one exact retained COLMAP classical retrieval capability if the implemented producer contract is complete enough to register without inventing future artifact persistence
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry after implementation evidence is green so V2L7.5 can be activated without implementing it
+    out_of_scope:
+      - changing src/wre/reconstruction/colmap_features.py ColmapFeatureExtractionResult SIFT extraction configuration source snapshotting or feature database schema
+      - re-decoding images re-reading source media or re-extracting SIFT descriptors already represented by the verified ColmapFeatureExtractionResult
+      - changing sequential GPS PairCandidate adapters or canonical PairCandidate PairCandidateSource PairCandidateSourceId merge semantics
+      - pycolmap.match_vocabtree FeatureMatchingOptions raw descriptor matching match rows two-view geometries spatial verification local geometric verification CorrespondenceSet or SceneCluster
+      - implicit default vocabulary resources HTTP HTTPS URI resolution automatic download cache fetch or any network access; the vocabulary tree must be an explicit existing local regular file whose bytes are verified before PyCOLMAP use
+      - training building mutating or replacing the production vocabulary tree inside retrieval execution; vocabulary construction and asset provisioning are separate from querying
+      - learned embeddings SALAD DINO hloc GeoCLIP TIGER GT-Loc Pinpoint model checkpoint integration or learned reranking owned by V2L7.5
+      - retrieval-union recall benchmarking source weighting rank fusion ANN backend selection large-scale indexing or lot review owned by V2L7.6 and V2L37
+      - promoting retrieval score rank or candidate existence to common-scene truth overlap truth exact geolocation capture time route choice QualityDecision or geometry truth
+      - starting V2L7.5 implementation in this work item
+    depends_on: [V2L7.3]
+    read_before:
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/27_RESEARCH_CANDIDATE_COVERAGE.md
+      - docs/28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md
+      - docs/29_PERFORMANCE_INTEGRATION_MAP.md
+      - registry/dependencies.yaml
+      - registry/adapter-models.yaml
+      - registry/v1-v2-migration.yaml
+      - src/wre/domain/artifacts.py
+      - src/wre/domain/observations.py
+      - src/wre/domain/pair_candidates.py
+      - src/wre/reconstruction/colmap_environment.py
+      - src/wre/reconstruction/colmap_features.py
+      - src/wre/retrieval/sequential_adapter.py
+      - src/wre/retrieval/gps_adapter.py
+      - tests/test_colmap_features.py
+      - tests/test_pair_candidates.py
+    reuse:
+      - ColmapFeatureExtractionResult as the only accepted retained SIFT input boundary including exact source observation membership COLMAP environment feature database SHA-256 byte length and canonical image-name mapping
+      - exact external pycolmap 4.2.0 already approved in registry/dependencies.yaml with candidate_retrieval role; no new native runtime dependency is introduced
+      - pycolmap.VocabTreePairGenerator and VocabTreePairingOptions as the classical proposal engine; pycolmap.match_vocabtree is deliberately excluded because matching and verification belong to later responsibilities
+      - Sha256Digest and exact byte length as the identity of the explicit local vocabulary-tree bytes; filesystem path is execution location rather than semantic vocabulary identity
+      - PairCandidate PairCandidateSource PairCandidateSourceId merge_pair_candidates and ArtifactRef as the canonical proposal/adaptation boundary established by V2L7.1 through V2L7.3
+      - content verification and exact PyCOLMAP environment inspection patterns already used by retained COLMAP feature/matching donors
+    acceptance:
+      - Define an immutable VocabTreeRetrievalConfig with exactly schema_version num_images num_nearest_neighbors num_checks max_num_features num_threads and random_seed plus a canonical SHA-256 document; positive integer controls fail closed, num_threads is exactly one for the deterministic baseline, random_seed is exactly zero, and no verification score threshold route or generic parameter bag exists.
+      - The adapter config passed to PyCOLMAP fixes num_images_after_verification to zero and leaves match_list_path empty so vocabulary retrieval cannot silently perform spatial/local verification or restrict membership through an undeclared file.
+      - Define an immutable ColmapVocabTreeRetrievalRequest containing exactly run features vocab_tree_path vocab_tree_sha256 vocab_tree_byte_length config and optional module injection only as a function argument rather than stored executable state.
+      - Request construction requires a ColmapFeatureExtractionResult produced by the exact supported PyCOLMAP 4.2 environment; ReconstructionRun input observation membership must exactly match feature provenance, producer implementation/version and configuration SHA must match this retrieval baseline, and vocabulary path must be pathlib.Path.
+      - Before any external PyCOLMAP operation, verify the retained feature database is an existing regular file with exact recorded SHA-256 and byte length and verify the vocabulary tree is an existing local regular file with exactly the supplied Sha256Digest and positive byte length; URI-like network sources and byte mismatches fail closed.
+      - Retrieval operates on a temporary copy or otherwise proves byte-for-byte non-mutation of the retained feature database; the source ColmapFeatureExtractionResult database bytes must remain unchanged after success and failure.
+      - Inspect and require the exact retained PyCOLMAP 4.2.0 / COLMAP 4.2.0 environment before constructing VocabTreePairGenerator.
+      - Configure VocabTreePairingOptions only from the canonical config plus the verified local vocabulary path, with num_images_after_verification zero, one thread and no implicit default/downloaded vocabulary.
+      - Query the complete canonical feature-bearing image membership by database image IDs, map generated image-ID pairs back to the exact ObservationId values using the ColmapFeatureExtractionResult image_name mapping, and fail closed on unknown duplicate self or membership-mismatched database images.
+      - Define an immutable source-specific ColmapVocabTreePair containing only canonical distinct ObservationId endpoints and no scene-truth field.
+      - Define an immutable ColmapVocabTreeRetrievalResult containing exact run provenance environment configuration SHA source feature database SHA vocabulary SHA/byte length and a unique lexically ordered tuple of ColmapVocabTreePair values; source-specific retrieval configuration remains evidence and is not flattened into PairCandidate.
+      - Retrieval may legitimately return an empty pair tuple for insufficient or nonmatching inputs and must not fabricate fallback pairs.
+      - Repeating retrieval against identical verified feature/vocabulary bytes config and exact PyCOLMAP environment returns equal semantic result values independent of temporary execution path.
+      - Define a stable VOCAB_TREE_PAIR_CANDIDATE_SOURCE_ID equal to PairCandidateSourceId colmap.vocab_tree and one immutable ColmapVocabTreePairCandidateAdapterInput containing exactly result and evidence_ref.
+      - adapt_colmap_vocab_tree_retrieval_result is pure and maps each source-specific pair to the same canonical endpoints with exactly one colmap.vocab_tree PairCandidateSource containing the supplied ArtifactRef, then canonicalizes only through merge_pair_candidates.
+      - PairCandidate receives no vocabulary score rank visual-word count descriptor count feature index COLMAP image ID vocabulary path distance confidence overlap or scene identity; such implementation details remain only in source evidence where represented.
+      - The implementation does not call pycolmap.match_vocabtree does not populate raw matches/two_view_geometries and does not perform geometric verification.
+      - Existing retained feature extraction sequential GPS canonical-pair and exact native COLMAP tests remain unchanged and pass.
+    tests:
+      - VocabTreeRetrievalConfig canonical-document SHA equality exact field-set immutability and bool zero negative wrong-type non-unit-thread nonzero-seed negative tests
+      - request exact field-set type membership producer version configuration and vocabulary-path validation tests
+      - source feature database hash/length mismatch and vocabulary hash/length mismatch fail-before-native-execution tests
+      - URI-like or non-local vocabulary path rejection and regression proving no network/default resource lookup surface exists
+      - fake-module fixture proving exact VocabTreePairingOptions values num_images_after_verification zero empty match_list_path exact local vocab path one thread random seed and VocabTreePairGenerator usage without match_vocabtree
+      - canonical database image-name to ObservationId mapping fixtures including unknown duplicate self and membership mismatch failure cases
+      - pair result exact field-set canonical ordering uniqueness immutability empty-result and no-score/no-scene-truth tests
+      - source feature database before/after SHA-256 equality on success and native failure
+      - pure PairCandidate adaptation exact source ID evidence preservation repeatability evidence-ref substitution and no source-specific field leakage tests
+      - dedicated exact PyCOLMAP 4.2 integration fixture using a bounded local test vocabulary-tree artifact and retained SIFT feature database without network access or geometric verification
+      - regression proving existing ColmapFeatureExtractionResult sequential GPS adapters and PairCandidate behavior remain unchanged
+      - full fast CI native COLMAP lane and CodeQL
   - {id: V2L7.5, lot: V2L7, title: Modern visual retrieval first candidate, status: planned, depends_on: [V2L7.4]}
   - {id: V2L7.6, lot: V2L7, title: Retrieval union dedup recall benchmark, status: planned, depends_on: [V2L7.5]}
   - {id: V2L8.1, lot: V2L8, title: SceneCluster and scene relation hypothesis contract, status: planned, depends_on: [V2L7.6]}
