@@ -16,6 +16,8 @@ from wre.domain import (
     ArtifactKind,
     ArtifactMaterializationEntry,
     ArtifactMaterializationMetadata,
+    ArtifactMaterializationVerification,
+    ArtifactMaterializationVerificationStatus,
     ArtifactProducerIdentity,
     ArtifactRef,
     ConfigurationIdentity,
@@ -481,6 +483,37 @@ def test_verified_rgb_input_uses_only_declared_level_zero_bytes(tmp_path: Path) 
     assert image.rgb8 == b"\x00\x7f\xff\xff\x7f\x00"
 
 
+def test_level_zero_bytes_are_rehashed_after_materialization_verification(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    item = _decoded_input(tmp_path, "obs:a")
+    entry = item.decoded_result.materialization.entries[0]
+    level_path = item.materialization_root / entry.relative_path
+    level_path.write_bytes(b"\xff\x7f\x00\x00\x7f\xff")
+
+    monkeypatch.setattr(
+        selavpr_module,
+        "verify_local_artifact_materialization",
+        lambda metadata, root: ArtifactMaterializationVerification(
+            artifact_ref=metadata.artifact_ref,
+            status=ArtifactMaterializationVerificationStatus.VERIFIED,
+        ),
+    )
+
+    with pytest.raises(SelaVprPlusRetrievalError, match="bytes changed after verify"):
+        selavpr_module._verified_rgb_image(item)
+
+
+def test_wrong_orientation_contract_fails_before_runtime(tmp_path: Path) -> None:
+    item = _decoded_input(tmp_path, "obs:a")
+    manifest = item.decoded_result.manifest
+    object.__setattr__(manifest, "orientation_policy", cast(Any, "autorotated"))
+
+    with pytest.raises(SelaVprPlusRetrievalError, match="source-pixel orientation"):
+        selavpr_module._verified_rgb_image(item)
+
+
 def test_corrupted_or_wrong_length_decoded_materialization_fails_before_runtime(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -604,6 +637,103 @@ def test_pair_proposal_rejects_invalid_descriptors_and_neighbors() -> None:
         )
 
 
+def test_preprocessing_fixes_rgb_normalization_and_322_resize_contract() -> None:
+    calls: list[tuple[object, ...]] = []
+
+    class _Tensor:
+        def __init__(self, label: str) -> None:
+            self.label = label
+
+        def view(self, *shape: int) -> _Tensor:
+            calls.append((self.label, "view", shape))
+            return self
+
+        def clone(self) -> _Tensor:
+            calls.append((self.label, "clone"))
+            return self
+
+        def reshape(self, *shape: int) -> _Tensor:
+            calls.append((self.label, "reshape", shape))
+            return self
+
+        def permute(self, *dims: int) -> _Tensor:
+            calls.append((self.label, "permute", dims))
+            return self
+
+        def unsqueeze(self, dim: int) -> _Tensor:
+            calls.append((self.label, "unsqueeze", dim))
+            return self
+
+        def to(self, *, dtype: object) -> _Tensor:
+            calls.append((self.label, "to", dtype))
+            return self
+
+        def div(self, value: object) -> _Tensor:
+            calls.append((self.label, "div", value))
+            return self
+
+        def sub(self, value: object) -> _Tensor:
+            calls.append((self.label, "sub", value))
+            return self
+
+    class _Functional:
+        @staticmethod
+        def interpolate(tensor: _Tensor, **kwargs: object) -> _Tensor:
+            calls.append(("interpolate", tensor.label, kwargs))
+            return tensor
+
+    class _Torch:
+        float32 = "float32"
+        uint8 = "uint8"
+        nn = type("_NN", (), {"functional": _Functional})
+
+        @staticmethod
+        def tensor(values: list[float], *, dtype: object) -> _Tensor:
+            calls.append(("tensor", tuple(values), dtype))
+            return _Tensor("constant")
+
+        @staticmethod
+        def frombuffer(buffer: memoryview, *, dtype: object) -> _Tensor:
+            calls.append(("frombuffer", bytes(buffer), dtype))
+            return _Tensor("image")
+
+    image = selavpr_module._VerifiedRgbImage(
+        observation_id=ObservationId("obs:preprocess"),
+        width_px=2,
+        height_px=1,
+        rgb8=b"\x00\x7f\xff\xff\x7f\x00",
+    )
+    config = SelaVprPlusRetrievalConfig()
+    mean, std = selavpr_module._normalization_tensors(_Torch)
+    output = selavpr_module._preprocess_rgb8_image(
+        _Torch,
+        image,
+        config,
+        mean=mean,
+        std=std,
+    )
+
+    assert isinstance(output, _Tensor)
+    assert ("tensor", (0.485, 0.456, 0.406), "float32") in calls
+    assert ("tensor", (0.229, 0.224, 0.225), "float32") in calls
+    assert ("frombuffer", image.rgb8, "uint8") in calls
+    assert ("image", "reshape", (1, 2, 3)) in calls
+    assert ("image", "permute", (2, 0, 1)) in calls
+    assert ("image", "unsqueeze", 0) in calls
+    assert ("image", "to", "float32") in calls
+    assert ("image", "div", 255.0) in calls
+    assert (
+        "interpolate",
+        "image",
+        {
+            "size": (322, 322),
+            "mode": "bilinear",
+            "align_corners": False,
+            "antialias": True,
+        },
+    ) in calls
+
+
 def test_fake_runtime_retrieval_preserves_exact_evidence_boundary(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -637,6 +767,48 @@ def test_fake_runtime_retrieval_preserves_exact_evidence_boundary(
     assert tuple(
         (pair.observation_id1.value, pair.observation_id2.value) for pair in result.pairs
     ) == (("obs:a", "obs:b"), ("obs:a", "obs:c"))
+
+
+def test_injected_runtime_must_report_exact_reviewed_environment(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = _request(tmp_path)
+    _allow_fixture_checkpoint(monkeypatch, request.checkpoint_path)
+
+    class _WrongEnvironmentRuntime(_FakeRuntime):
+        def infer(
+            self,
+            *,
+            source_root: Path,
+            checkpoint_path: Path,
+            images: tuple[object, ...],
+            config: SelaVprPlusRetrievalConfig,
+        ) -> tuple[SelaVprPlusEnvironmentIdentity, tuple[tuple[float, ...], ...]]:
+            del source_root, checkpoint_path, images, config
+            return (
+                SelaVprPlusEnvironmentIdentity(
+                    source_revision=SELAVPR_PLUS_SOURCE_REVISION,
+                    python_version="3.12.9",
+                    torch_version="0.0.0",
+                    numpy_version=SELAVPR_PLUS_NUMPY_VERSION,
+                    faiss_cpu_version=SELAVPR_PLUS_FAISS_CPU_VERSION,
+                    tqdm_version=SELAVPR_PLUS_TQDM_VERSION,
+                    device="cpu",
+                ),
+                self.descriptors,
+            )
+
+    runtime = _WrongEnvironmentRuntime(
+        (
+            _unit_descriptor(0),
+            _unit_descriptor(1),
+            _unit_descriptor(2),
+        )
+    )
+
+    with pytest.raises(SelaVprPlusRetrievalError, match="torch version must be exactly"):
+        retrieve_selavpr_plus_pairs(request, runtime=runtime)
 
 
 @pytest.mark.parametrize(
