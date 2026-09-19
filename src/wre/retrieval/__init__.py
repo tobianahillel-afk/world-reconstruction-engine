@@ -19,19 +19,6 @@ from wre.retrieval.gps_adapter import (
     GpsPairCandidateAdapterInput,
     adapt_gps_pairing_result,
 )
-from wre.retrieval.vocab_tree import (
-    COLMAP_VOCAB_TREE_RETRIEVAL_IMPLEMENTATION,
-    COLMAP_VOCAB_TREE_RETRIEVAL_VERSION,
-    VOCAB_TREE_PAIR_CANDIDATE_SOURCE_ID,
-    ColmapVocabTreePair,
-    ColmapVocabTreePairCandidateAdapterInput,
-    ColmapVocabTreeRetrievalError,
-    ColmapVocabTreeRetrievalRequest,
-    ColmapVocabTreeRetrievalResult,
-    VocabTreeRetrievalConfig,
-    adapt_colmap_vocab_tree_retrieval_result,
-    retrieve_colmap_vocab_tree_pairs,
-)
 from wre.retrieval.sequential import (
     COLMAP_SEQUENTIAL_REFERENCE_VERSION,
     SEQUENTIAL_PAIRING_IMPLEMENTATION,
@@ -46,6 +33,19 @@ from wre.retrieval.sequential_adapter import (
     SEQUENTIAL_PAIR_CANDIDATE_SOURCE_ID,
     SequentialPairCandidateAdapterInput,
     adapt_sequential_pairing_result,
+)
+from wre.retrieval.vocab_tree import (
+    COLMAP_VOCAB_TREE_RETRIEVAL_IMPLEMENTATION,
+    COLMAP_VOCAB_TREE_RETRIEVAL_VERSION,
+    VOCAB_TREE_PAIR_CANDIDATE_SOURCE_ID,
+    ColmapVocabTreePair,
+    ColmapVocabTreePairCandidateAdapterInput,
+    ColmapVocabTreeRetrievalError,
+    ColmapVocabTreeRetrievalRequest,
+    ColmapVocabTreeRetrievalResult,
+    VocabTreeRetrievalConfig,
+    adapt_colmap_vocab_tree_retrieval_result,
+    retrieve_colmap_vocab_tree_pairs,
 )
 
 __all__ = [
@@ -87,4 +87,3 @@ __all__ = [
     "generate_sequential_candidates",
     "retrieve_colmap_vocab_tree_pairs",
 ]
-
