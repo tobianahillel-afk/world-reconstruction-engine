@@ -500,10 +500,9 @@ def test_explicit_comparison_records_nonnegative_incremental_recall_only() -> No
         )
     )
 
-    assert result.comparison == RetrievalBenchmarkComparison(
-        source_id=SEQUENTIAL_PAIR_CANDIDATE_SOURCE_ID,
-        incremental_candidate_recall=pytest.approx(1.0 / 3.0),
-    )
+    assert result.comparison is not None
+    assert result.comparison.source_id == SEQUENTIAL_PAIR_CANDIDATE_SOURCE_ID
+    assert result.comparison.incremental_candidate_recall == pytest.approx(1.0 / 3.0)
     assert _metric_value(
         result.union_metrics,
         "retrieval.incremental_candidate_recall",
