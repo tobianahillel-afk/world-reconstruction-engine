@@ -784,6 +784,9 @@ def _local_source_import(source_root: Path) -> Iterator[None]:
         raise SelaVprPlusRetrievalError(
             "cannot load SelaVPR++ while another top-level model package is imported"
         )
+    previous_dont_write_bytecode = sys.dont_write_bytecode
+    sys.dont_write_bytecode = True
+    importlib.invalidate_caches()
     sys.path.insert(0, str(source_root))
     try:
         yield
@@ -798,6 +801,8 @@ def _local_source_import(source_root: Path) -> Iterator[None]:
         for name in tuple(sys.modules):
             if name == "model" or name.startswith("model."):
                 sys.modules.pop(name, None)
+        importlib.invalidate_caches()
+        sys.dont_write_bytecode = previous_dont_write_bytecode
 
 
 def _package_version(distribution: str) -> str:
