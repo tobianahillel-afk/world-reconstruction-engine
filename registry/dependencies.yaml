@@ -167,8 +167,9 @@ dependencies:
       Upstream source code and the official model repository report MIT licensing, but full
       transitive package/redistribution review remains pending; this dependency is experimental
       and cannot become a shipping default before V2L7.6 benchmark evidence and license review.
-      Runtime execution accepts only explicit local source/checkpoint material and performs no
-      implicit network download.
+      Runtime execution accepts only explicit local source/checkpoint material, verifies the exact
+      reviewed Python source-file set plus SHA-256 identities for the executable model subtree,
+      rejects unreviewed bytecode/native-module shadows, and performs no implicit network download.
   hloc:
     status: candidate_optional
     role: [difficult_visual_retrieval, visual_localization, mapping_proposals]
