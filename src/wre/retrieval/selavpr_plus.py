@@ -515,9 +515,7 @@ def _source_python_and_executable_paths(
                 if suffix in _SOURCE_EXECUTABLE_SUFFIXES:
                     executable_paths.append(relative)
     except OSError as exc:
-        raise SelaVprPlusRetrievalError(
-            "cannot enumerate SelaVPR++ source files"
-        ) from exc
+        raise SelaVprPlusRetrievalError("cannot enumerate SelaVPR++ source files") from exc
     return tuple(sorted(python_paths)), tuple(sorted(executable_paths))
 
 
