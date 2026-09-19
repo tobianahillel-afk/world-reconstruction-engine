@@ -394,10 +394,21 @@ def test_scratch_directory_does_not_require_artifact_parent_write_access(
     real_temporary_directory = vocab_tree_module.tempfile.TemporaryDirectory
     calls: list[dict[str, object]] = []
 
-    def _temporary_directory(*args: object, **kwargs: object) -> object:
-        calls.append(dict(kwargs))
-        assert "dir" not in kwargs
-        return real_temporary_directory(*args, **kwargs)
+    def _temporary_directory(
+        suffix: str | None = None,
+        prefix: str | None = None,
+        dir: str | os.PathLike[str] | None = None,
+        *,
+        ignore_cleanup_errors: bool = False,
+    ) -> Any:
+        assert dir is None
+        calls.append({"prefix": prefix})
+        return real_temporary_directory(
+            suffix=suffix,
+            prefix=prefix,
+            dir=dir,
+            ignore_cleanup_errors=ignore_cleanup_errors,
+        )
 
     monkeypatch.setattr(
         vocab_tree_module.tempfile,
