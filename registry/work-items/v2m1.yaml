@@ -1095,7 +1095,7 @@ work_items:
       - Retrieval operates on a temporary copy or otherwise proves byte-for-byte non-mutation of the retained feature database; the source ColmapFeatureExtractionResult database bytes must remain unchanged after success and failure.
       - Inspect and require the exact retained PyCOLMAP 4.2.0 / COLMAP 4.2.0 environment before constructing VocabTreePairGenerator.
       - Configure VocabTreePairingOptions only from the canonical config plus the verified local vocabulary path, with num_images_after_verification zero, one thread and no implicit default/downloaded vocabulary.
-      - Query the complete canonical feature-bearing image membership by database image IDs, map generated image-ID pairs back to the exact ObservationId values using the ColmapFeatureExtractionResult image_name mapping, and fail closed on unknown duplicate self or membership-mismatched database images.
+      - Query the complete canonical feature-bearing image membership by database image IDs and map generated image-ID pairs back to exact ObservationId values using the ColmapFeatureExtractionResult image_name mapping; fail closed on malformed unknown or membership-mismatched IDs while filtering native self-pairs and deterministically collapsing symmetric duplicate emissions before source-specific pair construction.
       - Define an immutable source-specific ColmapVocabTreePair containing only canonical distinct ObservationId endpoints and no scene-truth field.
       - Define an immutable ColmapVocabTreeRetrievalResult containing exact run provenance environment configuration SHA source feature database SHA vocabulary SHA/byte length and a unique lexically ordered tuple of ColmapVocabTreePair values; source-specific retrieval configuration remains evidence and is not flattened into PairCandidate.
       - Retrieval may legitimately return an empty pair tuple for insufficient or nonmatching inputs and must not fabricate fallback pairs.
@@ -1111,7 +1111,7 @@ work_items:
       - source feature database hash/length mismatch and vocabulary hash/length mismatch fail-before-native-execution tests
       - URI-like or non-local vocabulary path rejection and regression proving no network/default resource lookup surface exists
       - fake-module fixture proving exact VocabTreePairingOptions values num_images_after_verification zero empty match_list_path exact local vocab path one thread random seed and VocabTreePairGenerator usage without match_vocabtree
-      - canonical database image-name to ObservationId mapping fixtures including unknown duplicate self and membership mismatch failure cases
+      - canonical database image-name to ObservationId mapping fixtures including malformed unknown and membership mismatch failure cases plus native self-pair filtering and symmetric-pair deduplication
       - pair result exact field-set canonical ordering uniqueness immutability empty-result and no-score/no-scene-truth tests
       - source feature database before/after SHA-256 equality on success and native failure
       - pure PairCandidate adaptation exact source ID evidence preservation repeatability evidence-ref substitution and no source-specific field leakage tests
