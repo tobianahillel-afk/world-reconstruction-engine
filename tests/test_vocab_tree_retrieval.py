@@ -315,7 +315,7 @@ def test_request_is_exact_typed_and_matches_run(tmp_path: Path) -> None:
     assert request.run.configuration_sha256 == request.config.sha256
     assert request.run.input_observation_ids == request.features.provenance.source_observation_ids
 
-    with pytest.raises(TypeError, match="pathlib.Path"):
+    with pytest.raises(TypeError, match=r"pathlib\.Path"):
         ColmapVocabTreeRetrievalRequest(
             run=request.run,
             features=request.features,
@@ -414,16 +414,27 @@ def test_invalid_generator_pairs_fail_closed(tmp_path: Path) -> None:
             request,
             module=_FakePycolmap(pairs=((1, 99),)),
         )
-    with pytest.raises(ColmapVocabTreeRetrievalError, match="self pair"):
+    with pytest.raises(ColmapVocabTreeRetrievalError, match="image IDs must be integers"):
         retrieve_colmap_vocab_tree_pairs(
             request,
-            module=_FakePycolmap(pairs=((1, 1),)),
+            module=_FakePycolmap(pairs=cast(Any, ((1, "2"),))),
         )
-    with pytest.raises(ColmapVocabTreeRetrievalError, match="duplicate observation pair"):
-        retrieve_colmap_vocab_tree_pairs(
-            request,
-            module=_FakePycolmap(pairs=((1, 2), (2, 1))),
-        )
+
+
+def test_native_self_and_symmetric_pairs_normalize_to_unique_relationships(
+    tmp_path: Path,
+) -> None:
+    result = retrieve_colmap_vocab_tree_pairs(
+        _request(tmp_path),
+        module=_FakePycolmap(pairs=((1, 1), (1, 2), (2, 1), (2, 2))),
+    )
+
+    assert result.pairs == (
+        ColmapVocabTreePair(
+            observation_id1=ObservationId("obs:a"),
+            observation_id2=ObservationId("obs:b"),
+        ),
+    )
 
 
 def test_result_and_pair_contracts_are_source_specific_without_scores(tmp_path: Path) -> None:
