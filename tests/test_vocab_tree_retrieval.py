@@ -5,7 +5,6 @@ import sqlite3
 from dataclasses import FrozenInstanceError, fields
 from datetime import UTC, datetime
 from pathlib import Path
-from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
@@ -31,7 +30,7 @@ from wre.domain.runs import (
     ReconstructionRun,
     ReconstructionRunId,
 )
-from wre.ingestion.hashing import hash_file_content
+from wre.ingestion.hashing import FileContentHash, hash_file_content
 from wre.reconstruction.colmap_environment import ColmapEnvironmentIdentity
 from wre.reconstruction.colmap_features import (
     ColmapFeatureExtractionConfig,
@@ -190,6 +189,7 @@ def _write_feature_database(path: Path, image_names: tuple[str, ...]) -> None:
 
 
 def _feature_result(tmp_path: Path) -> ColmapFeatureExtractionResult:
+    tmp_path.mkdir(parents=True, exist_ok=True)
     database_path = tmp_path / "features.db"
     image_names = ("image-a.pgm", "image-b.pgm", "image-c.pgm")
     _write_feature_database(database_path, image_names)
@@ -225,7 +225,8 @@ def _feature_result(tmp_path: Path) -> ColmapFeatureExtractionResult:
     )
 
 
-def _vocabulary(tmp_path: Path) -> tuple[Path, object]:
+def _vocabulary(tmp_path: Path) -> tuple[Path, FileContentHash]:
+    tmp_path.mkdir(parents=True, exist_ok=True)
     path = tmp_path / "vocab-tree.bin"
     path.write_bytes(b"local-vocabulary-tree-fixture")
     return path, hash_file_content(path)
