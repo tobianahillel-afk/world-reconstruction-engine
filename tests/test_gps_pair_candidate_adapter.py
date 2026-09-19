@@ -25,9 +25,9 @@ from wre.domain.metadata import (
 )
 from wre.domain.runs import ProducerRef, ReconstructionRun, ReconstructionRunId
 from wre.retrieval import (
-    GPS_PAIR_CANDIDATE_SOURCE_ID,
     GPS_DISTANCE_MODEL,
     GPS_MAP_DATUM_POLICY,
+    GPS_PAIR_CANDIDATE_SOURCE_ID,
     GPS_PAIRING_IMPLEMENTATION,
     GPS_PAIRING_VERSION,
     GpsPairCandidateAdapterInput,
