@@ -653,10 +653,7 @@ def test_real_pycolmap_vocab_tree_retrieval_when_integration_lane_enabled(
     assert tuple(
         (pair.observation_id1.value, pair.observation_id2.value) for pair in result.pairs
     ) == tuple(
-        sorted(
-            (pair.observation_id1.value, pair.observation_id2.value)
-            for pair in result.pairs
-        )
+        sorted((pair.observation_id1.value, pair.observation_id2.value) for pair in result.pairs)
     )
 
     connection = sqlite3.connect(features.database_path)
