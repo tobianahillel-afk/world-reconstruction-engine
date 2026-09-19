@@ -635,8 +635,7 @@ def test_fake_runtime_retrieval_preserves_exact_evidence_boundary(
     assert result.configuration_sha256 == request.config.sha256
     assert result.environment == _environment()
     assert tuple(
-        (pair.observation_id1.value, pair.observation_id2.value)
-        for pair in result.pairs
+        (pair.observation_id1.value, pair.observation_id2.value) for pair in result.pairs
     ) == (("obs:a", "obs:b"), ("obs:a", "obs:c"))
 
 
