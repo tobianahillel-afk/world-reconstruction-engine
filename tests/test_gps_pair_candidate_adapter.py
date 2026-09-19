@@ -63,9 +63,7 @@ def _resolved(
             map_datum=map_datum,
             evidence_keys=("GPS GPSLatitude", "GPS GPSLongitude"),
         ),
-        capture_time=CaptureTimeInterpretation(
-            status=CaptureTimeInterpretationStatus.ABSENT
-        ),
+        capture_time=CaptureTimeInterpretation(status=CaptureTimeInterpretationStatus.ABSENT),
     )
 
 
@@ -192,15 +190,12 @@ def test_multi_pair_adaptation_preserves_donor_result_and_eligibility() -> None:
         GpsPairingEligibilityStatus.ELIGIBLE,
     )
     assert tuple(
-        (candidate.observation_id1.value, candidate.observation_id2.value)
-        for candidate in adapted
+        (candidate.observation_id1.value, candidate.observation_id2.value) for candidate in adapted
     ) == (("obs:a", "obs:b"), ("obs:a", "obs:c"), ("obs:b", "obs:c"))
 
 
 def test_valid_no_candidate_result_maps_to_empty_tuple_without_losing_eligibility() -> None:
-    result = _gps_result(
-        (_resolved("obs:single", latitude_deg=48.8566, longitude_deg=2.3522),)
-    )
+    result = _gps_result((_resolved("obs:single", latitude_deg=48.8566, longitude_deg=2.3522),))
 
     assert len(result.eligibility) == 1
     assert result.eligibility[0].status is GpsPairingEligibilityStatus.ELIGIBLE
@@ -243,19 +238,11 @@ def test_adaptation_is_repeatable_and_evidence_ref_is_the_only_changed_source_li
 
     assert first == repeated
     assert tuple(
-        (candidate.observation_id1, candidate.observation_id2)
-        for candidate in changed_evidence
-    ) == tuple(
-        (candidate.observation_id1, candidate.observation_id2)
-        for candidate in first
-    )
+        (candidate.observation_id1, candidate.observation_id2) for candidate in changed_evidence
+    ) == tuple((candidate.observation_id1, candidate.observation_id2) for candidate in first)
+    assert all(candidate.sources[0].evidence_refs == (first_ref,) for candidate in first)
     assert all(
-        candidate.sources[0].evidence_refs == (first_ref,)
-        for candidate in first
-    )
-    assert all(
-        candidate.sources[0].evidence_refs == (second_ref,)
-        for candidate in changed_evidence
+        candidate.sources[0].evidence_refs == (second_ref,) for candidate in changed_evidence
     )
 
 
@@ -276,9 +263,7 @@ def test_gps_specific_values_remain_only_on_donor_result() -> None:
 
     assert result.configuration_sha256 is not None
     assert result.colmap_reference_version == "4.2.0"
-    assert result.provenance.producing_run_id == ReconstructionRunId(
-        "run:v2l7.3-gps-adapter"
-    )
+    assert result.provenance.producing_run_id == ReconstructionRunId("run:v2l7.3-gps-adapter")
     assert result.candidates[0].distance_m > 0.0
     assert result.eligibility[0].source_gps_status is GpsInterpretationStatus.RESOLVED
     assert result.eligibility[0].map_datum == "WGS-84"
