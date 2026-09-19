@@ -19,6 +19,19 @@ from wre.retrieval.gps_adapter import (
     GpsPairCandidateAdapterInput,
     adapt_gps_pairing_result,
 )
+from wre.retrieval.vocab_tree import (
+    COLMAP_VOCAB_TREE_RETRIEVAL_IMPLEMENTATION,
+    COLMAP_VOCAB_TREE_RETRIEVAL_VERSION,
+    VOCAB_TREE_PAIR_CANDIDATE_SOURCE_ID,
+    ColmapVocabTreePair,
+    ColmapVocabTreePairCandidateAdapterInput,
+    ColmapVocabTreeRetrievalError,
+    ColmapVocabTreeRetrievalRequest,
+    ColmapVocabTreeRetrievalResult,
+    VocabTreeRetrievalConfig,
+    adapt_colmap_vocab_tree_retrieval_result,
+    retrieve_colmap_vocab_tree_pairs,
+)
 from wre.retrieval.sequential import (
     COLMAP_SEQUENTIAL_REFERENCE_VERSION,
     SEQUENTIAL_PAIRING_IMPLEMENTATION,
@@ -38,6 +51,8 @@ from wre.retrieval.sequential_adapter import (
 __all__ = [
     "COLMAP_SEQUENTIAL_REFERENCE_VERSION",
     "COLMAP_SPATIAL_REFERENCE_VERSION",
+    "COLMAP_VOCAB_TREE_RETRIEVAL_IMPLEMENTATION",
+    "COLMAP_VOCAB_TREE_RETRIEVAL_VERSION",
     "GPS_DISTANCE_MODEL",
     "GPS_MAP_DATUM_POLICY",
     "GPS_PAIRING_IMPLEMENTATION",
@@ -53,13 +68,23 @@ __all__ = [
     "GpsPairingEligibilityStatus",
     "GpsPairingRequest",
     "GpsPairingResult",
+    "VOCAB_TREE_PAIR_CANDIDATE_SOURCE_ID",
+    "ColmapVocabTreePair",
+    "ColmapVocabTreePairCandidateAdapterInput",
+    "ColmapVocabTreeRetrievalError",
+    "ColmapVocabTreeRetrievalRequest",
+    "ColmapVocabTreeRetrievalResult",
     "SequentialPairCandidate",
     "SequentialPairCandidateAdapterInput",
     "SequentialPairingConfig",
     "SequentialPairingRequest",
     "SequentialPairingResult",
+    "VocabTreeRetrievalConfig",
+    "adapt_colmap_vocab_tree_retrieval_result",
     "adapt_gps_pairing_result",
     "adapt_sequential_pairing_result",
     "generate_gps_candidates",
     "generate_sequential_candidates",
+    "retrieve_colmap_vocab_tree_pairs",
 ]
+
