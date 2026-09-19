@@ -348,8 +348,18 @@ def _canonical_pairs(
             raise ColmapVocabTreeRetrievalError(
                 "PyCOLMAP vocabulary pair generator returned an invalid pair"
             )
-        image_id1 = int(raw_pair[0])
-        image_id2 = int(raw_pair[1])
+        image_id1_raw, image_id2_raw = raw_pair
+        if (
+            isinstance(image_id1_raw, bool)
+            or not isinstance(image_id1_raw, int)
+            or isinstance(image_id2_raw, bool)
+            or not isinstance(image_id2_raw, int)
+        ):
+            raise ColmapVocabTreeRetrievalError(
+                "PyCOLMAP vocabulary pair image IDs must be integers"
+            )
+        image_id1 = image_id1_raw
+        image_id2 = image_id2_raw
         observation_id1 = observation_by_image_id.get(image_id1)
         observation_id2 = observation_by_image_id.get(image_id2)
         if observation_id1 is None or observation_id2 is None:
