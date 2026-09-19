@@ -367,16 +367,12 @@ def _canonical_pairs(
                 "PyCOLMAP vocabulary pair references an unknown database image"
             )
         if observation_id1 == observation_id2:
-            raise ColmapVocabTreeRetrievalError(
-                "PyCOLMAP vocabulary retrieval returned a self pair"
-            )
+            continue
         if observation_id2.value < observation_id1.value:
             observation_id1, observation_id2 = observation_id2, observation_id1
         key = (observation_id1.value, observation_id2.value)
         if key in keys:
-            raise ColmapVocabTreeRetrievalError(
-                "PyCOLMAP vocabulary retrieval returned a duplicate observation pair"
-            )
+            continue
         keys.add(key)
         pairs.append(
             ColmapVocabTreePair(
@@ -456,7 +452,10 @@ def retrieve_colmap_vocab_tree_pairs(
                 temporary_database_path,
                 request.features,
             )
-            if temporary_mapping != observation_by_image_id or temporary_query_ids != query_image_ids:
+            if (
+                temporary_mapping != observation_by_image_id
+                or temporary_query_ids != query_image_ids
+            ):
                 raise ColmapVocabTreeRetrievalError(
                     "vocabulary retrieval changed feature database membership"
                 )
