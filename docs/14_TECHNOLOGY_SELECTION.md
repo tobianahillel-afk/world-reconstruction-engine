@@ -101,6 +101,21 @@ Start with deterministic metrics plus learned features where they add measurable
 - classical vocabulary-tree retrieval as deterministic baseline;
 - hloc-style retrieval + local verification compositions.
 
+### First V2 learned candidate
+
+V2L7.5 evaluates SelaVPR++ Base with GeM and the standard floating-point global
+descriptor path at exact upstream revision
+`56bd921cbd3d53e9c5f91d0aafff147f95fb362a`. The candidate consumes verified
+canonical decoded-image pyramids, uses an explicit local content-identified checkpoint,
+and remains an optional external ML environment rather than a core dependency. The first
+reference execution is CPU-only and exact-search-only; hashing, reranking, ANN backends,
+geo-time inference and local/geometric verification remain separate responsibilities.
+
+This is an experimental benchmark candidate, not a default. V2L7.6 must compare its
+retrieval evidence with the sequential, GPS and classical vocabulary-tree sources before
+any promotion. Direct upstream code/model licensing is recorded as MIT while transitive
+environment and redistribution review remains pending in the dependency/model registry.
+
 Retrieval proposes relationships. Repeated façades/symmetric scenes require local/geometric disambiguation before cluster fusion.
 
 ## Sparse/local matching
