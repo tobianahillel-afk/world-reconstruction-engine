@@ -148,6 +148,28 @@ dependencies:
     license: BSD-4-Clause
     license_review: pending
     notes: Top-level four-clause BSD-style LICENSE verified on 2026-09-15; bundled packages require separate review when integrated.
+  selavpr_plus:
+    status: candidate_optional
+    role: [learned_visual_retrieval]
+    integration: optional_exact_external_environment
+    version_policy: pin_exact_external_environment
+    pinned_version: 56bd921cbd3d53e9c5f91d0aafff147f95fb362a
+    upstream_repository: Lu-Feng/SelaVPRplusplus
+    license: MIT
+    license_review: pending
+    notes: >-
+      V2L7.5 evaluates only the exact SelaVPR++ Base/GeM standard floating-point path at source
+      revision 56bd921cbd3d53e9c5f91d0aafff147f95fb362a with the official
+      SelaVPRplusplus_base.pth checkpoint SHA-256
+      b048490dbd1c27dee67fce6faaec7bec267d19a044c85877af94b8588e596a62. The reviewed
+      reference environment is Python 3.12 with torch==2.14.0, numpy==2.5.3,
+      faiss-cpu==1.15.1 and tqdm==4.68.2, kept outside the mandatory WRE uv environment.
+      Upstream source code and the official model repository report MIT licensing, but full
+      transitive package/redistribution review remains pending; this dependency is experimental
+      and cannot become a shipping default before V2L7.6 benchmark evidence and license review.
+      Runtime execution accepts only explicit local source/checkpoint material, verifies the exact
+      reviewed Python source-file set plus SHA-256 identities for the executable model subtree,
+      rejects unreviewed bytecode/native-module shadows, and performs no implicit network download.
   hloc:
     status: candidate_optional
     role: [difficult_visual_retrieval, visual_localization, mapping_proposals]

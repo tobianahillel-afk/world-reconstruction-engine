@@ -44,13 +44,21 @@ def _entries_by_id() -> dict[str, dict[str, Any]]:
     return {entry["adapter_id"]: entry for entry in typed_entries}
 
 
-def test_registry_contains_exactly_the_four_retained_baselines() -> None:
-    registry = _load_mapping(REGISTRY_PATH)
-    entries = registry["entries"]
-    assert isinstance(entries, list)
-    adapter_ids = tuple(entry["adapter_id"] for entry in entries)
+def _approved_baseline_entries_by_id() -> dict[str, dict[str, Any]]:
+    return {
+        adapter_id: entry
+        for adapter_id, entry in _entries_by_id().items()
+        if entry["shipping_status"] == "approved"
+    }
 
-    assert adapter_ids == _EXPECTED_ADAPTER_IDS
+
+def test_registry_contains_exactly_the_four_retained_approved_baselines() -> None:
+    entries = _entries_by_id()
+    approved = _approved_baseline_entries_by_id()
+    adapter_ids = tuple(entries)
+    approved_ids = tuple(approved)
+
+    assert approved_ids == _EXPECTED_ADAPTER_IDS
     assert adapter_ids == tuple(sorted(adapter_ids))
     assert validate_repository(ROOT) == []
 
@@ -98,7 +106,7 @@ def test_baseline_versions_and_dependency_refs_match_retained_evidence() -> None
 
 
 def test_baseline_capabilities_are_conservative_and_existing_only() -> None:
-    entries = _entries_by_id()
+    entries = _approved_baseline_entries_by_id()
 
     assert entries["colmap.sparse_sfm"]["capability"] == {
         "name": "geometry.sparse_sfm",
@@ -138,7 +146,7 @@ def test_baseline_capabilities_are_conservative_and_existing_only() -> None:
 
 
 def test_baseline_shipping_license_and_hardware_policy_match_approved_evidence() -> None:
-    entries = _entries_by_id()
+    entries = _approved_baseline_entries_by_id()
     dependencies = _load_mapping(DEPENDENCIES_PATH)["dependencies"]
     assert isinstance(dependencies, dict)
 
@@ -167,11 +175,25 @@ def test_baseline_shipping_license_and_hardware_policy_match_approved_evidence()
 
 def test_registry_does_not_promote_pending_candidates() -> None:
     entries = _entries_by_id()
+    dependencies = _load_mapping(DEPENDENCIES_PATH)["dependencies"]
+    assert isinstance(dependencies, dict)
+
+    approved_dependency_refs = {
+        dependency_ref
+        for entry in _approved_baseline_entries_by_id().values()
+        for dependency_ref in entry["dependency_refs"]
+    }
+    assert approved_dependency_refs == {"colmap", "exifread", "ffmpeg"}
+
+    experimental = entries["selavpr_plus.visual_retrieval"]
+    assert experimental["shipping_status"] == "experimental"
+    assert experimental["license"]["review"] == "pending"
+    assert experimental["dependency_refs"] == ["selavpr_plus"]
+    assert dependencies["selavpr_plus"]["license_review"] == "pending"
+
     registered_dependencies = {
         dependency_ref for entry in entries.values() for dependency_ref in entry["dependency_refs"]
     }
-
-    assert registered_dependencies == {"colmap", "exifread", "ffmpeg"}
     assert registered_dependencies.isdisjoint(
         {
             "alicevision",

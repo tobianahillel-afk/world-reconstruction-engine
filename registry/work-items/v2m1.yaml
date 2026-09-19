@@ -1121,12 +1121,13 @@ work_items:
   - id: V2L7.5
     lot: V2L7
     title: Modern visual retrieval first candidate
-    status: ready
+    status: done
     objective: Integrate one bounded modern learned visual-place retrieval source behind PairCandidate using the reviewed SelaVPR++ Base backbone with GeM aggregation and standard floating-point global descriptors, consuming only verified canonical decoded-image pyramid materializations and exact local code/checkpoint identities, with deterministic exact top-k proposal semantics and no implicit network access hashing reranking local matching geolocation time inference or scene-identity claims.
     allowed_scope:
       - src/wre/retrieval/selavpr_plus.py
       - focused public exports through src/wre/retrieval/__init__.py
       - tests/test_selavpr_plus_retrieval.py
+      - focused extension of tests/test_adapter_model_registry_baselines.py to preserve the four approved baseline assertions while admitting this explicitly experimental learned candidate
       - one optional dedicated learned-retrieval integration workflow or fixture that remains separate from the core WRE environment and does not require the 483 MB production checkpoint for ordinary fast CI
       - registry/dependencies.yaml for exact SelaVPR++ DINOv2 PyTorch and preprocessing dependency records after concrete environment/version/license review
       - registry/adapter-models.yaml for one experimental exact SelaVPR++ Base/GeM/float adapter registration only after its executable producer model checkpoint and license identities are complete
@@ -1185,7 +1186,7 @@ work_items:
       - Define one immutable SelaVprPlusRetrievalRequest containing exactly run inputs source_root checkpoint_path model checkpoint config where model is the exact ModelIdentity for SelaVPR++ Base/GeM/float at revision 56bd921cbd3d53e9c5f91d0aafff147f95fb362a and checkpoint is the exact CheckpointIdentity for SelaVPRplusplus_base.pth SHA-256 b048490dbd1c27dee67fce6faaec7bec267d19a044c85877af94b8588e596a62.
       - Request construction requires at least two unique inputs; ReconstructionRun input observation membership must exactly equal the canonical input observation IDs and run producer/configuration identity must match this candidate.
       - Before model code executes, each decoded materialization must verify VERIFIED through verify_local_artifact_materialization, its manifest must be RGB8_PACKED with SOURCE_PIXELS orientation and level zero must map to the exact declared materialization entry with byte length width*height*3.
-      - Before model code executes, source_root must be an explicit already-local SelaVPR++ source checkout/provisioned tree selected for exact revision 56bd921cbd3d53e9c5f91d0aafff147f95fb362a and checkpoint_path must be an explicit existing local regular file whose bytes match the exact CheckpointIdentity; no URI torch.hub load_state_dict_from_url Hugging Face download Git clone or other network fallback exists in execution.
+      - Before model code executes, source_root must be an explicit already-local SelaVPR++ source checkout/provisioned tree selected for exact revision 56bd921cbd3d53e9c5f91d0aafff147f95fb362a; execution additionally requires the exact reviewed Python source-file set, exact SHA-256 identities for every executable model-subtree Python file and absence of unreviewed bytecode/native-module shadows so a dirty worktree cannot execute under the reviewed revision identity. checkpoint_path must be an explicit existing local regular file whose bytes match the exact CheckpointIdentity; no URI torch.hub load_state_dict_from_url Hugging Face download Git clone or other network fallback exists in execution.
       - The optional learned environment is pinned explicitly before real inference and remains outside the mandatory core uv environment; concrete torch torchvision numpy Pillow and any SelaVPR++ transitive runtime versions/licenses are recorded in registry/dependencies.yaml before the adapter can move beyond experimental status.
       - Checkpoint loading uses a non-executable weights-only path such as torch.load weights_only=True with map_location cpu, validates the expected checkpoint mapping/model_state_dict shape, strips only the known optional module. prefix deterministically and fails closed on unexpected executable payload structure missing keys incompatible tensor shapes or unsupported safe-loading runtime.
       - Preprocessing starts from verified level-0 packed RGB8 bytes, converts to 0..1 float RGB, applies explicit ImageNet mean [0.485,0.456,0.406] and std [0.229,0.224,0.225], then exact 322x322 hard resize semantics with interpolation and antialias settings pinned by the implementation rather than inherited from floating torchvision defaults; it does not apply EXIF autorotation crop augmentation PCA or multi-view voting.
@@ -1203,7 +1204,7 @@ work_items:
       - config exact field-set immutability canonical SHA and boolean zero negative wrong-size wrong-dimension non-CPU nonzero-seed invalid-neighbor tests
       - image input and request exact field-set canonical observation ordering uniqueness run-membership exact-model exact-checkpoint exact-config and wrong-type tests
       - decoded materialization missing corrupted wrong artifact identity wrong pixel layout wrong orientation malformed level-zero byte count and source-observation mismatch fail-before-model tests
-      - source-root and checkpoint absent non-file wrong-hash URI-like and network-fallback negative tests proving no torch.hub requests urllib Hugging Face or Git execution path exists
+      - source-root and checkpoint absent non-file wrong-revision wrong-source-SHA unexpected-Python-file injected-bytecode/native-module wrong-checkpoint-hash URI-like and network-fallback negative tests proving no dirty source shadow torch.hub requests urllib Hugging Face or Git execution path exists
       - safe checkpoint-loader fake-runtime fixtures proving weights_only true map_location cpu known model_state_dict handling deterministic module-prefix stripping and rejection of unexpected payloads
       - preprocessing golden fixture from tiny packed RGB8 bytes proving explicit normalization resize settings and no original-media read
       - fake learned-runtime fixture producing exact 2048-dimensional normalized descriptors with deterministic observation mapping and regression failures for NaN Inf zero norm wrong dimension or count
@@ -1213,7 +1214,91 @@ work_items:
       - regression proving core fast CI imports/tests run without torch torchvision model code checkpoint or network
       - optional real-candidate smoke fixture only when an explicitly provisioned exact external environment local source tree and exact local checkpoint are available; ordinary CI must not download the production checkpoint implicitly
       - full fast CI CodeQL dependency review and any dedicated optional learned-candidate lane that is activated by the implementation
-  - {id: V2L7.6, lot: V2L7, title: Retrieval union dedup recall benchmark, status: planned, depends_on: [V2L7.5]}
+  - id: V2L7.6
+    lot: V2L7
+    title: Retrieval union dedup recall benchmark
+    status: ready
+    objective: Benchmark the completed V2L7 PairCandidate proposal sources through one deterministic benchmark-only union/dedup and candidate-recall evaluation boundary, preserving every source evidence reference and comparing source-specific and union coverage against explicit caller-supplied relevant-pair fixture truth without weighting rank fusion geometric verification scene-identity claims default-source promotion ANN scaling or route decisions; close the V2L7 lot review after exact-head evidence is green.
+    allowed_scope:
+      - src/wre/retrieval/benchmark.py
+      - focused public exports through src/wre/retrieval/__init__.py
+      - tests/test_retrieval_benchmark.py
+      - docs/reviews/V2L7-pair-candidate-retrieval-review.md only after implementation and exact-head evidence are complete
+      - registry/reviews.yaml only for the final V2L7 lot-review PASS/FAIL record after review evidence exists
+      - registry/components.yaml PROJECT_STATE.yaml and this work-item registry only for final V2L7 closure and V2L8.1 handoff after all V2L7.6 evidence is green
+    out_of_scope:
+      - changing PairCandidate PairCandidateSource PairCandidateSourceId merge_pair_candidates or any V2L7.1 canonical semantics
+      - changing sequential GPS classical vocabulary or SelaVPR++ proposal generation score semantics evidence or external-runtime behavior
+      - source weighting score normalization learned rank fusion reciprocal-rank fusion voting priority ordering default-source selection or automatic adapter promotion
+      - treating benchmark relevant pairs candidate recall source overlap or union membership as production same-scene truth
+      - local feature matching geometric verification CorrespondenceSet SceneCluster repeated-structure disambiguation or any V2L8 responsibility
+      - adding or integrating another learned retrieval model geo-time model SALAD AnyLoc CricaVPR hloc LightGlue GeoCLIP TIGER GT-Loc or Pinpoint
+      - FAISS ANN HNSW GPU ANN quantized distributed indexes index persistence or large-collection backend selection owned by V2L37
+      - route selection QualityDecision geometry reconstruction resource scheduling runtime compilation or any V2L10-plus responsibility
+      - modifying BenchmarkRecord MetricVector MetricDescriptor MetricObservation MetricProvenance BenchmarkFixtureIdentity or HardwareRuntimeIdentity domain contracts
+      - starting V2L8.1 implementation in this work item
+    depends_on: [V2L7.5]
+    read_before:
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/27_RESEARCH_CANDIDATE_COVERAGE.md
+      - docs/28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md
+      - docs/29_PERFORMANCE_INTEGRATION_MAP.md
+      - src/wre/domain/pair_candidates.py
+      - src/wre/domain/benchmarks.py
+      - src/wre/domain/metrics.py
+      - src/wre/retrieval/sequential_adapter.py
+      - src/wre/retrieval/gps_adapter.py
+      - src/wre/retrieval/vocab_tree.py
+      - src/wre/retrieval/selavpr_plus.py
+      - tests/test_pair_candidates.py
+      - tests/test_sequential_pair_candidate_adapter.py
+      - tests/test_gps_pair_candidate_adapter.py
+      - tests/test_vocab_tree_retrieval.py
+      - tests/test_selavpr_plus_retrieval.py
+    reuse:
+      - PairCandidate PairCandidateSource PairCandidateSourceId and merge_pair_candidates as the only candidate-union and source-evidence preservation semantics; V2L7.6 must not implement a competing deduplicator
+      - the completed sequential gps colmap.vocab_tree and selavpr_plus source IDs and their exact ArtifactRef evidence links as source-specific proposal provenance
+      - BenchmarkFixtureId BenchmarkFixtureIdentity BenchmarkRecord BenchmarkRecordId and QualityMode from the existing benchmark substrate rather than inventing a retrieval-specific benchmark registry
+      - MetricName MetricDescriptor MetricDimension MetricUnit MetricDirection MetricAggregation MetricObservation MetricProvenance and MetricVector for explicit finite benchmark measurements
+      - caller-supplied benchmark-only relevant unordered observation pairs as evaluation labels; these labels are fixture truth only and are never promoted to observed/reconstructed scene truth
+      - deterministic canonical lexical ordering conventions already used throughout PairCandidate and V2L7 source adapters
+    acceptance:
+      - Define one immutable RetrievalRelevantPair containing exactly two distinct canonical ObservationId endpoints and no score source confidence geometry scene or time field.
+      - Define one immutable RetrievalBenchmarkFixture containing exactly BenchmarkFixtureIdentity observation_ids and relevant_pairs; observation IDs are a non-empty canonical unique tuple, relevant pairs are a non-empty unique canonical tuple, and every relevant endpoint must belong to the fixture observation membership.
+      - Define one immutable RetrievalSourceCandidateSet containing exactly source_id and candidates; source_id is PairCandidateSourceId, candidates are a canonical unique tuple of PairCandidate values, every candidate endpoint belongs to the benchmark observation membership when evaluated, and every candidate in a source-specific set contains exactly one PairCandidateSource whose source_id equals the set source_id.
+      - A benchmark request requires at least one source-candidate set, source IDs are unique and canonical, fixture membership is exact and no filesystem registry network model checkpoint or source adapter execution is discovered implicitly.
+      - Deterministic union concatenates only the supplied source-specific PairCandidate tuples and delegates deduplication/evidence combination exclusively to merge_pair_candidates; repeated equal input produces equal output independent of supplied source-set order after canonical validation.
+      - Union output preserves every unique source ID and ArtifactRef evidence reference for duplicate endpoint pairs exactly as merge_pair_candidates defines; V2L7.6 never discards a lower-priority source because no source priority exists.
+      - Benchmark relevant-pair matching compares canonical endpoint identity only. A proposed pair is counted retrieved when its endpoints equal one fixture relevant pair; proposal score rank source count evidence count or source type cannot change relevance.
+      - For each source set and for the union compute exact finite candidate_count relevant_pair_count retrieved_relevant_pair_count and candidate_recall where candidate_recall equals retrieved_relevant_pair_count divided by relevant_pair_count and is within 0..1.
+      - The union benchmark additionally records source_count and deterministic union_candidate_count; it may record incremental recall relative to an explicitly named comparison source only when that baseline is supplied, but must not declare a winner or select a default source.
+      - Metric descriptors use stable retrieval benchmark names dimensions units directions and aggregations; counts are informational count metrics, candidate recall is a higher-is-better fraction, and all MetricObservation values use caller-supplied explicit MetricProvenance rather than hidden evaluator identity.
+      - Define one immutable RetrievalBenchmarkResult containing exactly fixture source_results union_candidates union_metrics and optional comparison metadata required to construct existing BenchmarkRecord values; result ordering is canonical and contains no production SceneCluster same-scene truth route choice or QualityDecision.
+      - A helper may construct BenchmarkRecord values only from caller-supplied record IDs producer QualityMode HardwareRuntimeIdentity MetricProvenance/performance evidence and the exact fixture identity; it must not infer hardware quality mode artifact refs or comparison baselines.
+      - Empty candidate sets are valid and yield zero retrieved count and zero recall; empty relevant-pair truth is invalid because recall would be undefined.
+      - Duplicate source IDs malformed candidates foreign observation IDs source-ID mismatches duplicate relevant pairs self-pairs NaN/Inf metric construction and noncanonical tuples fail closed before benchmark output.
+      - Unit tests exercise sequential GPS vocabulary and learned source IDs together using bounded in-memory PairCandidate fixtures and require union source-evidence preservation plus recall improvement/neutrality semantics without executing PyCOLMAP PyTorch FFmpeg network or external model assets.
+      - V2L7 lot review explicitly verifies V2L7.1 through V2L7.6 compose into proposal-only evidence and confirms retrieval candidates remain worth-considering-together hypotheses while no retrieval source or benchmark result establishes physical scene identity.
+      - The lot review records source-specific limitations including sequential locality assumptions GPS availability classical vocabulary dependence learned-model experimental/license status and the fact that repeated/symmetric look-alikes still require V2L8 geometric/disambiguation evidence.
+      - No learned candidate is promoted from experimental solely because it achieves higher fixture recall; promotion still requires representative benchmark evidence licensing reproducibility and later continuous/default-selection governance.
+    tests:
+      - RetrievalRelevantPair and RetrievalBenchmarkFixture exact field-set type canonical ordering uniqueness membership empty-truth and self-pair negative tests
+      - RetrievalSourceCandidateSet exact field-set source-ID uniqueness candidate canonicality endpoint membership one-source-only and source-ID mismatch negative tests
+      - deterministic union fixture covering disjoint pairs duplicate endpoints multi-source evidence merge duplicate ArtifactRef collapse source-set input-order independence and empty-source candidate tuples
+      - recall fixtures covering zero partial full recall exact fraction arithmetic candidate-count versus retrieved-count distinction and union recall never below any constituent source on the same relevant-pair fixture
+      - false-positive candidate fixture proving extra non-relevant proposals increase candidate_count without increasing retrieved_relevant_pair_count or candidate_recall and are not reclassified as negative scene truth
+      - metric descriptor/vector fixtures proving exact names units directions aggregations finite float values explicit MetricProvenance and canonical ordering
+      - BenchmarkRecord construction fixture proving caller-supplied fixture producer quality-mode hardware evidence and comparison IDs are preserved exactly with no inferred environment lookup
+      - regression combining sequential gps colmap.vocab_tree and selavpr_plus PairCandidate values without importing/running their external engines and proving all original source evidence survives union
+      - regression proving no weighting ranking default selection local matching geometric verification SceneCluster QualityDecision ANN model inference network filesystem discovery or later-lot execution path exists
+      - full fast CI native COLMAP lane FFmpeg 8 compatibility where triggered CodeQL and final V2L7 lot-review evidence
   - {id: V2L8.1, lot: V2L8, title: SceneCluster and scene relation hypothesis contract, status: planned, depends_on: [V2L7.6]}
   - {id: V2L8.2, lot: V2L8, title: Local match and geometric verification evidence adapter, status: planned, depends_on: [V2L8.1]}
   - {id: V2L8.3, lot: V2L8, title: Deterministic verified scene clustering, status: planned, depends_on: [V2L8.2]}

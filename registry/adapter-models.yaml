@@ -92,3 +92,32 @@ entries:
     failure_signals: []
     metric_names: []
     resume_mode: unsupported
+  - adapter_id: selavpr_plus.visual_retrieval
+    capability:
+      name: retrieval.learned_pair_proposals
+      input_kinds: [media.decoded_image_pyramid]
+      output_kinds: [retrieval.pair_candidates]
+    producer:
+      implementation: wre.retrieval.selavpr_plus
+      version: "1"
+      revision: 56bd921cbd3d53e9c5f91d0aafff147f95fb362a
+    dependency_refs: [selavpr_plus]
+    model:
+      name: selavpr_plus.base_gem_float
+      version: "1"
+      revision: 56bd921cbd3d53e9c5f91d0aafff147f95fb362a
+    checkpoint:
+      identifier: fenglu96/SelaVPRplusplus/SelaVPRplusplus_base.pth
+      sha256: b048490dbd1c27dee67fce6faaec7bec267d19a044c85877af94b8588e596a62
+    artifact_key_hardware_policy: required
+    license:
+      direct: MIT
+      review: pending
+      transitive_notes: "Direct SelaVPR++ source and official model repository are MIT; the exact optional PyTorch/NumPy/Faiss/tqdm environment remains under transitive review and is not part of core WRE."
+      redistribution_notes: "Experimental evaluation accepts an already-local exact source checkout and checkpoint only; WRE does not bundle or implicitly download the upstream source, checkpoint, or optional ML environment."
+    shipping_status: experimental
+    reproducibility_notes: "Exact source revision, reviewed Python source-file set, executable model-subtree SHA-256 manifest, checkpoint SHA-256, canonical 322x322 ImageNet preprocessing, CPU device, safe weights-only loading and exact-search proposal semantics are fixed by V2L7.5; default promotion is deferred to V2L7.6."
+    failure_signals: [checkpoint_incompatibility, dependency_unavailable]
+    metric_names: []
+    resume_mode: unsupported
+

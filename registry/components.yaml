@@ -140,12 +140,14 @@ components:
       - src/wre/retrieval/sequential_adapter.py
       - src/wre/retrieval/gps_adapter.py
       - src/wre/retrieval/vocab_tree.py
+      - src/wre/retrieval/selavpr_plus.py
       - src/wre/retrieval/__init__.py
     tests:
       - tests/test_pair_candidates.py
       - tests/test_sequential_pair_candidate_adapter.py
       - tests/test_gps_pair_candidate_adapter.py
       - tests/test_vocab_tree_retrieval.py
+      - tests/test_selavpr_plus_retrieval.py
     status: implementing
   scene_identity_clustering: {owner_lot: V2L8, implementation: [], tests: [], status: planned}
   temporal_grouping_sync: {owner_lot: V2L9, implementation: [], tests: [], status: planned}
