@@ -137,8 +137,11 @@ components:
     implementation:
       - src/wre/domain/pair_candidates.py
       - src/wre/domain/__init__.py
+      - src/wre/retrieval/sequential_adapter.py
+      - src/wre/retrieval/__init__.py
     tests:
       - tests/test_pair_candidates.py
+      - tests/test_sequential_pair_candidate_adapter.py
     status: implementing
   scene_identity_clustering: {owner_lot: V2L8, implementation: [], tests: [], status: planned}
   temporal_grouping_sync: {owner_lot: V2L9, implementation: [], tests: [], status: planned}
