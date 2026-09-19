@@ -1285,7 +1285,7 @@ work_items:
       - Empty candidate sets are valid and yield zero retrieved count and zero recall; empty relevant-pair truth is invalid because recall would be undefined.
       - Duplicate source IDs malformed candidates foreign observation IDs source-ID mismatches duplicate relevant pairs self-pairs NaN/Inf metric construction and noncanonical tuples fail closed before benchmark output.
       - Unit tests exercise sequential GPS vocabulary and learned source IDs together using bounded in-memory PairCandidate fixtures and require union source-evidence preservation plus recall improvement/neutrality semantics without executing PyCOLMAP PyTorch FFmpeg network or external model assets.
-      - V2L7 lot review explicitly verifies V2L7.1 through V2L7.6 compose into proposal-only evidence: retrieval candidates remain worth-considering-together hypotheses and no retrieval source or benchmark result establishes physical scene identity.
+      - V2L7 lot review explicitly verifies V2L7.1 through V2L7.6 compose into proposal-only evidence and confirms retrieval candidates remain worth-considering-together hypotheses while no retrieval source or benchmark result establishes physical scene identity.
       - The lot review records source-specific limitations including sequential locality assumptions GPS availability classical vocabulary dependence learned-model experimental/license status and the fact that repeated/symmetric look-alikes still require V2L8 geometric/disambiguation evidence.
       - No learned candidate is promoted from experimental solely because it achieves higher fixture recall; promotion still requires representative benchmark evidence licensing reproducibility and later continuous/default-selection governance.
     tests:
