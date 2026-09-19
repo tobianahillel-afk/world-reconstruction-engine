@@ -5,17 +5,17 @@ roadmap_version: '2.0'
 phase: implementation
 milestone: V2M1
 lot: V2L7
-active_work_item: V2L7.4
+active_work_item: V2L7.5
 status: ready
-last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5, V2L3.6, V2L4.1, V2L4.2, V2L4.3, V2L4.4, V2L4.5, V2L4.6, V2L5.1, V2L5.2, V2L5.3, V2L5.4, V2L5.5, V2L5.6, V2L6.1, V2L6.2, V2L6.3, V2L6.4, V2L6.5, V2L6.6, V2L7.1, V2L7.2, V2L7.3]
-last_merged_pr: 79
+last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5, V2L3.6, V2L4.1, V2L4.2, V2L4.3, V2L4.4, V2L4.5, V2L4.6, V2L5.1, V2L5.2, V2L5.3, V2L5.4, V2L5.5, V2L5.6, V2L6.1, V2L6.2, V2L6.3, V2L6.4, V2L6.5, V2L6.6, V2L7.1, V2L7.2, V2L7.3, V2L7.4]
+last_merged_pr: 80
 current_goal: >-
-  Add the first deterministic classical visual-retrieval baseline by reusing the verified COLMAP SIFT feature
-  database with exact PyCOLMAP 4.2 vocabulary-tree pairing and an explicitly local content-identified vocabulary.
+  Integrate one bounded modern learned visual-place retrieval candidate using exact SelaVPR++ Base/GeM float
+  descriptors over verified decoded-image pyramid artifacts while preserving model/checkpoint evidence explicitly.
 next_action: >-
-  Complete only V2L7.4 from its executable contract in registry/work-items/v2m1.yaml: implement audited
-  vocabulary-tree pair proposal plus canonical PairCandidate adaptation; do not redetect features, download a
-  vocabulary implicitly, run local matching/geometric verification, add learned retrieval or begin V2L7.5 early.
+  Complete only V2L7.5 from its executable contract in registry/work-items/v2m1.yaml: add the optional exact
+  SelaVPR++ Base/GeM float retrieval adapter, safe local checkpoint handling and focused tests; do not add hashing,
+  reranking, geo-time inference, ANN scaling, retrieval-union benchmarking or begin V2L7.6 early.
 blockers: []
 architecture:
   product_blueprint: docs/01_PRODUCT.md
@@ -39,4 +39,4 @@ reviews:
 quality:
   fast_ci_required: true
   known_regressions: 0
-updated_at: '2026-09-18'
+updated_at: '2026-09-19'

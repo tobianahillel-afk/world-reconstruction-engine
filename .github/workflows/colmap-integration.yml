@@ -21,6 +21,7 @@ on:
       - "tests/test_colmap_end_to_end_fixture.py"
       - "tests/test_sequential_pairing.py"
       - "tests/test_gps_pairing.py"
+      - "tests/test_vocab_tree_retrieval.py"
       - "tests/fixtures/synthetic/colmap-l3-end-to-end/**"
       - "docs/14_COLMAP_ENVIRONMENT.md"
       - "docs/15_COLMAP_FEATURE_EXTRACTION.md"
@@ -53,6 +54,7 @@ on:
       - "tests/test_colmap_end_to_end_fixture.py"
       - "tests/test_sequential_pairing.py"
       - "tests/test_gps_pairing.py"
+      - "tests/test_vocab_tree_retrieval.py"
       - "tests/fixtures/synthetic/colmap-l3-end-to-end/**"
       - "docs/14_COLMAP_ENVIRONMENT.md"
       - "docs/15_COLMAP_FEATURE_EXTRACTION.md"
@@ -117,3 +119,4 @@ jobs:
           tests/test_colmap_end_to_end_fixture.py
           tests/test_sequential_pairing.py
           tests/test_gps_pairing.py
+          tests/test_vocab_tree_retrieval.py

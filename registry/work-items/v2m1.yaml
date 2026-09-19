@@ -1034,7 +1034,7 @@ work_items:
   - id: V2L7.4
     lot: V2L7
     title: Classical vocabulary retrieval baseline
-    status: ready
+    status: done
     objective: Implement the first deterministic classical visual-retrieval PairCandidate source by reusing the retained verified COLMAP SIFT feature database and exact external PyCOLMAP 4.2 VocabTreePairGenerator with an explicitly caller-supplied local content-identified vocabulary-tree file, producing auditable source-specific proposal evidence without re-decoding media re-extracting features local feature matching geometric verification network downloads or scene-identity claims.
     allowed_scope:
       - src/wre/retrieval/vocab_tree.py
@@ -1087,15 +1087,15 @@ work_items:
       - PairCandidate PairCandidateSource PairCandidateSourceId merge_pair_candidates and ArtifactRef as the canonical proposal/adaptation boundary established by V2L7.1 through V2L7.3
       - content verification and exact PyCOLMAP environment inspection patterns already used by retained COLMAP feature/matching donors
     acceptance:
-      - Define an immutable VocabTreeRetrievalConfig with exactly schema_version num_images num_nearest_neighbors num_checks max_num_features num_threads and random_seed plus a canonical SHA-256 document; positive integer controls fail closed, num_threads is exactly one for the deterministic baseline, random_seed is exactly zero, and no verification score threshold route or generic parameter bag exists.
+      - Define an immutable VocabTreeRetrievalConfig with exactly schema_version num_images num_nearest_neighbors num_checks max_num_features num_threads and random_seed plus a canonical SHA-256 document; schema_version is exactly non-boolean integer 1, positive integer controls fail closed, num_threads is exactly one for the deterministic baseline, random_seed is exactly zero, and no verification score threshold route or generic parameter bag exists.
       - The adapter config passed to PyCOLMAP fixes num_images_after_verification to zero and leaves match_list_path empty so vocabulary retrieval cannot silently perform spatial/local verification or restrict membership through an undeclared file.
       - Define an immutable ColmapVocabTreeRetrievalRequest containing exactly run features vocab_tree_path vocab_tree_sha256 vocab_tree_byte_length config and optional module injection only as a function argument rather than stored executable state.
       - Request construction requires a ColmapFeatureExtractionResult produced by the exact supported PyCOLMAP 4.2 environment; ReconstructionRun input observation membership must exactly match feature provenance, producer implementation/version and configuration SHA must match this retrieval baseline, and vocabulary path must be pathlib.Path.
       - Before any external PyCOLMAP operation, verify the retained feature database is an existing regular file with exact recorded SHA-256 and byte length and verify the vocabulary tree is an existing local regular file with exactly the supplied Sha256Digest and positive byte length; URI-like network sources and byte mismatches fail closed.
-      - Retrieval operates on a temporary copy or otherwise proves byte-for-byte non-mutation of the retained feature database; the source ColmapFeatureExtractionResult database bytes must remain unchanged after success and failure.
+      - Retrieval operates on a system/configured scratch temporary copy independent of write permission on the retained artifact parent directory and proves byte-for-byte non-mutation of the retained feature database; the source ColmapFeatureExtractionResult database bytes must remain unchanged after success and failure.
       - Inspect and require the exact retained PyCOLMAP 4.2.0 / COLMAP 4.2.0 environment before constructing VocabTreePairGenerator.
       - Configure VocabTreePairingOptions only from the canonical config plus the verified local vocabulary path, with num_images_after_verification zero, one thread and no implicit default/downloaded vocabulary.
-      - Query the complete canonical feature-bearing image membership by database image IDs, map generated image-ID pairs back to the exact ObservationId values using the ColmapFeatureExtractionResult image_name mapping, and fail closed on unknown duplicate self or membership-mismatched database images.
+      - Require feature-artifact image_name values to be unique before constructing the image-name mapping, then query the complete canonical feature-bearing image membership by database image IDs and map generated image-ID pairs back to exact ObservationId values using the ColmapFeatureExtractionResult image_name mapping; fail closed on duplicate feature names malformed unknown or membership-mismatched IDs while filtering native self-pairs and deterministically collapsing symmetric duplicate emissions before source-specific pair construction.
       - Define an immutable source-specific ColmapVocabTreePair containing only canonical distinct ObservationId endpoints and no scene-truth field.
       - Define an immutable ColmapVocabTreeRetrievalResult containing exact run provenance environment configuration SHA source feature database SHA vocabulary SHA/byte length and a unique lexically ordered tuple of ColmapVocabTreePair values; source-specific retrieval configuration remains evidence and is not flattened into PairCandidate.
       - Retrieval may legitimately return an empty pair tuple for insufficient or nonmatching inputs and must not fabricate fallback pairs.
@@ -1106,19 +1106,113 @@ work_items:
       - The implementation does not call pycolmap.match_vocabtree does not populate raw matches/two_view_geometries and does not perform geometric verification.
       - Existing retained feature extraction sequential GPS canonical-pair and exact native COLMAP tests remain unchanged and pass.
     tests:
-      - VocabTreeRetrievalConfig canonical-document SHA equality exact field-set immutability and bool zero negative wrong-type non-unit-thread nonzero-seed negative tests
+      - VocabTreeRetrievalConfig canonical-document SHA equality exact field-set immutability and boolean-schema bool zero negative wrong-type non-unit-thread nonzero-seed negative tests
       - request exact field-set type membership producer version configuration and vocabulary-path validation tests
       - source feature database hash/length mismatch and vocabulary hash/length mismatch fail-before-native-execution tests
       - URI-like or non-local vocabulary path rejection and regression proving no network/default resource lookup surface exists
       - fake-module fixture proving exact VocabTreePairingOptions values num_images_after_verification zero empty match_list_path exact local vocab path one thread random seed and VocabTreePairGenerator usage without match_vocabtree
-      - canonical database image-name to ObservationId mapping fixtures including unknown duplicate self and membership mismatch failure cases
+      - canonical database image-name to ObservationId mapping fixtures including duplicate feature image_name malformed unknown and membership mismatch failure cases plus native self-pair filtering and symmetric-pair deduplication
       - pair result exact field-set canonical ordering uniqueness immutability empty-result and no-score/no-scene-truth tests
-      - source feature database before/after SHA-256 equality on success and native failure
+      - source feature database before/after SHA-256 equality on success and native failure plus regression proving temporary scratch creation does not require write access to the retained artifact parent directory
       - pure PairCandidate adaptation exact source ID evidence preservation repeatability evidence-ref substitution and no source-specific field leakage tests
       - dedicated exact PyCOLMAP 4.2 integration fixture using a bounded local test vocabulary-tree artifact and retained SIFT feature database without network access or geometric verification
       - regression proving existing ColmapFeatureExtractionResult sequential GPS adapters and PairCandidate behavior remain unchanged
       - full fast CI native COLMAP lane and CodeQL
-  - {id: V2L7.5, lot: V2L7, title: Modern visual retrieval first candidate, status: planned, depends_on: [V2L7.4]}
+  - id: V2L7.5
+    lot: V2L7
+    title: Modern visual retrieval first candidate
+    status: ready
+    objective: Integrate one bounded modern learned visual-place retrieval source behind PairCandidate using the reviewed SelaVPR++ Base backbone with GeM aggregation and standard floating-point global descriptors, consuming only verified canonical decoded-image pyramid materializations and exact local code/checkpoint identities, with deterministic exact top-k proposal semantics and no implicit network access hashing reranking local matching geolocation time inference or scene-identity claims.
+    allowed_scope:
+      - src/wre/retrieval/selavpr_plus.py
+      - focused public exports through src/wre/retrieval/__init__.py
+      - tests/test_selavpr_plus_retrieval.py
+      - one optional dedicated learned-retrieval integration workflow or fixture that remains separate from the core WRE environment and does not require the 483 MB production checkpoint for ordinary fast CI
+      - registry/dependencies.yaml for exact SelaVPR++ DINOv2 PyTorch and preprocessing dependency records after concrete environment/version/license review
+      - registry/adapter-models.yaml for one experimental exact SelaVPR++ Base/GeM/float adapter registration only after its executable producer model checkpoint and license identities are complete
+      - docs/14_TECHNOLOGY_SELECTION.md only for a focused note recording the first evaluated learned-VPR candidate and its benchmark-not-default status
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry after implementation evidence is green so V2L7.6 can be activated without implementing it
+    out_of_scope:
+      - changing DecodedImagePyramidManifest DecodedImagePyramidMaterializationResult ArtifactMaterializationMetadata verify_local_artifact_materialization or V2L6.6 decode/materialization semantics
+      - re-reading original image/video assets re-decoding media or bypassing the canonical media.decoded_image_pyramid artifact
+      - changing PairCandidate PairCandidateSource PairCandidateSourceId merge_pair_candidates or sequential GPS classical vocabulary retrieval behavior
+      - SALAD GPL-3.0 integration AnyLoc CricaVPR SelaVPR++ Large or additional learned-VPR candidate integration; those remain benchmark candidates rather than being bundled into this first work item
+      - SelaVPR++ hashing branch binary descriptors rerank branch local-feature reranking BoQ SALAD aggregation PCA or multi-crop query modes
+      - hloc local matching LightGlue geometric verification CorrespondenceSet SceneCluster repeated-structure disambiguation or any claim that a learned retrieval pair shares one physical scene
+      - GeoCLIP TIGER GT-Loc Pinpoint coordinate geolocation date time or geo-time prediction
+      - FAISS ANN HNSW GPU ANN quantized index distributed index or large-collection backend selection owned by V2L37; V2L7.5 uses a bounded exact reference search
+      - unioning weighting rank fusion recall benchmarking default-source selection or lot review owned by V2L7.6
+      - route selection QualityDecision geometry reconstruction resource scheduling runtime compilation or starting V2L7.6 early
+      - training finetuning checkpoint conversion checkpoint download source-code download torch.hub remote-code execution Hugging Face network fetch or any runtime network access
+      - adding torch torchvision or SelaVPR++ as mandatory core WRE dependencies; the learned candidate remains an optional exact external environment
+    depends_on: [V2L7.4]
+    read_before:
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/27_RESEARCH_CANDIDATE_COVERAGE.md
+      - docs/28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md
+      - docs/29_PERFORMANCE_INTEGRATION_MAP.md
+      - registry/dependencies.yaml
+      - registry/adapter-models.yaml
+      - src/wre/domain/artifacts.py
+      - src/wre/domain/artifact_materialization.py
+      - src/wre/domain/decoded_images.py
+      - src/wre/domain/producer_identity.py
+      - src/wre/domain/pair_candidates.py
+      - src/wre/ingestion/decoded_images.py
+      - src/wre/materialization.py
+      - src/wre/retrieval/vocab_tree.py
+      - tests/test_decoded_image_pyramids.py
+      - tests/test_vocab_tree_retrieval.py
+    reuse:
+      - DecodedImagePyramidMaterializationResult plus verify_local_artifact_materialization as the only image-pixel input boundary; use the verified level-0 RGB8 source-pixel materialization and never reopen the original media asset
+      - ModelIdentity CheckpointIdentity ArtifactProducerIdentity ConfigurationIdentity and Sha256Digest for exact model/checkpoint/configuration identity rather than floating model names URLs or latest tags
+      - the reviewed upstream SelaVPR++ repository Lu-Feng/SelaVPRplusplus at exact revision 56bd921cbd3d53e9c5f91d0aafff147f95fb362a as the first source-code candidate; upstream code is MIT but concrete transitive runtime packages remain separately reviewed
+      - the reviewed official SelaVPR++ Base standard checkpoint identifier fenglu96/SelaVPRplusplus/SelaVPRplusplus_base.pth with exact SHA-256 b048490dbd1c27dee67fce6faaec7bec267d19a044c85877af94b8588e596a62 as the only production-weight candidate for this work item; execution receives an already-local file and never downloads it
+      - SelaVPR++ Base with GeM standard non-hashing non-rerank output is the learned representation using upstream 322x322 hard resize ImageNet RGB normalization seed zero and 2048-dimensional L2-normalized floating-point global descriptors
+      - PairCandidate PairCandidateSource PairCandidateSourceId merge_pair_candidates and ArtifactRef as the only canonical pair-proposal boundary; learned similarities remain source-specific evidence
+      - exact deterministic lexical ordering and fail-closed validation conventions already used by classical vocabulary retrieval
+    acceptance:
+      - Define one immutable SelaVprPlusRetrievalConfig with exactly schema_version image_height_px image_width_px descriptor_dimension neighbors_per_observation random_seed device plus an exact canonical SHA-256 document; schema_version is non-boolean integer 1, image size is exactly 322x322, descriptor dimension exactly 2048, random_seed exactly zero and the first reference execution device is exactly cpu.
+      - The config fixes the candidate to SelaVPR++ Base plus GeM plus standard floating-point output with hashing false rerank false PCA absent and hard-resize single-image inference; those identities are constants or exact typed values rather than user-selectable generic strings.
+      - Define one immutable SelaVprPlusImageInput containing exactly decoded_result and materialization_root where decoded_result is DecodedImagePyramidMaterializationResult and materialization_root is pathlib.Path; input tuples are canonical and unique by decoded_result.manifest.source_observation_id.
+      - Define one immutable SelaVprPlusRetrievalRequest containing exactly run inputs source_root checkpoint_path model checkpoint config where model is the exact ModelIdentity for SelaVPR++ Base/GeM/float at revision 56bd921cbd3d53e9c5f91d0aafff147f95fb362a and checkpoint is the exact CheckpointIdentity for SelaVPRplusplus_base.pth SHA-256 b048490dbd1c27dee67fce6faaec7bec267d19a044c85877af94b8588e596a62.
+      - Request construction requires at least two unique inputs; ReconstructionRun input observation membership must exactly equal the canonical input observation IDs and run producer/configuration identity must match this candidate.
+      - Before model code executes, each decoded materialization must verify VERIFIED through verify_local_artifact_materialization, its manifest must be RGB8_PACKED with SOURCE_PIXELS orientation and level zero must map to the exact declared materialization entry with byte length width*height*3.
+      - Before model code executes, source_root must be an explicit already-local SelaVPR++ source checkout/provisioned tree selected for exact revision 56bd921cbd3d53e9c5f91d0aafff147f95fb362a and checkpoint_path must be an explicit existing local regular file whose bytes match the exact CheckpointIdentity; no URI torch.hub load_state_dict_from_url Hugging Face download Git clone or other network fallback exists in execution.
+      - The optional learned environment is pinned explicitly before real inference and remains outside the mandatory core uv environment; concrete torch torchvision numpy Pillow and any SelaVPR++ transitive runtime versions/licenses are recorded in registry/dependencies.yaml before the adapter can move beyond experimental status.
+      - Checkpoint loading uses a non-executable weights-only path such as torch.load weights_only=True with map_location cpu, validates the expected checkpoint mapping/model_state_dict shape, strips only the known optional module. prefix deterministically and fails closed on unexpected executable payload structure missing keys incompatible tensor shapes or unsupported safe-loading runtime.
+      - Preprocessing starts from verified level-0 packed RGB8 bytes, converts to 0..1 float RGB, applies explicit ImageNet mean [0.485,0.456,0.406] and std [0.229,0.224,0.225], then exact 322x322 hard resize semantics with interpolation and antialias settings pinned by the implementation rather than inherited from floating torchvision defaults; it does not apply EXIF autorotation crop augmentation PCA or multi-view voting.
+      - Model inference runs eval/no-grad with seed zero on CPU for the first reference path and returns exactly one finite 2048-value descriptor per input; each descriptor must be L2-normalized within a documented tight tolerance and wrong dimensionality NaN Inf zero norm or observation-count mismatch fails closed.
+      - Define one immutable source-specific SelaVprPlusPair containing canonical distinct ObservationId endpoints and one finite cosine_similarity value; it contains no scene identity geolocation capture time geometric verification or route decision.
+      - Pair proposal uses exact all-pairs cosine similarity over the normalized descriptors, excludes self, orders neighbors for each observation by descending similarity then lexical ObservationId tie-break, keeps at most neighbors_per_observation per observation, unions directed top-k proposals into canonical unordered pairs and retains one deterministic similarity per pair; no ANN or learned reranker is used.
+      - Define one immutable SelaVprPlusRetrievalResult containing exact run provenance model checkpoint configuration and external-environment identity plus a unique lexically ordered tuple of SelaVprPlusPair values; an empty pair tuple is impossible with two inputs and positive neighbor budget unless inference fails closed.
+      - Define SELAVPR_PLUS_PAIR_CANDIDATE_SOURCE_ID equal to PairCandidateSourceId selavpr_plus and one immutable SelaVprPlusPairCandidateAdapterInput containing exactly result and evidence_ref.
+      - adapt_selavpr_plus_retrieval_result is pure and maps each source-specific pair to identical canonical endpoints with exactly one selavpr_plus PairCandidateSource containing the supplied ArtifactRef, then canonicalizes only through merge_pair_candidates.
+      - cosine_similarity descriptor values checkpoint path source path model internals external runtime details and retrieval rank/budget are never copied into PairCandidate; they remain source-specific evidence.
+      - Repeated exact-search proposal from identical supplied descriptor values and config is deterministic and input-order independent; the exact-search pure function is unit-testable without importing torch or SelaVPR++.
+      - Core WRE import test collection remains usable with no torch torchvision SelaVPR++ checkout checkpoint GPU or network present.
+      - The adapter-model registry records this candidate as experimental/benchmark-only rather than approved/default until V2L7.6 comparative recall/resource evidence and full dependency/license review support promotion.
+    tests:
+      - config exact field-set immutability canonical SHA and boolean zero negative wrong-size wrong-dimension non-CPU nonzero-seed invalid-neighbor tests
+      - image input and request exact field-set canonical observation ordering uniqueness run-membership exact-model exact-checkpoint exact-config and wrong-type tests
+      - decoded materialization missing corrupted wrong artifact identity wrong pixel layout wrong orientation malformed level-zero byte count and source-observation mismatch fail-before-model tests
+      - source-root and checkpoint absent non-file wrong-hash URI-like and network-fallback negative tests proving no torch.hub requests urllib Hugging Face or Git execution path exists
+      - safe checkpoint-loader fake-runtime fixtures proving weights_only true map_location cpu known model_state_dict handling deterministic module-prefix stripping and rejection of unexpected payloads
+      - preprocessing golden fixture from tiny packed RGB8 bytes proving explicit normalization resize settings and no original-media read
+      - fake learned-runtime fixture producing exact 2048-dimensional normalized descriptors with deterministic observation mapping and regression failures for NaN Inf zero norm wrong dimension or count
+      - exact cosine top-k fixtures covering lexical tie-break self exclusion bounded neighbors symmetric union input-order independence and canonical pair order
+      - source-specific result exact field-set provenance model checkpoint environment configuration similarity validation and no scene geo-time geometry truth fields
+      - pure PairCandidate adaptation source ID evidence preservation repeatability evidence-ref substitution and no similarity/rank/model/checkpoint leakage tests
+      - regression proving core fast CI imports/tests run without torch torchvision model code checkpoint or network
+      - optional real-candidate smoke fixture only when an explicitly provisioned exact external environment local source tree and exact local checkpoint are available; ordinary CI must not download the production checkpoint implicitly
+      - full fast CI CodeQL dependency review and any dedicated optional learned-candidate lane that is activated by the implementation
   - {id: V2L7.6, lot: V2L7, title: Retrieval union dedup recall benchmark, status: planned, depends_on: [V2L7.5]}
   - {id: V2L8.1, lot: V2L8, title: SceneCluster and scene relation hypothesis contract, status: planned, depends_on: [V2L7.6]}
   - {id: V2L8.2, lot: V2L8, title: Local match and geometric verification evidence adapter, status: planned, depends_on: [V2L8.1]}
