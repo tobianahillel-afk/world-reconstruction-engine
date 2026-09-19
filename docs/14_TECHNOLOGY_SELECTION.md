@@ -109,7 +109,10 @@ descriptor path at exact upstream revision
 canonical decoded-image pyramids, uses an explicit local content-identified checkpoint,
 and remains an optional external ML environment rather than a core dependency. The first
 reference execution is CPU-only and exact-search-only; hashing, reranking, ANN backends,
-geo-time inference and local/geometric verification remain separate responsibilities.
+geo-time inference and local/geometric verification remain separate responsibilities. The
+runtime also verifies the exact reviewed Python-file set and SHA-256 identities for the
+executable `model/` subtree before import, and rejects unreviewed bytecode/native-module
+shadows so a dirty checkout cannot silently execute under the reviewed revision identity.
 
 This is an experimental benchmark candidate, not a default. V2L7.6 must compare its
 retrieval evidence with the sequential, GPS and classical vocabulary-tree sources before
