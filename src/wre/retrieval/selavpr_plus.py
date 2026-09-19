@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Iterator, Mapping
+
 import hashlib
 import importlib
 import importlib.metadata
@@ -11,7 +13,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any, Iterator, Mapping, Protocol, cast
+from typing import Any, Protocol, cast
 
 from wre.domain.artifact_materialization import ArtifactMaterializationVerificationStatus
 from wre.domain.artifacts import ArtifactRef
@@ -177,7 +179,9 @@ class SelaVprPlusRetrievalRequest:
         if self.model != SELAVPR_PLUS_MODEL:
             raise ValueError("selavpr_plus request model must match the exact reviewed model")
         if self.checkpoint != SELAVPR_PLUS_CHECKPOINT:
-            raise ValueError("selavpr_plus request checkpoint must match the exact reviewed checkpoint")
+            raise ValueError(
+                "selavpr_plus request checkpoint must match the exact reviewed checkpoint"
+            )
 
         observation_ids = tuple(
             item.decoded_result.manifest.source_observation_id for item in self.inputs
@@ -282,7 +286,10 @@ class SelaVprPlusRetrievalResult:
             raise TypeError("selavpr_plus result pairs must be an immutable tuple")
         if any(not isinstance(pair, SelaVprPlusPair) for pair in self.pairs):
             raise TypeError("selavpr_plus result pairs contain an invalid member")
-        keys = tuple((pair.observation_id1.value, pair.observation_id2.value) for pair in self.pairs)
+        keys = tuple(
+            (pair.observation_id1.value, pair.observation_id2.value)
+            for pair in self.pairs
+        )
         if len(keys) != len(set(keys)):
             raise ValueError("selavpr_plus result pairs must be unique")
         if keys != tuple(sorted(keys)):
