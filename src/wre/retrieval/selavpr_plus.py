@@ -89,11 +89,11 @@ class SelaVprPlusRetrievalConfig:
             or self.schema_version != 1
         ):
             raise ValueError("selavpr_plus schema_version must be integer 1")
-        if self.image_height_px != 322 or isinstance(self.image_height_px, bool):
+        if type(self.image_height_px) is not int or self.image_height_px != 322:
             raise ValueError("selavpr_plus image_height_px must be integer 322")
-        if self.image_width_px != 322 or isinstance(self.image_width_px, bool):
+        if type(self.image_width_px) is not int or self.image_width_px != 322:
             raise ValueError("selavpr_plus image_width_px must be integer 322")
-        if self.descriptor_dimension != 2048 or isinstance(self.descriptor_dimension, bool):
+        if type(self.descriptor_dimension) is not int or self.descriptor_dimension != 2048:
             raise ValueError("selavpr_plus descriptor_dimension must be integer 2048")
         if (
             isinstance(self.neighbors_per_observation, bool)
@@ -287,6 +287,13 @@ class SelaVprPlusRetrievalResult:
             raise ValueError("selavpr_plus result pairs must be unique")
         if keys != tuple(sorted(keys)):
             raise ValueError("selavpr_plus result pairs must use canonical lexical order")
+        provenance_ids = {item.value for item in self.provenance.source_observation_ids}
+        if any(
+            pair.observation_id1.value not in provenance_ids
+            or pair.observation_id2.value not in provenance_ids
+            for pair in self.pairs
+        ):
+            raise ValueError("selavpr_plus result pairs must belong to provenance observations")
 
 
 @dataclass(frozen=True, slots=True)
@@ -652,70 +659,85 @@ class _TorchSelaVprPlusRuntime:
     ) -> tuple[SelaVprPlusEnvironmentIdentity, tuple[tuple[float, ...], ...]]:
         environment = self._environment()
         torch = importlib.import_module("torch")
-        torch.manual_seed(config.random_seed)
-        torch.set_num_threads(1)
-        torch.use_deterministic_algorithms(True)
+        previous_threads = torch.get_num_threads()
+        previous_deterministic = torch.are_deterministic_algorithms_enabled()
+        previous_warn_only = torch.is_deterministic_algorithms_warn_only_enabled()
+        descriptors: list[tuple[float, ...]] = []
 
-        with _local_source_import(source_root):
-            network = importlib.import_module("model.network")
-            attention = importlib.import_module("model.dinov2.attention")
-            if bool(getattr(attention, "XFORMERS_AVAILABLE", False)):
-                raise SelaVprPlusRetrievalError(
-                    "the CPU reference path requires xFormers to be absent"
-                )
-            model = network.GeoLocalizationNet(
-                SimpleNamespace(
-                    backbone="dinov2-base",
-                    aggregation="gem",
-                    hashing=False,
-                    rerank=False,
-                    resume=True,
-                    foundation_model_path=None,
-                )
-            )
-            state = _safe_checkpoint_state(torch, checkpoint_path)
+        with torch.random.fork_rng(devices=[], enabled=True):
             try:
-                model.load_state_dict(state, strict=True)
-            except Exception as exc:
-                raise SelaVprPlusRetrievalError(
-                    "SelaVPR++ checkpoint is incompatible with the reviewed model"
-                ) from exc
-            model = model.to("cpu")
-            model.eval()
+                torch.manual_seed(config.random_seed)
+                torch.set_num_threads(1)
+                torch.use_deterministic_algorithms(True)
 
-            mean = torch.tensor(
-                [0.485, 0.456, 0.406],
-                dtype=torch.float32,
-            ).view(1, 3, 1, 1)
-            std = torch.tensor(
-                [0.229, 0.224, 0.225],
-                dtype=torch.float32,
-            ).view(1, 3, 1, 1)
-            descriptors: list[tuple[float, ...]] = []
-            with torch.no_grad():
-                for image in images:
-                    tensor = torch.frombuffer(
-                        memoryview(image.rgb8),
-                        dtype=torch.uint8,
-                    ).clone()
-                    tensor = tensor.reshape(image.height_px, image.width_px, 3)
-                    tensor = tensor.permute(2, 0, 1).unsqueeze(0).to(dtype=torch.float32)
-                    tensor = tensor.div(255.0)
-                    tensor = tensor.sub(mean).div(std)
-                    tensor = torch.nn.functional.interpolate(
-                        tensor,
-                        size=(config.image_height_px, config.image_width_px),
-                        mode="bilinear",
-                        align_corners=False,
-                        antialias=True,
-                    )
-                    output = model(tensor)
-                    if getattr(output, "shape", None) != (1, config.descriptor_dimension):
+                with _local_source_import(source_root):
+                    network = importlib.import_module("model.network")
+                    attention = importlib.import_module("model.dinov2.attention")
+                    if bool(getattr(attention, "XFORMERS_AVAILABLE", False)):
                         raise SelaVprPlusRetrievalError(
-                            "SelaVPR++ model returned an unexpected descriptor shape"
+                            "the CPU reference path requires xFormers to be absent"
                         )
-                    row = output[0].detach().to("cpu").tolist()
-                    descriptors.append(tuple(float(value) for value in row))
+                    model = network.GeoLocalizationNet(
+                        SimpleNamespace(
+                            backbone="dinov2-base",
+                            aggregation="gem",
+                            hashing=False,
+                            rerank=False,
+                            resume=True,
+                            foundation_model_path=None,
+                        )
+                    )
+                    state = _safe_checkpoint_state(torch, checkpoint_path)
+                    try:
+                        model.load_state_dict(state, strict=True)
+                    except Exception as exc:
+                        raise SelaVprPlusRetrievalError(
+                            "SelaVPR++ checkpoint is incompatible with the reviewed model"
+                        ) from exc
+                    model = model.to("cpu")
+                    model.eval()
+
+                    mean = torch.tensor(
+                        [0.485, 0.456, 0.406],
+                        dtype=torch.float32,
+                    ).view(1, 3, 1, 1)
+                    std = torch.tensor(
+                        [0.229, 0.224, 0.225],
+                        dtype=torch.float32,
+                    ).view(1, 3, 1, 1)
+                    with torch.no_grad():
+                        for image in images:
+                            tensor = torch.frombuffer(
+                                memoryview(image.rgb8),
+                                dtype=torch.uint8,
+                            ).clone()
+                            tensor = tensor.reshape(image.height_px, image.width_px, 3)
+                            tensor = tensor.permute(2, 0, 1).unsqueeze(0).to(dtype=torch.float32)
+                            tensor = tensor.div(255.0)
+                            tensor = tensor.sub(mean).div(std)
+                            tensor = torch.nn.functional.interpolate(
+                                tensor,
+                                size=(config.image_height_px, config.image_width_px),
+                                mode="bilinear",
+                                align_corners=False,
+                                antialias=True,
+                            )
+                            output = model(tensor)
+                            if getattr(output, "shape", None) != (
+                                1,
+                                config.descriptor_dimension,
+                            ):
+                                raise SelaVprPlusRetrievalError(
+                                    "SelaVPR++ model returned an unexpected descriptor shape"
+                                )
+                            row = output[0].detach().to("cpu").tolist()
+                            descriptors.append(tuple(float(value) for value in row))
+            finally:
+                torch.set_num_threads(previous_threads)
+                torch.use_deterministic_algorithms(
+                    previous_deterministic,
+                    warn_only=previous_warn_only,
+                )
 
         return environment, tuple(descriptors)
 
