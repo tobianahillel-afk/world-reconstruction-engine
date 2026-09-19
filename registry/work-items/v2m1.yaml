@@ -895,7 +895,7 @@ work_items:
   - id: V2L7.2
     lot: V2L7
     title: Sequential pairing donor adapter
-    status: ready
+    status: done
     objective: Wrap the retained deterministic SequentialPairingResult donor behind the canonical PairCandidate contract without changing sequence-pair generation semantics, by translating each donor pair into a source-neutral canonical observation pair whose only sequential-specific link is one explicit ArtifactRef to the exact donor evidence artifact.
     allowed_scope:
       - src/wre/retrieval/sequential_adapter.py
@@ -960,7 +960,77 @@ work_items:
       - full existing tests/test_sequential_pairing.py regression including dedicated COLMAP lane when triggered
       - regression proving no GPS visual retrieval matching verification clustering routing geometry scheduler or V2L7.3 surface is introduced
       - full fast CI
-  - {id: V2L7.3, lot: V2L7, title: GPS pairing donor adapter, status: planned, depends_on: [V2L7.2]}
+  - id: V2L7.3
+    lot: V2L7
+    title: GPS pairing donor adapter
+    status: ready
+    objective: Wrap the retained deterministic GpsPairingResult donor behind the canonical PairCandidate contract without changing resolved-WGS84 eligibility or spatial-neighbor semantics, by translating each donor candidate into a source-neutral canonical observation pair whose only GPS-specific link is one explicit ArtifactRef to the exact donor evidence artifact.
+    allowed_scope:
+      - src/wre/retrieval/gps_adapter.py
+      - focused public exports through src/wre/retrieval/__init__.py
+      - tests/test_gps_pair_candidate_adapter.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry after implementation evidence is green so V2L7.4 can be activated without implementing it
+    out_of_scope:
+      - changing src/wre/retrieval/gps.py GpsPairCandidate GpsPairingConfig GpsPairingEligibility GpsPairingEligibilityStatus GpsPairingRequest GpsPairingResult generate_gps_candidates WGS84 ECEF distance radius neighbor-cap map-datum or eligibility semantics
+      - changing PairCandidate PairCandidateSource PairCandidateSourceId merge_pair_candidates ArtifactRef ObservationId or any V2L7.1 canonical contract semantics
+      - changing src/wre/retrieval/sequential.py or sequential_adapter.py or their retained V2L7.2 behavior
+      - invoking generate_gps_candidates inside the adapter; V2L7.3 adapts an explicit already-produced donor result and does not hide candidate generation behind a second execution API
+      - serializing persisting hashing materializing or inventing a new GPS evidence payload format; the caller supplies the exact ArtifactRef that already identifies the donor evidence
+      - copying distance_m eligibility status source GPS status map datum coordinates radius max-neighbor configuration distance model COLMAP version configuration SHA run ID or donor-private values into PairCandidate fields
+      - classical vocabulary retrieval descriptor index tree query scoring ranking or COLMAP vocabulary retrieval owned by V2L7.4
+      - learned visual place geo-time retrieval models embeddings checkpoints scores or ranking owned by V2L7.5
+      - retrieval union recall benchmarking ANN large-scale performance or lot review owned by V2L7.6 and later scale work
+      - local matching geometric verification CorrespondenceSet SceneCluster scene identity synchronization routing geometry resource scheduling or runtime behavior
+      - starting V2L7.4 implementation in this work item
+    depends_on: [V2L7.2]
+    read_before:
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/27_RESEARCH_CANDIDATE_COVERAGE.md
+      - registry/v1-v2-migration.yaml
+      - src/wre/domain/pair_candidates.py
+      - src/wre/domain/artifacts.py
+      - src/wre/domain/metadata.py
+      - src/wre/domain/observations.py
+      - src/wre/retrieval/gps.py
+      - src/wre/retrieval/sequential_adapter.py
+      - tests/test_pair_candidates.py
+      - tests/test_gps_pairing.py
+      - tests/test_sequential_pair_candidate_adapter.py
+    reuse:
+      - GpsPairingResult GpsPairCandidate and GpsPairingEligibility as retained donor evidence/result types without modifying or reimplementing resolved-WGS84-only eligibility ECEF distance radius or neighbor-cap semantics
+      - PairCandidate PairCandidateSource PairCandidateSourceId and merge_pair_candidates as the only canonical V2 pair proposal representation
+      - ArtifactRef as the exact reference to source-specific GPS evidence rather than flattening distance eligibility datum coordinates configuration or run provenance into PairCandidate
+      - PairCandidateSourceId value gps as the stable source-family identity; exact donor implementation version configuration distance model datum policy and COLMAP reference remain in the referenced evidence artifact rather than the source-family token
+    acceptance:
+      - Define one immutable GpsPairCandidateAdapterInput containing exactly result and evidence_ref where result is GpsPairingResult and evidence_ref is ArtifactRef; wrong-type values fail closed.
+      - Define one stable GPS_PAIR_CANDIDATE_SOURCE_ID equal to PairCandidateSourceId gps.
+      - adapt_gps_pairing_result accepts only GpsPairCandidateAdapterInput and returns an immutable tuple of canonical PairCandidate values.
+      - A GpsPairingResult with a valid non-empty eligibility tuple but an empty candidates tuple returns an empty PairCandidate tuple without fabricating work or placeholder candidates.
+      - Each donor GpsPairCandidate maps to exactly one PairCandidate with the same two already-canonical ObservationId endpoints and exactly one PairCandidateSource whose source_id is gps and whose evidence_refs tuple contains exactly the supplied evidence_ref.
+      - distance_m eligibility decisions source GPS statuses map datum distance model radius neighbor cap donor configuration SHA COLMAP reference version run provenance and source coordinates are not copied into the canonical PairCandidate; they remain available only through the explicit donor result/evidence reference.
+      - The adapter neither invokes generate_gps_candidates nor mutates reorders or reconstructs the donor GpsPairingResult including its eligibility evidence.
+      - Output is canonicalized only at the PairCandidate collection boundary using merge_pair_candidates so output ordering remains lexical by pair identity and any impossible repeated donor pair is safely evidence-preserving rather than distance-score driven.
+      - Repeated adaptation of the same donor result and evidence_ref returns equal values and does not access filesystem network environment persistence model registry metadata interpretation or external solver state.
+      - Changing only evidence_ref changes PairCandidate source evidence but never observation pair identity.
+      - Existing GPS config eligibility generation result tests and real PyCOLMAP 4.2 WGS84-distance equivalence remain unchanged and continue to pass.
+      - No sequential distance visual retrieval score geometric verification scene identity route QualityDecision geometry or V2L7.4 behavior is introduced.
+    tests:
+      - adapter input exact field-set immutability result/evidence_ref wrong-type tests
+      - stable gps PairCandidateSourceId regression
+      - one-pair translation fixture proving exact endpoints single gps source and exact supplied ArtifactRef
+      - multi-pair donor fixture proving canonical PairCandidate output while retained donor result and eligibility tuple remain unchanged
+      - valid no-candidate GPS result fixture producing an empty canonical tuple without losing donor eligibility evidence
+      - repeated adaptation equality and evidence-ref substitution fixture
+      - regression proving distance eligibility datum coordinates config distance-model COLMAP version and run provenance are absent from PairCandidate and remain present on the donor result
+      - monkeypatch regression proving adapt_gps_pairing_result never invokes generate_gps_candidates or metadata interpretation/external execution
+      - full existing tests/test_gps_pairing.py regression including dedicated PyCOLMAP 4.2 equivalence lane when triggered
+      - regression proving no classical or learned visual retrieval matching verification clustering routing geometry scheduler or V2L7.4 surface is introduced
+      - full fast CI
   - {id: V2L7.4, lot: V2L7, title: Classical vocabulary retrieval baseline, status: planned, depends_on: [V2L7.3]}
   - {id: V2L7.5, lot: V2L7, title: Modern visual retrieval first candidate, status: planned, depends_on: [V2L7.4]}
   - {id: V2L7.6, lot: V2L7, title: Retrieval union dedup recall benchmark, status: planned, depends_on: [V2L7.5]}
