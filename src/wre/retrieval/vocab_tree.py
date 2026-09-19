@@ -53,8 +53,12 @@ class VocabTreeRetrievalConfig:
     random_seed: int = 0
 
     def __post_init__(self) -> None:
-        if self.schema_version != 1:
-            raise ValueError("vocab tree retrieval config schema_version must be 1")
+        if (
+            isinstance(self.schema_version, bool)
+            or not isinstance(self.schema_version, int)
+            or self.schema_version != 1
+        ):
+            raise ValueError("vocab tree retrieval config schema_version must be integer 1")
         for name in (
             "num_images",
             "num_nearest_neighbors",
@@ -254,6 +258,10 @@ def _read_feature_membership(
     features: ColmapFeatureExtractionResult,
 ) -> tuple[dict[int, ObservationId], tuple[int, ...]]:
     expected_by_name = {item.image_name: item.observation_id for item in features.images}
+    if len(expected_by_name) != len(features.images):
+        raise ColmapVocabTreeRetrievalError(
+            "feature artifact contains duplicate COLMAP image names"
+        )
     try:
         connection = sqlite3.connect(f"file:{database_path}?mode=ro", uri=True)
     except sqlite3.Error as exc:
@@ -412,10 +420,7 @@ def retrieve_colmap_vocab_tree_pairs(
     )
 
     try:
-        with tempfile.TemporaryDirectory(
-            prefix="wre-colmap-vocab-tree-",
-            dir=source_database_path.parent,
-        ) as temporary_name:
+        with tempfile.TemporaryDirectory(prefix="wre-colmap-vocab-tree-") as temporary_name:
             temporary_database_path = Path(temporary_name) / "features.db"
             shutil.copyfile(source_database_path, temporary_database_path)
             copied_hash = hash_file_content(temporary_database_path)
