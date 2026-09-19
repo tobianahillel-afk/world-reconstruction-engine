@@ -290,6 +290,7 @@ def test_config_is_exact_deterministic_and_fail_closed() -> None:
         config.num_images = 1  # type: ignore[misc]
 
     for kwargs in (
+        {"schema_version": True},
         {"num_images": 0},
         {"num_nearest_neighbors": -1},
         {"num_checks": True},
@@ -324,6 +325,90 @@ def test_request_is_exact_typed_and_matches_run(tmp_path: Path) -> None:
             vocab_tree_byte_length=request.vocab_tree_byte_length,
             config=request.config,
         )
+
+
+def test_duplicate_feature_image_names_fail_before_native_execution(tmp_path: Path) -> None:
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    database_path = tmp_path / "duplicate-name-features.db"
+    _write_feature_database(database_path, ("image-a.pgm", "image-c.pgm"))
+    database_hash = hash_file_content(database_path)
+    observation_ids = tuple(ObservationId(value) for value in ("obs:a", "obs:b", "obs:c"))
+    features = ColmapFeatureExtractionResult(
+        provenance=DerivedArtifactProvenance(
+            producing_run_id=ReconstructionRunId("run:duplicate-name-features"),
+            source_observation_ids=observation_ids,
+        ),
+        environment=ColmapEnvironmentIdentity(
+            pycolmap_version="4.2.0",
+            colmap_version="COLMAP 4.2.0",
+            colmap_build=_FakePycolmap.COLMAP_build,
+            ceres_version="2.2.0",
+            upstream_has_cuda=False,
+        ),
+        configuration_sha256=ColmapFeatureExtractionConfig().sha256,
+        database_path=database_path,
+        database_sha256=database_hash.sha256,
+        database_byte_length=database_hash.byte_length,
+        images=(
+            ColmapImageFeatureSummary(
+                observation_id=observation_ids[0],
+                image_name="image-a.pgm",
+                keypoint_rows=8,
+                keypoint_cols=4,
+                descriptor_rows=8,
+                descriptor_cols=128,
+            ),
+            ColmapImageFeatureSummary(
+                observation_id=observation_ids[1],
+                image_name="image-a.pgm",
+                keypoint_rows=8,
+                keypoint_cols=4,
+                descriptor_rows=8,
+                descriptor_cols=128,
+            ),
+            ColmapImageFeatureSummary(
+                observation_id=observation_ids[2],
+                image_name="image-c.pgm",
+                keypoint_rows=8,
+                keypoint_cols=4,
+                descriptor_rows=8,
+                descriptor_cols=128,
+            ),
+        ),
+    )
+    request = _request(tmp_path / "request", features=features)
+    fake = _FakePycolmap()
+
+    with pytest.raises(ColmapVocabTreeRetrievalError, match="duplicate COLMAP image names"):
+        retrieve_colmap_vocab_tree_pairs(request, module=fake)
+
+    assert fake.opened_databases == []
+
+
+def test_scratch_directory_does_not_require_artifact_parent_write_access(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    request = _request(tmp_path)
+    fake = _FakePycolmap(pairs=((1, 2),))
+    real_temporary_directory = vocab_tree_module.tempfile.TemporaryDirectory
+    calls: list[dict[str, object]] = []
+
+    def _temporary_directory(*args: object, **kwargs: object) -> object:
+        calls.append(dict(kwargs))
+        assert "dir" not in kwargs
+        return real_temporary_directory(*args, **kwargs)
+
+    monkeypatch.setattr(
+        vocab_tree_module.tempfile,
+        "TemporaryDirectory",
+        _temporary_directory,
+    )
+
+    result = retrieve_colmap_vocab_tree_pairs(request, module=fake)
+
+    assert len(result.pairs) == 1
+    assert calls == [{"prefix": "wre-colmap-vocab-tree-"}]
 
 
 def test_fake_retrieval_uses_only_local_pair_generator_and_preserves_source_db(
