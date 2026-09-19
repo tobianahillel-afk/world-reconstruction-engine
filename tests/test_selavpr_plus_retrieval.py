@@ -143,12 +143,22 @@ def _decoded_input(
 
 def _source_root(tmp_path: Path, *, revision: str = SELAVPR_PLUS_SOURCE_REVISION) -> Path:
     root = tmp_path / "selavpr-source"
-    for relative in selavpr_module._MODEL_REQUIRED_PATHS:
+    for relative in selavpr_module._SOURCE_PYTHON_PATHS:
         path = root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("# exact-source-fixture\n", encoding="utf-8")
     (root / ".wre-selavpr-plus-revision").write_text(revision + "\n", encoding="utf-8")
     return root
+
+
+def _fixture_source_manifest(source_root: Path) -> tuple[tuple[str, Sha256Digest], ...]:
+    return tuple(
+        (
+            relative_path,
+            hash_file_content(source_root.joinpath(*relative_path.split("/"))).sha256,
+        )
+        for relative_path, _ in selavpr_module._MODEL_SOURCE_SHA256
+    )
 
 
 def _checkpoint_path(tmp_path: Path) -> Path:
@@ -200,11 +210,15 @@ def _request(
     )
 
 
-def _allow_fixture_checkpoint(
+def _allow_fixture_external_material(
     monkeypatch: pytest.MonkeyPatch,
+    *,
+    source_root: Path,
     checkpoint_path: Path,
 ) -> None:
     real_hash = selavpr_module.hash_file_content
+    fixture_manifest = _fixture_source_manifest(source_root)
+    monkeypatch.setattr(selavpr_module, "_MODEL_SOURCE_SHA256", fixture_manifest)
     resolved = checkpoint_path.resolve()
 
     def _hash(path: Path) -> FileContentHash:
@@ -375,16 +389,19 @@ def test_request_rejects_run_membership_or_producer_mismatch(tmp_path: Path) -> 
         )
 
 
-def test_source_root_requires_exact_local_revision_and_model_files(tmp_path: Path) -> None:
+def test_source_root_requires_exact_revision_and_reviewed_python_tree(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     valid = _source_root(tmp_path)
+    monkeypatch.setattr(
+        selavpr_module,
+        "_MODEL_SOURCE_SHA256",
+        _fixture_source_manifest(valid),
+    )
     assert selavpr_module._verify_source_root(valid) == valid.resolve()
 
-    wrong = tmp_path / "wrong-source"
-    for relative in selavpr_module._MODEL_REQUIRED_PATHS:
-        path = wrong / relative
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text("# fixture\n", encoding="utf-8")
-    (wrong / ".wre-selavpr-plus-revision").write_text("0" * 40, encoding="utf-8")
+    wrong = _source_root(tmp_path / "wrong", revision="0" * 40)
     with pytest.raises(SelaVprPlusRetrievalError, match="revision"):
         selavpr_module._verify_source_root(wrong)
 
@@ -394,11 +411,63 @@ def test_source_root_requires_exact_local_revision_and_model_files(tmp_path: Pat
         SELAVPR_PLUS_SOURCE_REVISION,
         encoding="utf-8",
     )
-    with pytest.raises(SelaVprPlusRetrievalError, match="missing required file"):
+    with pytest.raises(SelaVprPlusRetrievalError, match="Python source file set"):
         selavpr_module._verify_source_root(missing)
 
     with pytest.raises(SelaVprPlusRetrievalError, match="explicit local path"):
         selavpr_module._verify_source_root(Path("https://example.invalid/model"))
+
+
+def test_source_root_rejects_dirty_reviewed_model_file(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_root = _source_root(tmp_path)
+    monkeypatch.setattr(
+        selavpr_module,
+        "_MODEL_SOURCE_SHA256",
+        _fixture_source_manifest(source_root),
+    )
+    (source_root / "model" / "network.py").write_text(
+        "# dirty local source\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SelaVprPlusRetrievalError, match="SHA-256 mismatch"):
+        selavpr_module._verify_source_root(source_root)
+
+
+@pytest.mark.parametrize(
+    "relative_path",
+    [
+        "faiss.py",
+        "model/__init__.py",
+        "model/network.cpython-312-x86_64-linux-gnu.so",
+        "model/__pycache__/network.cpython-312.pyc",
+    ],
+)
+def test_source_root_rejects_unreviewed_python_or_executable_files(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    relative_path: str,
+) -> None:
+    source_root = _source_root(tmp_path)
+    monkeypatch.setattr(
+        selavpr_module,
+        "_MODEL_SOURCE_SHA256",
+        _fixture_source_manifest(source_root),
+    )
+    injected = source_root.joinpath(*relative_path.split("/"))
+    injected.parent.mkdir(parents=True, exist_ok=True)
+    injected.write_bytes(b"injected")
+
+    expected = (
+        "Python source file set"
+        if relative_path.endswith(".py")
+        else "unreviewed executable or bytecode"
+    )
+    with pytest.raises(SelaVprPlusRetrievalError, match=expected):
+        selavpr_module._verify_source_root(source_root)
 
 
 def test_checkpoint_must_be_local_regular_file_with_exact_sha(tmp_path: Path) -> None:
@@ -519,7 +588,11 @@ def test_corrupted_or_wrong_length_decoded_materialization_fails_before_runtime(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     request = _request(tmp_path)
-    _allow_fixture_checkpoint(monkeypatch, request.checkpoint_path)
+    _allow_fixture_external_material(
+        monkeypatch,
+        source_root=request.source_root,
+        checkpoint_path=request.checkpoint_path,
+    )
     runtime = _FakeRuntime(
         (
             _unit_descriptor(0),
@@ -553,7 +626,11 @@ def test_corrupted_or_wrong_length_decoded_materialization_fails_before_runtime(
         checkpoint_path=_checkpoint_path(tmp_path / "short"),
         config=short_config,
     )
-    _allow_fixture_checkpoint(monkeypatch, short_request.checkpoint_path)
+    _allow_fixture_external_material(
+        monkeypatch,
+        source_root=short_request.source_root,
+        checkpoint_path=short_request.checkpoint_path,
+    )
 
     with pytest.raises(SelaVprPlusRetrievalError, match="invalid RGB8 byte length"):
         retrieve_selavpr_plus_pairs(short_request, runtime=runtime)
@@ -564,7 +641,11 @@ def test_wrong_pixel_contract_fails_before_runtime(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     request = _request(tmp_path)
-    _allow_fixture_checkpoint(monkeypatch, request.checkpoint_path)
+    _allow_fixture_external_material(
+        monkeypatch,
+        source_root=request.source_root,
+        checkpoint_path=request.checkpoint_path,
+    )
     runtime = _FakeRuntime(
         (
             _unit_descriptor(0),
@@ -739,7 +820,11 @@ def test_fake_runtime_retrieval_preserves_exact_evidence_boundary(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     request = _request(tmp_path)
-    _allow_fixture_checkpoint(monkeypatch, request.checkpoint_path)
+    _allow_fixture_external_material(
+        monkeypatch,
+        source_root=request.source_root,
+        checkpoint_path=request.checkpoint_path,
+    )
     runtime = _FakeRuntime(
         (
             _unit_descriptor(0),
@@ -774,7 +859,11 @@ def test_injected_runtime_must_report_exact_reviewed_environment(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     request = _request(tmp_path)
-    _allow_fixture_checkpoint(monkeypatch, request.checkpoint_path)
+    _allow_fixture_external_material(
+        monkeypatch,
+        source_root=request.source_root,
+        checkpoint_path=request.checkpoint_path,
+    )
 
     class _WrongEnvironmentRuntime(_FakeRuntime):
         def infer(
@@ -838,7 +927,11 @@ def test_runtime_descriptor_failures_are_fail_closed_before_pair_output(
     descriptors: tuple[tuple[float, ...], ...],
 ) -> None:
     request = _request(tmp_path)
-    _allow_fixture_checkpoint(monkeypatch, request.checkpoint_path)
+    _allow_fixture_external_material(
+        monkeypatch,
+        source_root=request.source_root,
+        checkpoint_path=request.checkpoint_path,
+    )
 
     with pytest.raises(SelaVprPlusRetrievalError):
         retrieve_selavpr_plus_pairs(request, runtime=_FakeRuntime(descriptors))
