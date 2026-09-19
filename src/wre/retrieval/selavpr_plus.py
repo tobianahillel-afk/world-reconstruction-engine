@@ -502,9 +502,7 @@ def _validate_environment_identity(
     environment: SelaVprPlusEnvironmentIdentity,
 ) -> SelaVprPlusEnvironmentIdentity:
     if not isinstance(environment, SelaVprPlusEnvironmentIdentity):
-        raise SelaVprPlusRetrievalError(
-            "SelaVPR++ runtime returned invalid environment identity"
-        )
+        raise SelaVprPlusRetrievalError("SelaVPR++ runtime returned invalid environment identity")
     if not environment.python_version.startswith("3.12."):
         raise SelaVprPlusRetrievalError(
             "SelaVPR++ runtime Python version must be an exact Python 3.12 release"
