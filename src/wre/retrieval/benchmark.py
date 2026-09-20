@@ -179,7 +179,9 @@ class RetrievalSourceCandidateSet:
 
     def __post_init__(self) -> None:
         if not isinstance(self.source_id, PairCandidateSourceId):
-            raise TypeError("retrieval_source_candidate_set.source_id must be PairCandidateSourceId")
+            raise TypeError(
+                "retrieval_source_candidate_set.source_id must be PairCandidateSourceId"
+            )
         if not isinstance(self.candidates, tuple):
             raise TypeError(
                 "retrieval_source_candidate_set.candidates must be an immutable tuple"
@@ -308,7 +310,10 @@ class RetrievalBenchmarkResult:
             raise TypeError(
                 "retrieval_benchmark_result.source_results must be an immutable tuple"
             )
-        if any(not isinstance(item, RetrievalSourceBenchmarkResult) for item in self.source_results):
+        if any(
+            not isinstance(item, RetrievalSourceBenchmarkResult)
+            for item in self.source_results
+        ):
             raise TypeError(
                 "retrieval_benchmark_result.source_results must contain "
                 "RetrievalSourceBenchmarkResult values"

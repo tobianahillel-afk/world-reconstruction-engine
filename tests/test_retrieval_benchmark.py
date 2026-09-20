@@ -30,8 +30,8 @@ from wre.domain import (
 )
 from wre.retrieval import (
     GPS_PAIR_CANDIDATE_SOURCE_ID,
-    SEQUENTIAL_PAIR_CANDIDATE_SOURCE_ID,
     SELAVPR_PLUS_PAIR_CANDIDATE_SOURCE_ID,
+    SEQUENTIAL_PAIR_CANDIDATE_SOURCE_ID,
     VOCAB_TREE_PAIR_CANDIDATE_SOURCE_ID,
 )
 from wre.retrieval.benchmark import (
@@ -42,7 +42,6 @@ from wre.retrieval.benchmark import (
     RETRIEVAL_RETRIEVED_RELEVANT_PAIR_COUNT,
     RETRIEVAL_SOURCE_COUNT,
     RETRIEVAL_UNION_CANDIDATE_COUNT,
-    RetrievalBenchmarkComparison,
     RetrievalBenchmarkFixture,
     RetrievalBenchmarkRequest,
     RetrievalBenchmarkResult,
@@ -563,9 +562,6 @@ def test_metric_descriptors_are_stable_and_preserve_explicit_provenance() -> Non
 
 
 def test_result_contract_is_canonical_and_contains_no_production_decision() -> None:
-    source_set = _set(SEQUENTIAL_PAIR_CANDIDATE_SOURCE_ID)
-    result = benchmark_retrieval_candidates(_request((source_set,)))
-
     assert tuple(field.name for field in fields(RetrievalSourceBenchmarkResult)) == (
         "source_id",
         "metrics",

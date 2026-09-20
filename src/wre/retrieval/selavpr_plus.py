@@ -15,8 +15,9 @@ from types import SimpleNamespace
 from typing import Any, Protocol, cast
 
 from wre.domain.artifact_materialization import ArtifactMaterializationVerificationStatus
-from wre.domain.artifacts import ArtifactRef
+from wre.domain.artifacts import ArtifactKind, ArtifactRef
 from wre.domain.decoded_images import (
+    DECODED_IMAGE_PYRAMID_KIND,
     DecodedImageOrientationPolicy,
     DecodedImagePixelLayout,
 )
@@ -183,6 +184,7 @@ _MODEL_SOURCE_SHA256 = (
 _SOURCE_EXECUTABLE_SUFFIXES = (".dll", ".dylib", ".pyd", ".pyc", ".pyo", ".so")
 _NETWORK_PREFIXES = ("http:", "https:", "ftp:", "s3:", "gs:")
 _DESCRIPTOR_NORM_TOLERANCE = 1e-4
+_DECODED_IMAGE_PYRAMID_ARTIFACT_KIND = ArtifactKind(DECODED_IMAGE_PYRAMID_KIND)
 
 
 class SelaVprPlusRetrievalError(RuntimeError):
@@ -590,6 +592,10 @@ def _verify_checkpoint(path: Path, checkpoint: CheckpointIdentity) -> Path:
 
 def _verified_rgb_image(item: SelaVprPlusImageInput) -> _VerifiedRgbImage:
     result = item.decoded_result
+    if result.materialization.artifact_ref.artifact_kind != _DECODED_IMAGE_PYRAMID_ARTIFACT_KIND:
+        raise SelaVprPlusRetrievalError(
+            "SelaVPR++ requires media.decoded_image_pyramid artifact identity"
+        )
     verification = verify_local_artifact_materialization(
         result.materialization,
         item.materialization_root,
@@ -654,7 +660,7 @@ def _validate_descriptors(
             raise SelaVprPlusRetrievalError("SelaVPR++ descriptor norm must be positive")
         if abs(norm - 1.0) > _DESCRIPTOR_NORM_TOLERANCE:
             raise SelaVprPlusRetrievalError("SelaVPR++ descriptors must be L2-normalized")
-        validated.append(tuple(values))
+        validated.append(tuple(value / norm for value in values))
     return tuple(validated)
 
 
@@ -867,14 +873,16 @@ class _TorchSelaVprPlusRuntime:
             raise SelaVprPlusRetrievalError(
                 "optional SelaVPR++ environment versions do not match the reviewed reference"
             )
-        return SelaVprPlusEnvironmentIdentity(
-            source_revision=SELAVPR_PLUS_SOURCE_REVISION,
-            python_version=platform.python_version(),
-            torch_version=versions["torch"],
-            numpy_version=versions["numpy"],
-            faiss_cpu_version=versions["faiss-cpu"],
-            tqdm_version=versions["tqdm"],
-            device="cpu",
+        return _validate_environment_identity(
+            SelaVprPlusEnvironmentIdentity(
+                source_revision=SELAVPR_PLUS_SOURCE_REVISION,
+                python_version=platform.python_version(),
+                torch_version=versions["torch"],
+                numpy_version=versions["numpy"],
+                faiss_cpu_version=versions["faiss-cpu"],
+                tqdm_version=versions["tqdm"],
+                device="cpu",
+            )
         )
 
     def infer(
