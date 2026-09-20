@@ -166,7 +166,14 @@ components:
       - tests/test_repeated_symmetric_lookalike_fixture.py
       - tests/test_scalable_scene_clustering.py
     status: implemented
-  temporal_grouping_sync: {owner_lot: V2L9, implementation: [], tests: [], status: implementing}
+  temporal_grouping_sync:
+    owner_lot: V2L9
+    implementation:
+      - src/wre/domain/temporal_groups.py
+      - src/wre/domain/__init__.py
+    tests:
+      - tests/test_temporal_groups.py
+    status: implementing
   route_graph: {owner_lot: V2L10, implementation: [], tests: [], status: planned}
   canonical_geometry_contracts: {owner_lot: V2L11, implementation: [], tests: [], status: planned}
   precision_geometry_baseline: {owner_lot: V2L12, implementation: [], tests: [], status: planned}
