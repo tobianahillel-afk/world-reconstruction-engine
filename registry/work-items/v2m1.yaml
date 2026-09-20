@@ -1448,7 +1448,7 @@ work_items:
   - id: V2L8.3
     lot: V2L8
     title: Deterministic verified scene clustering
-    status: ready
+    status: done
     objective: Build deterministic fail-closed SceneCluster values over an explicit canonical observation membership and explicit SceneRelationHypothesis evidence by connecting only SUPPORTED relations, preserving isolated observations as singleton clusters and rejecting any supported-connected component that contains an explicit CONTRADICTED pair, without treating UNRESOLVED or missing relationships as negative evidence and without performing retrieval matching geometric verification repeated-structure specialist inference temporal grouping or later-lot behavior.
     allowed_scope:
       - src/wre/scene_identity/clustering.py
@@ -1516,7 +1516,75 @@ work_items:
       - regression proving every observation appears exactly once and no relation endpoint outside membership is accepted
       - purity regression proving no retrieval matching geometric verification PairCandidate execution external graph library filesystem network persistence route geometry or later-lot path exists
       - full fast CI native COLMAP lane where triggered CodeQL
-  - {id: V2L8.4, lot: V2L8, title: Repeated symmetric look alike fail closed fixture, status: planned, depends_on: [V2L8.3]}
+  - id: V2L8.4
+    lot: V2L8
+    title: Repeated symmetric look alike fail closed fixture
+    status: ready
+    objective: Add one deterministic repository-authored fast regression fixture representing two distinct repeated/symmetric façade scenes whose visual retrieval evidence proposes a cross-scene PairCandidate but whose ambiguous retained geometric evidence remains UNRESOLVED and therefore cannot fuse the scenes, plus one explicit contradiction control proving that a false supported bridge fails closed, without integrating a new matcher or specialist model, changing production relationship semantics, or starting scalable clustering work.
+    allowed_scope:
+      - tests/fixtures/synthetic/repeated-symmetric-lookalike/fixture.json
+      - tests/fixtures/synthetic/repeated-symmetric-lookalike/scenario.json
+      - tests/test_repeated_symmetric_lookalike_fixture.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after fixture evidence is green so V2L8.5 can be activated without implementing it
+    out_of_scope:
+      - changing PairCandidate SceneRelationHypothesis SceneRelationDisposition SceneCluster clustering or COLMAP adapter production semantics
+      - downloading using or generating real photos solely for this fixture
+      - executing PyCOLMAP SelaVPR++ vocabulary retrieval LightGlue ALIKED DISK SuperPoint MASt3R RoMa LoFTR Doppelgangers++ or any external model/tool
+      - integrating a Doppelgangers++-class specialist adapter or selecting a new default matching/disambiguation model
+      - treating benchmark fixture physical-scene labels as production scene truth or provenance
+      - adding score thresholds confidence calibration retrieval weighting rank fusion or source priority
+      - weakening ambiguous DEGENERATE WATERMARK missing-geometry or other unresolved verification outcomes into SUPPORTED or CONTRADICTED
+      - changing deterministic cluster conflict behavior to force a partition
+      - large-graph persistence sharding distributed union-find ANN execution or any V2L8.5/V2L37 behavior
+      - temporal grouping synchronization routing geometry reconstruction or later-lot behavior
+      - starting V2L8.5 implementation in this work item
+    depends_on: [V2L8.3]
+    read_before:
+      - docs/03_PIPELINE.md
+      - docs/09_FIXTURES.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/27_RESEARCH_CANDIDATE_COVERAGE.md
+      - registry/schemas/fixture.schema.json
+      - src/wre/regression.py
+      - src/wre/domain/pair_candidates.py
+      - src/wre/domain/scene_clusters.py
+      - src/wre/scene_identity/colmap_adapter.py
+      - src/wre/scene_identity/clustering.py
+      - tests/test_colmap_scene_relation_adapter.py
+      - tests/test_verified_scene_clustering.py
+    reuse:
+      - standard fixture.json metadata contract and wre.regression.load_fixture/evaluate_fixture rather than creating a competing fixture harness
+      - PairCandidate with multiple explicit retrieval source evidence refs to model proposal-only similarity without executing retrieval engines
+      - retained ColmapGeometricVerificationResult donor values and V2L8.2 adapter to demonstrate that ambiguous two-view evidence remains UNRESOLVED
+      - V2L8.3 deterministic clustering to prove unresolved cross-scene proposals do not merge components and explicit internal contradiction fails closed
+      - benchmark-only expected physical-scene grouping stored in scenario input for assertions only and never converted into production relationship evidence
+    acceptance:
+      - Add exactly one synthetic fixture directory with fixture.json plus declared scenario.json input; fixture metadata conforms to registry/schemas/fixture.schema.json, uses lane fast, deterministic true and an explicit integer seed.
+      - The scenario contains exactly four canonical observation IDs representing two benchmark-only physical scenes with two observations each; expected physical-scene grouping is fixture truth only and is never passed as relationship evidence to production code.
+      - The scenario declares two within-scene pairs that receive explicit CALIBRATED positive-inlier retained COLMAP geometry and one cross-scene repeated-façade look-alike PairCandidate carrying at least two retrieval source evidence contributions.
+      - The cross-scene look-alike receives ambiguous retained geometric evidence using DEGENERATE with positive raw/inlier evidence so the fixture proves that high local activity plus ambiguous geometry still maps to UNRESOLVED rather than SUPPORTED.
+      - V2L8.2 adaptation returns SUPPORTED for the two within-scene pairs and UNRESOLVED for the cross-scene look-alike pair; it never returns CONTRADICTED from ordinary ambiguous COLMAP verification.
+      - V2L8.3 clustering over those adapted relations produces exactly two clusters matching the benchmark-only expected physical-scene grouping; the unresolved cross-scene candidate and its evidence do not appear in cluster supporting evidence.
+      - The fixture includes a separate false-bridge conflict control using explicit SceneRelationHypothesis values: within-scene support plus one false cross-scene SUPPORTED bridge connects all four observations while a different cross-scene pair is explicitly CONTRADICTED.
+      - The false-bridge conflict control must raise SceneClusteringConflictError and must not emit or accept an arbitrary merged/split cluster result.
+      - Fixture metrics include observation_count weak_similarity_candidate_count unresolved_cross_scene_relation_count baseline_cluster_count false_merge_count and conflict_detected_count with exact deterministic expectations.
+      - load_fixture and evaluate_fixture execute the fixture through the existing regression contract; all declared inputs exist and no undeclared filesystem/network/model state is required.
+      - The fixture makes no claim that the synthetic scenario measures real-world Doppelgangers++ LightGlue or other model accuracy; those remain future benchmark/integration candidates requiring separate landscape and license review.
+      - No production source file changes are needed or allowed for the fixture behavior; if the fixture exposes a production invariant defect, fix that defect only by reopening the owning work item rather than weakening fixture expectations inside V2L8.4.
+    tests:
+      - fixture metadata load and exact declared-input determinism/provenance assertions
+      - scenario schema/value validation for four unique canonical observations two benchmark-only expected scene groups two within-scene support pairs and one distinct cross-scene look-alike pair
+      - PairCandidate construction proving the look-alike proposal retains at least two source evidence families without becoming scene truth
+      - retained COLMAP verification fixture proving CALIBRATED within-scene pairs become SUPPORTED while the DEGENERATE cross-scene pair with positive inliers remains UNRESOLVED
+      - deterministic baseline clustering assertion for exactly two expected scene clusters and zero cross-scene false merges
+      - evidence regression proving unresolved look-alike retrieval/verification evidence is absent from SceneCluster supporting evidence
+      - explicit false-support-bridge plus distinct CONTRADICTED cross-scene pair regression proving SceneClusteringConflictError
+      - evaluate_fixture metrics all pass exactly and repeated execution produces identical relations clusters metrics and conflict outcome
+      - regression proving no external solver/model/network execution and no new production module or dependency is introduced
+      - full fast CI CodeQL and native COLMAP lane only where triggered
   - {id: V2L8.5, lot: V2L8, title: Scalable scene clustering boundary, status: planned, depends_on: [V2L8.4]}
   - {id: V2L9.1, lot: V2L9, title: TemporalGroup and SyncHypothesis contracts, status: planned, depends_on: [V2L8.5]}
   - {id: V2L9.2, lot: V2L9, title: Metadata timecode synchronization evidence, status: planned, depends_on: [V2L9.1]}
