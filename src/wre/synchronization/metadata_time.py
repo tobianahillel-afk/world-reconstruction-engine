@@ -87,13 +87,6 @@ class SameVideoFrameSyncAdapterInput:
             )
 
 
-def _timedelta_microseconds(delta: object) -> int:
-    days = getattr(delta, "days")
-    seconds = getattr(delta, "seconds")
-    microseconds = getattr(delta, "microseconds")
-    return days * 86_400_000_000 + seconds * 1_000_000 + microseconds
-
-
 def adapt_capture_time_sync(
     adapter_input: CaptureTimeSyncAdapterInput,
 ) -> SyncHypothesis | None:
@@ -119,7 +112,12 @@ def adapt_capture_time_sync(
     ):
         if first_time.instant is None or second_time.instant is None:
             raise ValueError("resolved capture-time interpretation must expose an instant")
-        offset_us = _timedelta_microseconds(second_time.instant - first_time.instant)
+        delta = second_time.instant - first_time.instant
+        offset_us = (
+            delta.days * 86_400_000_000
+            + delta.seconds * 1_000_000
+            + delta.microseconds
+        )
         disposition = SyncHypothesisDisposition.SUPPORTED
     else:
         offset_us = None
