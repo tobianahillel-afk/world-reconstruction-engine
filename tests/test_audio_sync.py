@@ -256,7 +256,7 @@ def test_source_mismatch_fails_before_toolchain_execution(
 
 def test_pcm_command_is_canonical_and_duration_bounded() -> None:
     policy = _policy(
-        sample_rate_hz=8_000,
+        sample_rate_hz=1_000,
         window_duration_us=1_234_567,
         max_lag_us=100_000,
         minimum_overlap_us=100_000,
@@ -283,7 +283,7 @@ def test_pcm_command_is_canonical_and_duration_bounded() -> None:
         "-ac",
         "1",
         "-ar",
-        "8000",
+        "1000",
         "-c:a",
         "pcm_s16le",
         "-f",
