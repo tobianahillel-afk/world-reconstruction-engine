@@ -34,7 +34,9 @@ class FallbackTrigger:
             self.failure_category,
             FailureCategory,
         ):
-            raise TypeError("fallback_trigger.failure_category must be FailureCategory when present")
+            raise TypeError(
+                "fallback_trigger.failure_category must be FailureCategory when present"
+            )
         if self.quality_decision is not None:
             if not isinstance(self.quality_decision, QualityDecision):
                 raise TypeError(
