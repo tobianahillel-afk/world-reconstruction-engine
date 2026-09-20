@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import struct
+import tomllib
 import wave
 from dataclasses import FrozenInstanceError, fields
 from datetime import UTC, datetime
@@ -441,3 +442,10 @@ def test_audio_adapter_adds_no_dsp_or_network_dependency_surface() -> None:
         "TemporalGroup",
     }
     assert forbidden.isdisjoint(audio_module.__dict__)
+
+
+def test_audio_adapter_adds_no_project_dependency() -> None:
+    pyproject_path = Path(__file__).resolve().parents[1] / "pyproject.toml"
+    document = tomllib.loads(pyproject_path.read_text(encoding="utf-8"))
+
+    assert document["project"]["dependencies"] == ["exifread==3.5.1"]
