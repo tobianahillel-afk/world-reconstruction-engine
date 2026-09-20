@@ -238,8 +238,7 @@ def test_visual_event_adapter_never_emits_contradicted() -> None:
     results = tuple(adapt_visual_event_sync(candidate, _policy()) for candidate in candidates)
 
     assert all(
-        result.disposition is not SyncHypothesisDisposition.CONTRADICTED
-        for result in results
+        result.disposition is not SyncHypothesisDisposition.CONTRADICTED for result in results
     )
 
 
