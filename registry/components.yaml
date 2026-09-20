@@ -141,6 +141,7 @@ components:
       - src/wre/retrieval/gps_adapter.py
       - src/wre/retrieval/vocab_tree.py
       - src/wre/retrieval/selavpr_plus.py
+      - src/wre/retrieval/benchmark.py
       - src/wre/retrieval/__init__.py
     tests:
       - tests/test_pair_candidates.py
@@ -148,7 +149,8 @@ components:
       - tests/test_gps_pair_candidate_adapter.py
       - tests/test_vocab_tree_retrieval.py
       - tests/test_selavpr_plus_retrieval.py
-    status: implementing
+      - tests/test_retrieval_benchmark.py
+    status: implemented
   scene_identity_clustering: {owner_lot: V2L8, implementation: [], tests: [], status: planned}
   temporal_grouping_sync: {owner_lot: V2L9, implementation: [], tests: [], status: planned}
   route_graph: {owner_lot: V2L10, implementation: [], tests: [], status: planned}
