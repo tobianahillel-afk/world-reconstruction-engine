@@ -339,8 +339,7 @@ def test_extra_donor_geometry_does_not_create_unsupplied_relationships() -> None
     relations = adapt_colmap_scene_relations(_input((candidate,), verification=verification))
 
     assert tuple(
-        (relation.observation_id1.value, relation.observation_id2.value)
-        for relation in relations
+        (relation.observation_id1.value, relation.observation_id2.value) for relation in relations
     ) == (("obs:a", "obs:b"),)
 
 
@@ -365,8 +364,7 @@ def test_output_order_is_canonical_and_repeated_adaptation_is_deterministic() ->
 
     assert first == second
     assert tuple(
-        (relation.observation_id1.value, relation.observation_id2.value)
-        for relation in first
+        (relation.observation_id1.value, relation.observation_id2.value) for relation in first
     ) == (("obs:a", "obs:b"), ("obs:a", "obs:c"))
 
 
