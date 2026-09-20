@@ -378,9 +378,10 @@ def test_union_delegates_canonical_merge_and_preserves_all_source_evidence() -> 
     second = union_retrieval_candidate_sets((gps, sequential, learned))
 
     assert first == second
-    assert tuple(
-        (item.observation_id1.value, item.observation_id2.value) for item in first
-    ) == (("obs:a", "obs:b"), ("obs:a", "obs:c"))
+    assert tuple((item.observation_id1.value, item.observation_id2.value) for item in first) == (
+        ("obs:a", "obs:b"),
+        ("obs:a", "obs:c"),
+    )
     assert tuple(source.source_id.value for source in first[0].sources) == (
         "gps",
         "sequential",
@@ -457,9 +458,7 @@ def test_false_positive_candidates_change_count_not_recall_truth() -> None:
     )
     fixture = _fixture(relevant_pairs=(("obs:a", "obs:b"),))
 
-    result = benchmark_retrieval_candidates(
-        _request((with_false_positive,), fixture=fixture)
-    )
+    result = benchmark_retrieval_candidates(_request((with_false_positive,), fixture=fixture))
     metrics = result.source_results[0].metrics
 
     assert _metric_value(metrics, "retrieval.candidate_count") == 2.0
@@ -547,16 +546,13 @@ def test_metric_descriptors_are_stable_and_preserve_explicit_provenance() -> Non
         )
     )
     assert all(
-        observation.provenance == provenance
-        for observation in result.union_metrics.observations
+        observation.provenance == provenance for observation in result.union_metrics.observations
     )
     assert tuple(
-        observation.descriptor.name.value
-        for observation in result.union_metrics.observations
+        observation.descriptor.name.value for observation in result.union_metrics.observations
     ) == tuple(
         sorted(
-            observation.descriptor.name.value
-            for observation in result.union_metrics.observations
+            observation.descriptor.name.value for observation in result.union_metrics.observations
         )
     )
 

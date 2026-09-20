@@ -141,9 +141,7 @@ class RetrievalBenchmarkFixture:
             )
 
         if not isinstance(self.relevant_pairs, tuple):
-            raise TypeError(
-                "retrieval_benchmark_fixture.relevant_pairs must be an immutable tuple"
-            )
+            raise TypeError("retrieval_benchmark_fixture.relevant_pairs must be an immutable tuple")
         if not self.relevant_pairs:
             raise ValueError("retrieval_benchmark_fixture.relevant_pairs must not be empty")
         if any(not isinstance(item, RetrievalRelevantPair) for item in self.relevant_pairs):
@@ -152,8 +150,7 @@ class RetrievalBenchmarkFixture:
                 "RetrievalRelevantPair values"
             )
         pair_keys = tuple(
-            _pair_key(item.observation_id1, item.observation_id2)
-            for item in self.relevant_pairs
+            _pair_key(item.observation_id1, item.observation_id2) for item in self.relevant_pairs
         )
         if len(pair_keys) != len(set(pair_keys)):
             raise ValueError(
@@ -183,9 +180,7 @@ class RetrievalSourceCandidateSet:
                 "retrieval_source_candidate_set.source_id must be PairCandidateSourceId"
             )
         if not isinstance(self.candidates, tuple):
-            raise TypeError(
-                "retrieval_source_candidate_set.candidates must be an immutable tuple"
-            )
+            raise TypeError("retrieval_source_candidate_set.candidates must be an immutable tuple")
         if any(not isinstance(item, PairCandidate) for item in self.candidates):
             raise TypeError(
                 "retrieval_source_candidate_set.candidates must contain PairCandidate values"
@@ -245,9 +240,7 @@ class RetrievalBenchmarkRequest:
                     "PairCandidateSourceId when present"
                 )
             if self.comparison_source_id.value not in set(source_values):
-                raise ValueError(
-                    "retrieval_benchmark_request comparison source must be supplied"
-                )
+                raise ValueError("retrieval_benchmark_request comparison source must be supplied")
 
         membership = {item.value for item in self.fixture.observation_ids}
         for source_set in self.source_sets:
@@ -307,12 +300,9 @@ class RetrievalBenchmarkResult:
         if not isinstance(self.fixture, RetrievalBenchmarkFixture):
             raise TypeError("retrieval_benchmark_result.fixture must be RetrievalBenchmarkFixture")
         if not isinstance(self.source_results, tuple):
-            raise TypeError(
-                "retrieval_benchmark_result.source_results must be an immutable tuple"
-            )
+            raise TypeError("retrieval_benchmark_result.source_results must be an immutable tuple")
         if any(
-            not isinstance(item, RetrievalSourceBenchmarkResult)
-            for item in self.source_results
+            not isinstance(item, RetrievalSourceBenchmarkResult) for item in self.source_results
         ):
             raise TypeError(
                 "retrieval_benchmark_result.source_results must contain "
@@ -393,8 +383,7 @@ def _recall_metrics(
     provenance: MetricProvenance,
 ) -> tuple[MetricVector, float]:
     relevant_keys = {
-        _pair_key(item.observation_id1, item.observation_id2)
-        for item in fixture.relevant_pairs
+        _pair_key(item.observation_id1, item.observation_id2) for item in fixture.relevant_pairs
     }
     candidate_keys = {_candidate_key(item) for item in candidates}
     retrieved_count = len(relevant_keys.intersection(candidate_keys))
