@@ -37,8 +37,7 @@ def _relation(
         observation_id1=ObservationId(first),
         observation_id2=ObservationId(second),
         disposition=disposition,
-        evidence_refs=evidence_refs
-        or (_ref("scene.relationship", f"artifact:{first}-{second}"),),
+        evidence_refs=evidence_refs or (_ref("scene.relationship", f"artifact:{first}-{second}"),),
     )
 
 
@@ -125,13 +124,13 @@ def test_clustering_input_validates_relation_tuple_order_and_pair_uniqueness() -
 
 
 def test_empty_relations_produce_deterministic_singletons() -> None:
-    clusters = cluster_verified_scene_relations(
-        _input(("obs:a", "obs:b", "obs:c"))
-    )
+    clusters = cluster_verified_scene_relations(_input(("obs:a", "obs:b", "obs:c")))
 
-    assert tuple(
-        tuple(item.value for item in cluster.observation_ids) for cluster in clusters
-    ) == (("obs:a",), ("obs:b",), ("obs:c",))
+    assert tuple(tuple(item.value for item in cluster.observation_ids) for cluster in clusters) == (
+        ("obs:a",),
+        ("obs:b",),
+        ("obs:c",),
+    )
     assert all(cluster.evidence_refs == () for cluster in clusters)
 
 
@@ -144,9 +143,7 @@ def test_supported_edge_produces_multi_observation_cluster_with_exact_evidence()
         evidence,
     )
 
-    clusters = cluster_verified_scene_relations(
-        _input(("obs:a", "obs:b"), (relation,))
-    )
+    clusters = cluster_verified_scene_relations(_input(("obs:a", "obs:b"), (relation,)))
 
     assert len(clusters) == 1
     assert clusters[0].observation_ids == (
@@ -174,9 +171,7 @@ def test_supported_chain_builds_one_component_and_unions_all_support_evidence() 
         ),
     )
 
-    clusters = cluster_verified_scene_relations(
-        _input(("obs:a", "obs:b", "obs:c"), relations)
-    )
+    clusters = cluster_verified_scene_relations(_input(("obs:a", "obs:b", "obs:c"), relations))
 
     assert len(clusters) == 1
     assert tuple(item.value for item in clusters[0].observation_ids) == (
@@ -205,9 +200,10 @@ def test_unresolved_relation_neither_merges_nor_contributes_evidence() -> None:
         _input(("obs:a", "obs:b"), (relation,))
     )
 
-    assert tuple(
-        tuple(item.value for item in cluster.observation_ids) for cluster in clusters
-    ) == (("obs:a",), ("obs:b",))
+    assert tuple(tuple(item.value for item in cluster.observation_ids) for cluster in clusters) == (
+        ("obs:a",),
+        ("obs:b",),
+    )
     assert all(unresolved_ref not in cluster.evidence_refs for cluster in clusters)
 
 
@@ -239,9 +235,10 @@ def test_separated_contradiction_does_not_merge_or_contribute_evidence() -> None
 
     clusters = cluster_verified_scene_relations(clustering_input)
 
-    assert tuple(
-        tuple(item.value for item in cluster.observation_ids) for cluster in clusters
-    ) == (("obs:a", "obs:b"), ("obs:c", "obs:d"))
+    assert tuple(tuple(item.value for item in cluster.observation_ids) for cluster in clusters) == (
+        ("obs:a", "obs:b"),
+        ("obs:c", "obs:d"),
+    )
     assert contradiction not in clusters[0].evidence_refs
     assert contradiction not in clusters[1].evidence_refs
     assert clustering_input.relations == relations
@@ -273,9 +270,7 @@ def test_internal_contradiction_fails_closed_without_arbitrary_partition() -> No
         SceneClusteringConflictError,
         match="explicitly contradicted pair",
     ):
-        cluster_verified_scene_relations(
-            _input(("obs:a", "obs:b", "obs:c"), relations)
-        )
+        cluster_verified_scene_relations(_input(("obs:a", "obs:b", "obs:c"), relations))
 
 
 def test_cluster_ids_use_exact_membership_sha256_rule() -> None:
@@ -286,9 +281,7 @@ def test_cluster_ids_use_exact_membership_sha256_rule() -> None:
         SceneRelationDisposition.SUPPORTED,
         _ref("scene.support", "artifact:ab"),
     )
-    pair = cluster_verified_scene_relations(
-        _input(("obs:a", "obs:b"), (supported,))
-    )[0]
+    pair = cluster_verified_scene_relations(_input(("obs:a", "obs:b"), (supported,)))[0]
 
     assert singleton.cluster_id.value == (
         "scene:363205504d24f13a757d850fd7de405322c336a6c04182c17c78237570388eeb"
@@ -296,9 +289,7 @@ def test_cluster_ids_use_exact_membership_sha256_rule() -> None:
     assert pair.cluster_id.value == (
         "scene:13591375616eec961dae3167aea62ef43bbb65c2e18fd77144fc03c375ca585e"
     )
-    assert cluster_verified_scene_relations(
-        _input(("obs:a", "obs:b"), (supported,))
-    ) == (pair,)
+    assert cluster_verified_scene_relations(_input(("obs:a", "obs:b"), (supported,))) == (pair,)
 
 
 def test_every_observation_appears_exactly_once_in_deterministic_cluster_order() -> None:
@@ -321,13 +312,13 @@ def test_every_observation_appears_exactly_once_in_deterministic_cluster_order()
         _input(("obs:a", "obs:b", "obs:c", "obs:d", "obs:e"), relations)
     )
 
-    assert tuple(
-        tuple(item.value for item in cluster.observation_ids) for cluster in clusters
-    ) == (("obs:a", "obs:d"), ("obs:b", "obs:c"), ("obs:e",))
+    assert tuple(tuple(item.value for item in cluster.observation_ids) for cluster in clusters) == (
+        ("obs:a", "obs:d"),
+        ("obs:b", "obs:c"),
+        ("obs:e",),
+    )
     flattened = [
-        observation_id.value
-        for cluster in clusters
-        for observation_id in cluster.observation_ids
+        observation_id.value for cluster in clusters for observation_id in cluster.observation_ids
     ]
     assert flattened == ["obs:a", "obs:d", "obs:b", "obs:c", "obs:e"]
     assert sorted(flattened) == ["obs:a", "obs:b", "obs:c", "obs:d", "obs:e"]
@@ -344,9 +335,7 @@ def test_redundant_supported_edges_contribute_all_exact_evidence() -> None:
         _relation("obs:b", "obs:c", SceneRelationDisposition.SUPPORTED, evidence_bc),
     )
 
-    cluster = cluster_verified_scene_relations(
-        _input(("obs:a", "obs:b", "obs:c"), relations)
-    )[0]
+    cluster = cluster_verified_scene_relations(_input(("obs:a", "obs:b", "obs:c"), relations))[0]
 
     assert cluster.evidence_refs == tuple(
         sorted(
