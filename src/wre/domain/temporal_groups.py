@@ -83,9 +83,7 @@ class SyncHypothesis:
                 "sync_hypothesis observation IDs must be distinct and canonically ordered"
             )
         if not isinstance(self.disposition, SyncHypothesisDisposition):
-            raise TypeError(
-                "sync_hypothesis.disposition must be SyncHypothesisDisposition"
-            )
+            raise TypeError("sync_hypothesis.disposition must be SyncHypothesisDisposition")
 
         if self.disposition is SyncHypothesisDisposition.SUPPORTED:
             if isinstance(self.offset_us, bool) or not isinstance(self.offset_us, int):
@@ -93,9 +91,7 @@ class SyncHypothesis:
                     "supported sync_hypothesis.offset_us must be an integer microsecond offset"
                 )
         elif self.offset_us is not None:
-            raise ValueError(
-                "contradicted or unresolved sync_hypothesis must not expose offset_us"
-            )
+            raise ValueError("contradicted or unresolved sync_hypothesis must not expose offset_us")
 
         _validate_evidence_refs(
             self.evidence_refs,
@@ -123,17 +119,13 @@ class TemporalGroup:
         if not self.observation_ids:
             raise ValueError("temporal_group.observation_ids must not be empty")
         if any(not isinstance(item, ObservationId) for item in self.observation_ids):
-            raise TypeError(
-                "temporal_group.observation_ids must contain only ObservationId values"
-            )
+            raise TypeError("temporal_group.observation_ids must contain only ObservationId values")
 
         observation_values = tuple(item.value for item in self.observation_ids)
         if len(observation_values) != len(set(observation_values)):
             raise ValueError("temporal_group.observation_ids must not contain duplicates")
         if observation_values != tuple(sorted(observation_values)):
-            raise ValueError(
-                "temporal_group.observation_ids must use canonical lexical order"
-            )
+            raise ValueError("temporal_group.observation_ids must use canonical lexical order")
 
         _validate_evidence_refs(
             self.evidence_refs,
