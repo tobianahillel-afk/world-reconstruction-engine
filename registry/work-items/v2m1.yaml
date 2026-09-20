@@ -1121,7 +1121,7 @@ work_items:
   - id: V2L7.5
     lot: V2L7
     title: Modern visual retrieval first candidate
-    status: ready
+    status: done
     objective: Integrate one bounded modern learned visual-place retrieval source behind PairCandidate using the reviewed SelaVPR++ Base backbone with GeM aggregation and standard floating-point global descriptors, consuming only verified canonical decoded-image pyramid materializations and exact local code/checkpoint identities, with deterministic exact top-k proposal semantics and no implicit network access hashing reranking local matching geolocation time inference or scene-identity claims.
     allowed_scope:
       - src/wre/retrieval/selavpr_plus.py
@@ -1217,7 +1217,7 @@ work_items:
   - id: V2L7.6
     lot: V2L7
     title: Retrieval union dedup recall benchmark
-    status: planned
+    status: ready
     objective: Benchmark the completed V2L7 PairCandidate proposal sources through one deterministic benchmark-only union/dedup and candidate-recall evaluation boundary, preserving every source evidence reference and comparing source-specific and union coverage against explicit caller-supplied relevant-pair fixture truth without weighting rank fusion geometric verification scene-identity claims default-source promotion ANN scaling or route decisions; close the V2L7 lot review after exact-head evidence is green.
     allowed_scope:
       - src/wre/retrieval/benchmark.py

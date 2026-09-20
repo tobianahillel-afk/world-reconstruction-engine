@@ -5,20 +5,18 @@ roadmap_version: '2.0'
 phase: implementation
 milestone: V2M1
 lot: V2L7
-active_work_item: V2L7.5
+active_work_item: V2L7.6
 status: ready
-last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5, V2L3.6, V2L4.1, V2L4.2, V2L4.3, V2L4.4, V2L4.5, V2L4.6, V2L5.1, V2L5.2, V2L5.3, V2L5.4, V2L5.5, V2L5.6, V2L6.1, V2L6.2, V2L6.3, V2L6.4, V2L6.5, V2L6.6, V2L7.1, V2L7.2, V2L7.3, V2L7.4]
-last_merged_pr: 81
+last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5, V2L3.6, V2L4.1, V2L4.2, V2L4.3, V2L4.4, V2L4.5, V2L4.6, V2L5.1, V2L5.2, V2L5.3, V2L5.4, V2L5.5, V2L5.6, V2L6.1, V2L6.2, V2L6.3, V2L6.4, V2L6.5, V2L6.6, V2L7.1, V2L7.2, V2L7.3, V2L7.4, V2L7.5]
+last_merged_pr: 83
 current_goal: >-
-  Remediate the three valid post-merge V2L7.5 review findings so the experimental SelaVPR++ candidate satisfies its
-  existing fail-closed environment, decoded-artifact identity and normalized-descriptor contracts before V2L7.6 resumes.
+  Benchmark deterministic PairCandidate union/dedup and candidate recall across the completed sequential, GPS,
+  classical vocabulary and experimental learned retrieval sources against explicit benchmark-only relevant-pair truth.
 next_action: >-
-  Complete only the three V2L7.5 post-merge regressions in src/wre/retrieval/selavpr_plus.py with focused tests:
-  reject unsupported Python before Torch/model execution, reject wrong decoded artifact kind before consuming bytes,
-  and exactly normalize descriptors already accepted by the documented norm tolerance. Then restore V2L7.6 as ready
-  only after exact-head evidence is green.
-blockers:
-  - PR #81 post-merge review reported three unresolved P2 contract regressions in V2L7.5.
+  Complete only V2L7.6 from its executable contract in registry/work-items/v2m1.yaml: add deterministic source-set
+  union and benchmark-only recall/count evidence plus the V2L7 lot review; do not add weighting, rank fusion,
+  geometric verification, scene identity, ANN scaling, default-source promotion or begin V2L8.1 early.
+blockers: []
 architecture:
   product_blueprint: docs/01_PRODUCT.md
   architecture_blueprint: docs/02_ARCHITECTURE.md
@@ -40,5 +38,5 @@ reviews:
   current_milestone: pending
 quality:
   fast_ci_required: true
-  known_regressions: 3
+  known_regressions: 0
 updated_at: '2026-09-20'
