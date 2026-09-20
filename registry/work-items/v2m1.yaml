@@ -2134,7 +2134,7 @@ work_items:
   - id: V2L10.3
     lot: V2L10
     title: Deterministic router input contract
-    status: ready
+    status: done
     objective: Define one immutable deterministic router-input snapshot containing only already-established data-profile evidence requested canonical quality mode an explicit bounded resource budget existing artifact references and prior stable failure categories without selecting a route resolving adapters executing work or adding fallback policy.
     allowed_scope:
       - src/wre/routing/inputs.py
@@ -2195,6 +2195,74 @@ work_items:
       - regression proving no route graph adapter capability selection fallback escalation decision score reason scheduling execution persistence or generic metadata surface
       - no filesystem network subprocess external dependency or persistence imports
       - full fast CI and CodeQL plus native lanes only where repository path triggers require them
-  - {id: V2L10.4, lot: V2L10, title: Bounded allowlisted fallback escalation policy, status: planned, depends_on: [V2L10.3]}
+  - id: V2L10.4
+    lot: V2L10
+    title: Bounded allowlisted fallback escalation policy
+    status: ready
+    objective: Define one immutable explicit fallback/escalation policy bound to a RouteGraph and one pure bounded resolver so only allowlisted stable failure or non-success quality outcomes can retry escalate or terminate unresolved without arbitrary try-everything behavior or adapter execution.
+    allowed_scope:
+      - src/wre/routing/fallback.py
+      - focused exports in src/wre/routing/__init__.py
+      - tests/test_fallback_policy.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L10.5 can be activated without implementing it
+    out_of_scope:
+      - changing FailureCategory QualityDecision RouteGraph RouterInputSnapshot QualityMode or quality-policy evaluator semantics
+      - accepting PASS or ACCEPT_WITH_WARNINGS as fallback triggers
+      - parsing exception messages stderr logs filenames return codes or solver-private status strings into fallback triggers
+      - adapter selection registry lookup capability satisfaction model/checkpoint ranking or default promotion
+      - executing retry escalation target nodes adapters graph traversal scheduling resource allocation checkpointing persistence or I/O
+      - route-decision artifact IDs reasons provenance evidence refs persistence or V2L10.5 behavior
+      - unbounded retry loops dynamic rule mutation wildcard catch-all triggers arbitrary try-everything fallback or silent substitution of quality mode thresholds provenance or truth
+      - starting V2L10.5 implementation in this work item
+    depends_on: [V2L10.3]
+    read_before:
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - src/wre/domain/failures.py
+      - src/wre/domain/quality.py
+      - src/wre/routing/graph.py
+      - src/wre/routing/inputs.py
+      - tests/test_failure_taxonomy.py
+      - tests/test_quality_decisions.py
+      - tests/test_route_graph.py
+      - tests/test_router_inputs.py
+    reuse:
+      - FailureCategory as the only stable failure trigger vocabulary and QualityDecision RETRY ESCALATE UNRESOLVED as the only quality-outcome triggers
+      - RouteNodeId and RouteGraph as exact structural route identities without creating fallback-private node strings
+      - explicit immutable canonical rule sets and fail-closed unresolved termination semantics
+    acceptance:
+      - Add immutable FallbackTrigger containing exactly optional failure_category FailureCategory and optional quality_decision QualityDecision with exactly one populated.
+      - QualityDecision triggers accept only RETRY ESCALATE or UNRESOLVED; PASS and ACCEPT_WITH_WARNINGS fail closed and no string coercion is allowed.
+      - Add closed FallbackAction with exactly RETRY ESCALATE and UNRESOLVED stable wire tokens retry escalate unresolved.
+      - Add immutable FallbackRule containing exactly source_node_id RouteNodeId trigger FallbackTrigger action FallbackAction and optional target_node_id RouteNodeId.
+      - RETRY requires target_node_id equal source_node_id; ESCALATE requires a distinct target_node_id; UNRESOLVED requires target_node_id None.
+      - Add immutable FallbackPolicy containing exactly route_graph RouteGraph rules tuple of FallbackRule and positive max_transitions integer.
+      - Rules are immutable canonical unique by source node plus trigger identity; duplicate or decreasing rules fail closed and every source or target node must exist in the bound RouteGraph.
+      - Multiple explicit rules for different triggers on one source node are valid; wildcard source trigger failure or quality matching is not supported.
+      - Add immutable FallbackResolution containing exactly action FallbackAction and optional target_node_id RouteNodeId with the same RETRY ESCALATE UNRESOLVED target invariants.
+      - Add pure resolve_fallback function taking policy current_node_id one explicit FallbackTrigger and non-negative transitions_used integer.
+      - If current_node_id is outside the policy graph wrong input types are supplied or transitions_used is negative/bool validation fails closed.
+      - If transitions_used is greater than or equal to max_transitions resolve_fallback deterministically returns UNRESOLVED with no target without consulting a retry/escalation rule.
+      - If no exact allowlisted rule matches current node plus trigger resolve_fallback returns UNRESOLVED with no target.
+      - If an exact rule matches below the transition bound the returned resolution preserves that rule action and target exactly; the resolver performs no execution or recursive chaining.
+      - Policy evaluation carries no score rank route reason artifact provenance retry counter mutation timestamp logs exception text adapter identity quality-mode change threshold change or generic metadata.
+      - No new dependency persistence schema registry mutation filesystem network subprocess or external execution surface is introduced.
+    tests:
+      - FallbackTrigger frozen exact field shape exactly-one-source validation quality-decision allowlist and wrong-type rejection
+      - FallbackAction exact closed vocabulary
+      - FallbackRule frozen exact field shape RETRY ESCALATE UNRESOLVED target invariants and wrong-type rejection
+      - FallbackPolicy frozen exact field shape positive max transition validation canonical unique rule ordering and graph endpoint validation
+      - multiple explicit triggers on one source node are valid while duplicate or wildcard behavior is impossible
+      - resolver exact-match retry escalate unresolved behavior
+      - missing rule returns unresolved
+      - max transition boundary and above-bound resolution return unresolved without chaining
+      - current node foreign to graph transitions_used negative/bool and wrong input types fail closed
+      - regression proving no adapter execution graph scheduling route-decision artifact quality-mode mutation threshold weakening provenance mutation catch-all trigger or generic metadata surface
+      - no filesystem network subprocess external dependency or persistence imports
+      - full fast CI and CodeQL plus native lanes only where repository path triggers require them
   - {id: V2L10.5, lot: V2L10, title: Auditable route decision artifact, status: planned, depends_on: [V2L10.4]}
   - {id: V2L10.6, lot: V2L10, title: Router determinism fail closed tests, status: planned, depends_on: [V2L10.5]}
