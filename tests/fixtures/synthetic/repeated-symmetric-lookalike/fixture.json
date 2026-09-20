@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "fixture_id": "synthetic.repeated-symmetric-lookalike.v1",
+  "kind": "synthetic",
+  "lane": "fast",
+  "deterministic": true,
+  "seed": 0,
+  "input_files": [
+    "scenario.json"
+  ],
+  "expectations": [
+    {
+      "metric": "observation_count",
+      "comparator": "eq",
+      "target": 4,
+      "abs_tolerance": 0,
+      "unit": "observations"
+    },
+    {
+      "metric": "weak_similarity_candidate_count",
+      "comparator": "eq",
+      "target": 1,
+      "abs_tolerance": 0,
+      "unit": "pairs"
+    },
+    {
+      "metric": "unresolved_cross_scene_relation_count",
+      "comparator": "eq",
+      "target": 1,
+      "abs_tolerance": 0,
+      "unit": "pairs"
+    },
+    {
+      "metric": "baseline_cluster_count",
+      "comparator": "eq",
+      "target": 2,
+      "abs_tolerance": 0,
+      "unit": "clusters"
+    },
+    {
+      "metric": "false_merge_count",
+      "comparator": "eq",
+      "target": 0,
+      "abs_tolerance": 0,
+      "unit": "clusters"
+    },
+    {
+      "metric": "conflict_detected_count",
+      "comparator": "eq",
+      "target": 1,
+      "abs_tolerance": 0,
+      "unit": "conflicts"
+    }
+  ],
+  "provenance": {
+    "owner": "WRE V2L8.4",
+    "source": "repository-authored",
+    "profile": "repeated/symmetric architecture",
+    "purpose": "Fail-closed scene-identity regression for visually similar but distinct synthetic facade scenes"
+  }
+}

@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "profile": "repeated/symmetric architecture",
+  "observation_ids": [
+    "obs:facade-a-1",
+    "obs:facade-a-2",
+    "obs:facade-b-1",
+    "obs:facade-b-2"
+  ],
+  "benchmark_scene_groups": [
+    [
+      "obs:facade-a-1",
+      "obs:facade-a-2"
+    ],
+    [
+      "obs:facade-b-1",
+      "obs:facade-b-2"
+    ]
+  ],
+  "candidate_pairs": [
+    {
+      "endpoints": [
+        "obs:facade-a-1",
+        "obs:facade-a-2"
+      ],
+      "role": "within_scene_control",
+      "sources": [
+        {
+          "source_id": "fixture.control",
+          "artifact_kind": "retrieval.fixture_control",
+          "artifact_id": "artifact:within-a-proposal"
+        }
+      ],
+      "verification": {
+        "artifact_kind": "scene.verification",
+        "artifact_id": "artifact:within-a-verification",
+        "configuration": "CALIBRATED",
+        "raw_match_count": 28,
+        "inlier_count": 20
+      }
+    },
+    {
+      "endpoints": [
+        "obs:facade-a-2",
+        "obs:facade-b-1"
+      ],
+      "role": "cross_scene_lookalike",
+      "sources": [
+        {
+          "source_id": "colmap.vocab_tree",
+          "artifact_kind": "retrieval.vocab_tree",
+          "artifact_id": "artifact:lookalike-vocab"
+        },
+        {
+          "source_id": "selavpr_plus",
+          "artifact_kind": "retrieval.learned",
+          "artifact_id": "artifact:lookalike-selavpr"
+        }
+      ],
+      "verification": {
+        "artifact_kind": "scene.verification",
+        "artifact_id": "artifact:lookalike-degenerate-verification",
+        "configuration": "DEGENERATE",
+        "raw_match_count": 30,
+        "inlier_count": 24
+      }
+    },
+    {
+      "endpoints": [
+        "obs:facade-b-1",
+        "obs:facade-b-2"
+      ],
+      "role": "within_scene_control",
+      "sources": [
+        {
+          "source_id": "fixture.control",
+          "artifact_kind": "retrieval.fixture_control",
+          "artifact_id": "artifact:within-b-proposal"
+        }
+      ],
+      "verification": {
+        "artifact_kind": "scene.verification",
+        "artifact_id": "artifact:within-b-verification",
+        "configuration": "CALIBRATED",
+        "raw_match_count": 26,
+        "inlier_count": 18
+      }
+    }
+  ],
+  "false_bridge_control": {
+    "bridge_pair": [
+      "obs:facade-a-2",
+      "obs:facade-b-1"
+    ],
+    "contradicted_pair": [
+      "obs:facade-a-1",
+      "obs:facade-b-2"
+    ],
+    "bridge_artifact": {
+      "artifact_kind": "scene.specialist_support",
+      "artifact_id": "artifact:false-bridge-support"
+    },
+    "contradiction_artifact": {
+      "artifact_kind": "scene.specialist_contradiction",
+      "artifact_id": "artifact:cross-scene-contradiction"
+    }
+  }
+}
