@@ -1736,7 +1736,7 @@ work_items:
   - id: V2L9.2
     lot: V2L9
     title: Metadata timecode synchronization evidence
-    status: ready
+    status: done
     objective: Adapt already-interpreted capture-time metadata and already-retained same-video frame timing into conservative SyncHypothesis values without re-parsing media guessing missing timezones treating publication time as capture time or performing audio visual or cross-video synchronization.
     allowed_scope:
       - src/wre/synchronization/__init__.py
@@ -1802,7 +1802,85 @@ work_items:
       - regression proving same-video frame timing does not inspect captured_at or create absolute time
       - no external execution dependency imports or new persistence surface
       - full fast CI CodeQL and native COLMAP lane only where triggered
-  - {id: V2L9.3, lot: V2L9, title: Audio correlation synchronization adapter, status: planned, depends_on: [V2L9.2]}
+  - id: V2L9.3
+    lot: V2L9
+    title: Audio correlation synchronization adapter
+    status: ready
+    objective: Add one bounded deterministic reference adapter that verifies two supplied VideoObservation source files, uses the already-approved exact FFmpeg toolchain only to extract canonical mono PCM, computes auditable bounded audio-correlation evidence without a new third-party dependency, and maps only explicitly accepted correlation evidence to SyncHypothesis while leaving weak ambiguous or unavailable audio unresolved and never inferring contradiction.
+    allowed_scope:
+      - src/wre/synchronization/audio.py
+      - focused exports in src/wre/synchronization/__init__.py
+      - tests/test_audio_sync.py
+      - registry/adapter-models.yaml only for the new FFmpeg audio synchronization capability after implementation semantics are fixed
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L9.4 can be activated without implementing it
+    out_of_scope:
+      - changing SyncHypothesis TemporalGroup metadata-time adapter or ingestion truth semantics
+      - adding NumPy SciPy librosa Torch or another audio/DSP dependency
+      - bundling linking downloading or silently selecting an alternate FFmpeg build
+      - audio fingerprint databases speech recognition speaker recognition source separation denoising dereverberation or learned audio embeddings
+      - cross-correlation over unbounded source duration or unbounded lag search
+      - hidden acceptance thresholds automatic policy tuning or confidence calibration
+      - emitting CONTRADICTED from weak low-correlation missing silent clipped or otherwise unusable audio
+      - clock-rate drift affine/spline time warp sample-clock calibration or long-duration drift correction
+      - visual event synchronization tracking or any V2L9.4 behavior
+      - TemporalGroup construction graph closure multi-source consensus or timeline optimization
+      - historical epoch inference TemporalState ChangeEvent or any V2L31 through V2L35 behavior
+      - filesystem persistence database network model checkpoint or remote execution beyond explicit temporary local FFmpeg subprocess materialization
+      - starting V2L9.4 implementation in this work item
+    depends_on: [V2L9.2]
+    read_before:
+      - docs/03_PIPELINE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - registry/adapter-models.yaml
+      - src/wre/domain/observations.py
+      - src/wre/domain/temporal_groups.py
+      - src/wre/ingestion/hashing.py
+      - src/wre/ingestion/keyframes.py
+      - src/wre/synchronization/metadata_time.py
+      - tests/test_temporal_groups.py
+      - tests/test_metadata_time_sync.py
+    reuse:
+      - VideoObservation MediaAssetRef and hash_file_content for exact source-byte verification before external execution
+      - retained FFmpegToolchain FFmpegToolchainIdentity inspect_toolchain and FFmpegExecutionError instead of creating a second executable identity system
+      - approved Ubuntu Noble FFmpeg 6.1.1-3ubuntu5 external subprocess posture already recorded in registry/adapter-models.yaml
+      - SyncHypothesis and SyncHypothesisDisposition as the only stable normalized synchronization output
+      - explicit caller-supplied ArtifactRef for the produced audio-correlation evidence provenance
+    acceptance:
+      - Add immutable AudioCorrelationPolicy with explicit positive sample_rate_hz window_duration_us max_lag_us minimum_overlap_us and minimum_correlation values; all numeric limits are finite/type-checked and no hidden default acceptance threshold exists.
+      - The reference policy is bounded: sample_rate_hz and window_duration_us determine a finite maximum decoded sample count and max_lag_us cannot exceed the decoded window duration.
+      - Add immutable AudioCorrelationSyncRequest containing two canonical distinct VideoObservation values two Path source locations one AudioCorrelationPolicy and one explicit ArtifactRef evidence reference.
+      - Request validation requires canonical ObservationId order and verifies types only; exact source bytes are verified against each VideoObservation asset before FFmpeg execution.
+      - Require inspect_toolchain to match the retained exact ffmpeg/ffprobe identity before decoding either source.
+      - FFmpeg extraction emits deterministic mono signed 16-bit little-endian PCM at the explicit policy sample rate with autorotation/video semantics irrelevant and a bounded explicit duration; no source file is mutated.
+      - Add immutable AudioCorrelationEvidence containing sample_rate_hz lag_samples overlap_samples correlation and a usability disposition or equivalent closed state sufficient to distinguish accepted weak ambiguous and unavailable evidence without leaking into the stable SyncHypothesis contract.
+      - Correlation uses only Python standard-library arithmetic over the bounded decoded PCM samples; no new DSP dependency is added.
+      - Lag search is deterministic over the explicit closed integer lag range derived from max_lag_us; ties use one documented canonical rule and repeated execution over identical bytes/toolchain/policy produces identical evidence.
+      - Correlation is normalized over overlapping demeaned samples; zero-energy or insufficient-overlap comparisons remain unusable/unresolved rather than producing NaN infinity or fabricated support.
+      - The sign convention is tested end to end so a positive resulting SyncHypothesis offset_us means event time on observation_id2 equals event time on observation_id1 plus offset_us.
+      - Only evidence meeting the explicit policy minimum_correlation and all usability conditions maps to SUPPORTED; weak ambiguous silent missing-audio or otherwise unusable cases map to UNRESOLVED with offset_us None.
+      - Audio adaptation never emits CONTRADICTED.
+      - The exact produced evidence_ref is preserved in the SyncHypothesis; solver-private sample count lag/correlation details remain outside the stable SyncHypothesis fields.
+      - Missing audio stream or FFmpeg extraction failure fails closed through explicit adapter error/unavailable evidence and never silently falls back to metadata or visual synchronization.
+      - Add one approved adapter-model registry entry for the reference FFmpeg audio-sync capability using dependency_refs [ffmpeg], the retained 6.1.1-3ubuntu5 producer version and existing external GPL subprocess license posture; no new dependency record is introduced.
+      - No persistence schema new package dependency network access model checkpoint or V2L9.4 behavior is introduced.
+    tests:
+      - AudioCorrelationPolicy frozen field shape numeric type finite and bound validation
+      - AudioCorrelationSyncRequest frozen canonical observation/path/policy/evidence validation
+      - source hash/length mismatch rejection before FFmpeg execution
+      - exact retained FFmpeg identity enforcement
+      - deterministic canonical PCM extraction command shape and bounded duration
+      - synthetic known-lag PCM fixture producing negative zero and positive offsets with exact sign convention
+      - deterministic tie handling
+      - weak-correlation below explicit threshold returns UNRESOLVED
+      - silence zero-energy and insufficient overlap remain UNRESOLVED with finite evidence fields
+      - missing audio or extraction error fails closed without metadata/visual fallback
+      - regression proving no CONTRADICTED result
+      - registry entry exact capability producer dependency license shipping and reproducibility assertions
+      - no new project dependency
+      - full fast CI CodeQL native FFmpeg/current environment and native COLMAP lane only where triggered
   - {id: V2L9.4, lot: V2L9, title: Visual event synchronization interface, status: planned, depends_on: [V2L9.3]}
   - {id: V2L9.5, lot: V2L9, title: Synchronization ambiguity contradiction fixtures, status: planned, depends_on: [V2L9.4]}
   - {id: V2L10.1, lot: V2L10, title: Adopt canonical QualityMode in routing contracts, status: planned, depends_on: [V2L9.5]}
