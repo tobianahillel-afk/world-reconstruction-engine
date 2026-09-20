@@ -151,7 +151,14 @@ components:
       - tests/test_selavpr_plus_retrieval.py
       - tests/test_retrieval_benchmark.py
     status: implemented
-  scene_identity_clustering: {owner_lot: V2L8, implementation: [], tests: [], status: planned}
+  scene_identity_clustering:
+    owner_lot: V2L8
+    implementation:
+      - src/wre/domain/scene_clusters.py
+      - src/wre/domain/__init__.py
+    tests:
+      - tests/test_scene_clusters.py
+    status: implementing
   temporal_grouping_sync: {owner_lot: V2L9, implementation: [], tests: [], status: planned}
   route_graph: {owner_lot: V2L10, implementation: [], tests: [], status: planned}
   canonical_geometry_contracts: {owner_lot: V2L11, implementation: [], tests: [], status: planned}

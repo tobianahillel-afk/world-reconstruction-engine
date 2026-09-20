@@ -1302,7 +1302,7 @@ work_items:
   - id: V2L8.1
     lot: V2L8
     title: SceneCluster and scene relation hypothesis contract
-    status: ready
+    status: done
     objective: Define the minimal immutable solver-independent contracts for auditable pairwise scene-relationship hypotheses and hypothesized connected-scene membership so later local/geometric verification and clustering can operate without promoting retrieval similarity to scene truth, while adding no matcher execution cluster-construction algorithm temporal grouping routing geometry persistence or external dependency behavior.
     allowed_scope:
       - src/wre/domain/scene_clusters.py
@@ -1369,7 +1369,82 @@ work_items:
       - regression proving no PairCandidate-to-relation conversion local matching geometric verification transitive closure cluster-construction persistence external dependency filesystem network or later-lot execution path exists
       - regression proving existing PairCandidate and Observation contracts remain unchanged and can only contribute to later scene organization through explicit typed identities/evidence
       - full fast CI native COLMAP lane where triggered CodeQL
-  - {id: V2L8.2, lot: V2L8, title: Local match and geometric verification evidence adapter, status: planned, depends_on: [V2L8.1]}
+  - id: V2L8.2
+    lot: V2L8
+    title: Local match and geometric verification evidence adapter
+    status: ready
+    objective: Adapt explicit already-produced retained COLMAP raw-match and two-view geometric-verification evidence for supplied canonical PairCandidate values into evidence-backed SceneRelationHypothesis values, preserving every upstream candidate evidence reference plus one exact caller-supplied verification ArtifactRef and classifying only clearly supported donor geometries while leaving missing degenerate ambiguous or watermark-like outcomes UNRESOLVED, without re-running matching or verification integrating a new matcher inferring CONTRADICTED relationships constructing clusters or starting V2L8.3.
+    allowed_scope:
+      - src/wre/scene_identity/__init__.py
+      - src/wre/scene_identity/colmap_adapter.py
+      - tests/test_colmap_scene_relation_adapter.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L8.3 can be activated without implementing it
+    out_of_scope:
+      - changing SceneRelationDisposition SceneRelationHypothesis SceneCluster SceneClusterId PairCandidate PairCandidateSource PairCandidateSourceId or merge_pair_candidates semantics
+      - changing or re-executing src/wre/reconstruction/colmap_features.py src/wre/reconstruction/colmap_matching.py src/wre/reconstruction/colmap_verification.py or their retained L3 donor semantics
+      - feature extraction descriptor computation raw local matching RANSAC geometric verification database mutation or PyCOLMAP execution inside the adapter
+      - integrating LightGlue ALIKED DISK SuperPoint MASt3R RoMa LoFTR Doppelgangers++ or any other new matching/disambiguation model in this work item
+      - copying raw match counts inlier matches F E H matrices relative pose triangulation angle image names COLMAP configuration internals or other solver-private payloads into SceneRelationHypothesis
+      - score weighting confidence calibration threshold search ranking source priority retrieval promotion route selection or QualityDecision behavior
+      - treating absent failed degenerate watermark multiple-model or otherwise unsupported verification as evidence that observations depict different scenes
+      - emitting SceneRelationDisposition.CONTRADICTED from this donor adapter because retained COLMAP verification provides support/ambiguity evidence but no explicit different-scene proof
+      - automatic SceneCluster construction transitive closure graph partitioning union-find merge/split policy or any V2L8.3 behavior
+      - repeated symmetric look-alike specialist disambiguation or any V2L8.4 behavior
+      - scalable large-graph execution ANN indexing distributed processing or any V2L8.5/V2L37 behavior
+      - temporal grouping synchronization route graph geometry reconstruction persistence runtime compilation or later-lot behavior
+      - starting V2L8.3 implementation in this work item
+    depends_on: [V2L8.1]
+    read_before:
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/27_RESEARCH_CANDIDATE_COVERAGE.md
+      - docs/28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md
+      - docs/29_PERFORMANCE_INTEGRATION_MAP.md
+      - docs/reviews/V2L7-pair-candidate-retrieval-review.md
+      - src/wre/domain/artifacts.py
+      - src/wre/domain/pair_candidates.py
+      - src/wre/domain/scene_clusters.py
+      - src/wre/reconstruction/colmap_matching.py
+      - src/wre/reconstruction/colmap_verification.py
+      - tests/test_pair_candidates.py
+      - tests/test_scene_clusters.py
+      - tests/test_colmap_matching.py
+      - tests/test_colmap_geometric_verification.py
+    reuse:
+      - PairCandidate as the explicit upstream proposal set; the adapter consumes only caller-supplied candidates and never performs retrieval or candidate discovery
+      - SceneRelationDisposition and SceneRelationHypothesis as the only stable relationship output vocabulary
+      - ArtifactRef as the exact evidence-link primitive; every candidate-source evidence ref is preserved and one explicit verification ArtifactRef identifies the retained donor result
+      - retained ColmapGeometricVerificationResult and ColmapPairGeometryEvidence as source-specific donor evidence rather than inventing another local-matching or RANSAC implementation
+      - retained PyCOLMAP 4.2 matching/verification stages remain external donor producers and are never imported or executed merely to adapt an already-produced result
+    acceptance:
+      - Define one immutable ColmapSceneRelationAdapterInput containing exactly candidates verification and evidence_ref; candidates are an immutable canonical unique tuple of PairCandidate values, verification is ColmapGeometricVerificationResult and evidence_ref is ArtifactRef.
+      - Candidate endpoint pairs are unique and use the existing PairCandidate canonical order; every candidate endpoint belongs to verification provenance source observations, and malformed foreign or noncanonical inputs fail closed.
+      - Adapting compares donor geometry and candidate identity only by canonical ObservationId endpoint pair; image names database pair IDs source ordering or solver-private indices never become WRE relationship identity.
+      - Return exactly one SceneRelationHypothesis per supplied PairCandidate in the same canonical pair order, including candidates for which donor geometry is absent; extra donor geometries not present in the supplied candidate set are ignored rather than creating new relationships.
+      - Output evidence_refs are the canonical unique union of every ArtifactRef present in all PairCandidateSource contributions for that candidate plus the explicit verification evidence_ref; no candidate evidence source may be discarded or prioritized.
+      - A candidate is SUPPORTED only when a matching ColmapPairGeometryEvidence exists, has at least one inlier match and its configuration is one of CALIBRATED CALIBRATED_RIG UNCALIBRATED PLANAR PANORAMIC or PLANAR_OR_PANORAMIC.
+      - A candidate is UNRESOLVED when no matching geometry exists, inlier count is zero, or configuration is UNDEFINED DEGENERATE WATERMARK MULTIPLE or any future unsupported configuration that cannot be mapped safely; the adapter never promotes ambiguity to support.
+      - This adapter never emits CONTRADICTED because ordinary absence rejection or degenerate geometric verification is not explicit evidence that two observations depict different physical scenes.
+      - Raw match count inlier count feature correspondences F E H matrices relative pose triangulation angle camera flags image names database paths environment/configuration identities and COLMAP configuration strings remain source-specific evidence and are not copied into SceneRelationHypothesis.
+      - Adaptation is deterministic pure and input-order preserving after canonical input validation; it performs no filesystem database environment registry network PyCOLMAP import matching verification random sampling or external model execution.
+      - The adapter does not mutate PairCandidate ColmapGeometricVerificationResult its geometries or evidence refs and repeated equal input produces equal output.
+      - Existing retained COLMAP matching/verification behavior V2L7 retrieval contracts and V2L8.1 domain contracts remain unchanged.
+    tests:
+      - ColmapSceneRelationAdapterInput exact field-set immutability candidate tuple type canonicality uniqueness verification/evidence typing provenance-membership and foreign-endpoint negative tests
+      - supported fixtures for CALIBRATED CALIBRATED_RIG UNCALIBRATED PLANAR PANORAMIC and PLANAR_OR_PANORAMIC with positive inlier evidence
+      - unresolved fixtures for absent geometry zero-inlier UNDEFINED DEGENERATE WATERMARK and MULTIPLE outcomes proving no implicit negative-scene claim
+      - evidence-union fixture combining multiple PairCandidateSource evidence refs plus verification ArtifactRef with exact canonical deduplication and no source loss
+      - extra-donor-geometry fixture proving only supplied PairCandidate endpoints produce relation hypotheses
+      - regression proving the adapter never emits CONTRADICTED and never copies raw counts inliers matrices pose camera flags image names configuration score confidence rank or route fields into SceneRelationHypothesis
+      - purity regression proving no calls to match_colmap_pairs verify_colmap_geometry PyCOLMAP filesystem database registry environment or network behavior and no input mutation
+      - deterministic repeated-adaptation and canonical output-order tests
+      - full fast CI native COLMAP lane CodeQL
   - {id: V2L8.3, lot: V2L8, title: Deterministic verified scene clustering, status: planned, depends_on: [V2L8.2]}
   - {id: V2L8.4, lot: V2L8, title: Repeated symmetric look alike fail closed fixture, status: planned, depends_on: [V2L8.3]}
   - {id: V2L8.5, lot: V2L8, title: Scalable scene clustering boundary, status: planned, depends_on: [V2L8.4]}
