@@ -4,18 +4,19 @@ project_name: World Reconstruction Engine
 roadmap_version: '2.0'
 phase: implementation
 milestone: V2M1
-lot: V2L7
-active_work_item: V2L7.6
+lot: V2L8
+active_work_item: V2L8.1
 status: ready
-last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5, V2L3.6, V2L4.1, V2L4.2, V2L4.3, V2L4.4, V2L4.5, V2L4.6, V2L5.1, V2L5.2, V2L5.3, V2L5.4, V2L5.5, V2L5.6, V2L6.1, V2L6.2, V2L6.3, V2L6.4, V2L6.5, V2L6.6, V2L7.1, V2L7.2, V2L7.3, V2L7.4, V2L7.5]
-last_merged_pr: 83
+last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5, V2L3.6, V2L4.1, V2L4.2, V2L4.3, V2L4.4, V2L4.5, V2L4.6, V2L5.1, V2L5.2, V2L5.3, V2L5.4, V2L5.5, V2L5.6, V2L6.1, V2L6.2, V2L6.3, V2L6.4, V2L6.5, V2L6.6, V2L7.1, V2L7.2, V2L7.3, V2L7.4, V2L7.5, V2L7.6]
+last_merged_pr: 82
 current_goal: >-
-  Benchmark deterministic PairCandidate union/dedup and candidate recall across the completed sequential, GPS,
-  classical vocabulary and experimental learned retrieval sources against explicit benchmark-only relevant-pair truth.
+  Define the minimal immutable SceneCluster and pairwise scene-relation hypothesis contracts that let later
+  verification/clustering separate explicit supported contradicted and unresolved relationships from retrieval proposals.
 next_action: >-
-  Complete only V2L7.6 from its executable contract in registry/work-items/v2m1.yaml: add deterministic source-set
-  union and benchmark-only recall/count evidence plus the V2L7 lot review; do not add weighting, rank fusion,
-  geometric verification, scene identity, ANN scaling, default-source promotion or begin V2L8.1 early.
+  Complete only V2L8.1 from its executable contract in registry/work-items/v2m1.yaml: add typed scene-relation
+  disposition/hypothesis and SceneCluster identity/membership contracts plus focused tests; do not add local matching,
+  geometric verification, automatic PairCandidate promotion, cluster construction, repeated-structure disambiguation
+  or begin V2L8.2 early.
 blockers: []
 architecture:
   product_blueprint: docs/01_PRODUCT.md

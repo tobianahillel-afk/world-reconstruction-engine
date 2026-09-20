@@ -1217,7 +1217,7 @@ work_items:
   - id: V2L7.6
     lot: V2L7
     title: Retrieval union dedup recall benchmark
-    status: ready
+    status: done
     objective: Benchmark the completed V2L7 PairCandidate proposal sources through one deterministic benchmark-only union/dedup and candidate-recall evaluation boundary, preserving every source evidence reference and comparing source-specific and union coverage against explicit caller-supplied relevant-pair fixture truth without weighting rank fusion geometric verification scene-identity claims default-source promotion ANN scaling or route decisions; close the V2L7 lot review after exact-head evidence is green.
     allowed_scope:
       - src/wre/retrieval/benchmark.py
@@ -1299,7 +1299,76 @@ work_items:
       - regression combining sequential gps colmap.vocab_tree and selavpr_plus PairCandidate values without importing/running their external engines and proving all original source evidence survives union
       - regression proving no weighting ranking default selection local matching geometric verification SceneCluster QualityDecision ANN model inference network filesystem discovery or later-lot execution path exists
       - full fast CI native COLMAP lane FFmpeg 8 compatibility where triggered CodeQL and final V2L7 lot-review evidence
-  - {id: V2L8.1, lot: V2L8, title: SceneCluster and scene relation hypothesis contract, status: planned, depends_on: [V2L7.6]}
+  - id: V2L8.1
+    lot: V2L8
+    title: SceneCluster and scene relation hypothesis contract
+    status: ready
+    objective: Define the minimal immutable solver-independent contracts for auditable pairwise scene-relationship hypotheses and hypothesized connected-scene membership so later local/geometric verification and clustering can operate without promoting retrieval similarity to scene truth, while adding no matcher execution cluster-construction algorithm temporal grouping routing geometry persistence or external dependency behavior.
+    allowed_scope:
+      - src/wre/domain/scene_clusters.py
+      - focused public-domain exports through src/wre/domain/__init__.py only if required for the new contracts
+      - tests/test_scene_clusters.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L8.2 can be activated without implementing it
+    out_of_scope:
+      - changing PairCandidate PairCandidateSource PairCandidateSourceId merge_pair_candidates or any V2L7 retrieval semantics
+      - automatically converting PairCandidate values into accepted scene relationships or SceneCluster membership
+      - local feature extraction local matching CorrespondenceSet geometric verification essential/fundamental/homography estimation inlier thresholds or any V2L8.2 behavior
+      - deterministic cluster construction transitive closure union-find graph partitioning merge/split policy or any V2L8.3 behavior
+      - repeated symmetric look-alike disambiguation false-merge benchmark behavior or any V2L8.4 behavior
+      - large-graph storage ANN indexing distributed graph processing or any V2L8.5/V2L37 scaling behavior
+      - temporal grouping synchronization epoch inference route selection geometry reconstruction or runtime compilation
+      - generic score confidence probability rank distance overlap geolocation timestamp or catch-all metadata fields
+      - filesystem database registry network model checkpoint or external solver execution
+      - starting V2L8.2 implementation in this work item
+    depends_on: [V2L7.6]
+    read_before:
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/27_RESEARCH_CANDIDATE_COVERAGE.md
+      - docs/28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md
+      - docs/29_PERFORMANCE_INTEGRATION_MAP.md
+      - docs/reviews/V2L7-pair-candidate-retrieval-review.md
+      - src/wre/domain/artifacts.py
+      - src/wre/domain/observations.py
+      - src/wre/domain/pair_candidates.py
+      - tests/test_artifacts.py
+      - tests/test_observations.py
+      - tests/test_pair_candidates.py
+    reuse:
+      - ObservationId as the only observation identity in scene-relation and cluster membership contracts
+      - ArtifactRef as the only exact evidence-link primitive instead of filenames paths scores or solver-private objects
+      - frozen slots dataclass and canonical tuple validation conventions already used throughout wre.domain
+      - PairCandidate remains the upstream proposal boundary only; V2L8.1 defines no automatic promotion path from candidate existence to relationship support
+      - explicit fail-closed unresolved state rather than treating missing or failed verification as negative or positive scene truth
+    acceptance:
+      - Define SceneRelationDisposition as one closed typed vocabulary with exactly SUPPORTED CONTRADICTED and UNRESOLVED; no boolean same-scene flag implicit truthiness or numeric confidence substitutes for this state.
+      - Define one immutable SceneRelationHypothesis containing exactly two distinct canonical ObservationId endpoints one SceneRelationDisposition and one non-empty canonical unique tuple of ArtifactRef evidence_refs.
+      - SceneRelationHypothesis endpoint ordering is lexical and caller supplied; reversed equal self mutable wrong-type duplicate-evidence and noncanonical-evidence states fail closed rather than being silently reordered deduplicated or coerced.
+      - SUPPORTED means only that supplied verification evidence supports using the pair as a same-connected-scene relationship under the producing method; CONTRADICTED requires explicit contradictory evidence; UNRESOLVED preserves ambiguity. None of the three states claims absolute physical-world identity beyond its evidence.
+      - The relation contract contains no retrieval score rank source priority GPS distance sequence distance geolocation capture time correspondence payload geometry route QualityDecision generic confidence or arbitrary metadata bag.
+      - Define SceneClusterId as an opaque immutable typed identity with a bounded canonical token format and no embedded observation count location time solver or route semantics.
+      - Define one immutable SceneCluster containing exactly SceneClusterId observation_ids and evidence_refs; observation_ids are a non-empty canonical unique tuple of ObservationId values and evidence_refs are a canonical unique tuple of exact ArtifactRef values.
+      - A singleton SceneCluster may have no evidence refs because an isolated observation is an explicit valid connected component; a multi-observation SceneCluster requires at least one evidence ref and cannot be constructed as unsupported bare membership.
+      - SceneCluster does not embed PairCandidate SceneRelationHypothesis correspondences scores timestamps transforms geometry temporal groups routes or mutable solver-private graph structures.
+      - Contract construction performs no transitive closure connectivity inference cluster merge/split relationship verification persistence registry filesystem database environment or network lookup.
+      - Equality hashing and ordering-relevant validation are deterministic from typed immutable values only, and neither relation nor cluster contract silently changes caller-supplied endpoint/member/evidence ordering.
+      - Existing V2L7 PairCandidate retrieval benchmark Observation ArtifactRef and other domain contracts remain unchanged.
+    tests:
+      - SceneRelationDisposition exact closed vocabulary and no boolean/numeric substitution regression
+      - SceneRelationHypothesis exact field-set immutability endpoint typing canonical ordering self-pair disposition typing evidence non-empty uniqueness canonical-order wrong-member and mutable-collection negative tests
+      - regression proving supported contradicted and unresolved hypotheses retain the exact same endpoints/evidence while differing only by explicit disposition and never expose generic score confidence rank scene truth geometry time or route fields
+      - SceneClusterId valid boundary and invalid blank uppercase whitespace overlength and disallowed-character tests
+      - SceneCluster exact field-set immutability canonical non-empty unique ObservationId membership and canonical unique ArtifactRef evidence tests
+      - singleton cluster with empty evidence accepted; multi-observation cluster with empty evidence rejected; populated multi-observation cluster preserves exact evidence refs
+      - regression proving no PairCandidate-to-relation conversion local matching geometric verification transitive closure cluster-construction persistence external dependency filesystem network or later-lot execution path exists
+      - regression proving existing PairCandidate and Observation contracts remain unchanged and can only contribute to later scene organization through explicit typed identities/evidence
+      - full fast CI native COLMAP lane where triggered CodeQL
   - {id: V2L8.2, lot: V2L8, title: Local match and geometric verification evidence adapter, status: planned, depends_on: [V2L8.1]}
   - {id: V2L8.3, lot: V2L8, title: Deterministic verified scene clustering, status: planned, depends_on: [V2L8.2]}
   - {id: V2L8.4, lot: V2L8, title: Repeated symmetric look alike fail closed fixture, status: planned, depends_on: [V2L8.3]}
