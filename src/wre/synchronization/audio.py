@@ -53,9 +53,7 @@ class AudioCorrelationPolicy:
         if max_lag_us > window_duration_us:
             raise ValueError("audio_policy.max_lag_us must not exceed window_duration_us")
         if minimum_overlap_us > window_duration_us:
-            raise ValueError(
-                "audio_policy.minimum_overlap_us must not exceed window_duration_us"
-            )
+            raise ValueError("audio_policy.minimum_overlap_us must not exceed window_duration_us")
         if (
             isinstance(self.minimum_correlation, bool)
             or not isinstance(self.minimum_correlation, float)
@@ -69,14 +67,10 @@ class AudioCorrelationPolicy:
         max_samples = (
             sample_rate_hz * window_duration_us + _MICROSECONDS_PER_SECOND - 1
         ) // _MICROSECONDS_PER_SECOND
-        max_lag_samples = (
-            sample_rate_hz * max_lag_us // _MICROSECONDS_PER_SECOND
-        )
+        max_lag_samples = sample_rate_hz * max_lag_us // _MICROSECONDS_PER_SECOND
         estimated_work = max_samples * (2 * max_lag_samples + 1)
         if estimated_work > _MAX_REFERENCE_CORRELATION_WORK:
-            raise ValueError(
-                "audio_policy exceeds the bounded reference correlation work limit"
-            )
+            raise ValueError("audio_policy exceeds the bounded reference correlation work limit")
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,9 +90,7 @@ class AudioCorrelationSyncRequest:
         if not isinstance(self.video2, VideoObservation):
             raise TypeError("audio_sync.video2 must be VideoObservation")
         if self.video1.observation_id.value >= self.video2.observation_id.value:
-            raise ValueError(
-                "audio_sync observation IDs must be distinct and canonically ordered"
-            )
+            raise ValueError("audio_sync observation IDs must be distinct and canonically ordered")
         if not isinstance(self.source_path1, Path):
             raise TypeError("audio_sync.source_path1 must be Path")
         if not isinstance(self.source_path2, Path):
@@ -164,9 +156,7 @@ class AudioCorrelationSyncResult:
 
 def _max_samples(policy: AudioCorrelationPolicy) -> int:
     return (
-        policy.sample_rate_hz * policy.window_duration_us
-        + _MICROSECONDS_PER_SECOND
-        - 1
+        policy.sample_rate_hz * policy.window_duration_us + _MICROSECONDS_PER_SECOND - 1
     ) // _MICROSECONDS_PER_SECOND
 
 
@@ -176,9 +166,7 @@ def _max_lag_samples(policy: AudioCorrelationPolicy) -> int:
 
 def _minimum_overlap_samples(policy: AudioCorrelationPolicy) -> int:
     return (
-        policy.sample_rate_hz * policy.minimum_overlap_us
-        + _MICROSECONDS_PER_SECOND
-        - 1
+        policy.sample_rate_hz * policy.minimum_overlap_us + _MICROSECONDS_PER_SECOND - 1
     ) // _MICROSECONDS_PER_SECOND
 
 
@@ -256,9 +244,7 @@ def _extract_pcm_samples(
     if len(completed.stdout) % 2:
         raise FFmpegExecutionError("ffmpeg audio extraction returned misaligned s16le PCM")
 
-    samples = tuple(
-        item[0] for item in struct.iter_unpack("<h", completed.stdout)
-    )
+    samples = tuple(item[0] for item in struct.iter_unpack("<h", completed.stdout))
     bounded = samples[: _max_samples(policy)]
     if not bounded:
         raise FFmpegExecutionError("ffmpeg audio extraction returned no PCM samples")
@@ -279,17 +265,14 @@ def _normalized_correlation(
     second_mean = second_sum / length
 
     covariance = math.fsum(
-        (first[first_start + index] - first_mean)
-        * (second[second_start + index] - second_mean)
+        (first[first_start + index] - first_mean) * (second[second_start + index] - second_mean)
         for index in range(length)
     )
     first_energy = math.fsum(
-        (first[first_start + index] - first_mean) ** 2
-        for index in range(length)
+        (first[first_start + index] - first_mean) ** 2 for index in range(length)
     )
     second_energy = math.fsum(
-        (second[second_start + index] - second_mean) ** 2
-        for index in range(length)
+        (second[second_start + index] - second_mean) ** 2 for index in range(length)
     )
     if first_energy <= 0.0 or second_energy <= 0.0:
         return None
@@ -360,11 +343,7 @@ def _correlate_samples(
 
 
 def _lag_offset_us(lag_samples: int, sample_rate_hz: int) -> int:
-    value = (
-        Decimal(lag_samples)
-        * Decimal(_MICROSECONDS_PER_SECOND)
-        / Decimal(sample_rate_hz)
-    )
+    value = Decimal(lag_samples) * Decimal(_MICROSECONDS_PER_SECOND) / Decimal(sample_rate_hz)
     return int(value.to_integral_value(rounding=ROUND_HALF_EVEN))
 
 
