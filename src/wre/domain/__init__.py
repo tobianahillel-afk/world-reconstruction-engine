@@ -126,6 +126,12 @@ from wre.domain.runs import (
     ReconstructionRun,
     ReconstructionRunId,
 )
+from wre.domain.scene_clusters import (
+    SceneCluster,
+    SceneClusterId,
+    SceneRelationDisposition,
+    SceneRelationHypothesis,
+)
 
 __all__ = [
     "ARTIFACT_KEY_SCHEMA_VERSION",
@@ -215,8 +221,12 @@ __all__ = [
     "RawMetadataEntry",
     "ReconstructionRun",
     "ReconstructionRunId",
+    "SceneCluster",
+    "SceneClusterId",
     "SceneProject",
     "SceneProjectId",
+    "SceneRelationDisposition",
+    "SceneRelationHypothesis",
     "Sha256Digest",
     "SourceId",
     "SourceRef",
