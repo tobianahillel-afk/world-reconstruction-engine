@@ -1588,7 +1588,7 @@ work_items:
   - id: V2L8.5
     lot: V2L8
     title: Scalable scene clustering boundary
-    status: ready
+    status: done
     objective: Define and implement one deterministic one-pass batch boundary for already-produced SceneRelationHypothesis values that preserves exactly the V2L8.3 scene-clustering truth semantics and output identity across different batch partitions while avoiding a requirement to materialize one monolithic relation tuple, then close the V2L8 lot review without adding large-collection retrieval, persistence, distributed graph execution or any V2L37 behavior.
     allowed_scope:
       - src/wre/scene_identity/clustering.py
@@ -1662,7 +1662,77 @@ work_items:
       - unchanged V2L8.4 repeated/symmetric fail-closed regression
       - full fast CI CodeQL and native COLMAP lane only where triggered
       - lot review validator and exact-head lifecycle handoff evidence
-  - {id: V2L9.1, lot: V2L9, title: TemporalGroup and SyncHypothesis contracts, status: planned, depends_on: [V2L8.5]}
+  - id: V2L9.1
+    lot: V2L9
+    title: TemporalGroup and SyncHypothesis contracts
+    status: ready
+    objective: Define only the minimal immutable solver-independent contracts needed to represent one event-time synchronization context inside an existing scene cluster and one canonical pairwise relative-time synchronization hypothesis, preserving supported contradicted and unresolved states without parsing metadata executing synchronization algorithms constructing groups or conflating event-time synchronization with long-term historical chronology.
+    allowed_scope:
+      - src/wre/domain/temporal_groups.py
+      - focused exports in src/wre/domain/__init__.py
+      - tests/test_temporal_groups.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L9.2 can be activated without implementing it
+    out_of_scope:
+      - parsing EXIF capture time publication dates archive dates timecodes or any V2L9.2 evidence generation
+      - audio extraction correlation resampling FFmpeg execution or any V2L9.3 behavior
+      - visual event detection tracking alignment model execution or any V2L9.4 behavior
+      - deterministic temporal-group construction graph closure clock fusion consensus or timeline optimization
+      - clock-rate drift affine warp spline warp rolling-shutter timing or long-video synchronization optimization
+      - absolute capture timestamp invention timezone inference calendar epoch inference or publication-time-as-capture-time promotion
+      - long-term historical TemporalState ChangeEvent epoch clustering or any V2L31 through V2L35 behavior
+      - scene-identity changes retrieval matching geometry reconstruction routing or runtime compilation
+      - generic score confidence probability rank quality mode or catch-all metadata fields
+      - filesystem database network subprocess model checkpoint or external solver execution
+      - starting V2L9.2 implementation in this work item
+    depends_on: [V2L8.5]
+    read_before:
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/04_DATA_MODEL.md
+      - docs/13_TEMPORAL_WORLD.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - src/wre/domain/observations.py
+      - src/wre/domain/metadata.py
+      - src/wre/domain/artifacts.py
+      - src/wre/domain/scene_clusters.py
+      - src/wre/domain/__init__.py
+    reuse:
+      - ObservationId for canonical synchronization endpoints and temporal-group membership
+      - SceneClusterId to anchor every TemporalGroup to one already-established physical scene identity
+      - ArtifactRef for exact supporting or contradicting evidence rather than embedding solver-private metadata
+      - existing CaptureTimeInterpretation and VideoFrameObservation timing as future evidence sources only without copying their parser semantics into the new contracts
+      - the V2L8 supported contradicted unresolved distinction as a semantic pattern while defining a temporal-specific closed disposition type rather than reusing scene identity as sync truth
+    acceptance:
+      - Add TemporalGroupId as an opaque validated identity type with no timestamp epoch route or solver semantics encoded in its value.
+      - Add SyncHypothesisDisposition with exactly SUPPORTED CONTRADICTED and UNRESOLVED values.
+      - Add immutable SyncHypothesis with canonical distinct ObservationId endpoints disposition optional offset_us and a non-empty canonical unique tuple of ArtifactRef evidence.
+      - Canonical endpoint ordering fixes the offset sign convention so a supported offset_us means corresponding event time on observation_id2 equals event time on observation_id1 plus offset_us microseconds.
+      - SUPPORTED SyncHypothesis requires offset_us to be an integer other than bool and permits negative zero or positive offsets.
+      - CONTRADICTED and UNRESOLVED SyncHypothesis require offset_us to be None so disagreement or ambiguity cannot expose a fake accepted alignment.
+      - Missing synchronization evidence is represented by absence of a SyncHypothesis rather than by fabricating UNRESOLVED without evidence.
+      - Add immutable TemporalGroup with TemporalGroupId one parent SceneClusterId canonical non-empty unique ObservationId membership and canonical unique ArtifactRef evidence.
+      - A singleton TemporalGroup may carry an empty evidence tuple; a multi-observation TemporalGroup requires non-empty evidence.
+      - TemporalGroup means observations assigned to one event-time synchronization context inside one scene cluster; it does not mean the observations share an exact capture instant and it is not a historical epoch.
+      - No datetime absolute timestamp timezone publication date source clock model clock-rate drift or historical validity interval field appears in either contract.
+      - No score confidence probability rank route quality mode solver path model identifier or generic metadata bag appears in either contract.
+      - Focused domain exports expose only the new stable contract values and do not add an execution adapter.
+      - No persistence codec migration external dependency filesystem network subprocess or synchronization algorithm is introduced.
+    tests:
+      - TemporalGroupId valid invalid type and boundary tokens
+      - exact SyncHypothesisDisposition vocabulary
+      - SyncHypothesis frozen field shape canonical endpoint validation and exact evidence ordering
+      - supported negative zero and positive offset_us cases
+      - supported missing offset rejection and bool offset rejection
+      - contradicted and unresolved non-None offset rejection
+      - empty duplicate and unsorted SyncHypothesis evidence rejection
+      - TemporalGroup frozen field shape SceneClusterId type membership canonicality and evidence rules
+      - singleton TemporalGroup with empty evidence accepted
+      - multi-observation TemporalGroup without evidence rejected
+      - regression proving no absolute datetime historical epoch generic score route solver or execution fields are embedded
+      - full fast CI CodeQL and native COLMAP lane only where triggered
   - {id: V2L9.2, lot: V2L9, title: Metadata timecode synchronization evidence, status: planned, depends_on: [V2L9.1]}
   - {id: V2L9.3, lot: V2L9, title: Audio correlation synchronization adapter, status: planned, depends_on: [V2L9.2]}
   - {id: V2L9.4, lot: V2L9, title: Visual event synchronization interface, status: planned, depends_on: [V2L9.3]}
