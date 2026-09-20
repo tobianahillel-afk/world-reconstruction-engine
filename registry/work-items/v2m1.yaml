@@ -1805,12 +1805,13 @@ work_items:
   - id: V2L9.3
     lot: V2L9
     title: Audio correlation synchronization adapter
-    status: ready
+    status: done
     objective: Add one bounded deterministic reference adapter that verifies two supplied VideoObservation source files, uses the already-approved exact FFmpeg toolchain only to extract canonical mono PCM, computes auditable bounded audio-correlation evidence without a new third-party dependency, and maps only explicitly accepted correlation evidence to SyncHypothesis while leaving weak ambiguous or unavailable audio unresolved and never inferring contradiction.
     allowed_scope:
       - src/wre/synchronization/audio.py
       - focused exports in src/wre/synchronization/__init__.py
       - tests/test_audio_sync.py
+      - tests/test_adapter_model_registry_baselines.py only for the exact new approved FFmpeg audio-sync baseline expectations required by this registry addition
       - registry/adapter-models.yaml only for the new FFmpeg audio synchronization capability after implementation semantics are fixed
       - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L9.4 can be activated without implementing it
     out_of_scope:
@@ -1881,7 +1882,73 @@ work_items:
       - registry entry exact capability producer dependency license shipping and reproducibility assertions
       - no new project dependency
       - full fast CI CodeQL native FFmpeg/current environment and native COLMAP lane only where triggered
-  - {id: V2L9.4, lot: V2L9, title: Visual event synchronization interface, status: planned, depends_on: [V2L9.3]}
+  - id: V2L9.4
+    lot: V2L9
+    title: Visual event synchronization interface
+    status: ready
+    objective: Define one minimal immutable solver-independent interface for adapting already-produced pairwise visual-event alignment evidence into SyncHypothesis values with explicit support residual ambiguity and acceptance policy while performing no visual model execution no tracking and no implicit fusion into one timeline.
+    allowed_scope:
+      - src/wre/synchronization/visual.py
+      - focused exports in src/wre/synchronization/__init__.py
+      - tests/test_visual_event_sync.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L9.5 can be activated without implementing it
+    out_of_scope:
+      - image or video decoding filesystem database network subprocess FFmpeg model checkpoint or external solver execution
+      - integrating AllTracker CoTracker optical flow feature matching object tracking action recognition or a visual foundation model
+      - defining or promoting a visual synchronization algorithm candidate
+      - changing SyncHypothesis TemporalGroup metadata-time or audio synchronization semantics
+      - automatic fusion weighting ranking or preference across metadata audio visual or future motion synchronization evidence
+      - TemporalGroup construction graph closure multi-source consensus or global timeline optimization
+      - clock-rate drift affine spline or other time-warp estimation
+      - treating publication time archive time or historical epoch information as event-time evidence
+      - emitting CONTRADICTED from weak residuals low support or visual ambiguity
+      - V2L29 multi-video event fusion V2L31 historical chronology or any later 4D reconstruction behavior
+      - starting V2L9.5 implementation in this work item
+    depends_on: [V2L9.3]
+    read_before:
+      - docs/03_PIPELINE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - src/wre/domain/observations.py
+      - src/wre/domain/temporal_groups.py
+      - src/wre/synchronization/metadata_time.py
+      - src/wre/synchronization/audio.py
+      - tests/test_temporal_groups.py
+      - tests/test_metadata_time_sync.py
+      - tests/test_audio_sync.py
+    reuse:
+      - ObservationId and ArtifactRef for canonical endpoint identity and exact evidence provenance
+      - SyncHypothesis and SyncHypothesisDisposition as the only stable normalized synchronization output
+      - the V2L9.3 pattern of explicit solver-private evidence plus explicit policy and fail-closed adaptation without copying audio-specific execution concerns
+    acceptance:
+      - Add immutable VisualEventSyncPolicy with explicit positive minimum_support_count and non-negative maximum_residual_us values and no hidden acceptance threshold.
+      - Add a closed VisualEventCandidateMultiplicity vocabulary with UNIQUE and AMBIGUOUS values or an equivalently strict closed representation.
+      - Add immutable VisualEventSyncCandidate containing two canonical distinct ObservationId endpoints one signed integer candidate_offset_us one non-negative integer residual_us one positive integer support_count one explicit multiplicity and a non-empty canonical unique tuple of ArtifactRef evidence.
+      - Candidate validation rejects duplicate or decreasing endpoints bool masquerading as integers negative residual zero support invalid multiplicity and evidence-ref type duplicate or ordering violations.
+      - Add a pure adapt_visual_event_sync function or equivalently narrow adapter that performs no I/O and returns exactly one pairwise SyncHypothesis for one supplied candidate and policy.
+      - A UNIQUE candidate becomes SUPPORTED only when support_count meets the explicit minimum and residual_us does not exceed the explicit maximum and the exact candidate_offset_us is preserved.
+      - An AMBIGUOUS candidate always remains UNRESOLVED with offset_us None even when one candidate metric tuple would otherwise pass the policy.
+      - A UNIQUE candidate below the support threshold or above the residual threshold remains UNRESOLVED with offset_us None.
+      - Visual adaptation never emits CONTRADICTED and absence of visual evidence is represented by absence of a candidate rather than fabrication of an unresolved record.
+      - Every supplied ArtifactRef is preserved exactly and solver-private support residual and multiplicity details do not leak into the stable SyncHypothesis field set.
+      - The sign convention remains identical to every earlier V2L9 adapter so positive offset_us means event time on observation_id2 equals event time on observation_id1 plus offset_us.
+      - No collection-level merge source priority weighting confidence score route decision TemporalGroup timeline or cross-evidence fusion surface is introduced.
+      - No new dependency registry entry project dependency persistence schema or external execution surface is introduced.
+    tests:
+      - VisualEventSyncPolicy frozen field shape type and bound validation
+      - VisualEventCandidateMultiplicity exact closed vocabulary
+      - VisualEventSyncCandidate frozen field shape canonical endpoint numeric multiplicity and evidence validation
+      - negative zero and positive accepted offsets preserve exact sign convention
+      - exact support threshold acceptance and just-below rejection
+      - exact residual boundary acceptance and just-above rejection
+      - ambiguous candidate remains UNRESOLVED even with otherwise strong metrics
+      - weak unique candidates remain UNRESOLVED with no offset
+      - every evidence ref is preserved in canonical order
+      - regression proving no CONTRADICTED result and no TemporalGroup construction or fusion behavior
+      - no filesystem network subprocess model checkpoint external dependency or persistence imports
+      - full fast CI and CodeQL plus native lanes only where repository path triggers require them
   - {id: V2L9.5, lot: V2L9, title: Synchronization ambiguity contradiction fixtures, status: planned, depends_on: [V2L9.4]}
   - {id: V2L10.1, lot: V2L10, title: Adopt canonical QualityMode in routing contracts, status: planned, depends_on: [V2L9.5]}
   - {id: V2L10.2, lot: V2L10, title: Route node and route graph contract, status: planned, depends_on: [V2L10.1]}

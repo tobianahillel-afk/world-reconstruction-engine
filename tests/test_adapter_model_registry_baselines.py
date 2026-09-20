@@ -21,6 +21,7 @@ DEPENDENCIES_PATH = ROOT / "registry" / "dependencies.yaml"
 _EXPECTED_ADAPTER_IDS = (
     "colmap.sparse_sfm",
     "exifread.raw_exif",
+    "ffmpeg.audio_correlation_sync",
     "ffmpeg.decoded_image_pyramid",
     "ffmpeg.keyframe_extraction",
 )
@@ -52,7 +53,7 @@ def _approved_baseline_entries_by_id() -> dict[str, dict[str, Any]]:
     }
 
 
-def test_registry_contains_exactly_the_four_retained_approved_baselines() -> None:
+def test_registry_contains_exactly_the_retained_approved_baselines() -> None:
     entries = _entries_by_id()
     approved = _approved_baseline_entries_by_id()
     adapter_ids = tuple(entries)
@@ -87,6 +88,14 @@ def test_baseline_versions_and_dependency_refs_match_retained_evidence() -> None
     assert exifread["dependency_refs"] == ["exifread"]
     assert dependencies["exifread"]["pinned_version"] == distribution_version("ExifRead") == "3.5.1"
 
+    ffmpeg_audio = entries["ffmpeg.audio_correlation_sync"]
+    assert ffmpeg_audio["producer"] == {
+        "implementation": "wre.synchronization.audio.FFmpegAudioCorrelationSynchronizer",
+        "version": SUPPORTED_FFMPEG_VERSION,
+        "revision": None,
+    }
+    assert ffmpeg_audio["dependency_refs"] == ["ffmpeg"]
+
     ffmpeg_pyramid = entries["ffmpeg.decoded_image_pyramid"]
     assert ffmpeg_pyramid["producer"] == {
         "implementation": "wre.ingestion.decoded_images.FFmpegDecodedImagePyramidMaterializer",
@@ -117,6 +126,11 @@ def test_baseline_capabilities_are_conservative_and_existing_only() -> None:
         "name": "metadata.raw_exif",
         "input_kinds": ["image.observation"],
         "output_kinds": ["observation.metadata"],
+    }
+    assert entries["ffmpeg.audio_correlation_sync"]["capability"] == {
+        "name": "synchronization.audio_correlation",
+        "input_kinds": ["video.observation"],
+        "output_kinds": ["sync.hypothesis"],
     }
     assert entries["ffmpeg.decoded_image_pyramid"]["capability"] == {
         "name": "media.decoded_image_pyramid",
@@ -153,6 +167,7 @@ def test_baseline_shipping_license_and_hardware_policy_match_approved_evidence()
     expected_hardware_policy = {
         "colmap.sparse_sfm": "required",
         "exifread.raw_exif": "omitted",
+        "ffmpeg.audio_correlation_sync": "omitted",
         "ffmpeg.decoded_image_pyramid": "omitted",
         "ffmpeg.keyframe_extraction": "omitted",
     }

@@ -46,6 +46,29 @@ entries:
     failure_signals: []
     metric_names: []
     resume_mode: unsupported
+  - adapter_id: ffmpeg.audio_correlation_sync
+    capability:
+      name: synchronization.audio_correlation
+      input_kinds: [video.observation]
+      output_kinds: [sync.hypothesis]
+    producer:
+      implementation: wre.synchronization.audio.FFmpegAudioCorrelationSynchronizer
+      version: 6.1.1-3ubuntu5
+      revision: null
+    dependency_refs: [ffmpeg]
+    model: null
+    checkpoint: null
+    artifact_key_hardware_policy: omitted
+    license:
+      direct: GPL-2.0-or-later
+      review: approved
+      transitive_notes: "The retained Ubuntu Noble FFmpeg package is already reviewed as an external GPL-2.0-or-later subprocess dependency; audio correlation adds only bounded canonical PCM extraction and Python standard-library arithmetic."
+      redistribution_notes: "WRE invokes the exact ffmpeg/ffprobe package as external subprocesses and does not link or bundle the binaries; alternate builds or redistribution require fresh review."
+    shipping_status: approved
+    reproducibility_notes: "FFmpegAudioCorrelationSynchronizer requires matching ffmpeg and ffprobe 6.1.1-3ubuntu5 identities, verifies exact source bytes, extracts bounded mono s16le PCM at an explicit policy sample rate/duration, and uses deterministic bounded normalized correlation with explicit acceptance thresholds."
+    failure_signals: []
+    metric_names: []
+    resume_mode: unsupported
   - adapter_id: ffmpeg.decoded_image_pyramid
     capability:
       name: media.decoded_image_pyramid
