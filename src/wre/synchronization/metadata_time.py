@@ -113,11 +113,7 @@ def adapt_capture_time_sync(
         if first_time.instant is None or second_time.instant is None:
             raise ValueError("resolved capture-time interpretation must expose an instant")
         delta = second_time.instant - first_time.instant
-        offset_us = (
-            delta.days * 86_400_000_000
-            + delta.seconds * 1_000_000
-            + delta.microseconds
-        )
+        offset_us = delta.days * 86_400_000_000 + delta.seconds * 1_000_000 + delta.microseconds
         disposition = SyncHypothesisDisposition.SUPPORTED
     else:
         offset_us = None
