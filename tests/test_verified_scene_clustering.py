@@ -196,9 +196,7 @@ def test_unresolved_relation_neither_merges_nor_contributes_evidence() -> None:
         unresolved_ref,
     )
 
-    clusters = cluster_verified_scene_relations(
-        _input(("obs:a", "obs:b"), (relation,))
-    )
+    clusters = cluster_verified_scene_relations(_input(("obs:a", "obs:b"), (relation,)))
 
     assert tuple(tuple(item.value for item in cluster.observation_ids) for cluster in clusters) == (
         ("obs:a",),
