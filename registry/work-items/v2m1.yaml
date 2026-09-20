@@ -2075,7 +2075,7 @@ work_items:
   - id: V2L10.2
     lot: V2L10
     title: Route node and route graph contract
-    status: ready
+    status: done
     objective: Define the minimal immutable solver-independent route-node and route-graph structure needed to express an acyclic orchestration plan in terms of explicit required AdapterCapabilityName values without selecting concrete adapters executing work or introducing router inputs fallback policy or route decisions.
     allowed_scope:
       - src/wre/routing/graph.py
@@ -2131,7 +2131,70 @@ work_items:
       - regression proving graph contracts expose no adapter selection profile budget fallback quality decision reason execution persistence or generic metadata fields
       - no filesystem network subprocess external dependency or persistence imports
       - full fast CI and CodeQL plus native lanes only where repository path triggers require them
-  - {id: V2L10.3, lot: V2L10, title: Deterministic router input contract, status: planned, depends_on: [V2L10.2]}
+  - id: V2L10.3
+    lot: V2L10
+    title: Deterministic router input contract
+    status: ready
+    objective: Define one immutable deterministic router-input snapshot containing only already-established data-profile evidence requested canonical quality mode an explicit bounded resource budget existing artifact references and prior stable failure categories without selecting a route resolving adapters executing work or adding fallback policy.
+    allowed_scope:
+      - src/wre/routing/inputs.py
+      - focused exports in src/wre/routing/__init__.py
+      - tests/test_router_inputs.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L10.4 can be activated without implementing it
+    out_of_scope:
+      - changing MediaProfile RouteQualityRequest QualityMode ArtifactRef FailureCategory RouteNode RouteGraph or existing domain semantics
+      - deriving media-profile facts parsing evidence artifacts recomputing metrics or inferring route signals from filenames logs environment or mutable registry state
+      - hardware discovery benchmarking resource estimation scheduling placement queueing duration prediction or any V2L46 responsibility
+      - concrete adapter availability registry lookup capability satisfaction route graph construction ranking scoring default selection or route choice
+      - retry fallback escalation transition tables attempt counters termination policy or any V2L10.4 behavior
+      - route-decision artifacts reasons provenance persistence or any V2L10.5 behavior
+      - quality-gate execution threshold changes mode-dependent truth or provenance mutation
+      - filesystem network subprocess external dependency persistence schema or registry mutation
+      - starting V2L10.4 implementation in this work item
+    depends_on: [V2L10.2]
+    read_before:
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - src/wre/domain/media_profiles.py
+      - src/wre/domain/artifacts.py
+      - src/wre/domain/failures.py
+      - src/wre/routing/quality_mode.py
+      - src/wre/routing/graph.py
+      - tests/test_media_profiles.py
+      - tests/test_routing_quality_mode.py
+      - tests/test_route_graph.py
+    reuse:
+      - RouteQualityRequest for the exact canonical requested QualityMode without a second routing mode vocabulary
+      - MediaProfile as the already-derived per-observation profiling boundary rather than embedding profiler-private metrics or classifications
+      - ArtifactRef for exact existing-artifact identity and FailureCategory for stable prior failure vocabulary
+      - immutable canonical tuple validation patterns already used across V2 domain contracts
+    acceptance:
+      - Add immutable RouteResourceBudget containing exactly cpu_threads ram_bytes gpu_count gpu_vram_bytes and scratch_storage_bytes integer fields.
+      - cpu_threads and ram_bytes must be positive integers; gpu_count gpu_vram_bytes and scratch_storage_bytes must be non-negative integers; bool values fail closed as invalid integers.
+      - A zero gpu_count requires zero gpu_vram_bytes while positive gpu_vram_bytes requires at least one GPU; the contract performs no hardware discovery or allocation.
+      - Add immutable RouterInputSnapshot containing exactly quality RouteQualityRequest media_profiles tuple of MediaProfile resource_budget RouteResourceBudget existing_artifacts tuple of ArtifactRef and prior_failures tuple of FailureCategory.
+      - media_profiles must be a non-empty immutable tuple with unique canonical ObservationId order; their evidence is retained inside each MediaProfile and is not flattened or recomputed.
+      - existing_artifacts may be empty; when present it is an immutable canonical unique tuple ordered by ArtifactId then ArtifactKind and conflicting kinds for one ArtifactId fail closed.
+      - prior_failures may be empty; when present it is an immutable canonical unique tuple ordered by stable FailureCategory wire token and carries no logs messages retry counts stack traces or solver-private values.
+      - quality resource budget profiles artifacts and failures are retained exactly as caller supplied after validation; no derived score route hint capability requirement or normalized replacement object is created.
+      - RouterInputSnapshot performs no route selection graph traversal adapter resolution fallback escalation quality evaluation scheduling execution persistence or I/O.
+      - The contract carries no timestamp random seed environment dictionary user preference free-form metadata route winner reason score rank or mutable catch-all field.
+      - No new dependency registry entry persistence schema filesystem network subprocess or external execution surface is introduced.
+    tests:
+      - RouteResourceBudget frozen exact field shape valid CPU-only and GPU budgets and integer bound/type validation
+      - zero-GPU plus nonzero VRAM inconsistency rejection
+      - RouterInputSnapshot frozen exact field shape and wrong-type rejection
+      - non-empty canonical unique MediaProfile validation by ObservationId
+      - empty and populated canonical existing-artifact validation including duplicates decreasing order wrong types and conflicting ArtifactKind for one ArtifactId
+      - empty and populated canonical unique prior FailureCategory validation including duplicate decreasing and wrong-type rejection
+      - canonical RouteQualityRequest identity and exact caller-object retention
+      - regression proving no route graph adapter capability selection fallback escalation decision score reason scheduling execution persistence or generic metadata surface
+      - no filesystem network subprocess external dependency or persistence imports
+      - full fast CI and CodeQL plus native lanes only where repository path triggers require them
   - {id: V2L10.4, lot: V2L10, title: Bounded allowlisted fallback escalation policy, status: planned, depends_on: [V2L10.3]}
   - {id: V2L10.5, lot: V2L10, title: Auditable route decision artifact, status: planned, depends_on: [V2L10.4]}
   - {id: V2L10.6, lot: V2L10, title: Router determinism fail closed tests, status: planned, depends_on: [V2L10.5]}
