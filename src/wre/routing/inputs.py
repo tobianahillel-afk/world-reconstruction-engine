@@ -68,9 +68,7 @@ class RouterInputSnapshot:
         if len(observation_ids) != len(set(observation_ids)):
             raise ValueError("router_input.media_profiles must use unique ObservationId values")
         if observation_ids != tuple(sorted(observation_ids)):
-            raise ValueError(
-                "router_input.media_profiles must use canonical ObservationId order"
-            )
+            raise ValueError("router_input.media_profiles must use canonical ObservationId order")
 
         if not isinstance(self.resource_budget, RouteResourceBudget):
             raise TypeError("router_input.resource_budget must be RouteResourceBudget")
@@ -81,8 +79,7 @@ class RouterInputSnapshot:
             raise TypeError("router_input.existing_artifacts members must be ArtifactRef")
 
         artifact_keys = tuple(
-            (ref.artifact_id.value, ref.artifact_kind.value)
-            for ref in self.existing_artifacts
+            (ref.artifact_id.value, ref.artifact_kind.value) for ref in self.existing_artifacts
         )
         if len(artifact_keys) != len(set(artifact_keys)):
             raise ValueError("router_input.existing_artifacts must be unique")
@@ -112,6 +109,4 @@ class RouterInputSnapshot:
         if len(failure_values) != len(set(failure_values)):
             raise ValueError("router_input.prior_failures must be unique")
         if failure_values != tuple(sorted(failure_values)):
-            raise ValueError(
-                "router_input.prior_failures must use canonical FailureCategory order"
-            )
+            raise ValueError("router_input.prior_failures must use canonical FailureCategory order")
