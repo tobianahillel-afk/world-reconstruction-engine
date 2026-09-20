@@ -1811,6 +1811,7 @@ work_items:
       - src/wre/synchronization/audio.py
       - focused exports in src/wre/synchronization/__init__.py
       - tests/test_audio_sync.py
+      - tests/test_adapter_model_registry_baselines.py only for the exact new approved FFmpeg audio-sync baseline expectations required by this registry addition
       - registry/adapter-models.yaml only for the new FFmpeg audio synchronization capability after implementation semantics are fixed
       - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L9.4 can be activated without implementing it
     out_of_scope:
