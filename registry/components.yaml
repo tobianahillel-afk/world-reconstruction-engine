@@ -174,10 +174,12 @@ components:
       - src/wre/synchronization/__init__.py
       - src/wre/synchronization/metadata_time.py
       - src/wre/synchronization/audio.py
+      - src/wre/synchronization/visual.py
     tests:
       - tests/test_temporal_groups.py
       - tests/test_metadata_time_sync.py
       - tests/test_audio_sync.py
+      - tests/test_visual_event_sync.py
     status: implementing
   route_graph: {owner_lot: V2L10, implementation: [], tests: [], status: planned}
   canonical_geometry_contracts: {owner_lot: V2L11, implementation: [], tests: [], status: planned}

@@ -5,17 +5,17 @@ roadmap_version: '2.0'
 phase: implementation
 milestone: V2M1
 lot: V2L9
-active_work_item: V2L9.4
+active_work_item: V2L9.5
 status: ready
-last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5, V2L3.6, V2L4.1, V2L4.2, V2L4.3, V2L4.4, V2L4.5, V2L4.6, V2L5.1, V2L5.2, V2L5.3, V2L5.4, V2L5.5, V2L5.6, V2L6.1, V2L6.2, V2L6.3, V2L6.4, V2L6.5, V2L6.6, V2L7.1, V2L7.2, V2L7.3, V2L7.4, V2L7.5, V2L7.6, V2L8.1, V2L8.2, V2L8.3, V2L8.4, V2L8.5, V2L9.1, V2L9.2, V2L9.3]
-last_merged_pr: 91
+last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5, V2L3.6, V2L4.1, V2L4.2, V2L4.3, V2L4.4, V2L4.5, V2L4.6, V2L5.1, V2L5.2, V2L5.3, V2L5.4, V2L5.5, V2L5.6, V2L6.1, V2L6.2, V2L6.3, V2L6.4, V2L6.5, V2L6.6, V2L7.1, V2L7.2, V2L7.3, V2L7.4, V2L7.5, V2L7.6, V2L8.1, V2L8.2, V2L8.3, V2L8.4, V2L8.5, V2L9.1, V2L9.2, V2L9.3, V2L9.4]
+last_merged_pr: 92
 current_goal: >-
-  Define a solver-independent pairwise visual-event synchronization evidence interface that can normalize explicit
-  offset support residual and ambiguity information without running a visual solver or fusing sources into a timeline.
+  Prove through deterministic fixtures and lot review that metadata audio and visual synchronization evidence remains
+  evidence-scoped under agreement ambiguity disagreement and explicit contradiction without implicit source fusion.
 next_action: >-
-  Complete only V2L9.4 from its executable contract in registry/work-items/v2m1.yaml: add immutable explicit-policy
-  visual-event candidate contracts and pure fail-closed adaptation to SyncHypothesis; do not decode media, run trackers
-  or models, merge metadata/audio/visual evidence, build TemporalGroup values or begin V2L9.5 early.
+  Complete only V2L9.5 from its executable contract in registry/work-items/v2m1.yaml: add fixture-only composition
+  regressions, then review V2L9 and mark it PASS only if no source winner, fused timeline, TemporalGroup construction or
+  contradiction inference leaks into the foundation; do not begin V2L10.1 early.
 blockers: []
 architecture:
   product_blueprint: docs/01_PRODUCT.md

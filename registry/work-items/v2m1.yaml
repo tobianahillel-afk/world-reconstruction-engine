@@ -1885,7 +1885,7 @@ work_items:
   - id: V2L9.4
     lot: V2L9
     title: Visual event synchronization interface
-    status: ready
+    status: done
     objective: Define one minimal immutable solver-independent interface for adapting already-produced pairwise visual-event alignment evidence into SyncHypothesis values with explicit support residual ambiguity and acceptance policy while performing no visual model execution no tracking and no implicit fusion into one timeline.
     allowed_scope:
       - src/wre/synchronization/visual.py
@@ -1949,7 +1949,73 @@ work_items:
       - regression proving no CONTRADICTED result and no TemporalGroup construction or fusion behavior
       - no filesystem network subprocess model checkpoint external dependency or persistence imports
       - full fast CI and CodeQL plus native lanes only where repository path triggers require them
-  - {id: V2L9.5, lot: V2L9, title: Synchronization ambiguity contradiction fixtures, status: planned, depends_on: [V2L9.4]}
+  - id: V2L9.5
+    lot: V2L9
+    title: Synchronization ambiguity contradiction fixtures
+    status: ready
+    objective: Add deterministic fixture-level regression coverage and complete the V2L9 lot review proving metadata audio and visual synchronization evidence can remain supported unresolved ambiguous or explicitly contradicted as separate evidence-scoped hypotheses without automatic cross-source fusion winner selection or TemporalGroup construction.
+    allowed_scope:
+      - tests/test_sync_ambiguity_contradiction_fixture.py
+      - docs/reviews/V2L9-temporal-grouping-sync-review.md only after fixture and full implementation evidence are green
+      - registry/reviews.yaml only after lot-review evidence exists
+      - registry/components.yaml PROJECT_STATE.yaml and this work-item registry only for final lot closure and V2L10.1 handoff after review evidence is PASS
+    out_of_scope:
+      - adding a synchronization fusion resolver consensus algorithm source priority winner ranking weighting or default-source policy
+      - changing any V2L9.1 through V2L9.4 production contract or adapter semantics
+      - inferring CONTRADICTED merely because two supported sources disagree on offset
+      - constructing TemporalGroup values from hypotheses or assigning observations to a shared event-time group
+      - clock-rate drift affine spline or other time-warp estimation
+      - executing FFmpeg trackers visual models feature matching optical flow or any external solver in the fixture
+      - route selection geometry reconstruction 4D reconstruction multi-video event fusion or any V2L29 behavior
+      - historical chronology TemporalState ChangeEvent or V2L31 through V2L35 behavior
+      - starting V2L10.1 implementation in this work item
+    depends_on: [V2L9.4]
+    read_before:
+      - docs/03_PIPELINE.md
+      - docs/13_TEMPORAL_WORLD.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - src/wre/domain/temporal_groups.py
+      - src/wre/synchronization/metadata_time.py
+      - src/wre/synchronization/audio.py
+      - src/wre/synchronization/visual.py
+      - tests/test_temporal_groups.py
+      - tests/test_metadata_time_sync.py
+      - tests/test_audio_sync.py
+      - tests/test_visual_event_sync.py
+      - registry/reviews.yaml
+      - docs/reviews/V2L8-scene-identity-clustering-review.md
+    reuse:
+      - SyncHypothesis as the stable evidence-scoped pairwise output whose dispositions remain separate until a later explicit fusion responsibility
+      - existing pure metadata and visual adapters for fixture-produced supported and unresolved hypotheses without reimplementing their truth rules
+      - explicit ArtifactRef kinds to distinguish metadata audio visual and contradiction fixture evidence
+      - direct SyncHypothesis construction only for fixture-local explicitly contradictory ground-truth evidence because no V2L9 adapter is allowed to infer contradiction from ordinary weakness or disagreement
+    acceptance:
+      - Add one deterministic fixture module with one canonical observation pair and source-specific ArtifactRef values for metadata audio visual and explicit contradiction evidence.
+      - The fixture includes an agreement case where independently supported metadata and visual hypotheses expose the same offset and remain separate records rather than being merged.
+      - The fixture includes an ambiguity case where supported metadata coexists with an unresolved ambiguous visual hypothesis and metadata support does not promote visual ambiguity.
+      - The fixture includes a weak or unavailable audio-style unresolved hypothesis carrying only audio evidence and proves no metadata or visual fallback is injected.
+      - The fixture includes a disagreement case where two separately SUPPORTED source hypotheses expose different offsets and remain two supported evidence-scoped records without automatically manufacturing CONTRADICTED or selecting a winner.
+      - The fixture includes an explicit contradiction case represented by a distinct CONTRADICTED SyncHypothesis with offset_us None and exact contradiction evidence and proves this explicit state can coexist with supported or unresolved source hypotheses without silent overwrite.
+      - Fixture ordering is deterministic and evidence provenance remains exact per hypothesis with no cross-source evidence union.
+      - No fixture helper returns a fused offset TemporalGroup global timeline source priority ranking confidence winner or route decision.
+      - The fixture performs no filesystem network subprocess FFmpeg model checkpoint tracker or external-solver execution.
+      - Full regression suite remains green and no known semantic regression remains across V2L9.1 through V2L9.4.
+      - Add docs/reviews/V2L9-temporal-grouping-sync-review.md only after implementation evidence is green and record PASS only if composition preserves relative-time semantics provenance ambiguity and explicit contradiction without implicit fusion.
+      - The lot review explicitly states that cross-source synchronization fusion belongs to V2L29 and long-term historical chronology belongs to V2L31 plus rather than V2L9.
+      - Update registry/reviews.yaml V2L9 to passed only after the review document exists and final review evidence is complete.
+      - Mark temporal_grouping_sync implemented and activate only V2L10.1 after lot PASS without implementing V2L10.1 in this work item.
+    tests:
+      - deterministic agreement fixture with separate supported metadata and visual hypotheses
+      - ambiguous visual plus supported metadata remains separate and unresolved on the visual path
+      - unresolved audio-style evidence remains unresolved with exact audio-only provenance
+      - supported-offset disagreement does not automatically become contradiction or choose a winner
+      - explicit contradiction remains CONTRADICTED with no offset and exact contradiction-only provenance
+      - deterministic fixture ordering and no evidence-ref union across source hypotheses
+      - no TemporalGroup fusion winner source-priority route historical or external-execution surface
+      - full fast CI CodeQL and native lanes only where repository path triggers require them
   - {id: V2L10.1, lot: V2L10, title: Adopt canonical QualityMode in routing contracts, status: planned, depends_on: [V2L9.5]}
   - {id: V2L10.2, lot: V2L10, title: Route node and route graph contract, status: planned, depends_on: [V2L10.1]}
   - {id: V2L10.3, lot: V2L10, title: Deterministic router input contract, status: planned, depends_on: [V2L10.2]}
