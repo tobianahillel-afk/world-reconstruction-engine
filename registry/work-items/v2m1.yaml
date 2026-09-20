@@ -1665,7 +1665,7 @@ work_items:
   - id: V2L9.1
     lot: V2L9
     title: TemporalGroup and SyncHypothesis contracts
-    status: ready
+    status: done
     objective: Define only the minimal immutable solver-independent contracts needed to represent one event-time synchronization context inside an existing scene cluster and one canonical pairwise relative-time synchronization hypothesis, preserving supported contradicted and unresolved states without parsing metadata executing synchronization algorithms constructing groups or conflating event-time synchronization with long-term historical chronology.
     allowed_scope:
       - src/wre/domain/temporal_groups.py
@@ -1733,7 +1733,75 @@ work_items:
       - multi-observation TemporalGroup without evidence rejected
       - regression proving no absolute datetime historical epoch generic score route solver or execution fields are embedded
       - full fast CI CodeQL and native COLMAP lane only where triggered
-  - {id: V2L9.2, lot: V2L9, title: Metadata timecode synchronization evidence, status: planned, depends_on: [V2L9.1]}
+  - id: V2L9.2
+    lot: V2L9
+    title: Metadata timecode synchronization evidence
+    status: ready
+    objective: Adapt already-interpreted capture-time metadata and already-retained same-video frame timing into conservative SyncHypothesis values without re-parsing media guessing missing timezones treating publication time as capture time or performing audio visual or cross-video synchronization.
+    allowed_scope:
+      - src/wre/synchronization/__init__.py
+      - src/wre/synchronization/metadata_time.py
+      - tests/test_metadata_time_sync.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L9.3 can be activated without implementing it
+    out_of_scope:
+      - changing raw EXIF extraction metadata interpretation or CaptureTimeInterpretation semantics
+      - parsing raw EXIF strings archive catalog dates publication upload dates or external calendar metadata
+      - guessing a timezone for LOCAL_AMBIGUOUS capture time
+      - parsing SMPTE LTC VITC container timecode tracks or external clock protocols
+      - cross-video synchronization from unrelated source-relative frame clocks
+      - audio extraction correlation resampling fingerprinting FFmpeg execution or any V2L9.3 behavior
+      - visual event detection tracking alignment or any V2L9.4 behavior
+      - TemporalGroup construction graph closure clock fusion consensus drift estimation or timeline optimization
+      - emitting CONTRADICTED merely because timestamps differ or metadata is invalid ambiguous incomplete or absent
+      - historical epoch inference TemporalState ChangeEvent or any V2L31 through V2L35 behavior
+      - filesystem database network subprocess model checkpoint or external solver execution
+      - starting V2L9.3 implementation in this work item
+    depends_on: [V2L9.1]
+    read_before:
+      - docs/03_PIPELINE.md
+      - docs/13_TEMPORAL_WORLD.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - src/wre/domain/metadata.py
+      - src/wre/domain/observations.py
+      - src/wre/domain/temporal_groups.py
+      - src/wre/ingestion/metadata_interpretation.py
+      - tests/test_metadata_interpretation.py
+      - tests/test_video_ingestion.py
+      - tests/test_temporal_groups.py
+    reuse:
+      - ObservationMetadataInterpretation and CaptureTimeInterpretation as already-produced fail-closed metadata semantics rather than re-parsing raw EXIF
+      - VideoFrameObservation.frame_time_us and exact parent video_asset identity as already-retained source-relative timing evidence
+      - SyncHypothesis and SyncHypothesisDisposition as the only normalized output contract
+      - ArtifactRef supplied by the caller to retain exact interpretation or frame-timing evidence provenance
+    acceptance:
+      - Add immutable CaptureTimeSyncAdapterInput containing two ObservationMetadataInterpretation values in canonical ObservationId order plus a non-empty canonical unique tuple of ArtifactRef evidence.
+      - Capture-time adapter input rejects duplicate or decreasing endpoints and rejects evidence-ref type duplicate or ordering violations.
+      - adapt_capture_time_sync returns None only when both capture-time interpretations are ABSENT because no synchronization evidence exists.
+      - If both capture-time interpretations are RESOLVED adapt_capture_time_sync returns SUPPORTED with exact signed offset_us equal to instant2 minus instant1 using integer microsecond arithmetic and preserves every supplied evidence ref.
+      - If at least one capture-time interpretation is LOCAL_AMBIGUOUS INVALID or ABSENT while the pair still carries some capture-time evidence the result is UNRESOLVED with offset_us None.
+      - Capture-time adaptation never guesses a timezone never substitutes received_at and never emits CONTRADICTED from ordinary metadata disagreement invalidity ambiguity or absence.
+      - Add immutable SameVideoFrameSyncAdapterInput containing two VideoFrameObservation values in canonical ObservationId order plus one explicit ArtifactRef evidence reference.
+      - SameVideoFrameSyncAdapterInput requires exact equality of the two parent video_asset values; frames from different source videos fail closed instead of pretending their frame_time_us origins are comparable.
+      - adapt_same_video_frame_sync returns SUPPORTED with exact signed offset_us equal to frame2.frame_time_us minus frame1.frame_time_us and preserves the supplied evidence ref.
+      - Same-video frame timing is explicitly source-relative evidence only and does not create an absolute capture timestamp or cross-video alignment.
+      - No new time parser datetime inference publication-date logic clock-rate model drift model score confidence probability or generic metadata bag is introduced.
+      - No external dependency filesystem network subprocess FFmpeg invocation or synchronization algorithm is introduced.
+    tests:
+      - CaptureTimeSyncAdapterInput frozen field shape canonical endpoint and evidence validation
+      - two resolved UTC instants with negative zero and positive exact microsecond offsets
+      - resolved offsets across different timezone offsets after interpretation normalization
+      - both ABSENT returns None
+      - resolved plus ABSENT returns UNRESOLVED
+      - LOCAL_AMBIGUOUS and INVALID cases remain UNRESOLVED without offset
+      - regression proving capture-time adapter never emits CONTRADICTED
+      - SameVideoFrameSyncAdapterInput frozen field shape canonical endpoint and evidence validation
+      - same parent video negative zero and positive frame_time_us offsets
+      - different parent video rejection
+      - regression proving same-video frame timing does not inspect captured_at or create absolute time
+      - no external execution dependency imports or new persistence surface
+      - full fast CI CodeQL and native COLMAP lane only where triggered
   - {id: V2L9.3, lot: V2L9, title: Audio correlation synchronization adapter, status: planned, depends_on: [V2L9.2]}
   - {id: V2L9.4, lot: V2L9, title: Visual event synchronization interface, status: planned, depends_on: [V2L9.3]}
   - {id: V2L9.5, lot: V2L9, title: Synchronization ambiguity contradiction fixtures, status: planned, depends_on: [V2L9.4]}

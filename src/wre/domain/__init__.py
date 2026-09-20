@@ -132,6 +132,12 @@ from wre.domain.scene_clusters import (
     SceneRelationDisposition,
     SceneRelationHypothesis,
 )
+from wre.domain.temporal_groups import (
+    SyncHypothesis,
+    SyncHypothesisDisposition,
+    TemporalGroup,
+    TemporalGroupId,
+)
 
 __all__ = [
     "ARTIFACT_KEY_SCHEMA_VERSION",
@@ -234,6 +240,10 @@ __all__ = [
     "SparseReconstructionEstimateId",
     "SpatialFragment",
     "SpatialFragmentId",
+    "SyncHypothesis",
+    "SyncHypothesisDisposition",
+    "TemporalGroup",
+    "TemporalGroupId",
     "VideoFrameObservation",
     "VideoObservation",
     "build_decoded_image_level_descriptors",
