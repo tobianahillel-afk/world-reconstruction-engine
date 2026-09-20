@@ -1850,7 +1850,7 @@ work_items:
       - explicit caller-supplied ArtifactRef for the produced audio-correlation evidence provenance
     acceptance:
       - Add immutable AudioCorrelationPolicy with explicit positive sample_rate_hz window_duration_us max_lag_us minimum_overlap_us and minimum_correlation values; all numeric limits are finite/type-checked and no hidden default acceptance threshold exists.
-      - The reference policy is bounded: sample_rate_hz and window_duration_us determine a finite maximum decoded sample count and max_lag_us cannot exceed the decoded window duration.
+      - 'The reference policy is bounded: sample_rate_hz and window_duration_us determine a finite maximum decoded sample count and max_lag_us cannot exceed the decoded window duration.'
       - Add immutable AudioCorrelationSyncRequest containing two canonical distinct VideoObservation values two Path source locations one AudioCorrelationPolicy and one explicit ArtifactRef evidence reference.
       - Request validation requires canonical ObservationId order and verifies types only; exact source bytes are verified against each VideoObservation asset before FFmpeg execution.
       - Require inspect_toolchain to match the retained exact ffmpeg/ffprobe identity before decoding either source.
