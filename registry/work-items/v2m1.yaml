@@ -2019,7 +2019,7 @@ work_items:
   - id: V2L10.1
     lot: V2L10
     title: Adopt canonical QualityMode in routing contracts
-    status: ready
+    status: done
     objective: Establish the minimal immutable route-facing quality-mode boundary by reusing the exact canonical wre.domain.QualityMode type owned by V2L4.4 and regression-proving that routing introduces no competing mode vocabulary or mode-dependent truth semantics before route-node graph inputs fallback or route-decision responsibilities exist.
     allowed_scope:
       - src/wre/routing/__init__.py
@@ -2072,7 +2072,65 @@ work_items:
       - regression proving route-quality request has no route graph profile budget fallback escalation threshold decision provenance or generic metadata fields
       - no filesystem network subprocess external dependency or persistence imports
       - full fast CI and CodeQL plus native lanes only where repository path triggers require them
-  - {id: V2L10.2, lot: V2L10, title: Route node and route graph contract, status: planned, depends_on: [V2L10.1]}
+  - id: V2L10.2
+    lot: V2L10
+    title: Route node and route graph contract
+    status: ready
+    objective: Define the minimal immutable solver-independent route-node and route-graph structure needed to express an acyclic orchestration plan in terms of explicit required AdapterCapabilityName values without selecting concrete adapters executing work or introducing router inputs fallback policy or route decisions.
+    allowed_scope:
+      - src/wre/routing/graph.py
+      - focused exports in src/wre/routing/__init__.py
+      - tests/test_route_graph.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L10.3 can be activated without implementing it
+    out_of_scope:
+      - changing AdapterCapabilityName AdapterCapabilityDescriptor QualityMode RouteQualityRequest or adapter-model registry semantics
+      - concrete adapter IDs model/checkpoint identities registry lookup candidate ranking default selection or capability satisfaction resolution
+      - data-profile hardware budget existing-artifact prior-failure router inputs owned by V2L10.3
+      - retry fallback escalation alternate branches failure-trigger transitions or any V2L10.4 behavior
+      - route-decision artifact reasons scores provenance persistence or any V2L10.5 behavior
+      - adapter execution graph scheduling concurrency resource estimation checkpointing persistence filesystem network subprocess or external dependency behavior
+      - quality-gate execution threshold changes mode-dependent truth acceptance or provenance mutation
+      - cycles loops retries dynamic graph mutation or runtime graph rewriting
+      - starting V2L10.3 implementation in this work item
+    depends_on: [V2L10.1]
+    read_before:
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - src/wre/domain/adapter_capabilities.py
+      - src/wre/routing/quality_mode.py
+      - tests/test_adapter_capabilities.py
+      - tests/test_routing_quality_mode.py
+    reuse:
+      - AdapterCapabilityName as the only stable semantic capability requirement identity carried by route nodes
+      - immutable typed positive-domain contract patterns already used by scene and artifact graphs
+      - canonical lexical ordering and fail-closed validation rather than silently normalizing unordered or duplicate graph members
+    acceptance:
+      - Add immutable RouteNodeId using the established 1-128 character opaque identifier syntax and keep it distinct from AdapterCapabilityName and other domain identities.
+      - Add immutable RouteNode containing exactly node_id RouteNodeId and a non-empty immutable canonical unique tuple of required_capabilities AdapterCapabilityName values.
+      - RouteNode rejects mutable collections duplicate or decreasing capability order wrong member types and empty capability requirements.
+      - Add immutable RouteEdge containing exactly source RouteNodeId and target RouteNodeId with distinct endpoints and canonical pair identity.
+      - Add immutable RouteGraph containing exactly nodes tuple and edges tuple with at least one node canonical unique node IDs and canonical unique edge order.
+      - Every edge endpoint must reference a node present in the same graph and duplicate self or foreign-endpoint edges fail closed.
+      - RouteGraph must be acyclic; any directed cycle including a multi-node cycle fails closed rather than becoming implicit retry or fallback behavior.
+      - Disconnected nodes and multiple roots or leaves are valid because route graphs may represent parallel or optional independent work structure without execution semantics.
+      - The contract performs no topological scheduling traversal adapter resolution capability satisfaction quality-mode interpretation route selection fallback or execution.
+      - No concrete adapter model checkpoint registry failure quality metric budget profile artifact decision reason or generic metadata field is added.
+      - No new dependency persistence schema registry mutation filesystem network subprocess or external execution surface is introduced.
+    tests:
+      - RouteNodeId equality hashing immutability lexical validation and cross-identity distinctness
+      - RouteNode frozen exact field shape non-empty canonical unique capability validation and wrong-type rejection
+      - RouteEdge frozen exact field shape endpoint typing self-edge rejection equality and hashing
+      - RouteGraph frozen exact field shape canonical node and edge validation
+      - missing edge endpoints duplicate nodes duplicate edges and decreasing order fail closed
+      - one-node graph linear DAG branch merge parallel disconnected and multi-root graphs are valid
+      - two-node and longer directed cycles fail closed
+      - regression proving graph contracts expose no adapter selection profile budget fallback quality decision reason execution persistence or generic metadata fields
+      - no filesystem network subprocess external dependency or persistence imports
+      - full fast CI and CodeQL plus native lanes only where repository path triggers require them
   - {id: V2L10.3, lot: V2L10, title: Deterministic router input contract, status: planned, depends_on: [V2L10.2]}
   - {id: V2L10.4, lot: V2L10, title: Bounded allowlisted fallback escalation policy, status: planned, depends_on: [V2L10.3]}
   - {id: V2L10.5, lot: V2L10, title: Auditable route decision artifact, status: planned, depends_on: [V2L10.4]}

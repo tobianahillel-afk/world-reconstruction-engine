@@ -182,7 +182,14 @@ components:
       - tests/test_visual_event_sync.py
       - tests/test_sync_ambiguity_contradiction_fixture.py
     status: implemented
-  route_graph: {owner_lot: V2L10, implementation: [], tests: [], status: planned}
+  route_graph:
+    owner_lot: V2L10
+    implementation:
+      - src/wre/routing/__init__.py
+      - src/wre/routing/quality_mode.py
+    tests:
+      - tests/test_routing_quality_mode.py
+    status: implementing
   canonical_geometry_contracts: {owner_lot: V2L11, implementation: [], tests: [], status: planned}
   precision_geometry_baseline: {owner_lot: V2L12, implementation: [], tests: [], status: planned}
   feed_forward_geometry: {owner_lot: V2L13, implementation: [], tests: [], status: planned}
