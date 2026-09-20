@@ -1,5 +1,13 @@
 """Synchronization evidence adapters behind stable temporal contracts."""
 
+from wre.synchronization.audio import (
+    AudioCorrelationEvidence,
+    AudioCorrelationEvidenceStatus,
+    AudioCorrelationPolicy,
+    AudioCorrelationSyncRequest,
+    AudioCorrelationSyncResult,
+    FFmpegAudioCorrelationSynchronizer,
+)
 from wre.synchronization.metadata_time import (
     CaptureTimeSyncAdapterInput,
     SameVideoFrameSyncAdapterInput,
@@ -8,6 +16,12 @@ from wre.synchronization.metadata_time import (
 )
 
 __all__ = [
+    "AudioCorrelationEvidence",
+    "AudioCorrelationEvidenceStatus",
+    "AudioCorrelationPolicy",
+    "AudioCorrelationSyncRequest",
+    "AudioCorrelationSyncResult",
+    "FFmpegAudioCorrelationSynchronizer",
     "CaptureTimeSyncAdapterInput",
     "SameVideoFrameSyncAdapterInput",
     "adapt_capture_time_sync",
