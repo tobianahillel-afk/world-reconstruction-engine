@@ -87,6 +87,7 @@ def _decoded_input(
     observation_value: str,
     *,
     rgb8: bytes = b"\x00\x7f\xff\xff\x7f\x00",
+    artifact_kind: str = "media.decoded_image_pyramid",
 ) -> SelaVprPlusImageInput:
     token = observation_value.replace(":", "-")
     root = tmp_path / token
@@ -96,7 +97,7 @@ def _decoded_input(
     content_hash = hash_file_content(level_path)
     artifact_ref = ArtifactRef(
         artifact_id=ArtifactId(f"artifact:{token}"),
-        artifact_kind=ArtifactKind("media.decoded_image_pyramid"),
+        artifact_kind=ArtifactKind(artifact_kind),
     )
     manifest = DecodedImagePyramidManifest(
         source_observation_id=ObservationId(observation_value),
@@ -552,6 +553,29 @@ def test_verified_rgb_input_uses_only_declared_level_zero_bytes(tmp_path: Path) 
     assert image.rgb8 == b"\x00\x7f\xff\xff\x7f\x00"
 
 
+def test_wrong_decoded_artifact_kind_fails_before_materialization_verification(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    item = _decoded_input(
+        tmp_path,
+        "obs:a",
+        artifact_kind="not.decoded_image_pyramid",
+    )
+
+    def _unexpected_verify(*args: object, **kwargs: object) -> None:
+        raise AssertionError(f"wrong artifact identity reached verification: {args} {kwargs}")
+
+    monkeypatch.setattr(
+        selavpr_module,
+        "verify_local_artifact_materialization",
+        _unexpected_verify,
+    )
+
+    with pytest.raises(SelaVprPlusRetrievalError, match="artifact identity"):
+        selavpr_module._verified_rgb_image(item)
+
+
 def test_level_zero_bytes_are_rehashed_after_materialization_verification(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -695,6 +719,25 @@ def test_exact_cosine_top_k_is_deterministic_bounded_and_order_independent() -> 
     )
 
 
+def test_pair_proposal_normalizes_descriptors_within_declared_tolerance() -> None:
+    ids = (ObservationId("obs:a"), ObservationId("obs:b"))
+    near_unit = (1.00005, 0.0)
+
+    result = propose_selavpr_plus_pairs(
+        ids,
+        (near_unit, near_unit),
+        neighbors_per_observation=1,
+    )
+
+    assert result == (
+        SelaVprPlusPair(
+            observation_id1=ObservationId("obs:a"),
+            observation_id2=ObservationId("obs:b"),
+            cosine_similarity=1.0,
+        ),
+    )
+
+
 def test_pair_proposal_rejects_invalid_descriptors_and_neighbors() -> None:
     ids = (ObservationId("obs:a"), ObservationId("obs:b"))
 
@@ -813,6 +856,36 @@ def test_preprocessing_fixes_rgb_normalization_and_322_resize_contract() -> None
             "antialias": True,
         },
     ) in calls
+
+
+def test_default_runtime_rejects_unsupported_python_before_torch_import(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    versions = {
+        "torch": SELAVPR_PLUS_TORCH_VERSION,
+        "numpy": SELAVPR_PLUS_NUMPY_VERSION,
+        "faiss-cpu": SELAVPR_PLUS_FAISS_CPU_VERSION,
+        "tqdm": SELAVPR_PLUS_TQDM_VERSION,
+    }
+    monkeypatch.setattr(selavpr_module, "_package_version", lambda name: versions[name])
+    monkeypatch.setattr(selavpr_module.platform, "python_version", lambda: "3.11.9")
+    imported: list[str] = []
+
+    def _unexpected_import(name: str) -> object:
+        imported.append(name)
+        raise AssertionError(f"unsupported Python imported {name!r}")
+
+    monkeypatch.setattr(selavpr_module.importlib, "import_module", _unexpected_import)
+
+    with pytest.raises(SelaVprPlusRetrievalError, match="Python version"):
+        selavpr_module._TorchSelaVprPlusRuntime().infer(
+            source_root=Path("/tmp/selavpr-source"),
+            checkpoint_path=Path("/tmp/checkpoint.pth"),
+            images=(),
+            config=SelaVprPlusRetrievalConfig(),
+        )
+
+    assert imported == []
 
 
 def test_fake_runtime_retrieval_preserves_exact_evidence_boundary(
