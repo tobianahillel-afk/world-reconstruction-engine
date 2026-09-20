@@ -163,6 +163,7 @@ components:
       - tests/test_scene_clusters.py
       - tests/test_colmap_scene_relation_adapter.py
       - tests/test_verified_scene_clustering.py
+      - tests/test_repeated_symmetric_lookalike_fixture.py
     status: implementing
   temporal_grouping_sync: {owner_lot: V2L9, implementation: [], tests: [], status: planned}
   route_graph: {owner_lot: V2L10, implementation: [], tests: [], status: planned}
