@@ -297,7 +297,7 @@ def _false_merge_count(
     }
     count = 0
     for cluster_object in clusters:
-        observation_ids = getattr(cluster_object, "observation_ids")
+        observation_ids = cluster_object.observation_ids
         group_ids = {
             group_by_observation[observation_id.value]
             for observation_id in observation_ids
