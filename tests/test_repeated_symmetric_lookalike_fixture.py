@@ -36,9 +36,7 @@ from wre.scene_identity import (
     cluster_verified_scene_relations,
 )
 
-_FIXTURE_DIR = (
-    Path(__file__).parent / "fixtures" / "synthetic" / "repeated-symmetric-lookalike"
-)
+_FIXTURE_DIR = Path(__file__).parent / "fixtures" / "synthetic" / "repeated-symmetric-lookalike"
 _FIXTURE_PATH = _FIXTURE_DIR / "fixture.json"
 
 
@@ -93,9 +91,7 @@ def _pair(value: object, context: str) -> tuple[str, str]:
 def _artifact_ref(data: dict[str, object], context: str) -> ArtifactRef:
     return ArtifactRef(
         artifact_id=ArtifactId(_string(data.get("artifact_id"), f"{context}.artifact_id")),
-        artifact_kind=ArtifactKind(
-            _string(data.get("artifact_kind"), f"{context}.artifact_kind")
-        ),
+        artifact_kind=ArtifactKind(_string(data.get("artifact_kind"), f"{context}.artifact_kind")),
     )
 
 
@@ -120,8 +116,7 @@ def _load_scenario(fixture: FixtureSpec) -> dict[str, object]:
 def _observation_values(scenario: dict[str, object]) -> tuple[str, ...]:
     raw = _array(scenario["observation_ids"], "scenario.observation_ids")
     values = tuple(
-        _string(value, f"scenario.observation_ids[{index}]")
-        for index, value in enumerate(raw)
+        _string(value, f"scenario.observation_ids[{index}]") for index, value in enumerate(raw)
     )
     assert len(values) == 4
     assert values == tuple(sorted(values))
@@ -162,9 +157,7 @@ def _candidate_records(scenario: dict[str, object]) -> tuple[dict[str, object], 
     assert len(records) == 3
     for record in records:
         assert set(record) == {"endpoints", "role", "sources", "verification"}
-    pair_keys = tuple(
-        _pair(record["endpoints"], "candidate_pair.endpoints") for record in records
-    )
+    pair_keys = tuple(_pair(record["endpoints"], "candidate_pair.endpoints") for record in records)
     assert pair_keys == tuple(sorted(pair_keys))
     assert len(pair_keys) == len(set(pair_keys))
     return records
@@ -182,9 +175,7 @@ def _pair_candidate(record: dict[str, object]) -> PairCandidate:
                 source_id=PairCandidateSourceId(
                     _string(source["source_id"], f"candidate_pair.sources[{index}].source_id")
                 ),
-                evidence_refs=(
-                    _artifact_ref(source, f"candidate_pair.sources[{index}]"),
-                ),
+                evidence_refs=(_artifact_ref(source, f"candidate_pair.sources[{index}]"),),
             )
         )
     return PairCandidate(
@@ -233,11 +224,9 @@ def _verification_result(
         has_estimated_camera2=False,
     )
     verification_ref = _artifact_ref(verification_data, "verification")
-    safe_name = (
-        f"{candidate.observation_id1.value}-{candidate.observation_id2.value}"
-        .replace(":", "_")
-        .replace("/", "_")
-    )
+    safe_name = f"{candidate.observation_id1.value}-{candidate.observation_id2.value}".replace(
+        ":", "_"
+    ).replace("/", "_")
     result = ColmapGeometricVerificationResult(
         provenance=DerivedArtifactProvenance(
             producing_run_id=ReconstructionRunId(f"run:{safe_name}"),
@@ -299,8 +288,7 @@ def _false_merge_count(
     for cluster_object in clusters:
         observation_ids = cluster_object.observation_ids
         group_ids = {
-            group_by_observation[observation_id.value]
-            for observation_id in observation_ids
+            group_by_observation[observation_id.value] for observation_id in observation_ids
         }
         if len(group_ids) > 1:
             count += 1
@@ -335,9 +323,7 @@ def _conflict_detected(
     assert baseline_by_pair[bridge_pair].disposition is SceneRelationDisposition.UNRESOLVED
 
     conflict_relations = [
-        relation
-        for pair, relation in baseline_by_pair.items()
-        if pair != bridge_pair
+        relation for pair, relation in baseline_by_pair.items() if pair != bridge_pair
     ]
     conflict_relations.extend(
         (
@@ -409,9 +395,7 @@ def _run_baseline() -> _BaselineRun:
     )
 
     lookalike_indices = tuple(
-        index
-        for index, record in enumerate(records)
-        if record["role"] == "cross_scene_lookalike"
+        index for index, record in enumerate(records) if record["role"] == "cross_scene_lookalike"
     )
     assert len(lookalike_indices) == 1
     lookalike_index = lookalike_indices[0]
@@ -472,9 +456,7 @@ def test_lookalike_candidate_keeps_multiple_retrieval_sources_without_scene_trut
     run = _run_baseline()
     records = _candidate_records(run.scenario)
     lookalike_index = next(
-        index
-        for index, record in enumerate(records)
-        if record["role"] == "cross_scene_lookalike"
+        index for index, record in enumerate(records) if record["role"] == "cross_scene_lookalike"
     )
     candidate = run.candidates[lookalike_index]
     relation = run.relations[lookalike_index]
@@ -511,11 +493,7 @@ def test_ambiguous_geometry_keeps_distinct_repeated_scenes_separate() -> None:
         if record["role"] == "cross_scene_lookalike"
     )
     unresolved_evidence = set(run.relations[lookalike_index].evidence_refs)
-    cluster_evidence = {
-        ref
-        for cluster in run.clusters
-        for ref in cluster.evidence_refs
-    }
+    cluster_evidence = {ref for cluster in run.clusters for ref in cluster.evidence_refs}
     assert unresolved_evidence.isdisjoint(cluster_evidence)
 
 
