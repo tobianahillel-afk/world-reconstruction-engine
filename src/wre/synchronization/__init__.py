@@ -14,6 +14,12 @@ from wre.synchronization.metadata_time import (
     adapt_capture_time_sync,
     adapt_same_video_frame_sync,
 )
+from wre.synchronization.visual import (
+    VisualEventCandidateMultiplicity,
+    VisualEventSyncCandidate,
+    VisualEventSyncPolicy,
+    adapt_visual_event_sync,
+)
 
 __all__ = [
     "AudioCorrelationEvidence",
@@ -24,6 +30,10 @@ __all__ = [
     "CaptureTimeSyncAdapterInput",
     "FFmpegAudioCorrelationSynchronizer",
     "SameVideoFrameSyncAdapterInput",
+    "VisualEventCandidateMultiplicity",
+    "VisualEventSyncCandidate",
+    "VisualEventSyncPolicy",
     "adapt_capture_time_sync",
     "adapt_same_video_frame_sync",
+    "adapt_visual_event_sync",
 ]
