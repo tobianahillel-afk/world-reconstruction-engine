@@ -1952,7 +1952,7 @@ work_items:
   - id: V2L9.5
     lot: V2L9
     title: Synchronization ambiguity contradiction fixtures
-    status: ready
+    status: done
     objective: Add deterministic fixture-level regression coverage and complete the V2L9 lot review proving metadata audio and visual synchronization evidence can remain supported unresolved ambiguous or explicitly contradicted as separate evidence-scoped hypotheses without automatic cross-source fusion winner selection or TemporalGroup construction.
     allowed_scope:
       - tests/test_sync_ambiguity_contradiction_fixture.py
@@ -2016,7 +2016,62 @@ work_items:
       - deterministic fixture ordering and no evidence-ref union across source hypotheses
       - no TemporalGroup fusion winner source-priority route historical or external-execution surface
       - full fast CI CodeQL and native lanes only where repository path triggers require them
-  - {id: V2L10.1, lot: V2L10, title: Adopt canonical QualityMode in routing contracts, status: planned, depends_on: [V2L9.5]}
+  - id: V2L10.1
+    lot: V2L10
+    title: Adopt canonical QualityMode in routing contracts
+    status: ready
+    objective: Establish the minimal immutable route-facing quality-mode boundary by reusing the exact canonical wre.domain.QualityMode type owned by V2L4.4 and regression-proving that routing introduces no competing mode vocabulary or mode-dependent truth semantics before route-node graph inputs fallback or route-decision responsibilities exist.
+    allowed_scope:
+      - src/wre/routing/__init__.py
+      - src/wre/routing/quality_mode.py
+      - tests/test_routing_quality_mode.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L10.2 can be activated without implementing it
+    out_of_scope:
+      - changing src/wre/domain/quality.py QualityMode QualityDecision benchmark quality-mode semantics or V2L4 ownership
+      - defining a second enum string alias integer mode scale legacy FAST STANDARD ESCALATED vocabulary or mode coercion layer
+      - route node route graph capability requirements or any V2L10.2 behavior
+      - data-profile hardware budget existing-artifact prior-failure router input contracts owned by V2L10.3
+      - retry fallback escalation allowlists termination policy or any V2L10.4 behavior
+      - route decision reasons artifacts default selection ranking benchmarking or any V2L10.5 behavior
+      - route execution adapter invocation scheduling resource estimation persistence network subprocess or external dependency behavior
+      - changing evidence provenance acceptance thresholds quality gates truth semantics or converting a quality mode into a provenance or confidence class
+      - starting V2L10.2 implementation in this work item
+    depends_on: [V2L9.5]
+    read_before:
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/reviews/V2L4-quality-failure-benchmark-review.md
+      - docs/reviews/V2L9-temporal-grouping-sync-review.md
+      - src/wre/domain/quality.py
+      - src/wre/domain/__init__.py
+      - src/wre/domain/benchmarks.py
+      - tests/test_benchmarks.py
+    reuse:
+      - the exact QualityMode StrEnum object exported by wre.domain with PREVIEW FAST QUALITY and MASTER and stable preview fast quality master wire tokens
+      - immutable positive-domain contract style used throughout V2 without adding solver route or budget state prematurely
+      - the invariant that quality modes choose compute/product richness but never weaken provenance or evidence truth
+    acceptance:
+      - The routing package imports and exposes the exact canonical QualityMode object from wre.domain or wre.domain.quality and does not define subclass copy wrapper enum alias table or duplicate mode constants.
+      - Add one minimal immutable RouteQualityRequest or equivalently narrow route-facing contract containing exactly one quality_mode field typed as QualityMode.
+      - RouteQualityRequest rejects raw strings integers bool values QualityDecision and foreign Enum or StrEnum members rather than silently coercing them.
+      - All four canonical QualityMode members PREVIEW FAST QUALITY and MASTER construct valid route-quality requests and preserve object identity and exact wire token values.
+      - Tests assert routing QualityMode is the same Python type object as wre.domain.QualityMode and that its exact member set remains PREVIEW FAST QUALITY MASTER.
+      - The route-facing contract carries no provenance class confidence score quality decision failure category threshold adapter capability route node route graph budget profile artifact fallback retry escalation reason or generic metadata field.
+      - No mode is treated as a truth or acceptance decision and no mode-dependent evidence threshold or provenance mutation is introduced.
+      - No route selection graph traversal fallback scheduling adapter execution persistence registry mutation new dependency or I/O surface is introduced.
+    tests:
+      - exact routing-to-domain QualityMode identity and closed member/wire-token regression
+      - RouteQualityRequest frozen exact field-shape and wrong-type rejection tests
+      - PREVIEW FAST QUALITY MASTER construction and identity preservation
+      - regression proving QualityMode remains distinct from QualityDecision and ProvenanceClass
+      - regression proving route-quality request has no route graph profile budget fallback escalation threshold decision provenance or generic metadata fields
+      - no filesystem network subprocess external dependency or persistence imports
+      - full fast CI and CodeQL plus native lanes only where repository path triggers require them
   - {id: V2L10.2, lot: V2L10, title: Route node and route graph contract, status: planned, depends_on: [V2L10.1]}
   - {id: V2L10.3, lot: V2L10, title: Deterministic router input contract, status: planned, depends_on: [V2L10.2]}
   - {id: V2L10.4, lot: V2L10, title: Bounded allowlisted fallback escalation policy, status: planned, depends_on: [V2L10.3]}

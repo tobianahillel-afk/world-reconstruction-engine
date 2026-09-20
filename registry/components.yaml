@@ -180,7 +180,8 @@ components:
       - tests/test_metadata_time_sync.py
       - tests/test_audio_sync.py
       - tests/test_visual_event_sync.py
-    status: implementing
+      - tests/test_sync_ambiguity_contradiction_fixture.py
+    status: implemented
   route_graph: {owner_lot: V2L10, implementation: [], tests: [], status: planned}
   canonical_geometry_contracts: {owner_lot: V2L11, implementation: [], tests: [], status: planned}
   precision_geometry_baseline: {owner_lot: V2L12, implementation: [], tests: [], status: planned}
