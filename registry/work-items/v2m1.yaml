@@ -1519,7 +1519,7 @@ work_items:
   - id: V2L8.4
     lot: V2L8
     title: Repeated symmetric look alike fail closed fixture
-    status: ready
+    status: done
     objective: Add one deterministic repository-authored fast regression fixture representing two distinct repeated/symmetric façade scenes whose visual retrieval evidence proposes a cross-scene PairCandidate but whose ambiguous retained geometric evidence remains UNRESOLVED and therefore cannot fuse the scenes, plus one explicit contradiction control proving that a false supported bridge fails closed, without integrating a new matcher or specialist model, changing production relationship semantics, or starting scalable clustering work.
     allowed_scope:
       - tests/fixtures/synthetic/repeated-symmetric-lookalike/fixture.json
@@ -1585,7 +1585,83 @@ work_items:
       - evaluate_fixture metrics all pass exactly and repeated execution produces identical relations clusters metrics and conflict outcome
       - regression proving no external solver/model/network execution and no new production module or dependency is introduced
       - full fast CI CodeQL and native COLMAP lane only where triggered
-  - {id: V2L8.5, lot: V2L8, title: Scalable scene clustering boundary, status: planned, depends_on: [V2L8.4]}
+  - id: V2L8.5
+    lot: V2L8
+    title: Scalable scene clustering boundary
+    status: ready
+    objective: Define and implement one deterministic one-pass batch boundary for already-produced SceneRelationHypothesis values that preserves exactly the V2L8.3 scene-clustering truth semantics and output identity across different batch partitions while avoiding a requirement to materialize one monolithic relation tuple, then close the V2L8 lot review without adding large-collection retrieval, persistence, distributed graph execution or any V2L37 behavior.
+    allowed_scope:
+      - src/wre/scene_identity/clustering.py
+      - focused exports in src/wre/scene_identity/__init__.py
+      - tests/test_scalable_scene_clustering.py
+      - docs/reviews/V2L8-scene-identity-clustering-review.md only after implementation evidence is green
+      - registry/reviews.yaml only after review evidence exists
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation and lot-review evidence are green so V2L9.1 can be activated without implementing it
+    out_of_scope:
+      - changing SceneRelationDisposition SceneRelationHypothesis SceneCluster SceneClusterId PairCandidate or V2L8.2 truth semantics
+      - generating retrieval candidates local matches geometric verification or specialist disambiguation evidence
+      - score weighting probabilistic clustering confidence calibration graph partition heuristics community detection or approximate connected components
+      - filesystem database artifact-store persistence relation spill files mmap external sorting checkpointing or resume
+      - sharding distributed union-find multi-process multi-node GPU graph processing or remote execution
+      - ANN HNSW IVF PQ vector indexing retrieval backend work or any V2L37.1 behavior
+      - submap chunk reconstruction global alignment refinement large-collection mapping or any V2L37.2 through V2L37.5 behavior
+      - resource scheduling topology-aware placement residency eviction or any V2L46 behavior
+      - temporal grouping synchronization route selection geometry reconstruction or runtime compilation
+      - starting V2L9.1 implementation in this work item
+    depends_on: [V2L8.4]
+    read_before:
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md
+      - docs/29_PERFORMANCE_INTEGRATION_MAP.md
+      - registry/work-items/v2m6.yaml
+      - src/wre/domain/scene_clusters.py
+      - src/wre/scene_identity/clustering.py
+      - tests/test_verified_scene_clustering.py
+      - tests/test_repeated_symmetric_lookalike_fixture.py
+    reuse:
+      - existing V2L8.3 SceneClusteringConflictError SceneCluster construction SHA-256 membership identity and support-evidence semantics as the only scene-clustering truth definition
+      - immutable SceneRelationHypothesis and ObservationId values as the input truth surface rather than solver-private graph nodes
+      - Python iterator protocol only as an execution boundary; no new persistence or external graph dependency
+      - canonical endpoint-pair ordering so duplicate detection across batches needs only the preceding pair key instead of retaining every relationship key
+      - existing V2L8.4 repeated/symmetric fixture as a regression consumer proving the scalable boundary does not weaken false-merge behavior
+    acceptance:
+      - Add one immutable SceneRelationBatch value containing a non-empty immutable tuple of SceneRelationHypothesis values; every batch must be internally canonical by endpoint pair with no duplicate pair.
+      - Add cluster_verified_scene_relation_batches with explicit canonical non-empty observation_ids plus an Iterable of SceneRelationBatch values; zero batches are valid and produce deterministic singleton clusters.
+      - Batch execution consumes the supplied batch iterable exactly once and must not require len indexing rewinding tuple conversion or a second iteration over the batch source.
+      - Across the whole stream endpoint-pair keys must be strictly increasing from one relation to the next including batch boundaries; equal or decreasing keys fail closed before any result is returned.
+      - Every relation endpoint must belong to the explicit observation universe and foreign endpoints fail closed.
+      - Only SUPPORTED relationships create connectivity; UNRESOLVED and CONTRADICTED relationships never create connectivity or cluster support evidence.
+      - A CONTRADICTED pair whose endpoints end in one SUPPORTED-connected component raises SceneClusteringConflictError after all support connectivity is known; batching must never choose an arbitrary partition.
+      - Multi-observation SceneCluster evidence is the exact canonical unique union of evidence_refs from internal SUPPORTED relationships only; singleton evidence remains empty.
+      - SceneCluster membership ordering output ordering and SceneClusterId values are byte-for-byte identical to V2L8.3 for the same canonical observation and relation set regardless of valid batch partition boundaries.
+      - Refactor the existing cluster_verified_scene_relations path only as needed so monolithic and batched entry points share one semantic implementation; existing public behavior and V2L8.3 tests must remain unchanged.
+      - The implementation must process relations in one pass with working relationship-state memory bounded by observation union-find/component state contradiction pairs and unique support evidence; it must not retain the complete input relation objects solely to cluster later.
+      - Focused tests compare one-batch one-relation-per-batch and mixed-batch partitions for exact equality over supported unresolved contradicted singleton and redundant-support cases.
+      - A one-shot generator fixture proves the batch iterable is consumed once; a second-iteration-sensitive iterable must not be required.
+      - Cross-batch duplicate out-of-order foreign-endpoint and internal-contradiction cases fail closed deterministically.
+      - The V2L8.4 repeated/symmetric look-alike fixture remains green unchanged and no batch boundary may promote its unresolved cross-scene relation.
+      - No new third-party dependency model checkpoint filesystem database network subprocess ANN backend distributed runtime or persistence surface is introduced.
+      - Create docs/reviews/V2L8-scene-identity-clustering-review.md only after the scalable implementation is green; the review must cover V2L8.1 through V2L8.5 composition truth boundaries false-merge behavior deterministic batching limitations and the explicit handoff to V2L9.1.
+      - Record V2L8 PASS in registry/reviews.yaml only after the review document and exact implementation evidence exist; then mark scene_identity_clustering implemented and activate only V2L9.1.
+    tests:
+      - SceneRelationBatch frozen/type/canonical-order/duplicate validation
+      - zero-batch singleton behavior
+      - one-shot iterable consumed exactly once
+      - exact equality between monolithic V2L8.3 and batched clustering across one-batch one-edge-per-batch and mixed partitions
+      - exact cluster evidence membership ordering and SHA-256 SceneClusterId equality across partitions
+      - cross-batch duplicate and decreasing pair-order rejection
+      - foreign endpoint rejection
+      - unresolved and separated contradiction non-connectivity
+      - contradiction discovered before later support closure still fails closed after final connectivity
+      - redundant supported edges retain every canonical unique support evidence ref
+      - unchanged V2L8.4 repeated/symmetric fail-closed regression
+      - full fast CI CodeQL and native COLMAP lane only where triggered
+      - lot review validator and exact-head lifecycle handoff evidence
   - {id: V2L9.1, lot: V2L9, title: TemporalGroup and SyncHypothesis contracts, status: planned, depends_on: [V2L8.5]}
   - {id: V2L9.2, lot: V2L9, title: Metadata timecode synchronization evidence, status: planned, depends_on: [V2L9.1]}
   - {id: V2L9.3, lot: V2L9, title: Audio correlation synchronization adapter, status: planned, depends_on: [V2L9.2]}
