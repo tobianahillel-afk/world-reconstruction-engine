@@ -211,8 +211,7 @@ def test_supported_offset_disagreement_does_not_manufacture_contradiction_or_win
     )
     assert tuple(item.offset_us for item in hypotheses) == (10_000, 25_000)
     assert all(
-        item.disposition is not SyncHypothesisDisposition.CONTRADICTED
-        for item in hypotheses
+        item.disposition is not SyncHypothesisDisposition.CONTRADICTED for item in hypotheses
     )
     assert metadata.evidence_refs == (METADATA_REF,)
     assert visual.evidence_refs == (VISUAL_REF,)
