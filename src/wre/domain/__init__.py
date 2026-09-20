@@ -132,6 +132,12 @@ from wre.domain.scene_clusters import (
     SceneRelationDisposition,
     SceneRelationHypothesis,
 )
+from wre.domain.temporal_groups import (
+    SyncHypothesis,
+    SyncHypothesisDisposition,
+    TemporalGroup,
+    TemporalGroupId,
+)
 
 __all__ = [
     "ARTIFACT_KEY_SCHEMA_VERSION",
@@ -227,6 +233,10 @@ __all__ = [
     "SceneProjectId",
     "SceneRelationDisposition",
     "SceneRelationHypothesis",
+    "SyncHypothesis",
+    "SyncHypothesisDisposition",
+    "TemporalGroup",
+    "TemporalGroupId",
     "Sha256Digest",
     "SourceId",
     "SourceRef",
