@@ -17,7 +17,11 @@ from wre.domain.pair_candidates import (
     PairCandidateSourceId,
 )
 from wre.domain.runs import DerivedArtifactProvenance, ReconstructionRunId
-from wre.domain.scene_clusters import SceneRelationDisposition, SceneRelationHypothesis
+from wre.domain.scene_clusters import (
+    SceneCluster,
+    SceneRelationDisposition,
+    SceneRelationHypothesis,
+)
 from wre.reconstruction.colmap_environment import ColmapEnvironmentIdentity
 from wre.reconstruction.colmap_verification import (
     ColmapGeometricVerificationResult,
@@ -44,7 +48,7 @@ class _BaselineRun:
     scenario: dict[str, object]
     candidates: tuple[PairCandidate, ...]
     relations: tuple[SceneRelationHypothesis, ...]
-    clusters: tuple[object, ...]
+    clusters: tuple[SceneCluster, ...]
     metrics: dict[str, int]
     regression: RegressionResult
 
@@ -283,7 +287,7 @@ def _adapt_relations(
 
 
 def _false_merge_count(
-    clusters: tuple[object, ...],
+    clusters: tuple[SceneCluster, ...],
     expected_groups: tuple[tuple[str, ...], ...],
 ) -> int:
     group_by_observation = {
