@@ -53,7 +53,11 @@ lot_reviews:
     reviewed_at: '2026-09-20'
     evidence:
       - docs/reviews/V2L7-pair-candidate-retrieval-review.md
-  V2L8: {status: pending, reviewed_at: null, evidence: []}
+  V2L8:
+    status: passed
+    reviewed_at: '2026-09-20'
+    evidence:
+      - docs/reviews/V2L8-scene-identity-clustering-review.md
   V2L9: {status: pending, reviewed_at: null, evidence: []}
   V2L10: {status: pending, reviewed_at: null, evidence: []}
   V2L11: {status: pending, reviewed_at: null, evidence: []}
