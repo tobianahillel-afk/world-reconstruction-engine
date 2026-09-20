@@ -188,9 +188,11 @@ components:
       - src/wre/routing/__init__.py
       - src/wre/routing/quality_mode.py
       - src/wre/routing/graph.py
+      - src/wre/routing/inputs.py
     tests:
       - tests/test_routing_quality_mode.py
       - tests/test_route_graph.py
+      - tests/test_router_inputs.py
     status: implementing
   canonical_geometry_contracts: {owner_lot: V2L11, implementation: [], tests: [], status: planned}
   precision_geometry_baseline: {owner_lot: V2L12, implementation: [], tests: [], status: planned}

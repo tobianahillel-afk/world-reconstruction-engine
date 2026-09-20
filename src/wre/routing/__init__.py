@@ -2,6 +2,7 @@
 
 from wre.domain import QualityMode
 from wre.routing.graph import RouteEdge, RouteGraph, RouteNode, RouteNodeId
+from wre.routing.inputs import RouteResourceBudget, RouterInputSnapshot
 from wre.routing.quality_mode import RouteQualityRequest
 
 __all__ = [
@@ -11,4 +12,6 @@ __all__ = [
     "RouteNode",
     "RouteNodeId",
     "RouteQualityRequest",
+    "RouteResourceBudget",
+    "RouterInputSnapshot",
 ]
