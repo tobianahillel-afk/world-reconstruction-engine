@@ -179,7 +179,10 @@ def test_adapter_input_rejects_candidate_outside_verification_provenance() -> No
     )
 
     with pytest.raises(ValueError, match="verification provenance observations"):
-        _input(candidate and (candidate,), verification=_verification(observation_ids=("obs:a", "obs:b")))
+        _input(
+            (candidate,),
+            verification=_verification(observation_ids=("obs:a", "obs:b")),
+        )
 
 
 @pytest.mark.parametrize(
