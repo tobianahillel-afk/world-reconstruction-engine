@@ -129,9 +129,7 @@ def _validate_batched_observation_ids(
     if len(observation_values) != len(set(observation_values)):
         raise ValueError("scene_relation_batches.observation_ids must not contain duplicates")
     if observation_values != tuple(sorted(observation_values)):
-        raise ValueError(
-            "scene_relation_batches.observation_ids must use canonical lexical order"
-        )
+        raise ValueError("scene_relation_batches.observation_ids must use canonical lexical order")
     return {observation_id.value: observation_id for observation_id in observation_ids}
 
 

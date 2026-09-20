@@ -328,9 +328,7 @@ def test_unresolved_and_separated_contradiction_never_connect_or_add_evidence() 
         for cluster in clusters
     ) == (("obs:a", "obs:b"), ("obs:c", "obs:d"))
     excluded = set(unresolved_ac.evidence_refs + contradiction_bc.evidence_refs)
-    assert excluded.isdisjoint(
-        ref for cluster in clusters for ref in cluster.evidence_refs
-    )
+    assert excluded.isdisjoint(ref for cluster in clusters for ref in cluster.evidence_refs)
 
 
 def test_early_contradiction_fails_after_later_support_closes_component() -> None:
