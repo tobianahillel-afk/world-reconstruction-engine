@@ -1372,7 +1372,7 @@ work_items:
   - id: V2L8.2
     lot: V2L8
     title: Local match and geometric verification evidence adapter
-    status: ready
+    status: done
     objective: Adapt explicit already-produced retained COLMAP raw-match and two-view geometric-verification evidence for supplied canonical PairCandidate values into evidence-backed SceneRelationHypothesis values, preserving every upstream candidate evidence reference plus one exact caller-supplied verification ArtifactRef and classifying only clearly supported donor geometries while leaving missing degenerate ambiguous or watermark-like outcomes UNRESOLVED, without re-running matching or verification integrating a new matcher inferring CONTRADICTED relationships constructing clusters or starting V2L8.3.
     allowed_scope:
       - src/wre/scene_identity/__init__.py
@@ -1445,7 +1445,77 @@ work_items:
       - purity regression proving no calls to match_colmap_pairs verify_colmap_geometry PyCOLMAP filesystem database registry environment or network behavior and no input mutation
       - deterministic repeated-adaptation and canonical output-order tests
       - full fast CI native COLMAP lane CodeQL
-  - {id: V2L8.3, lot: V2L8, title: Deterministic verified scene clustering, status: planned, depends_on: [V2L8.2]}
+  - id: V2L8.3
+    lot: V2L8
+    title: Deterministic verified scene clustering
+    status: ready
+    objective: Build deterministic fail-closed SceneCluster values over an explicit canonical observation membership and explicit SceneRelationHypothesis evidence by connecting only SUPPORTED relations, preserving isolated observations as singleton clusters and rejecting any supported-connected component that contains an explicit CONTRADICTED pair, without treating UNRESOLVED or missing relationships as negative evidence and without performing retrieval matching geometric verification repeated-structure specialist inference temporal grouping or later-lot behavior.
+    allowed_scope:
+      - src/wre/scene_identity/clustering.py
+      - focused exports through src/wre/scene_identity/__init__.py
+      - tests/test_verified_scene_clustering.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L8.4 can be activated without implementing it
+    out_of_scope:
+      - changing SceneRelationDisposition SceneRelationHypothesis SceneCluster SceneClusterId PairCandidate or V2L8.2 adapter semantics
+      - retrieval PairCandidate generation local matching geometric verification donor execution or relation reclassification
+      - inferring support from UNRESOLVED relationships or from absence of a relation
+      - treating CONTRADICTED relationships as a reason to greedily choose one of several possible graph partitions
+      - silently dropping contradictory evidence to force a cluster merge
+      - probabilistic clustering graph neural networks spectral/community clustering learned partitioners or score-weighted edge selection
+      - repeated symmetric look-alike specialist evidence generation or the dedicated V2L8.4 fixture behavior
+      - large-graph persistence distributed union-find sharding or V2L8.5/V2L37 scaling
+      - temporal grouping synchronization epoch inference routing geometry reconstruction persistence runtime compilation or later-lot behavior
+      - starting V2L8.4 implementation in this work item
+    depends_on: [V2L8.2]
+    read_before:
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/27_RESEARCH_CANDIDATE_COVERAGE.md
+      - docs/reviews/V2L7-pair-candidate-retrieval-review.md
+      - src/wre/domain/artifacts.py
+      - src/wre/domain/observations.py
+      - src/wre/domain/scene_clusters.py
+      - src/wre/scene_identity/colmap_adapter.py
+      - tests/test_scene_clusters.py
+      - tests/test_colmap_scene_relation_adapter.py
+    reuse:
+      - ObservationId as the complete clustering membership identity
+      - SceneRelationDisposition and SceneRelationHypothesis as the only accepted relationship evidence vocabulary
+      - SceneClusterId and SceneCluster as the only stable cluster output contracts
+      - ArtifactRef evidence already carried by SUPPORTED relation hypotheses; clustering unions exact support evidence rather than inventing solver scores or graph metadata
+      - pure Python standard-library hashing and deterministic graph traversal/union semantics; no external graph dependency is introduced for the bounded baseline
+    acceptance:
+      - Define one immutable VerifiedSceneClusteringInput containing exactly observation_ids and relations; observation_ids are a non-empty canonical unique tuple of ObservationId values and relations are a canonical unique tuple of SceneRelationHypothesis values keyed by endpoint pair.
+      - Every relation endpoint belongs to observation_ids; duplicate endpoint pairs even with different dispositions are rejected rather than allowing contradictory duplicate edges to be resolved implicitly.
+      - Empty relations are valid and produce one singleton SceneCluster per observation; missing pair relations carry no positive or negative truth.
+      - Build provisional connected components using only SceneRelationDisposition.SUPPORTED edges; UNRESOLVED and CONTRADICTED edges never create connectivity.
+      - Before emitting any multi-observation component, detect whether any explicit CONTRADICTED relation has both endpoints inside that SUPPORTED connected component; if so fail closed with a dedicated SceneClusteringConflictError and emit no partial cluster result rather than choosing an arbitrary split or discarding the contradiction.
+      - A CONTRADICTED relation whose endpoints are already in different supported components is retained as external evidence but does not merge those components and does not become SceneCluster supporting evidence.
+      - UNRESOLVED relations never merge observations and their evidence refs are not copied into SceneCluster supporting evidence.
+      - Every input observation appears in exactly one output SceneCluster; no observation is dropped duplicated or invented.
+      - Singleton clusters contain exactly one ObservationId and an empty evidence_refs tuple; multi-observation clusters carry the canonical unique union of evidence_refs from all SUPPORTED relation hypotheses whose two endpoints lie inside that component.
+      - SceneCluster IDs are deterministic from canonical membership only using one documented SHA-256 identity rule with no timestamp solver route filesystem or random input, so repeated equal membership produces the same SceneClusterId independent of relation evidence ordering.
+      - 'Use SceneClusterId value "scene:" followed by the full lowercase SHA-256 hex digest of the UTF-8 payload formed by joining canonical ObservationId.value strings with one newline character; ObservationId tokens cannot contain newlines so the identity encoding is unambiguous.'
+      - Output clusters are ordered deterministically by their canonical observation membership, using the first ObservationId lexical value as the primary key; repeated equal input produces equal output.
+      - Clustering performs no filesystem database registry environment network external solver retrieval matching verification or model execution and does not mutate input observations relations or evidence refs.
+      - No PairCandidate SceneRelationHypothesis object graph solver score adjacency structure contradiction list route or temporal metadata is embedded into SceneCluster beyond its canonical observation membership and exact supporting ArtifactRef tuple.
+    tests:
+      - VerifiedSceneClusteringInput exact field-set immutability observation/relation tuple typing canonical ordering uniqueness foreign-endpoint and duplicate-pair negative tests
+      - empty-relation fixture producing deterministic singleton clusters for every observation with empty evidence
+      - simple supported-edge fixture producing one two-observation cluster with exact support evidence
+      - supported-chain fixture A-B plus B-C producing one A-B-C cluster with canonical union of both support evidence sets
+      - unresolved-edge fixture proving UNRESOLVED neither merges observations nor contributes cluster evidence
+      - separated contradiction fixture proving CONTRADICTED does not merge separate supported components or contribute support evidence
+      - conflict fixture with SUPPORTED A-B and B-C plus CONTRADICTED A-C proving fail-closed SceneClusteringConflictError and no arbitrary partition
+      - deterministic full SHA-256 SceneClusterId fixture for singleton and multi-observation canonical membership plus repeated-run equality
+      - regression proving every observation appears exactly once and no relation endpoint outside membership is accepted
+      - purity regression proving no retrieval matching geometric verification PairCandidate execution external graph library filesystem network persistence route geometry or later-lot path exists
+      - full fast CI native COLMAP lane where triggered CodeQL
   - {id: V2L8.4, lot: V2L8, title: Repeated symmetric look alike fail closed fixture, status: planned, depends_on: [V2L8.3]}
   - {id: V2L8.5, lot: V2L8, title: Scalable scene clustering boundary, status: planned, depends_on: [V2L8.4]}
   - {id: V2L9.1, lot: V2L9, title: TemporalGroup and SyncHypothesis contracts, status: planned, depends_on: [V2L8.5]}
