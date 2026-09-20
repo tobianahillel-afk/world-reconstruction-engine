@@ -488,9 +488,7 @@ def test_ambiguous_geometry_keeps_distinct_repeated_scenes_separate() -> None:
     assert run.metrics["false_merge_count"] == 0
 
     lookalike_index = next(
-        index
-        for index, record in enumerate(records)
-        if record["role"] == "cross_scene_lookalike"
+        index for index, record in enumerate(records) if record["role"] == "cross_scene_lookalike"
     )
     unresolved_evidence = set(run.relations[lookalike_index].evidence_refs)
     cluster_evidence = {ref for cluster in run.clusters for ref in cluster.evidence_refs}
