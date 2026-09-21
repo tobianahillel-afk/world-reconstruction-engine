@@ -219,7 +219,7 @@ work_items:
   - id: V2L11.4
     lot: V2L11
     title: GeometrySolution assembly local scale contract
-    status: ready
+    status: done
     objective: Define the minimal immutable solver-independent GeometrySolution assembly contract for one coherent local-frame reconstruction hypothesis referencing canonical camera depth and point products with explicit unresolved-or-metric local-scale semantics and canonical metrics without reconstructing geometry resolving scale performing world anchoring comparing competing hypotheses or defining a physical surface.
     allowed_scope:
       - src/wre/domain/geometry_solutions.py
@@ -291,7 +291,87 @@ work_items:
       - regression proving no embedded child payload observation membership raw camera depth point coordinate track fragment world anchor surface solver persistence or generic metadata surface
       - module-surface regression proving no filesystem network subprocess database NumPy Torch Open3D PyCOLMAP or other external execution dependency is introduced
       - full fast CI and CodeQL plus native lanes only where repository path triggers require them
-  - {id: V2L11.5, lot: V2L11, title: One way legacy SparseReconstructionEstimate conversion, status: planned, depends_on: [V2L11.4]}
+  - id: V2L11.5
+    lot: V2L11
+    title: One way legacy SparseReconstructionEstimate conversion
+    status: ready
+    objective: Define and implement one deterministic in-memory one-way conversion from the retained legacy SparseReconstructionEstimate donor representation into canonical V2 CameraSolution PointMap and GeometrySolution products while preserving local-frame camera-from-local extrinsics and explicit scale status without modifying legacy contracts reading solver-native artifacts inventing missing evidence or creating a permanent bidirectional compatibility layer.
+    allowed_scope:
+      - src/wre/reconstruction/legacy_geometry_conversion.py
+      - focused exports in src/wre/reconstruction/__init__.py
+      - tests/test_legacy_geometry_conversion.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L11.6 can be activated without implementing it
+    out_of_scope:
+      - changing legacy SparseReconstructionEstimate CameraCalibrationEstimate CameraPoseEstimate Point3DEstimate LocalScaleStatus or any canonical CameraSolution PointMap GeometrySolution contract
+      - reverse V2-to-legacy conversion compatibility wrappers persistence migration database schema changes or making legacy estimated geometry a permanent V2 API
+      - reading COLMAP native sparse-model files invoking PyCOLMAP modifying src/wre/reconstruction/colmap_import.py or implementing the V2 COLMAP adapter work owned by V2L12
+      - physical CameraId inference calibration-sharing identity rig modeling rolling-shutter modeling or device identity claims
+      - depth generation DepthField synthesis triangulation point generation fusion refinement bundle adjustment geometry optimization scale inference coordinate rescaling cross-frame alignment or metric upgrade
+      - world Earth ECEF ENU geographic anchoring GPS GCP reference-fragment placement fragment creation fragment membership or fragment merging
+      - translating legacy point tracks feature indices or reprojection errors into new canonical fields that do not exist; such source-only evidence must not be silently reinterpreted
+      - SurfaceModel appearance material environment dynamic historical runtime compilation quality-policy route fallback retry adapter/model execution or new external dependencies
+      - starting V2L11.6 or any V2L12 implementation in this work item
+    depends_on: [V2L11.4]
+    read_before:
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/04_DATA_MODEL.md
+      - docs/19_COLMAP_RECONSTRUCTION_IMPORT.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md
+      - registry/v1-v2-migration.yaml
+      - docs/reviews/L3-M1-colmap-baseline-review.md
+      - src/wre/domain/estimated_geometry.py
+      - src/wre/domain/camera_solutions.py
+      - src/wre/domain/point_maps.py
+      - src/wre/domain/geometry_solutions.py
+      - src/wre/domain/cameras.py
+      - src/wre/domain/metrics.py
+      - src/wre/reconstruction/colmap_import.py
+      - src/wre/reconstruction/__init__.py
+      - tests/test_estimated_geometry.py
+      - tests/test_camera_solutions.py
+      - tests/test_point_maps.py
+      - tests/test_geometry_solutions.py
+      - tests/test_colmap_reconstruction_import.py
+    reuse:
+      - SparseReconstructionEstimate as immutable donor input only; its validated local frame camera poses calibration references scale status point ordering and observation membership may be consumed without mutating or extending the legacy types
+      - CameraSolution as the canonical per-observation target preserving each legacy pose camera-from-local-frame transform and referenced calibration values without promoting calibration sharing into physical CameraId identity
+      - PointMap as one canonical aggregate point carrier using the legacy estimate observation membership and legacy canonical point-id order while intentionally omitting unsupported per-point confidence
+      - GeometrySolution as the canonical assembled hypothesis referencing the converted camera solutions and one converted PointMap in the same LocalFrameId with mapped scale semantics
+      - empty MetricVector uncertainty-artifact tuples and absent PointMap confidence to represent no additional canonical measurement or uncertainty claim rather than fabricating metrics
+      - standard-library SHA-256 only for deterministic target identities derived from explicit legacy identity inputs; no external dependency is required
+    acceptance:
+      - Add immutable LegacySparseGeometryConversionResult containing exactly source_estimate_id SparseReconstructionEstimateId camera_solutions tuple of CameraSolution point_map PointMap and geometry_solution GeometrySolution.
+      - Add convert_sparse_reconstruction_estimate accepting exactly one SparseReconstructionEstimate and rejecting wrong input types without filesystem registry environment solver or artifact-store lookup.
+      - The conversion is deterministic and source-immutable: repeated conversion of the same validated input yields equal target values and the source estimate child tuples objects and values are not rewritten or reordered by the converter.
+      - Derive opaque target IDs deterministically with standard-library SHA-256 from explicit role-prefixed source identities: each CameraSolution identity depends on the source estimate identity plus its ObservationId while the PointMap and GeometrySolution identities depend on the source estimate identity and distinct role prefixes.
+      - Emit exactly one CameraSolution per legacy CameraPoseEstimate and preserve the exact ObservationId LocalFrameId camera-from-local-frame rotation_matrix translation_xyz referenced calibration image dimensions and finite parameter tuple.
+      - Convert the referenced legacy calibration projection_model to the canonical CameraProjectionModelName by lowercase normalization only; unsupported characters whitespace or otherwise invalid canonical tokens fail closed rather than being stripped replaced guessed or mapped through a vendor table.
+      - Shared legacy calibration estimates may descriptively populate multiple per-observation CameraSolution values but must not create physical CameraId calibration-sharing rig or device identity claims.
+      - Converted CameraSolution uncertainty_artifacts are empty and metrics are empty MetricVector values; legacy prior-focal flags provenance or other source-only metadata are not promoted into unrelated canonical fields.
+      - Emit exactly one PointMap in the legacy LocalFrameId with source_observation_ids equal to the legacy estimate observation membership and positions_xyz in the legacy estimate canonical Point3DEstimate order; confidence is None and metrics are empty.
+      - An estimate with zero legacy points still converts to an explicit empty PointMap and valid GeometrySolution rather than fabricating points or converting the outcome into a hidden failure.
+      - Legacy point tracks feature indices reprojection errors and per-object DerivedArtifactProvenance remain source-only evidence and are not embedded into PointMap GeometrySolution or invented metrics because canonical contracts do not own those fields.
+      - Map LocalScaleStatus.UNRESOLVED exactly to GeometryScaleStatus.UNRESOLVED and LocalScaleStatus.METRIC exactly to GeometryScaleStatus.METRIC without rescaling coordinates translations or point positions and without adding a scale factor.
+      - Emit one GeometrySolution in the same LocalFrameId with canonical ascending converted CameraSolutionId references no depth-field references exactly one converted PointMapId and empty metrics.
+      - camera_solutions in the conversion result are in canonical ascending CameraSolutionId order and geometry_solution.camera_solution_ids exactly matches that order.
+      - The conversion performs no world Earth geographic placement fragment acceptance geometry optimization scale inference point fusion depth synthesis persistence serialization subprocess network or external solver execution.
+    tests:
+      - wrong input type rejection plus exact frozen LegacySparseGeometryConversionResult field shape
+      - deterministic role-separated ID derivation across repeated conversion and distinct source estimate identities
+      - representative uppercase legacy projection model normalization to the lowercase canonical token plus fail-closed invalid projection-model syntax
+      - one CameraSolution per legacy pose with exact observation local-frame intrinsics dimensions and camera-from-local rotation translation preservation including shared-calibration reuse without CameraId inference
+      - unresolved and metric scale-status mapping with exact unchanged camera translations and point coordinates proving conversion does not rescale or anchor geometry
+      - populated-point conversion preserving legacy canonical point order source observation support absent confidence and empty metrics
+      - zero-point conversion producing an empty PointMap and valid GeometrySolution without synthetic coordinates
+      - GeometrySolution child-reference canonical ordering exact PointMap linkage no depth references and exact same local frame
+      - source immutability regression proving conversion does not mutate legacy calibrations poses points tracks provenance or their ordering
+      - regression proving legacy tracks feature indices reprojection error prior-focal flag provenance physical camera identity world placement surface solver persistence and generic metadata are not promoted into canonical outputs
+      - module-surface regression proving no filesystem network subprocess database PyCOLMAP NumPy Torch Open3D or other external execution dependency is introduced
+      - full fast CI and CodeQL plus native lanes only where repository path triggers require them
   - {id: V2L11.6, lot: V2L11, title: Coordinate convention regression fixture, status: planned, depends_on: [V2L11.5]}
   - {id: V2L12.1, lot: V2L12, title: Current COLMAP adapter descriptor and normalization, status: planned, depends_on: [V2L11.6]}
   - {id: V2L12.2, lot: V2L12, title: Current COLMAP evidence stages use v2 artifact identities, status: planned, depends_on: [V2L12.1]}
