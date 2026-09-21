@@ -68,6 +68,11 @@ from wre.domain.frame_selection import (
     FrameSelectionPolicyId,
     FrameSelectionPolicyRevision,
 )
+from wre.domain.geometry_solutions import (
+    GeometryScaleStatus,
+    GeometrySolution,
+    GeometrySolutionId,
+)
 from wre.domain.hardware_identity import HardwareRuntimeIdentity
 from wre.domain.media_profiles import MediaProfile
 from wre.domain.metadata import (
@@ -197,6 +202,9 @@ __all__ = [
     "FrameSelectionPolicy",
     "FrameSelectionPolicyId",
     "FrameSelectionPolicyRevision",
+    "GeometryScaleStatus",
+    "GeometrySolution",
+    "GeometrySolutionId",
     "GpsInterpretationStatus",
     "GpsMetadataInterpretation",
     "HardwareRuntimeIdentity",
