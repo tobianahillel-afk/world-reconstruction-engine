@@ -63,7 +63,11 @@ lot_reviews:
     reviewed_at: '2026-09-20'
     evidence:
       - docs/reviews/V2L9-temporal-grouping-sync-review.md
-  V2L10: {status: pending, reviewed_at: null, evidence: []}
+  V2L10:
+    status: passed
+    reviewed_at: '2026-09-21'
+    evidence:
+      - docs/reviews/V2L10-routing-v2m1-review.md
   V2L11: {status: pending, reviewed_at: null, evidence: []}
   V2L12: {status: pending, reviewed_at: null, evidence: []}
   V2L13: {status: pending, reviewed_at: null, evidence: []}
@@ -111,7 +115,11 @@ milestone_reviews:
     reviewed_at: '2026-09-18'
     evidence:
       - docs/reviews/V2L4-quality-failure-benchmark-review.md
-  V2M1: {status: pending, reviewed_at: null, evidence: []}
+  V2M1:
+    status: passed
+    reviewed_at: '2026-09-21'
+    evidence:
+      - docs/reviews/V2L10-routing-v2m1-review.md
   V2M2: {status: pending, reviewed_at: null, evidence: []}
   V2M3: {status: pending, reviewed_at: null, evidence: []}
   V2M4: {status: pending, reviewed_at: null, evidence: []}

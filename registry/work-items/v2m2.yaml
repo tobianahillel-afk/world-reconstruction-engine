@@ -1,7 +1,79 @@
 schema_version: 1
 milestone: V2M2
 work_items:
-  - {id: V2L11.1, lot: V2L11, title: Canonical CameraSolution contract, status: planned, depends_on: [V2L10.6]}
+  - id: V2L11.1
+    lot: V2L11
+    title: Canonical CameraSolution contract
+    status: ready
+    objective: Define the minimal immutable solver-independent per-observation CameraSolution contract with explicit local coordinate frame projection-model identity image dimensions finite intrinsic parameters camera-from-local-frame rigid extrinsics optional exact uncertainty-artifact hooks and canonical metrics without solving cameras asserting metric/world placement or creating any depth point or geometry assembly product.
+    allowed_scope:
+      - src/wre/domain/camera_solutions.py
+      - focused exports in src/wre/domain/__init__.py
+      - tests/test_camera_solutions.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L11.2 can be activated without implementing it
+    out_of_scope:
+      - changing legacy CameraCalibrationEstimate CameraPoseEstimate SparseReconstructionEstimate LocalFrameId ImageDimensions ArtifactRef MetricVector or existing camera metadata semantics
+      - reusing or wrapping solver-native COLMAP camera image reconstruction objects in the stable contract
+      - converting legacy SparseReconstructionEstimate or COLMAP import output which belongs to V2L11.5 and V2L12
+      - physical CameraId identity inference calibration sharing rig modeling rolling-shutter pose curves or multi-camera identity resolution
+      - metric-scale inference world Earth ECEF ENU geographic anchoring cross-local-frame alignment or fragment placement
+      - DepthField PointMap GeometrySolution SurfaceModel dense geometry physical surface or any V2L11.2 through V2L16 behavior
+      - covariance estimation uncertainty computation quality-gate execution route selection adapter/model execution persistence or I/O
+      - starting V2L11.2 implementation in this work item
+    depends_on: [V2L10.6]
+    read_before:
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/04_DATA_MODEL.md
+      - docs/19_COLMAP_RECONSTRUCTION_IMPORT.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - registry/v1-v2-migration.yaml
+      - docs/reviews/V2L10-routing-v2m1-review.md
+      - src/wre/domain/cameras.py
+      - src/wre/domain/fragments.py
+      - src/wre/domain/estimated_geometry.py
+      - src/wre/domain/artifacts.py
+      - src/wre/domain/metrics.py
+      - src/wre/domain/__init__.py
+      - tests/test_cameras.py
+      - tests/test_fragments.py
+      - tests/test_estimated_geometry.py
+    reuse:
+      - ObservationId as the exact source observation whose camera is solved
+      - LocalFrameId as the explicit unanchored local coordinate-frame identity without importing legacy sparse-model lifecycle semantics
+      - ImageDimensions for positive pixel dimensions
+      - ArtifactRef for optional exact uncertainty/covariance artifact hooks rather than embedding a solver-specific covariance layout
+      - MetricVector for canonical typed finite camera-quality measurements rather than adding a generic score map
+      - the retained camera-from-local-frame convention documented by L3.6 while defining a new V2 canonical contract independent of legacy estimate classes
+    acceptance:
+      - Add immutable CameraSolutionId using the established 1-128 character opaque identifier syntax.
+      - Add immutable CameraProjectionModelName using a 1-128 character lowercase semantic token syntax so projection parameter semantics are explicit without freezing a vendor enum.
+      - Add immutable CameraSolution containing exactly solution_id CameraSolutionId observation_id ObservationId local_frame_id LocalFrameId projection_model CameraProjectionModelName dimensions ImageDimensions intrinsic_parameters tuple of float rotation_matrix immutable 3x3 tuple translation_xyz immutable 3-vector uncertainty_artifacts tuple of ArtifactRef and metrics MetricVector.
+      - intrinsic_parameters must be a non-empty immutable tuple of exact finite float values; bool integers NaN and infinity fail closed rather than being silently normalized.
+      - rotation_matrix must be an immutable finite 3x3 proper rotation with unit orthogonal rows and determinant plus one within the established 1e-6 numeric tolerance.
+      - translation_xyz must be an immutable finite 3-vector of exact float values; bool integers NaN and infinity fail closed rather than being silently normalized.
+      - Extrinsic semantics are fixed and tested as camera-from-local-frame: x_camera equals rotation_matrix multiplied by x_local plus translation_xyz. No world-from-camera alias camera-center field or implicit inversion is exposed.
+      - local_frame_id names only the solution coordinate frame and makes no metric scale Earth alignment geographic placement or compatibility claim with another LocalFrameId.
+      - projection_model plus intrinsic_parameters are solver-independent descriptive camera calibration values and do not assert physical CameraId identity.
+      - uncertainty_artifacts may be empty; when present they must be immutable canonical unique ArtifactRef values ordered by ArtifactId then ArtifactKind and conflicting kinds for one ArtifactId fail closed.
+      - metrics must be the exact caller-supplied MetricVector object and no total score confidence rank threshold or quality decision is derived by CameraSolution.
+      - CameraSolution retains exact caller-supplied identity observation frame projection dimensions uncertainty tuple and metrics after validation; validated numeric tuples remain immutable values.
+      - The contract contains no solver adapter model checkpoint route quality mode scale status world transform GPS timestamp depth points surface appearance dynamic state historical state or generic metadata field.
+      - No persistence codec registry mutation filesystem network subprocess external dependency or camera-solving execution surface is introduced.
+    tests:
+      - CameraSolutionId equality hashing immutability syntax validation and string conversion
+      - CameraProjectionModelName equality hashing immutability lowercase-token validation and string conversion
+      - CameraSolution frozen exact field shape and wrong-type rejection for every typed field
+      - intrinsic parameter non-empty exact-float finite validation including bool integer NaN infinity rejection
+      - rigid rotation identity and representative valid rotation acceptance plus malformed shape non-finite non-unit non-orthogonal reflection and determinant failure cases
+      - translation immutable exact-float finite validation including bool integer NaN infinity rejection
+      - explicit camera-from-local-frame sign convention regression using a known rotation translation and local point
+      - empty and populated canonical uncertainty artifact validation including duplicate decreasing wrong-type and conflicting-kind rejection
+      - exact MetricVector and other caller-object retention
+      - regression proving no physical CameraId metric/world/geographic scale depth geometry route solver execution persistence or generic metadata surface
+      - full fast CI and CodeQL plus native lanes only where repository path triggers require them
   - {id: V2L11.2, lot: V2L11, title: DepthField validity confidence contract, status: planned, depends_on: [V2L11.1]}
   - {id: V2L11.3, lot: V2L11, title: PointMap contract, status: planned, depends_on: [V2L11.2]}
   - {id: V2L11.4, lot: V2L11, title: GeometrySolution assembly local scale contract, status: planned, depends_on: [V2L11.3]}

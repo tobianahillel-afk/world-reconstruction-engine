@@ -2335,7 +2335,7 @@ work_items:
   - id: V2L10.6
     lot: V2L10
     title: Router determinism fail closed tests
-    status: ready
+    status: done
     objective: Add deterministic composition regressions over the complete V2L10 routing foundation and close both the V2L10 lot review and V2M1 milestone review only if canonical inputs route structure fallback and auditable decision records remain repeatable fail closed and strictly separated from reconstruction truth or execution.
     allowed_scope:
       - tests/test_router_determinism_fail_closed.py
