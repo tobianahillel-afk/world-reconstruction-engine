@@ -225,7 +225,7 @@ def test_valid_pixels_require_strictly_positive_depth(value: float) -> None:
 
 @pytest.mark.parametrize("value", [1.0, -1.0])
 def test_invalid_pixels_require_canonical_zero_depth(value: float) -> None:
-    with pytest.raises(ValueError, match="invalid pixels must use canonical 0.0 depth"):
+    with pytest.raises(ValueError, match=r"invalid pixels must use canonical 0\.0 depth"):
         _depth_field(depth_values=(1.0, 2.0, value, 4.0))
 
 
@@ -255,13 +255,13 @@ def test_confidence_requires_finite_members(value: float) -> None:
 
 @pytest.mark.parametrize("value", [-0.1, 1.1])
 def test_confidence_must_be_in_closed_zero_to_one_range(value: float) -> None:
-    with pytest.raises(ValueError, match="inclusive range 0.0 to 1.0"):
+    with pytest.raises(ValueError, match=r"inclusive range 0\.0 to 1\.0"):
         _depth_field(confidence=(0.9, value, 0.0, 0.7))
 
 
 @pytest.mark.parametrize("value", [0.1, 1.0])
 def test_invalid_pixels_require_canonical_zero_confidence(value: float) -> None:
-    with pytest.raises(ValueError, match="invalid pixels must use canonical 0.0 confidence"):
+    with pytest.raises(ValueError, match=r"invalid pixels must use canonical 0\.0 confidence"):
         _depth_field(confidence=(0.9, 0.8, value, 0.7))
 
 
