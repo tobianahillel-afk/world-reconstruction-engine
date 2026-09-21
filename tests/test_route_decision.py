@@ -277,9 +277,13 @@ def test_route_decision_requires_fallback_policy_for_exact_same_graph() -> None:
     other_graph = RouteGraph(
         nodes=(
             _node("a", "geometry.fast"),
+            _node("b", "geometry.precise"),
             _node("c", "geometry.other"),
         ),
-        edges=(RouteEdge(RouteNodeId("a"), RouteNodeId("c")),),
+        edges=(
+            RouteEdge(RouteNodeId("a"), RouteNodeId("b")),
+            RouteEdge(RouteNodeId("b"), RouteNodeId("c")),
+        ),
     )
 
     with pytest.raises(ValueError, match="must equal"):
