@@ -28,17 +28,17 @@ from wre.domain.benchmarks import (
     BenchmarkRecord,
     BenchmarkRecordId,
 )
+from wre.domain.camera_solutions import (
+    CameraProjectionModelName,
+    CameraSolution,
+    CameraSolutionId,
+)
 from wre.domain.cameras import (
     Camera,
     CameraId,
     ImageDimensions,
     ObservationMetadata,
     RawMetadataEntry,
-)
-from wre.domain.camera_solutions import (
-    CameraProjectionModelName,
-    CameraSolution,
-    CameraSolutionId,
 )
 from wre.domain.decoded_images import (
     DECODED_IMAGE_PYRAMID_KIND,
