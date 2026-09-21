@@ -203,9 +203,11 @@ components:
     owner_lot: V2L11
     implementation:
       - src/wre/domain/camera_solutions.py
+      - src/wre/domain/depth_fields.py
       - src/wre/domain/__init__.py
     tests:
       - tests/test_camera_solutions.py
+      - tests/test_depth_fields.py
     status: implementing
   precision_geometry_baseline: {owner_lot: V2L12, implementation: [], tests: [], status: planned}
   feed_forward_geometry: {owner_lot: V2L13, implementation: [], tests: [], status: planned}
