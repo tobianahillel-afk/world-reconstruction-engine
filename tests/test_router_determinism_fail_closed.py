@@ -166,10 +166,10 @@ def test_repeated_canonical_fixture_is_equal_and_wire_stable() -> None:
         "timeout",
     )
     assert tuple(node.node_id.value for node in graph.nodes) == ("a", "b", "c")
-    assert tuple(
-        (edge.source.value, edge.target.value)
-        for edge in graph.edges
-    ) == (("a", "b"), ("b", "c"))
+    assert tuple((edge.source.value, edge.target.value) for edge in graph.edges) == (
+        ("a", "b"),
+        ("b", "c"),
+    )
     assert tuple(rule.action.value for rule in policy.rules) == (
         "escalate",
         "escalate",
