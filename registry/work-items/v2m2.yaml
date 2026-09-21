@@ -77,7 +77,7 @@ work_items:
   - id: V2L11.2
     lot: V2L11
     title: DepthField validity confidence contract
-    status: ready
+    status: done
     objective: Define the minimal immutable solver-independent per-observation DepthField semantic contract tied to one canonical CameraSolution with explicit image dimensions depth-value convention row-major depth samples validity and optional normalized confidence plus canonical metrics without back-projecting points fusing fields asserting metric or world scale or defining a production dense-depth storage format.
     allowed_scope:
       - src/wre/domain/depth_fields.py
@@ -143,7 +143,79 @@ work_items:
       - regression proving no duplicated camera calibration extrinsics local-frame metric/world/geographic point geometry surface route solver persistence or generic metadata surface
       - module-surface regression proving no filesystem network subprocess database NumPy Torch PyCOLMAP or other external execution dependency is introduced
       - full fast CI and CodeQL plus native lanes only where repository path triggers require them
-  - {id: V2L11.3, lot: V2L11, title: PointMap contract, status: planned, depends_on: [V2L11.2]}
+  - id: V2L11.3
+    lot: V2L11
+    title: PointMap contract
+    status: ready
+    objective: Define the minimal immutable solver-independent PointMap contract for an ordered dense-or-sparse collection of local-frame 3D point predictions with explicit source-observation support optional per-point normalized confidence and canonical metrics without assembling a GeometrySolution resolving scale back-projecting DepthField values or introducing solver-specific point-cloud storage.
+    allowed_scope:
+      - src/wre/domain/point_maps.py
+      - focused exports in src/wre/domain/__init__.py
+      - tests/test_point_maps.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L11.4 can be activated without implementing it
+    out_of_scope:
+      - changing CameraSolution DepthField ObservationId LocalFrameId MetricVector or legacy Point3DEstimate SparseReconstructionEstimate semantics
+      - deriving points by depth back-projection triangulation SfM MVS SLAM feed-forward model execution fusion or any other reconstruction algorithm
+      - pixel-grid topology image dimensions pixel coordinates feature tracks correspondence tracks reprojection errors normals colors descriptors labels semantics materials or surface connectivity
+      - metric-scale inference scale-status resolution world Earth ECEF ENU geographic anchoring cross-local-frame alignment fragment placement or coordinate conversion
+      - GeometrySolution assembly competing-solution comparison SurfaceModel dense fusion collision measurement or any V2L11.4 through V2L16 behavior
+      - solver-specific PLY LAS LAZ OBJ tensor array NumPy Torch CUDA Open3D point-cloud object memory-map chunk compression persistence codec or production point-storage representation
+      - per-point calibrated probability threshold ranking quality decision route selection retry fallback adapter/model execution filesystem network subprocess or registry mutation
+      - starting V2L11.4 implementation in this work item
+    depends_on: [V2L11.2]
+    read_before:
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/04_DATA_MODEL.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/27_RESEARCH_CANDIDATE_COVERAGE.md
+      - docs/28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md
+      - docs/29_PERFORMANCE_INTEGRATION_MAP.md
+      - registry/v1-v2-migration.yaml
+      - src/wre/domain/camera_solutions.py
+      - src/wre/domain/depth_fields.py
+      - src/wre/domain/fragments.py
+      - src/wre/domain/observations.py
+      - src/wre/domain/metrics.py
+      - src/wre/domain/estimated_geometry.py
+      - src/wre/domain/__init__.py
+      - tests/test_camera_solutions.py
+      - tests/test_depth_fields.py
+      - tests/test_estimated_geometry.py
+    reuse:
+      - LocalFrameId as the explicit local coordinate-frame identity without importing legacy sparse-model lifecycle scale or fragment semantics
+      - ObservationId as canonical source-support identity for observations that contributed evidence to the point map
+      - MetricVector as canonical typed finite point-map measurements without adding an untyped score dictionary
+      - the exact-float immutable-tuple fail-closed conventions established by CameraSolution and DepthField while deliberately not reusing legacy coercing Point3DEstimate helpers
+      - artifact-DAG provenance and producer identity outside this value contract rather than embedding solver model checkpoint or persistence metadata into PointMap
+    acceptance:
+      - Add immutable PointMapId using the established 1-128 character opaque identifier syntax.
+      - Add immutable PointMap containing exactly point_map_id PointMapId local_frame_id LocalFrameId source_observation_ids tuple of ObservationId positions_xyz tuple of immutable 3-float tuples confidence tuple of float or None and metrics MetricVector.
+      - source_observation_ids must be a non-empty immutable tuple of exact ObservationId values in canonical ascending ObservationId order with no duplicates; decreasing duplicate mutable or wrong-type support fails closed and input is never silently sorted.
+      - positions_xyz must be an immutable tuple whose members are immutable 3-tuples of exact finite float values; bool integers strings NaN infinity malformed vectors and mutable nested values fail closed rather than being coerced.
+      - positions_xyz may be empty so an explicit no-point prediction can remain truthful without fabricating geometry; PointMap does not turn an empty result into a failure category or quality decision.
+      - the point sequence is retained exactly as supplied and is not sorted deduplicated fused clustered or interpreted as pixel order; equal coordinates may coexist because this semantic contract does not assert point identity correspondence or topology.
+      - confidence may be None to represent no producer confidence claim; when present it must be an immutable tuple with exactly one exact finite float per point in the inclusive range zero to one and is retained exactly.
+      - confidence is producer-supplied normalized support only; PointMap does not interpret it as a calibrated probability derive thresholds ranks aggregate confidence quality decisions or route consequences.
+      - local_frame_id names only the coordinate frame of positions_xyz and makes no metric scale Earth alignment geographic placement fragment-membership or compatibility claim with another LocalFrameId.
+      - source_observation_ids express aggregate source support only and do not create per-point tracks feature correspondences camera identity pixel alignment or triangulation provenance.
+      - metrics must be the exact caller-supplied MetricVector object and no metric is computed from point count coordinates source support or confidence by this value contract.
+      - PointMap retains exact caller-supplied point-map identity frame source-support tuple point sequence optional confidence tuple and metrics after validation and performs no registry filesystem database environment or network lookup.
+      - The contract contains no CameraId CameraSolutionId DepthFieldId ImageDimensions scale status world transform GPS pixel coordinates tracks geometry-solution surface appearance dynamic state historical state solver adapter model checkpoint route quality mode generic metadata or persistence field.
+      - No point generation back-projection triangulation serialization compression chunking memory mapping GPU tensor representation persistence I/O external dependency or solver execution surface is introduced.
+    tests:
+      - PointMapId equality hashing immutability syntax validation and string conversion
+      - PointMap frozen exact field shape wrong-type rejection and exact caller-object retention
+      - canonical non-empty source-observation validation including mutable duplicate decreasing and wrong-member rejection without silent sorting
+      - empty positions acceptance plus immutable nested 3-vector shape exact-float finite validation including bool integer string NaN infinity and mutable-vector rejection
+      - representative ordered positions retained exactly including repeated coordinate values without sorting deduplication fusion or topology inference
+      - absent confidence acceptance plus populated exact-float finite zero-to-one validation exact point-count matching and caller-tuple retention
+      - exact MetricVector retention with no derived count confidence quality or route decision
+      - regression proving no camera/depth duplication metric/world/geographic scale pixel track GeometrySolution surface route solver persistence or generic metadata surface
+      - module-surface regression proving no filesystem network subprocess database NumPy Torch Open3D PyCOLMAP or other external execution dependency is introduced
+      - full fast CI and CodeQL plus native lanes only where repository path triggers require them
   - {id: V2L11.4, lot: V2L11, title: GeometrySolution assembly local scale contract, status: planned, depends_on: [V2L11.3]}
   - {id: V2L11.5, lot: V2L11, title: One way legacy SparseReconstructionEstimate conversion, status: planned, depends_on: [V2L11.4]}
   - {id: V2L11.6, lot: V2L11, title: Coordinate convention regression fixture, status: planned, depends_on: [V2L11.5]}

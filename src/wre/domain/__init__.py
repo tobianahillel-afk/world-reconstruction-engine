@@ -49,6 +49,7 @@ from wre.domain.decoded_images import (
     DecodedImagePyramidSpec,
     build_decoded_image_level_descriptors,
 )
+from wre.domain.depth_fields import DepthField, DepthFieldId, DepthValueConventionName
 from wre.domain.estimated_geometry import (
     CameraCalibrationEstimate,
     CameraCalibrationEstimateId,
@@ -185,6 +186,9 @@ __all__ = [
     "DecodedImagePixelLayout",
     "DecodedImagePyramidManifest",
     "DecodedImagePyramidSpec",
+    "DepthField",
+    "DepthFieldId",
+    "DepthValueConventionName",
     "DerivedArtifactProvenance",
     "EstimatedPoint3DId",
     "EstimatedTrackElement",
