@@ -203,9 +203,7 @@ def test_fallback_rule_rejects_wrong_types() -> None:
 
 
 def test_fallback_policy_is_exact_frozen_contract() -> None:
-    rules = (
-        _rule("a", _failure_trigger(), FallbackAction.ESCALATE, "b"),
-    )
+    rules = (_rule("a", _failure_trigger(), FallbackAction.ESCALATE, "b"),)
     policy = _policy(rules=rules)
 
     assert tuple(field.name for field in fields(FallbackPolicy)) == (
@@ -364,9 +362,7 @@ def test_resolver_returns_exact_retry_escalate_and_unresolved_rules() -> None:
 def test_resolver_missing_rule_and_transition_bound_fail_closed_to_unresolved() -> None:
     trigger = _failure_trigger()
     policy = _policy(
-        rules=(
-            _rule("a", trigger, FallbackAction.ESCALATE, "b"),
-        ),
+        rules=(_rule("a", trigger, FallbackAction.ESCALATE, "b"),),
         max_transitions=2,
     )
 
