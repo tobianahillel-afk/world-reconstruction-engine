@@ -40,7 +40,6 @@ from wre.domain.cameras import (
     ObservationMetadata,
     RawMetadataEntry,
 )
-from wre.domain.depth_fields import DepthField, DepthFieldId, DepthValueConventionName
 from wre.domain.decoded_images import (
     DECODED_IMAGE_PYRAMID_KIND,
     DecodedImageLevelDescriptor,
@@ -50,6 +49,7 @@ from wre.domain.decoded_images import (
     DecodedImagePyramidSpec,
     build_decoded_image_level_descriptors,
 )
+from wre.domain.depth_fields import DepthField, DepthFieldId, DepthValueConventionName
 from wre.domain.estimated_geometry import (
     CameraCalibrationEstimate,
     CameraCalibrationEstimateId,
