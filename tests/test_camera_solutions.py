@@ -226,52 +226,75 @@ def test_rotation_accepts_identity_and_representative_non_identity_proper_rotati
 
 def test_rotation_rejects_malformed_mutable_wrong_type_and_non_finite_values() -> None:
     with pytest.raises(TypeError, match="immutable 3x3 tuple"):
-        _solution(rotation_matrix=cast(Any, [
-            (1.0, 0.0, 0.0),
-            (0.0, 1.0, 0.0),
-            (0.0, 0.0, 1.0),
-        ]))
+        _solution(
+            rotation_matrix=cast(
+                Any,
+                [
+                    (1.0, 0.0, 0.0),
+                    (0.0, 1.0, 0.0),
+                    (0.0, 0.0, 1.0),
+                ],
+            )
+        )
     with pytest.raises(TypeError, match="immutable 3-tuples"):
-        _solution(rotation_matrix=cast(Any, (
-            [1.0, 0.0, 0.0],
-            (0.0, 1.0, 0.0),
-            (0.0, 0.0, 1.0),
-        )))
+        _solution(
+            rotation_matrix=cast(
+                Any,
+                (
+                    [1.0, 0.0, 0.0],
+                    (0.0, 1.0, 0.0),
+                    (0.0, 0.0, 1.0),
+                ),
+            )
+        )
     with pytest.raises(TypeError, match="immutable 3x3 tuple"):
         _solution(rotation_matrix=cast(Any, ((1.0, 0.0, 0.0),)))
     with pytest.raises(TypeError, match="member must be float"):
-        _solution(rotation_matrix=cast(Any, (
-            (1, 0.0, 0.0),
-            (0.0, 1.0, 0.0),
-            (0.0, 0.0, 1.0),
-        )))
+        _solution(
+            rotation_matrix=cast(
+                Any,
+                (
+                    (1, 0.0, 0.0),
+                    (0.0, 1.0, 0.0),
+                    (0.0, 0.0, 1.0),
+                ),
+            )
+        )
     with pytest.raises(ValueError, match="member must be finite"):
-        _solution(rotation_matrix=(
-            (float("nan"), 0.0, 0.0),
-            (0.0, 1.0, 0.0),
-            (0.0, 0.0, 1.0),
-        ))
+        _solution(
+            rotation_matrix=(
+                (float("nan"), 0.0, 0.0),
+                (0.0, 1.0, 0.0),
+                (0.0, 0.0, 1.0),
+            )
+        )
 
 
 def test_rotation_rejects_non_unit_non_orthogonal_and_reflection_matrices() -> None:
     with pytest.raises(ValueError, match="unit length"):
-        _solution(rotation_matrix=(
-            (2.0, 0.0, 0.0),
-            (0.0, 1.0, 0.0),
-            (0.0, 0.0, 1.0),
-        ))
+        _solution(
+            rotation_matrix=(
+                (2.0, 0.0, 0.0),
+                (0.0, 1.0, 0.0),
+                (0.0, 0.0, 1.0),
+            )
+        )
     with pytest.raises(ValueError, match="mutually orthogonal"):
-        _solution(rotation_matrix=(
-            (1.0, 0.0, 0.0),
-            (0.6, 0.8, 0.0),
-            (0.0, 0.0, 1.0),
-        ))
-    with pytest.raises(ValueError, match="determinant must be \+1"):
-        _solution(rotation_matrix=(
-            (1.0, 0.0, 0.0),
-            (0.0, 1.0, 0.0),
-            (0.0, 0.0, -1.0),
-        ))
+        _solution(
+            rotation_matrix=(
+                (1.0, 0.0, 0.0),
+                (0.6, 0.8, 0.0),
+                (0.0, 0.0, 1.0),
+            )
+        )
+    with pytest.raises(ValueError, match=r"determinant must be \+1"):
+        _solution(
+            rotation_matrix=(
+                (1.0, 0.0, 0.0),
+                (0.0, 1.0, 0.0),
+                (0.0, 0.0, -1.0),
+            )
+        )
 
 
 def test_translation_requires_immutable_exact_finite_float_three_vector() -> None:
