@@ -67,10 +67,7 @@ def _validate_rotation_matrix(value: object) -> None:
 
     for left_index in range(3):
         for right_index in range(left_index + 1, 3):
-            dot = sum(
-                rows[left_index][axis] * rows[right_index][axis]
-                for axis in range(3)
-            )
+            dot = sum(rows[left_index][axis] * rows[right_index][axis] for axis in range(3))
             if abs(dot) > _ROTATION_TOLERANCE:
                 raise ValueError("camera_solution.rotation_matrix rows must be mutually orthogonal")
 
@@ -96,16 +93,12 @@ def _validate_uncertainty_artifacts(value: object) -> None:
     if any(not isinstance(ref, ArtifactRef) for ref in value):
         raise TypeError("camera_solution.uncertainty_artifacts members must be ArtifactRef")
 
-    artifact_keys = tuple(
-        (ref.artifact_id.value, ref.artifact_kind.value)
-        for ref in value
-    )
+    artifact_keys = tuple((ref.artifact_id.value, ref.artifact_kind.value) for ref in value)
     if len(artifact_keys) != len(set(artifact_keys)):
         raise ValueError("camera_solution.uncertainty_artifacts must be unique")
     if artifact_keys != tuple(sorted(artifact_keys)):
         raise ValueError(
-            "camera_solution.uncertainty_artifacts must use canonical "
-            "ArtifactId/ArtifactKind order"
+            "camera_solution.uncertainty_artifacts must use canonical ArtifactId/ArtifactKind order"
         )
 
     kinds_by_id: dict[str, str] = {}
@@ -150,8 +143,7 @@ class CameraProjectionModelName:
             self.value,
             _LOWER_TOKEN_RE,
             "camera_projection_model",
-            "must be a 1-128 character lowercase token using "
-            "letters, digits, '.', '_', ':' or '-'",
+            "must be a 1-128 character lowercase token using letters, digits, '.', '_', ':' or '-'",
         )
 
     def __str__(self) -> str:
@@ -185,9 +177,7 @@ class CameraSolution:
         if not isinstance(self.local_frame_id, LocalFrameId):
             raise TypeError("camera_solution.local_frame_id must be LocalFrameId")
         if not isinstance(self.projection_model, CameraProjectionModelName):
-            raise TypeError(
-                "camera_solution.projection_model must be CameraProjectionModelName"
-            )
+            raise TypeError("camera_solution.projection_model must be CameraProjectionModelName")
         if not isinstance(self.dimensions, ImageDimensions):
             raise TypeError("camera_solution.dimensions must be ImageDimensions")
 
