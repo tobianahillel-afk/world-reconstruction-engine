@@ -106,6 +106,7 @@ from wre.domain.pair_candidates import (
     PairCandidateSourceId,
     merge_pair_candidates,
 )
+from wre.domain.point_maps import PointMap, PointMapId
 from wre.domain.producer_identity import (
     ArtifactProducerIdentity,
     CheckpointIdentity,
@@ -224,6 +225,8 @@ __all__ = [
     "PairCandidateSource",
     "PairCandidateSourceId",
     "Point3DEstimate",
+    "PointMap",
+    "PointMapId",
     "ProducerRef",
     "ProvenanceClass",
     "QualityDecision",

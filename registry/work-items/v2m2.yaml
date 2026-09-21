@@ -146,7 +146,7 @@ work_items:
   - id: V2L11.3
     lot: V2L11
     title: PointMap contract
-    status: ready
+    status: done
     objective: Define the minimal immutable solver-independent PointMap contract for an ordered dense-or-sparse collection of local-frame 3D point predictions with explicit source-observation support optional per-point normalized confidence and canonical metrics without assembling a GeometrySolution resolving scale back-projecting DepthField values or introducing solver-specific point-cloud storage.
     allowed_scope:
       - src/wre/domain/point_maps.py
@@ -216,7 +216,81 @@ work_items:
       - regression proving no camera/depth duplication metric/world/geographic scale pixel track GeometrySolution surface route solver persistence or generic metadata surface
       - module-surface regression proving no filesystem network subprocess database NumPy Torch Open3D PyCOLMAP or other external execution dependency is introduced
       - full fast CI and CodeQL plus native lanes only where repository path triggers require them
-  - {id: V2L11.4, lot: V2L11, title: GeometrySolution assembly local scale contract, status: planned, depends_on: [V2L11.3]}
+  - id: V2L11.4
+    lot: V2L11
+    title: GeometrySolution assembly local scale contract
+    status: ready
+    objective: Define the minimal immutable solver-independent GeometrySolution assembly contract for one coherent local-frame reconstruction hypothesis referencing canonical camera depth and point products with explicit unresolved-or-metric local-scale semantics and canonical metrics without reconstructing geometry resolving scale performing world anchoring comparing competing hypotheses or defining a physical surface.
+    allowed_scope:
+      - src/wre/domain/geometry_solutions.py
+      - focused exports in src/wre/domain/__init__.py
+      - tests/test_geometry_solutions.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L11.5 can be activated without implementing it
+    out_of_scope:
+      - changing CameraSolution DepthField PointMap LocalFrameId MetricVector or legacy LocalScaleStatus SparseReconstructionEstimate semantics
+      - converting legacy SparseReconstructionEstimate data or COLMAP import output which belongs to V2L11.5 and V2L12
+      - estimating cameras depth points scale alignment transforms metric scale or any reconstruction refinement optimization bundle adjustment triangulation fusion or solver execution
+      - world Earth ECEF ENU geographic anchoring absolute placement cross-local-frame alignment fragment creation fragment membership or fragment merging
+      - comparing ranking selecting merging or reconciling competing GeometrySolution hypotheses which belongs to V2L14
+      - SurfaceModel mesh SDF collision navigation measurement appearance material environment dynamic historical or runtime representation behavior
+      - embedding child CameraSolution DepthField or PointMap payloads solver-native objects tensors point arrays depth rasters tracks correspondences or other heavy geometry data in GeometrySolution
+      - artifact persistence codec database filesystem network subprocess adapter/model execution route selection fallback retry quality-policy execution or registry mutation
+      - starting V2L11.5 implementation in this work item
+    depends_on: [V2L11.3]
+    read_before:
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/04_DATA_MODEL.md
+      - docs/19_COLMAP_RECONSTRUCTION_IMPORT.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md
+      - registry/v1-v2-migration.yaml
+      - src/wre/domain/camera_solutions.py
+      - src/wre/domain/depth_fields.py
+      - src/wre/domain/point_maps.py
+      - src/wre/domain/fragments.py
+      - src/wre/domain/metrics.py
+      - src/wre/domain/estimated_geometry.py
+      - src/wre/domain/__init__.py
+      - tests/test_camera_solutions.py
+      - tests/test_depth_fields.py
+      - tests/test_point_maps.py
+      - tests/test_estimated_geometry.py
+    reuse:
+      - LocalFrameId as the explicit coordinate-frame identity for the assembled hypothesis without implying fragment identity global placement or compatibility with any other local frame
+      - CameraSolutionId DepthFieldId and PointMapId as canonical lightweight child-product references instead of duplicating camera depth or point payloads inside GeometrySolution
+      - MetricVector as canonical typed finite geometry measurements without adding untyped score maps scalar confidence or policy outcomes
+      - the legacy unresolved-versus-metric scale distinction only as a semantic donor while defining a new canonical GeometryScaleStatus independent of legacy LocalScaleStatus compatibility
+      - artifact-DAG provenance producer identity dependency validation and persistence outside this immutable value contract
+    acceptance:
+      - Add immutable GeometrySolutionId using the established 1-128 character opaque identifier syntax.
+      - Add GeometryScaleStatus as a stable string enum containing exactly UNRESOLVED with value unresolved and METRIC with value metric.
+      - Add immutable GeometrySolution containing exactly geometry_solution_id GeometrySolutionId local_frame_id LocalFrameId scale_status GeometryScaleStatus camera_solution_ids tuple of CameraSolutionId depth_field_ids tuple of DepthFieldId point_map_ids tuple of PointMapId and metrics MetricVector.
+      - camera_solution_ids must be a non-empty immutable tuple of exact CameraSolutionId values in canonical ascending identifier order with no duplicates; mutable duplicate decreasing or wrong-type input fails closed and is never silently sorted.
+      - depth_field_ids and point_map_ids must each be immutable tuples of exact typed identifiers in canonical ascending identifier order with no duplicates; either tuple may be empty but they may not both be empty because a GeometrySolution must assemble at least one canonical geometry carrier beyond cameras.
+      - child reference tuples are retained exactly as supplied after validation and GeometrySolution performs no registry artifact-store or object dereference to inspect child payloads infer observation membership or silently repair cross-product relationships.
+      - local_frame_id declares the single local coordinate frame of the coherent hypothesis; producers may list only camera depth and point products already interpreted in that frame and any cross-frame alignment belongs to a separate explicit operation.
+      - GeometryScaleStatus.UNRESOLVED means local distances have an arbitrary unresolved scale and must not be interpreted as meters; GeometryScaleStatus.METRIC means one local-frame distance unit is one meter while origin orientation Earth alignment and global placement remain unspecified.
+      - GeometrySolution contains no scale factor because metric scale is represented by geometry already expressed in meter-valued local coordinates; converting or rescaling coordinates is outside this value contract.
+      - scale status is descriptive truth-bearing state only and GeometrySolution performs no scale inference calibration GPS GCP anchor lookup coordinate conversion or metric upgrade.
+      - metrics must be the exact caller-supplied MetricVector object and no total score aggregate confidence preferred flag rank threshold quality decision or route consequence is derived.
+      - GeometrySolution retains exact caller-supplied identity frame scale status child-reference tuples and metrics after validation and performs no filesystem database environment network or external dependency lookup.
+      - The contract contains no ObservationId CameraId raw intrinsics extrinsics depth raster point coordinates tracks correspondences fragment identity world transform GPS anchor solver adapter model checkpoint route quality mode surface appearance generic metadata timestamp or persistence field.
+      - No reconstruction assembly algorithm beyond validating references no legacy conversion no geometry computation no serialization no external dependency and no solver execution surface is introduced.
+    tests:
+      - GeometrySolutionId equality hashing immutability syntax validation and string conversion
+      - GeometryScaleStatus exact enum members and values with wrong-type scale-status rejection in GeometrySolution
+      - GeometrySolution frozen exact field shape wrong-core-type rejection and exact caller-object retention
+      - canonical non-empty camera-solution reference validation including mutable duplicate decreasing and wrong-member rejection without silent sorting
+      - canonical depth-field and point-map reference validation including empty valid tuples plus mutable duplicate decreasing and wrong-member rejection
+      - rejection when both depth_field_ids and point_map_ids are empty plus acceptance of representative depth-only point-only and mixed geometry-carrier assemblies
+      - local-frame and scale-semantics regressions proving unresolved scale is not metric and metric scale does not imply Earth world global placement orientation or origin
+      - exact MetricVector retention with no derived score confidence ranking quality or route decision
+      - regression proving no embedded child payload observation membership raw camera depth point coordinate track fragment world anchor surface solver persistence or generic metadata surface
+      - module-surface regression proving no filesystem network subprocess database NumPy Torch Open3D PyCOLMAP or other external execution dependency is introduced
+      - full fast CI and CodeQL plus native lanes only where repository path triggers require them
   - {id: V2L11.5, lot: V2L11, title: One way legacy SparseReconstructionEstimate conversion, status: planned, depends_on: [V2L11.4]}
   - {id: V2L11.6, lot: V2L11, title: Coordinate convention regression fixture, status: planned, depends_on: [V2L11.5]}
   - {id: V2L12.1, lot: V2L12, title: Current COLMAP adapter descriptor and normalization, status: planned, depends_on: [V2L11.6]}
