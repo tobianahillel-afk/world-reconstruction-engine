@@ -23,9 +23,7 @@ class FallbackTrigger:
     quality_decision: QualityDecision | None = None
 
     def __post_init__(self) -> None:
-        populated = int(self.failure_category is not None) + int(
-            self.quality_decision is not None
-        )
+        populated = int(self.failure_category is not None) + int(self.quality_decision is not None)
         if populated != 1:
             raise ValueError(
                 "fallback_trigger requires exactly one of failure_category or quality_decision"
@@ -78,9 +76,7 @@ class FallbackRule:
 
         if self.action is FallbackAction.RETRY:
             if self.target_node_id != self.source_node_id:
-                raise ValueError(
-                    "fallback_rule RETRY target_node_id must equal source_node_id"
-                )
+                raise ValueError("fallback_rule RETRY target_node_id must equal source_node_id")
         elif self.action is FallbackAction.ESCALATE:
             if self.target_node_id is None:
                 raise ValueError("fallback_rule ESCALATE requires target_node_id")
@@ -129,25 +125,16 @@ class FallbackPolicy:
 
         rule_keys = tuple(_rule_key(rule) for rule in self.rules)
         if len(rule_keys) != len(set(rule_keys)):
-            raise ValueError(
-                "fallback_policy.rules must be unique by source node and trigger"
-            )
+            raise ValueError("fallback_policy.rules must be unique by source node and trigger")
         if rule_keys != tuple(sorted(rule_keys)):
             raise ValueError("fallback_policy.rules must use canonical source/trigger order")
 
         graph_node_ids = {node.node_id for node in self.route_graph.nodes}
         for rule in self.rules:
             if rule.source_node_id not in graph_node_ids:
-                raise ValueError(
-                    "fallback_policy rule source_node_id must exist in route_graph"
-                )
-            if (
-                rule.target_node_id is not None
-                and rule.target_node_id not in graph_node_ids
-            ):
-                raise ValueError(
-                    "fallback_policy rule target_node_id must exist in route_graph"
-                )
+                raise ValueError("fallback_policy rule source_node_id must exist in route_graph")
+            if rule.target_node_id is not None and rule.target_node_id not in graph_node_ids:
+                raise ValueError("fallback_policy rule target_node_id must exist in route_graph")
 
 
 @dataclass(frozen=True, slots=True)
@@ -164,18 +151,12 @@ class FallbackResolution:
             self.target_node_id,
             RouteNodeId,
         ):
-            raise TypeError(
-                "fallback_resolution.target_node_id must be RouteNodeId when present"
-            )
+            raise TypeError("fallback_resolution.target_node_id must be RouteNodeId when present")
         if self.action is FallbackAction.UNRESOLVED:
             if self.target_node_id is not None:
-                raise ValueError(
-                    "fallback_resolution UNRESOLVED requires target_node_id None"
-                )
+                raise ValueError("fallback_resolution UNRESOLVED requires target_node_id None")
         elif self.target_node_id is None:
-            raise ValueError(
-                "fallback_resolution RETRY or ESCALATE requires target_node_id"
-            )
+            raise ValueError("fallback_resolution RETRY or ESCALATE requires target_node_id")
 
 
 def resolve_fallback(
