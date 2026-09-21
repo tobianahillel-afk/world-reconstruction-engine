@@ -150,9 +150,7 @@ class DepthField:
         if not isinstance(self.dimensions, ImageDimensions):
             raise TypeError("depth_field.dimensions must be ImageDimensions")
         if not isinstance(self.depth_value_convention, DepthValueConventionName):
-            raise TypeError(
-                "depth_field.depth_value_convention must be DepthValueConventionName"
-            )
+            raise TypeError("depth_field.depth_value_convention must be DepthValueConventionName")
         if not isinstance(self.metrics, MetricVector):
             raise TypeError("depth_field.metrics must be MetricVector")
 
