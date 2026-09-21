@@ -129,14 +129,10 @@ def test_source_observation_ids_must_be_non_empty_immutable_and_canonical() -> N
         _point_map(source_observation_ids=cast(Any, (ObservationId("obs:1"), "obs:2")))
 
     with pytest.raises(ValueError, match="cannot contain duplicates"):
-        _point_map(
-            source_observation_ids=(ObservationId("obs:1"), ObservationId("obs:1"))
-        )
+        _point_map(source_observation_ids=(ObservationId("obs:1"), ObservationId("obs:1")))
 
     with pytest.raises(ValueError, match="canonical ObservationId order"):
-        _point_map(
-            source_observation_ids=(ObservationId("obs:2"), ObservationId("obs:1"))
-        )
+        _point_map(source_observation_ids=(ObservationId("obs:2"), ObservationId("obs:1")))
 
 
 def test_source_observation_ids_are_retained_without_silent_sorting() -> None:
