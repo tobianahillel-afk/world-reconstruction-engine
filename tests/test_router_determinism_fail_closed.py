@@ -244,7 +244,6 @@ def test_noncanonical_graph_policy_and_decision_collections_fail_closed() -> Non
         )
 
 
-
 def test_noncanonical_reason_evidence_fails_closed() -> None:
     _, _, _, reasons, _ = _canonical_fixture()
 
