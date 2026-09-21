@@ -199,7 +199,14 @@ components:
       - tests/test_route_decision.py
       - tests/test_router_determinism_fail_closed.py
     status: implemented
-  canonical_geometry_contracts: {owner_lot: V2L11, implementation: [], tests: [], status: planned}
+  canonical_geometry_contracts:
+    owner_lot: V2L11
+    implementation:
+      - src/wre/domain/camera_solutions.py
+      - src/wre/domain/__init__.py
+    tests:
+      - tests/test_camera_solutions.py
+    status: implementing
   precision_geometry_baseline: {owner_lot: V2L12, implementation: [], tests: [], status: planned}
   feed_forward_geometry: {owner_lot: V2L13, implementation: [], tests: [], status: planned}
   precision_global_refinement: {owner_lot: V2L14, implementation: [], tests: [], status: planned}
