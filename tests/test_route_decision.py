@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import FrozenInstanceError, fields
-from datetime import UTC, datetime
 from typing import Any, cast
 
 import pytest
