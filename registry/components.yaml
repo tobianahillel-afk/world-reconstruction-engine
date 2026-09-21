@@ -190,11 +190,13 @@ components:
       - src/wre/routing/graph.py
       - src/wre/routing/inputs.py
       - src/wre/routing/fallback.py
+      - src/wre/routing/decision.py
     tests:
       - tests/test_routing_quality_mode.py
       - tests/test_route_graph.py
       - tests/test_router_inputs.py
       - tests/test_fallback_policy.py
+      - tests/test_route_decision.py
     status: implementing
   canonical_geometry_contracts: {owner_lot: V2L11, implementation: [], tests: [], status: planned}
   precision_geometry_baseline: {owner_lot: V2L12, implementation: [], tests: [], status: planned}
