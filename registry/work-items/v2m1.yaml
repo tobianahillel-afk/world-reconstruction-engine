@@ -2198,7 +2198,7 @@ work_items:
   - id: V2L10.4
     lot: V2L10
     title: Bounded allowlisted fallback escalation policy
-    status: ready
+    status: done
     objective: Define one immutable explicit fallback/escalation policy bound to a RouteGraph and one pure bounded resolver so only allowlisted stable failure or non-success quality outcomes can retry escalate or terminate unresolved without arbitrary try-everything behavior or adapter execution.
     allowed_scope:
       - src/wre/routing/fallback.py
@@ -2264,5 +2264,72 @@ work_items:
       - regression proving no adapter execution graph scheduling route-decision artifact quality-mode mutation threshold weakening provenance mutation catch-all trigger or generic metadata surface
       - no filesystem network subprocess external dependency or persistence imports
       - full fast CI and CodeQL plus native lanes only where repository path triggers require them
-  - {id: V2L10.5, lot: V2L10, title: Auditable route decision artifact, status: planned, depends_on: [V2L10.4]}
+  - id: V2L10.5
+    lot: V2L10
+    title: Auditable route decision artifact
+    status: ready
+    objective: Define one immutable auditable route-decision record that binds an explicit caller-supplied decision artifact identity to the exact validated RouterInputSnapshot chosen RouteGraph matching FallbackPolicy and canonical typed reason records without implementing route selection ranking adapter resolution execution or persistence.
+    allowed_scope:
+      - src/wre/routing/decision.py
+      - focused exports in src/wre/routing/__init__.py
+      - tests/test_route_decision.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L10.6 can be activated without implementing it
+    out_of_scope:
+      - changing ArtifactRef ArtifactKind RouterInputSnapshot RouteGraph FallbackPolicy QualityMode or existing domain semantics
+      - choosing constructing optimizing scoring ranking or comparing candidate route graphs
+      - concrete adapter selection registry lookup capability satisfaction default promotion model/checkpoint identity or benchmark winner logic
+      - executing route nodes fallback transitions adapters scheduling resource allocation checkpointing persistence or I/O
+      - generating free-form natural-language explanations timestamps environment snapshots random seeds mutable metadata dictionaries or opaque serialized payloads
+      - quality-gate execution threshold changes quality-mode mutation provenance mutation or treating a route reason as reconstruction truth
+      - artifact metadata persistence codec database writes artifact DAG insertion or cache behavior
+      - starting V2L10.6 implementation in this work item
+    depends_on: [V2L10.4]
+    read_before:
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - src/wre/domain/artifacts.py
+      - src/wre/domain/artifact_metadata.py
+      - src/wre/routing/inputs.py
+      - src/wre/routing/graph.py
+      - src/wre/routing/fallback.py
+      - tests/test_artifacts.py
+      - tests/test_router_inputs.py
+      - tests/test_route_graph.py
+      - tests/test_fallback_policy.py
+    reuse:
+      - ArtifactRef and ArtifactKind for caller-supplied stable decision artifact identity without creating a second artifact identity system
+      - RouterInputSnapshot as the exact validated decision input snapshot
+      - RouteGraph as the exact chosen structural route output and FallbackPolicy as the exact bounded escalation policy bound to that same graph
+      - canonical immutable evidence-reference ordering patterns already used throughout V2
+    acceptance:
+      - Add constant ROUTE_DECISION_ARTIFACT_KIND equal to ArtifactKind routing.route_decision.
+      - Add immutable RouteDecisionReasonCode using a 1-128 character lowercase token syntax matching stable open semantic identifiers and rejecting blank uppercase whitespace slash or overlength values.
+      - Add immutable RouteDecisionReason containing exactly code RouteDecisionReasonCode and evidence_refs tuple of ArtifactRef.
+      - Reason evidence_refs may be empty; when present they must be immutable canonical unique ArtifactRef values ordered by ArtifactId then ArtifactKind with no conflicting ArtifactKind for one ArtifactId.
+      - Add immutable RouteDecisionArtifact containing exactly decision_ref ArtifactRef router_input RouterInputSnapshot route_graph RouteGraph fallback_policy FallbackPolicy and non-empty reasons tuple of RouteDecisionReason.
+      - decision_ref.artifact_kind must equal ROUTE_DECISION_ARTIFACT_KIND exactly; no string coercion or alternate artifact kind is accepted.
+      - fallback_policy.route_graph must equal route_graph exactly so the recorded escalation policy cannot silently target a different graph.
+      - reasons must be immutable unique by RouteDecisionReasonCode and in canonical lexical code order.
+      - Every reason evidence ref must already occur either in RouterInputSnapshot.existing_artifacts or in one of its MediaProfile.evidence_artifacts; foreign evidence refs fail closed rather than extending decision provenance implicitly.
+      - The exact caller-supplied router_input route_graph fallback_policy reason objects and decision_ref are retained after validation without deriving a score winner confidence or replacement graph.
+      - No reason carries free-form text numeric score rank weight probability threshold adapter identity model checkpoint route execution result timestamp or generic metadata.
+      - RouteDecisionArtifact performs no route selection graph traversal fallback resolution adapter resolution quality evaluation execution persistence or I/O.
+      - No new dependency registry entry persistence schema codec filesystem network subprocess or external execution surface is introduced.
+    tests:
+      - ROUTE_DECISION_ARTIFACT_KIND exact stable value
+      - RouteDecisionReasonCode equality hashing immutability syntax validation and exact string conversion
+      - RouteDecisionReason frozen exact field shape empty and populated evidence validation duplicate decreasing wrong-type and conflicting-kind rejection
+      - RouteDecisionArtifact frozen exact field shape and wrong-type rejection
+      - wrong decision artifact kind fails closed
+      - fallback policy bound to a different RouteGraph fails closed
+      - non-empty canonical unique reason-code ordering validation
+      - reason evidence drawn from existing artifacts and MediaProfile evidence is accepted while foreign evidence fails closed
+      - exact caller-object retention for router_input route_graph fallback_policy decision_ref and reason tuple
+      - regression proving no route selection score rank winner adapter model checkpoint execution timestamp free-text reason persistence provenance mutation or generic metadata surface
+      - no filesystem network subprocess external dependency or persistence imports
+      - full fast CI and CodeQL plus native lanes only where repository path triggers require them
   - {id: V2L10.6, lot: V2L10, title: Router determinism fail closed tests, status: planned, depends_on: [V2L10.5]}
