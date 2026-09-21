@@ -4,7 +4,7 @@ work_items:
   - id: V2L11.1
     lot: V2L11
     title: Canonical CameraSolution contract
-    status: ready
+    status: done
     objective: Define the minimal immutable solver-independent per-observation CameraSolution contract with explicit local coordinate frame projection-model identity image dimensions finite intrinsic parameters camera-from-local-frame rigid extrinsics optional exact uncertainty-artifact hooks and canonical metrics without solving cameras asserting metric/world placement or creating any depth point or geometry assembly product.
     allowed_scope:
       - src/wre/domain/camera_solutions.py
@@ -74,7 +74,75 @@ work_items:
       - exact MetricVector and other caller-object retention
       - regression proving no physical CameraId metric/world/geographic scale depth geometry route solver execution persistence or generic metadata surface
       - full fast CI and CodeQL plus native lanes only where repository path triggers require them
-  - {id: V2L11.2, lot: V2L11, title: DepthField validity confidence contract, status: planned, depends_on: [V2L11.1]}
+  - id: V2L11.2
+    lot: V2L11
+    title: DepthField validity confidence contract
+    status: ready
+    objective: Define the minimal immutable solver-independent per-observation DepthField semantic contract tied to one canonical CameraSolution with explicit image dimensions depth-value convention row-major depth samples validity and optional normalized confidence plus canonical metrics without back-projecting points fusing fields asserting metric or world scale or defining a production dense-depth storage format.
+    allowed_scope:
+      - src/wre/domain/depth_fields.py
+      - focused exports in src/wre/domain/__init__.py
+      - tests/test_depth_fields.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L11.3 can be activated without implementing it
+    out_of_scope:
+      - changing CameraSolution CameraSolutionId ObservationId ImageDimensions LocalFrameId MetricVector or legacy estimated-geometry semantics
+      - changing the camera-from-local-frame convention or adding physical CameraId identity metric scale world Earth ECEF ENU geographic anchoring cross-local-frame alignment or fragment placement
+      - solver-specific tensor array image-file EXR PFM NumPy Torch CUDA memory-map chunk compression persistence codec or production dense-depth artifact layout which belongs to later dense-depth work
+      - depth inference monocular depth MVS PatchMatch learned models disparity conversion convention conversion confidence calibration or threshold learning
+      - PointMap back-projection point generation GeometrySolution assembly fusion refinement SurfaceModel collision measurement or any V2L11.3 through V2L16 behavior
+      - deriving pass fail quality decisions scalar total scores route selection retry fallback adapter execution model execution filesystem network subprocess or registry mutation
+      - starting V2L11.3 implementation in this work item
+    depends_on: [V2L11.1]
+    read_before:
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/04_DATA_MODEL.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md
+      - docs/29_PERFORMANCE_INTEGRATION_MAP.md
+      - registry/v1-v2-migration.yaml
+      - src/wre/domain/camera_solutions.py
+      - src/wre/domain/cameras.py
+      - src/wre/domain/observations.py
+      - src/wre/domain/metrics.py
+      - src/wre/domain/__init__.py
+      - tests/test_camera_solutions.py
+      - tests/test_metrics.py
+    reuse:
+      - CameraSolutionId as the exact camera calibration and pose solution to which the depth raster is bound instead of duplicating intrinsics extrinsics or local-frame identity
+      - ObservationId as the exact source observation whose pixel grid the field describes
+      - ImageDimensions as the positive raster dimensions and canonical pixel-count source
+      - MetricVector as canonical typed finite field-quality measurements without adding an untyped score dictionary
+      - immutable tuple and exact-float fail-closed conventions already established by CameraSolution while keeping production dense-depth storage separately owned
+    acceptance:
+      - Add immutable DepthFieldId using the established 1-128 character opaque identifier syntax.
+      - Add immutable DepthValueConventionName using the established 1-128 character lowercase semantic-token syntax so camera-z ray-distance inverse-depth or future canonicalized conventions can be named explicitly without freezing a solver or vendor enum.
+      - Add immutable DepthField containing exactly depth_field_id DepthFieldId observation_id ObservationId camera_solution_id CameraSolutionId dimensions ImageDimensions depth_value_convention DepthValueConventionName depth_values tuple of float validity tuple of bool confidence tuple of float or None and metrics MetricVector.
+      - depth_values validity and any present confidence are row-major pixel rasters whose exact length equals dimensions width_px multiplied by height_px; mutable collections short or long rasters and wrong member types fail closed rather than being reshaped padded or coerced.
+      - every depth_values member must be an exact finite float; a valid pixel requires strictly positive depth and an invalid pixel requires canonical 0.0 so unsupported pixels never depend on NaN infinity negative values or arbitrary sentinel payloads.
+      - validity members must be exact bool values and are the sole truth-bearing indication that the corresponding depth sample is supported; zero depth by itself is not interpreted without the validity contract.
+      - confidence may be None to represent no producer confidence claim; when present it must be an immutable tuple of exact finite float values in the inclusive range zero to one with the same pixel count and invalid pixels must carry canonical 0.0 confidence.
+      - confidence is a producer-supplied normalized support value only; DepthField does not interpret it as a calibrated probability derive a threshold rank aggregate confidence quality decision or route consequence.
+      - depth_value_convention is descriptive and retained exactly; DepthField performs no camera-z ray-distance inverse-depth or unit conversion and consumers must not compare fields with different conventions as if values were interchangeable.
+      - the referenced CameraSolution owns calibration extrinsics and local-frame identity; DepthField duplicates none of them and makes no claim that local depth units are meters or Earth/world aligned.
+      - metrics must be the exact caller-supplied MetricVector object and no metrics are computed from depth validity or confidence by this value contract.
+      - DepthField retains the exact caller-supplied identities dimensions convention raster tuples optional confidence tuple and metrics after validation and performs no registry filesystem database environment or network lookup.
+      - The contract contains no LocalFrameId CameraId scale status world transform GPS point map point coordinates geometry solution surface appearance dynamic state historical state solver adapter model checkpoint route quality mode generic metadata or persistence field.
+      - No production dense-depth serialization compression chunking memory mapping GPU tensor representation persistence I/O external dependency or depth-solving execution surface is introduced.
+    tests:
+      - DepthFieldId equality hashing immutability syntax validation and string conversion
+      - DepthValueConventionName equality hashing immutability lowercase-token validation and string conversion
+      - DepthField frozen exact field shape wrong-type rejection and exact caller-object retention
+      - row-major raster pixel-count validation for depth validity and optional confidence including mutable short long and wrong-member negative cases
+      - exact finite float depth validation including bool integer string NaN infinity negative and valid-zero rejection plus canonical invalid-zero enforcement
+      - exact bool validity validation including integer and string rejection
+      - absent confidence acceptance plus populated exact-float finite zero-to-one validation length checks and invalid-pixel zero-confidence enforcement
+      - representative multiple depth-value convention tokens retained without implicit conversion normalization or equality conflation
+      - regression proving no duplicated camera calibration extrinsics local-frame metric/world/geographic point geometry surface route solver persistence or generic metadata surface
+      - module-surface regression proving no filesystem network subprocess database NumPy Torch PyCOLMAP or other external execution dependency is introduced
+      - full fast CI and CodeQL plus native lanes only where repository path triggers require them
   - {id: V2L11.3, lot: V2L11, title: PointMap contract, status: planned, depends_on: [V2L11.2]}
   - {id: V2L11.4, lot: V2L11, title: GeometrySolution assembly local scale contract, status: planned, depends_on: [V2L11.3]}
   - {id: V2L11.5, lot: V2L11, title: One way legacy SparseReconstructionEstimate conversion, status: planned, depends_on: [V2L11.4]}

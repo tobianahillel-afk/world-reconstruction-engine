@@ -28,6 +28,11 @@ from wre.domain.benchmarks import (
     BenchmarkRecord,
     BenchmarkRecordId,
 )
+from wre.domain.camera_solutions import (
+    CameraProjectionModelName,
+    CameraSolution,
+    CameraSolutionId,
+)
 from wre.domain.cameras import (
     Camera,
     CameraId,
@@ -168,6 +173,9 @@ __all__ = [
     "CameraCalibrationEstimateId",
     "CameraId",
     "CameraPoseEstimate",
+    "CameraProjectionModelName",
+    "CameraSolution",
+    "CameraSolutionId",
     "CaptureTimeInterpretation",
     "CaptureTimeInterpretationStatus",
     "CheckpointIdentity",
