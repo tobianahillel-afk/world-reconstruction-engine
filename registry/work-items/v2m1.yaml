@@ -2385,7 +2385,7 @@ work_items:
       - Rebuilding the fixture from the same explicit semantic inputs produces equal RouterInputSnapshot RouteGraph FallbackPolicy reasons and RouteDecisionArtifact values and identical stable wire tokens.
       - Reordering media profiles existing artifacts prior failures route nodes route edges fallback rules decision reasons or reason evidence does not silently normalize; non-canonical variants fail closed under their owning contracts.
       - A foreign reason evidence ref wrong route-decision ArtifactKind mismatched fallback-policy graph graph cycle unsupported quality-mode input and invalid resource budget each fail closed rather than producing a decision.
-      - Explicit fallback resolution remains deterministic: exact allowlisted trigger below bound preserves action and target while missing rules and exhausted bounds return UNRESOLVED with no target.
+      - 'Explicit fallback resolution remains deterministic: exact allowlisted trigger below bound preserves action and target while missing rules and exhausted bounds return UNRESOLVED with no target.'
       - Positive PASS or ACCEPT_WITH_WARNINGS quality decisions cannot become fallback triggers.
       - The composition fixture proves routing contracts carry no timestamps random state mutable metadata scores ranks winners concrete adapter IDs model/checkpoint identities execution results or reconstruction provenance mutation.
       - Full regression suite remains green and no known semantic regression remains across V2L10.1 through V2L10.5.
