@@ -5,17 +5,16 @@ roadmap_version: '2.0'
 phase: implementation
 milestone: V2M1
 lot: V2L10
-active_work_item: V2L10.5
+active_work_item: V2L10.6
 status: ready
-last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5, V2L3.6, V2L4.1, V2L4.2, V2L4.3, V2L4.4, V2L4.5, V2L4.6, V2L5.1, V2L5.2, V2L5.3, V2L5.4, V2L5.5, V2L5.6, V2L6.1, V2L6.2, V2L6.3, V2L6.4, V2L6.5, V2L6.6, V2L7.1, V2L7.2, V2L7.3, V2L7.4, V2L7.5, V2L7.6, V2L8.1, V2L8.2, V2L8.3, V2L8.4, V2L8.5, V2L9.1, V2L9.2, V2L9.3, V2L9.4, V2L9.5, V2L10.1, V2L10.2, V2L10.3, V2L10.4]
-last_merged_pr: 97
+last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5, V2L3.6, V2L4.1, V2L4.2, V2L4.3, V2L4.4, V2L4.5, V2L4.6, V2L5.1, V2L5.2, V2L5.3, V2L5.4, V2L5.5, V2L5.6, V2L6.1, V2L6.2, V2L6.3, V2L6.4, V2L6.5, V2L6.6, V2L7.1, V2L7.2, V2L7.3, V2L7.4, V2L7.5, V2L7.6, V2L8.1, V2L8.2, V2L8.3, V2L8.4, V2L8.5, V2L9.1, V2L9.2, V2L9.3, V2L9.4, V2L9.5, V2L10.1, V2L10.2, V2L10.3, V2L10.4, V2L10.5]
+last_merged_pr: 99
 current_goal: >-
-  Define one immutable auditable route-decision record binding the exact validated router input chosen structural route
-  bounded fallback policy and canonical typed reason evidence without implementing route selection or execution.
+  Prove the complete V2L10 routing foundation deterministic and fail closed then perform the V2L10 lot and V2M1
+  end-to-end milestone composition reviews before any static-geometry implementation begins.
 next_action: >-
-  Complete only V2L10.5 from its executable contract in registry/work-items/v2m1.yaml: add stable decision artifact
-  identity typed reason records and strict cross-contract validation; do not choose routes, resolve adapters, execute
-  fallback or begin V2L10.6 early.
+  Complete only V2L10.6 from its executable contract in registry/work-items/v2m1.yaml: add deterministic composition
+  regressions then review V2L10 and V2M1; activate V2L11.1 only after PASS and do not implement V2M2 early.
 blockers: []
 architecture:
   product_blueprint: docs/01_PRODUCT.md

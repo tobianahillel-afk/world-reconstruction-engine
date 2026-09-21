@@ -2267,7 +2267,7 @@ work_items:
   - id: V2L10.5
     lot: V2L10
     title: Auditable route decision artifact
-    status: ready
+    status: done
     objective: Define one immutable auditable route-decision record that binds an explicit caller-supplied decision artifact identity to the exact validated RouterInputSnapshot chosen RouteGraph matching FallbackPolicy and canonical typed reason records without implementing route selection ranking adapter resolution execution or persistence.
     allowed_scope:
       - src/wre/routing/decision.py
@@ -2332,4 +2332,74 @@ work_items:
       - regression proving no route selection score rank winner adapter model checkpoint execution timestamp free-text reason persistence provenance mutation or generic metadata surface
       - no filesystem network subprocess external dependency or persistence imports
       - full fast CI and CodeQL plus native lanes only where repository path triggers require them
-  - {id: V2L10.6, lot: V2L10, title: Router determinism fail closed tests, status: planned, depends_on: [V2L10.5]}
+  - id: V2L10.6
+    lot: V2L10
+    title: Router determinism fail closed tests
+    status: ready
+    objective: Add deterministic composition regressions over the complete V2L10 routing foundation and close both the V2L10 lot review and V2M1 milestone review only if canonical inputs route structure fallback and auditable decision records remain repeatable fail closed and strictly separated from reconstruction truth or execution.
+    allowed_scope:
+      - tests/test_router_determinism_fail_closed.py
+      - docs/reviews/V2L10-routing-v2m1-review.md only after deterministic fixture and full implementation evidence are green
+      - registry/reviews.yaml only after lot and milestone review evidence exists
+      - registry/components.yaml PROJECT_STATE.yaml this work-item registry and registry/work-items/v2m2.yaml only for final V2L10/V2M1 closure and V2L11.1 handoff after review evidence is PASS
+    out_of_scope:
+      - changing any V2L10.1 through V2L10.5 production contract or semantics
+      - adding route-selection heuristics graph scoring ranking adapter resolution default selection or benchmark promotion
+      - parsing raw profiler artifacts logs exceptions filenames or mutable environment state into route decisions
+      - executing route nodes fallback transitions adapters schedulers resource allocation checkpointing persistence or I/O
+      - weakening canonical ordering exact-type validation fallback bounds artifact provenance quality thresholds or fail-closed behavior
+      - geometry camera depth reconstruction surface appearance dynamic historical runtime or any V2M2 implementation
+      - starting V2L11.1 implementation in this work item
+    depends_on: [V2L10.5]
+    read_before:
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/reviews/V2L5-media-profiling-review.md
+      - docs/reviews/V2L6-adaptive-frame-selection-review.md
+      - docs/reviews/V2L7-pair-candidate-retrieval-review.md
+      - docs/reviews/V2L8-scene-identity-clustering-review.md
+      - docs/reviews/V2L9-temporal-grouping-sync-review.md
+      - src/wre/routing/quality_mode.py
+      - src/wre/routing/graph.py
+      - src/wre/routing/inputs.py
+      - src/wre/routing/fallback.py
+      - src/wre/routing/decision.py
+      - tests/test_routing_quality_mode.py
+      - tests/test_route_graph.py
+      - tests/test_router_inputs.py
+      - tests/test_fallback_policy.py
+      - tests/test_route_decision.py
+      - registry/reviews.yaml
+      - registry/work-items/v2m2.yaml
+    reuse:
+      - the complete immutable V2L10 contract stack without adding another router abstraction
+      - accepted V2L5 through V2L9 lot-review evidence for the V2M1 end-to-end composition audit
+      - exact object equality canonical order and explicit unresolved fallback behavior as observable determinism properties
+    acceptance:
+      - Add one deterministic fixture builder using canonical RouteQualityRequest MediaProfile RouteResourceBudget RouterInputSnapshot RouteGraph FallbackPolicy RouteDecisionReason and RouteDecisionArtifact values with no clock randomness environment filesystem registry lookup or external execution.
+      - Rebuilding the fixture from the same explicit semantic inputs produces equal RouterInputSnapshot RouteGraph FallbackPolicy reasons and RouteDecisionArtifact values and identical stable wire tokens.
+      - Reordering media profiles existing artifacts prior failures route nodes route edges fallback rules decision reasons or reason evidence does not silently normalize; non-canonical variants fail closed under their owning contracts.
+      - A foreign reason evidence ref wrong route-decision ArtifactKind mismatched fallback-policy graph graph cycle unsupported quality-mode input and invalid resource budget each fail closed rather than producing a decision.
+      - 'Explicit fallback resolution remains deterministic: exact allowlisted trigger below bound preserves action and target while missing rules and exhausted bounds return UNRESOLVED with no target.'
+      - Positive PASS or ACCEPT_WITH_WARNINGS quality decisions cannot become fallback triggers.
+      - The composition fixture proves routing contracts carry no timestamps random state mutable metadata scores ranks winners concrete adapter IDs model/checkpoint identities execution results or reconstruction provenance mutation.
+      - Full regression suite remains green and no known semantic regression remains across V2L10.1 through V2L10.5.
+      - Add docs/reviews/V2L10-routing-v2m1-review.md only after implementation evidence is green and mark V2L10 PASS only if quality modes graph inputs bounded fallback and decision artifacts compose deterministically and fail closed.
+      - The same review must perform the required V2M1 milestone end-to-end composition audit over accepted V2L5 through V2L10 evidence and mark V2M1 PASS only if arbitrary media can be profiled sampled/reused for retrieval organized into scene identity and event-time evidence and supplied to auditable routing without collapsing evidence provenance or claiming reconstruction.
+      - The milestone review explicitly states that V2M1 does not yet provide canonical camera depth geometry physical surface photorealistic appearance dynamic 4D historical reconstruction or runtime compilation.
+      - Update registry/reviews.yaml V2L10 and V2M1 to passed only after the review document exists and final review evidence is complete.
+      - Mark route_graph implemented only after V2L10 review PASS.
+      - Activate only V2L11.1 after V2M1 PASS by expanding its machine work-item contract in registry/work-items/v2m2.yaml; do not implement any V2L11 code in this work item.
+    tests:
+      - repeated canonical fixture equality and stable-token determinism
+      - non-canonical collection permutations fail closed instead of auto-sorting
+      - invalid decision evidence artifact kind graph/policy mismatch graph cycle quality input and resource budget cases fail closed
+      - exact fallback match missing-rule and transition-bound determinism
+      - positive quality outcomes cannot trigger fallback
+      - no timestamp randomness environment adapter selection scoring ranking execution persistence reconstruction truth or generic metadata surface
+      - full fast CI CodeQL and native lanes only where repository path triggers require them
