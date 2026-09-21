@@ -63,6 +63,11 @@ from wre.domain.estimated_geometry import (
 )
 from wre.domain.failures import FailureCategory
 from wre.domain.fragments import LocalFrameId, SpatialFragment, SpatialFragmentId
+from wre.domain.geometry_solutions import (
+    GeometryScaleStatus,
+    GeometrySolution,
+    GeometrySolutionId,
+)
 from wre.domain.frame_selection import (
     FrameSelectionPolicy,
     FrameSelectionPolicyId,
@@ -199,6 +204,9 @@ __all__ = [
     "FrameSelectionPolicyRevision",
     "GpsInterpretationStatus",
     "GpsMetadataInterpretation",
+    "GeometryScaleStatus",
+    "GeometrySolution",
+    "GeometrySolutionId",
     "HardwareRuntimeIdentity",
     "ImageDimensions",
     "ImageObservation",
