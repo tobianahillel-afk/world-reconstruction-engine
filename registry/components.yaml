@@ -197,7 +197,8 @@ components:
       - tests/test_router_inputs.py
       - tests/test_fallback_policy.py
       - tests/test_route_decision.py
-    status: implementing
+      - tests/test_router_determinism_fail_closed.py
+    status: implemented
   canonical_geometry_contracts: {owner_lot: V2L11, implementation: [], tests: [], status: planned}
   precision_geometry_baseline: {owner_lot: V2L12, implementation: [], tests: [], status: planned}
   feed_forward_geometry: {owner_lot: V2L13, implementation: [], tests: [], status: planned}
