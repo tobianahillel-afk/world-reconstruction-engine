@@ -52,7 +52,8 @@ class RouteDecisionReason:
             raise ValueError("route_decision_reason.evidence_refs must be unique")
         if evidence_keys != tuple(sorted(evidence_keys)):
             raise ValueError(
-                "route_decision_reason.evidence_refs must use canonical ArtifactId/ArtifactKind order"
+                "route_decision_reason.evidence_refs must use canonical "
+                "ArtifactId/ArtifactKind order"
             )
 
         kinds_by_id: dict[str, str] = {}

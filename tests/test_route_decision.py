@@ -268,7 +268,7 @@ def test_route_decision_artifact_rejects_wrong_core_types() -> None:
 
 
 def test_route_decision_requires_exact_artifact_kind() -> None:
-    with pytest.raises(ValueError, match="routing.route_decision"):
+    with pytest.raises(ValueError, match=r"routing\.route_decision"):
         _artifact(decision_ref=_decision_ref(ArtifactKind("routing.other")))
 
 
