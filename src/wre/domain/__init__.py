@@ -35,6 +35,11 @@ from wre.domain.cameras import (
     ObservationMetadata,
     RawMetadataEntry,
 )
+from wre.domain.camera_solutions import (
+    CameraProjectionModelName,
+    CameraSolution,
+    CameraSolutionId,
+)
 from wre.domain.decoded_images import (
     DECODED_IMAGE_PYRAMID_KIND,
     DecodedImageLevelDescriptor,
@@ -168,6 +173,9 @@ __all__ = [
     "CameraCalibrationEstimateId",
     "CameraId",
     "CameraPoseEstimate",
+    "CameraProjectionModelName",
+    "CameraSolution",
+    "CameraSolutionId",
     "CaptureTimeInterpretation",
     "CaptureTimeInterpretationStatus",
     "CheckpointIdentity",
