@@ -243,11 +243,6 @@ def test_noncanonical_graph_policy_and_decision_collections_fail_closed() -> Non
             reasons=tuple(reversed(reasons)),
         )
 
-    reversed_evidence = RouteDecisionReason(
-        code=RouteDecisionReasonCode("profile.signal"),
-        evidence_refs=tuple(reversed(reasons[1].evidence_refs)),
-    )
-    assert reversed_evidence is not None
 
 
 def test_noncanonical_reason_evidence_fails_closed() -> None:
