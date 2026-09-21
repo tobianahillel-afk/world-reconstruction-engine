@@ -54,7 +54,7 @@ work_items:
       - intrinsic_parameters must be a non-empty immutable tuple of exact finite float values; bool integers NaN and infinity fail closed rather than being silently normalized.
       - rotation_matrix must be an immutable finite 3x3 proper rotation with unit orthogonal rows and determinant plus one within the established 1e-6 numeric tolerance.
       - translation_xyz must be an immutable finite 3-vector of exact float values; bool integers NaN and infinity fail closed rather than being silently normalized.
-      - Extrinsic semantics are fixed and tested as camera-from-local-frame: x_camera equals rotation_matrix multiplied by x_local plus translation_xyz. No world-from-camera alias camera-center field or implicit inversion is exposed.
+      - 'Extrinsic semantics are fixed and tested as camera-from-local-frame: x_camera equals rotation_matrix multiplied by x_local plus translation_xyz. No world-from-camera alias camera-center field or implicit inversion is exposed.'
       - local_frame_id names only the solution coordinate frame and makes no metric scale Earth alignment geographic placement or compatibility claim with another LocalFrameId.
       - projection_model plus intrinsic_parameters are solver-independent descriptive camera calibration values and do not assert physical CameraId identity.
       - uncertainty_artifacts may be empty; when present they must be immutable canonical unique ArtifactRef values ordered by ArtifactId then ArtifactKind and conflicting kinds for one ArtifactId fail closed.
