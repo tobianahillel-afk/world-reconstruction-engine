@@ -34,13 +34,9 @@ from wre.domain import (
     ImageDimensions,
     LocalFrameId,
     MetricAggregation,
-    MetricDescriptor,
-    MetricDimension,
     MetricDirection,
-    MetricName,
     MetricObservation,
     MetricProvenance,
-    MetricUnit,
     MetricVector,
     ObservationId,
     ObservationKind,
@@ -55,7 +51,6 @@ from wre.reconstruction.da3_execution_benchmark import (
     DA3_CUDA_EAGER_PROFILE,
     DA3_EXECUTION_END_TO_END_STAGE,
     DA3_REFERENCE_PROFILE,
-    Da3CandidateExecutionOutcome,
     Da3ExecutionBenchmarkRequest,
     Da3ExecutionProfileAvailability,
     Da3ExecutionProfileId,
@@ -74,8 +69,8 @@ from wre.reconstruction.da3_runtime import (
     execute_da3_base_preview,
 )
 from wre.reconstruction.feed_forward_camera_quality import (
-    FeedForwardCameraQualityRequest,
     OBSERVATION_COVERAGE_DESCRIPTOR,
+    FeedForwardCameraQualityRequest,
     evaluate_feed_forward_camera_quality,
 )
 
@@ -142,10 +137,11 @@ def _timings(
     stages = list(DA3_PROFILE_STAGE_NAMES)
     if include_gpu_transfer:
         raise AssertionError("the current accepted runtime stage vocabulary has no transfer stage")
-    return tuple(
-        Da3StageTiming(stage=stage, elapsed_seconds=float(base + index * 0.001))
-        for index, stage in enumerate(stages)
-    ) + (
+    return (
+        *(
+            Da3StageTiming(stage=stage, elapsed_seconds=float(base + index * 0.001))
+            for index, stage in enumerate(stages)
+        ),
         Da3StageTiming(
             stage=DA3_EXECUTION_END_TO_END_STAGE,
             elapsed_seconds=float(base + 0.5),
@@ -337,7 +333,9 @@ def test_available_candidate_links_baseline_and_retains_gpu_memory_evidence() ->
     assert candidate.measured.benchmark_record.comparison_baseline == (
         result.reference.benchmark_record.record_id
     )
-    assert candidate.measured.benchmark_record.hardware == result.reference.benchmark_record.hardware
+    assert candidate.measured.benchmark_record.hardware == (
+        result.reference.benchmark_record.hardware
+    )
     names = {
         item.descriptor.name.value
         for item in candidate.measured.benchmark_record.metrics.observations
