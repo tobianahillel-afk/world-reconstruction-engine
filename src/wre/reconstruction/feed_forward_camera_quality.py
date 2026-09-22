@@ -18,7 +18,7 @@ from wre.domain.metrics import (
     MetricUnit,
     MetricVector,
 )
-from wre.domain.observations import ObservationId, Sha256Digest
+from wre.domain.observations import Sha256Digest
 from wre.domain.producer_identity import ArtifactProducerIdentity, ConfigurationIdentity
 from wre.domain.runs import ProducerRef
 from wre.reconstruction.feed_forward_geometry import FeedForwardGeometryResult
