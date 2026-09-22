@@ -1,5 +1,28 @@
 schema_version: 1
 entries:
+  - adapter_id: colmap.precision_geometry
+    capability:
+      name: geometry.precision_sfm
+      input_kinds: [image.observation]
+      output_kinds: [geometry.camera_solution, geometry.point_map, geometry.solution]
+    producer:
+      implementation: wre.reconstruction.colmap_adapter
+      version: "1"
+      revision: null
+    dependency_refs: [colmap]
+    model: null
+    checkpoint: null
+    artifact_key_hardware_policy: required
+    license:
+      direct: BSD-3-Clause
+      review: approved
+      transitive_notes: "The approved dependency record notes that a concrete COLMAP build can include separately licensed dependencies; this V2 descriptor does not broaden those terms."
+      redistribution_notes: "WRE retains PyCOLMAP/COLMAP as an exact external solver environment; V2L12.1 adds only a pure descriptor and does not approve alternate builds or bundled redistribution."
+    shipping_status: experimental
+    reproducibility_notes: "V2L12.1 declares the current PyCOLMAP 4.2.0 / COLMAP 4.2.0 precision-geometry capability through canonical V2 artifact kinds only. It does not execute COLMAP or materialize CameraSolution, PointMap, or GeometrySolution values."
+    failure_signals: []
+    metric_names: []
+    resume_mode: unsupported
   - adapter_id: colmap.sparse_sfm
     capability:
       name: geometry.sparse_sfm
