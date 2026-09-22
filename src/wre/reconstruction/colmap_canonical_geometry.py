@@ -27,7 +27,6 @@ from wre.domain.point_maps import PointMap, PointMapId
 from wre.ingestion.hashing import hash_file_content
 from wre.reconstruction.colmap_adapter import COLMAP_PRECISION_OUTPUT_KINDS
 from wre.reconstruction.colmap_environment import (
-    SUPPORTED_COLMAP_VERSION,
     SUPPORTED_PYCOLMAP_VERSION,
     ColmapEnvironmentError,
     ColmapEnvironmentIdentity,
