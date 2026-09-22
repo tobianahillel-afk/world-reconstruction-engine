@@ -233,7 +233,9 @@ def test_request_is_exact_frozen_and_preserves_ordered_provenance() -> None:
 
     request = _request(candidate, references, artifacts)
 
-    assert tuple(field.name for field in fields(camera_quality.FeedForwardCameraQualityRequest)) == (
+    assert tuple(
+        field.name for field in fields(camera_quality.FeedForwardCameraQualityRequest)
+    ) == (
         "candidate",
         "reference_cameras",
         "input_artifacts",
