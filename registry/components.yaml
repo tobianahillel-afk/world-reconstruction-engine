@@ -207,11 +207,14 @@ components:
       - src/wre/domain/point_maps.py
       - src/wre/domain/geometry_solutions.py
       - src/wre/domain/__init__.py
+      - src/wre/reconstruction/legacy_geometry_conversion.py
+      - src/wre/reconstruction/__init__.py
     tests:
       - tests/test_camera_solutions.py
       - tests/test_depth_fields.py
       - tests/test_point_maps.py
       - tests/test_geometry_solutions.py
+      - tests/test_legacy_geometry_conversion.py
     status: implementing
   precision_geometry_baseline: {owner_lot: V2L12, implementation: [], tests: [], status: planned}
   feed_forward_geometry: {owner_lot: V2L13, implementation: [], tests: [], status: planned}

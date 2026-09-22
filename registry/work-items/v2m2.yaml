@@ -294,7 +294,7 @@ work_items:
   - id: V2L11.5
     lot: V2L11
     title: One way legacy SparseReconstructionEstimate conversion
-    status: ready
+    status: done
     objective: Define and implement one deterministic in-memory one-way conversion from the retained legacy SparseReconstructionEstimate donor representation into canonical V2 CameraSolution PointMap and GeometrySolution products while preserving local-frame camera-from-local extrinsics and explicit scale status without modifying legacy contracts reading solver-native artifacts inventing missing evidence or creating a permanent bidirectional compatibility layer.
     allowed_scope:
       - src/wre/reconstruction/legacy_geometry_conversion.py
@@ -372,7 +372,83 @@ work_items:
       - regression proving legacy tracks feature indices reprojection error prior-focal flag provenance physical camera identity world placement surface solver persistence and generic metadata are not promoted into canonical outputs
       - module-surface regression proving no filesystem network subprocess database PyCOLMAP NumPy Torch Open3D or other external execution dependency is introduced
       - full fast CI and CodeQL plus native lanes only where repository path triggers require them
-  - {id: V2L11.6, lot: V2L11, title: Coordinate convention regression fixture, status: planned, depends_on: [V2L11.5]}
+  - id: V2L11.6
+    lot: V2L11
+    title: Coordinate convention regression fixture and lot review
+    status: ready
+    objective: Add one deterministic fast regression fixture that composes the accepted V2L11 camera point-map geometry and one-way legacy-conversion contracts around an asymmetric non-identity camera-from-local-frame transform so transpose inverse sign frame and scale regressions fail closed, then close the V2L11 lot review without introducing a coordinate-conversion engine or beginning the V2L12 classical adapter.
+    allowed_scope:
+      - tests/test_geometry_coordinate_conventions.py
+      - docs/reviews/V2L11-canonical-geometry-contracts-review.md
+      - focused corrections to V2L11-owned canonical geometry or legacy-conversion files only if the fixture demonstrates an existing V2L11 contract violation and without API or responsibility expansion
+      - focused lifecycle and review updates to registry/components.yaml registry/reviews.yaml PROJECT_STATE.yaml and this work-item registry only after fixture evidence and the V2L11 lot review are green so V2L12.1 can be activated without implementing it
+    out_of_scope:
+      - a new coordinate transform alignment library generic SE3 math API or reusable world-frame conversion subsystem
+      - changing accepted CameraSolution DepthField PointMap GeometrySolution or one-way legacy-conversion semantics unless required to fix a demonstrated V2L11 regression
+      - native COLMAP artifact reading or execution V2L12 adapter descriptors feature matching verification mapper normalization or any V2L12 product implementation
+      - alignment between different LocalFrameId values fragment creation fragment membership fragment merging or competing-geometry selection
+      - world Earth ECEF ENU geographic GPS GCP reference-fragment anchoring absolute placement or CRS conversion
+      - metric-scale inference coordinate rescaling bundle adjustment triangulation depth generation geometry refinement fusion or optimization
+      - SurfaceModel mesh SDF collision navigation measurement appearance material environment dynamic historical or runtime representation work
+      - persistence serialization database filesystem network model execution routing fallback or quality-policy execution
+      - starting V2L12.1 implementation in this work item
+    depends_on: [V2L11.5]
+    read_before:
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/06_TESTING.md
+      - docs/19_COLMAP_RECONSTRUCTION_IMPORT.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md
+      - registry/reviews.yaml
+      - registry/v1-v2-migration.yaml
+      - docs/reviews/L3-M1-colmap-baseline-review.md
+      - src/wre/domain/camera_solutions.py
+      - src/wre/domain/depth_fields.py
+      - src/wre/domain/point_maps.py
+      - src/wre/domain/geometry_solutions.py
+      - src/wre/domain/estimated_geometry.py
+      - src/wre/reconstruction/legacy_geometry_conversion.py
+      - src/wre/reconstruction/colmap_import.py
+      - tests/test_camera_solutions.py
+      - tests/test_depth_fields.py
+      - tests/test_point_maps.py
+      - tests/test_geometry_solutions.py
+      - tests/test_legacy_geometry_conversion.py
+      - tests/test_colmap_reconstruction_import.py
+    reuse:
+      - CameraSolution camera-from-local-frame semantics exactly expressed as x_camera equals rotation_matrix multiplied by x_local plus translation_xyz
+      - LocalFrameId as explicit local coordinate identity without metric Earth geographic or cross-frame compatibility implications
+      - PointMap and GeometrySolution as canonical local-frame geometry values whose coordinates and child references must remain unchanged by convention checks
+      - the V2L11.5 one-way legacy bridge as donor regression evidence that historical camera-from-local-frame poses and point coordinates reach the same canonical convention without inversion or rescaling
+      - one asymmetric proper rotation nonzero translation and non-symmetric local points chosen as deterministic arithmetic evidence against accidental transpose inverse sign or axis assumptions
+      - the fast deterministic fixture pattern and existing lot-review evidence process without adding a native external dependency
+    acceptance:
+      - Add one dedicated deterministic fast fixture using a non-identity proper rotation with nonzero translation and at least two non-symmetric local-frame points so identity transpose inverse sign-flip and accidental symmetric cases cannot pass trivially.
+      - Construct a canonical CameraSolution and verify with explicit scalar arithmetic that a chosen local point satisfies x_camera equals rotation_matrix multiplied by x_local plus translation_xyz with the expected camera coordinates.
+      - Prove representative incorrect transpose inverse or translation-sign interpretations do not equal the expected camera coordinates and are not accepted as alternative conventions.
+      - Thread one exact LocalFrameId through CameraSolution PointMap and GeometrySolution and prove none of those contracts renames the local frame into world Earth geographic fragment or another implicit coordinate domain.
+      - Prove PointMap positions remain exactly the supplied local coordinates in their supplied order and the fixture performs no hidden rotation translation sorting fusion or coordinate conversion on those points.
+      - Exercise both GeometryScaleStatus.UNRESOLVED and GeometryScaleStatus.METRIC and prove changing only scale status does not alter camera extrinsics point coordinates frame identity or create any origin orientation Earth alignment or global-placement claim.
+      - Build an equivalent retained legacy SparseReconstructionEstimate with the same asymmetric camera-from-local-frame transform and local points then run convert_sparse_reconstruction_estimate and prove the converted CameraSolution rotation translation PointMap coordinates LocalFrameId and scale mapping are preserved without inversion transpose sign change or rescaling.
+      - Apply the same explicit local-point camera equation to the converted CameraSolution and verify it yields the same expected camera coordinates as the directly constructed canonical CameraSolution.
+      - The regression fixture introduces no NumPy Torch Open3D PyCOLMAP filesystem database subprocess network solver execution coordinate-alignment engine or external dependency.
+      - Add a V2L11 lot review documenting composition across V2L11.1 through V2L11.6 including canonical camera depth point and geometry boundaries local-scale semantics the one-way legacy bridge coordinate convention evidence and explicit remaining non-capabilities.
+      - The V2L11 review must explicitly confirm that local frame does not imply metric scale or world placement unresolved scale remains valid physical surface is still absent and V2L12 solver normalization has not begun.
+      - Only after the fixture and review evidence are green may registry/reviews.yaml mark V2L11 passed canonical_geometry_contracts become implemented PROJECT_STATE hand off to V2L12.1 and the V2L12.1 work item become ready without adding any V2L12 implementation.
+    tests:
+      - asymmetric direct CameraSolution camera-from-local-frame arithmetic with exact expected camera coordinates
+      - regression proving transpose inverse translation-sign and identity-like alternative interpretations differ from the canonical result
+      - exact LocalFrameId continuity across CameraSolution PointMap and GeometrySolution with no world Earth fragment or geographic claim
+      - exact PointMap local-coordinate and ordering preservation with no hidden conversion
+      - unresolved-versus-metric scale-status regression proving status does not mutate transforms coordinates frame identity or world semantics
+      - equivalent legacy estimate conversion preserving rotation translation local points local frame and scale mapping
+      - direct-versus-converted canonical camera equation equivalence on the same local point
+      - module and fixture surface regression proving no external math solver native IO persistence or coordinate-alignment dependency is introduced
+      - V2L11 lot review evidence covers V2L11.1 through V2L11.6 and the explicit handoff boundary to V2L12.1
+      - full fast CI and CodeQL plus native lanes only where repository path triggers require them
   - {id: V2L12.1, lot: V2L12, title: Current COLMAP adapter descriptor and normalization, status: planned, depends_on: [V2L11.6]}
   - {id: V2L12.2, lot: V2L12, title: Current COLMAP evidence stages use v2 artifact identities, status: planned, depends_on: [V2L12.1]}
   - {id: V2L12.3, lot: V2L12, title: COLMAP incremental and global mappers emit canonical geometry, status: planned, depends_on: [V2L12.2]}
