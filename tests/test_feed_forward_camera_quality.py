@@ -443,7 +443,7 @@ def test_translation_direction_error_and_coincident_pair_coverage() -> None:
     candidate = _geometry(
         _pose_from_center("obs:a", (0.0, 0.0, 0.0), frame="candidate"),
         _pose_from_center("obs:b", (0.0, 1.0, 0.0), frame="candidate"),
-        _pose_from_center("obs:c", (-1.0, 0.0, 0.0), frame="candidate"),
+        _pose_from_center("obs:c", (0.0, 0.0, 0.0), frame="candidate"),
     )
 
     values = _metrics(
