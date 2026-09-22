@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from dataclasses import FrozenInstanceError, fields
 import os
+from dataclasses import FrozenInstanceError, fields
 from pathlib import Path
 from typing import Any, cast
 
@@ -413,8 +413,9 @@ def test_verified_rgb_input_reads_only_canonical_materialization(tmp_path: Path)
 
 def test_checkpoint_state_compatibility_accepts_only_reviewed_missing_keys() -> None:
     class _Incompatible:
-        missing_keys = list(da3_runtime._DA3_EXPECTED_MISSING_STATE_KEYS)
-        unexpected_keys: list[str] = []
+        def __init__(self) -> None:
+            self.missing_keys = list(da3_runtime._DA3_EXPECTED_MISSING_STATE_KEYS)
+            self.unexpected_keys: list[str] = []
 
     class _Model:
         def load_state_dict(self, state: dict[str, object], *, strict: bool) -> _Incompatible:
@@ -430,8 +431,12 @@ def test_checkpoint_state_compatibility_accepts_only_reviewed_missing_keys() -> 
 
 def test_checkpoint_state_compatibility_rejects_any_other_divergence() -> None:
     class _Incompatible:
-        missing_keys = [*da3_runtime._DA3_EXPECTED_MISSING_STATE_KEYS, "foreign.weight"]
-        unexpected_keys: list[str] = []
+        def __init__(self) -> None:
+            self.missing_keys = [
+                *da3_runtime._DA3_EXPECTED_MISSING_STATE_KEYS,
+                "foreign.weight",
+            ]
+            self.unexpected_keys: list[str] = []
 
     class _Model:
         def load_state_dict(self, state: dict[str, object], *, strict: bool) -> _Incompatible:
