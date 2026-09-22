@@ -47,9 +47,7 @@ DA3_MODEL = ModelIdentity(
 )
 DA3_CHECKPOINT = CheckpointIdentity(
     identifier="depth-anything/DA3-BASE/model.safetensors",
-    sha256=Sha256Digest(
-        "e01067dc1659613083d9145a9a2547ccdbe6ccbbf83c4fe7b3e8a4e2bdae78b5"
-    ),
+    sha256=Sha256Digest("e01067dc1659613083d9145a9a2547ccdbe6ccbbf83c4fe7b3e8a4e2bdae78b5"),
 )
 
 # Reference-v1 is intentionally a conservative CPU/float32 path. Accelerated GPU
@@ -95,13 +93,9 @@ class Da3ReferenceConfig:
         if type(self.process_res) is not int or self.process_res != 504:
             raise ValueError("DA3-BASE reference process_res must be integer 504")
         if self.process_res_method != "upper_bound_resize":
-            raise ValueError(
-                "DA3-BASE reference process_res_method must be 'upper_bound_resize'"
-            )
+            raise ValueError("DA3-BASE reference process_res_method must be 'upper_bound_resize'")
         if self.ref_view_strategy != "saddle_balanced":
-            raise ValueError(
-                "DA3-BASE reference ref_view_strategy must be 'saddle_balanced'"
-            )
+            raise ValueError("DA3-BASE reference ref_view_strategy must be 'saddle_balanced'")
         if type(self.infer_gs) is not bool or self.infer_gs:
             raise ValueError("DA3-BASE reference infer_gs must be false")
         if type(self.use_ray_pose) is not bool or self.use_ray_pose:
@@ -138,9 +132,7 @@ class Da3ReferenceConfig:
             separators=(",", ":"),
             allow_nan=False,
         ).encode("utf-8")
-        return ConfigurationIdentity(
-            sha256=Sha256Digest(hashlib.sha256(encoded).hexdigest())
-        )
+        return ConfigurationIdentity(sha256=Sha256Digest(hashlib.sha256(encoded).hexdigest()))
 
 
 @dataclass(frozen=True, slots=True)
@@ -345,9 +337,7 @@ def _verified_rgb_image(item: Da3ImageInput) -> _VerifiedRgbImage:
         item.materialization_root,
     )
     if verification.status is not ArtifactMaterializationVerificationStatus.VERIFIED:
-        raise Da3RuntimeError(
-            f"DA3 decoded-image materialization is {verification.status.value}"
-        )
+        raise Da3RuntimeError(f"DA3 decoded-image materialization is {verification.status.value}")
     manifest = result.manifest
     if manifest.pixel_layout is not DecodedImagePixelLayout.RGB8_PACKED:
         raise Da3RuntimeError("DA3 requires packed RGB8 decoded pixels")
@@ -444,9 +434,7 @@ def inspect_da3_reference_environment() -> Da3EnvironmentIdentity:
         try:
             actual = importlib.metadata.version(distribution)
         except importlib.metadata.PackageNotFoundError as exc:
-            raise Da3RuntimeError(
-                f"DA3 reference package {distribution!r} is unavailable"
-            ) from exc
+            raise Da3RuntimeError(f"DA3 reference package {distribution!r} is unavailable") from exc
         if actual != expected:
             raise Da3RuntimeError(
                 f"DA3 reference package {distribution!r} must be exactly {expected!r}"
@@ -524,9 +512,7 @@ class LocalDa3ReferenceRuntime:
                 torch = importlib.import_module("torch")
                 safetensors_torch = importlib.import_module("safetensors.torch")
                 cfg = importlib.import_module("depth_anything_3.cfg")
-                input_module = importlib.import_module(
-                    "depth_anything_3.utils.io.input_processor"
-                )
+                input_module = importlib.import_module("depth_anything_3.utils.io.input_processor")
                 output_module = importlib.import_module(
                     "depth_anything_3.utils.io.output_processor"
                 )
@@ -622,9 +608,8 @@ class LocalDa3ReferenceRuntime:
                 raise Da3RuntimeError("DA3-BASE prediction is missing camera parameters")
             if len(prediction.depth) != len(images):
                 raise Da3RuntimeError("DA3-BASE depth count does not match inputs")
-            if (
-                len(prediction.extrinsics) != len(images)
-                or len(prediction.intrinsics) != len(images)
+            if len(prediction.extrinsics) != len(images) or len(prediction.intrinsics) != len(
+                images
             ):
                 raise Da3RuntimeError("DA3-BASE camera count does not match inputs")
 
