@@ -38,6 +38,7 @@ from wre.reconstruction.da3_preview import (
 from wre.reconstruction.feed_forward_geometry import FeedForwardGeometryResult
 
 DA3_SOURCE_REVISION = "3d835ec1a5802d64a8b8b15f817a1ab54809bfe4"
+DA3_SOURCE_PACKAGE_TREE_SHA = "be87985cb286f0747d4fd9bfaec47f1b765457ea"
 DA3_RUNTIME_IMPLEMENTATION = "wre.reconstruction.da3_runtime"
 DA3_RUNTIME_VERSION = "1"
 DA3_MODEL = ModelIdentity(
@@ -290,6 +291,9 @@ def _verify_source_root(source_root: Path) -> Path:
     revision = _run_git(resolved, "rev-parse", "HEAD")
     if revision != DA3_SOURCE_REVISION:
         raise Da3RuntimeError("DA3 source revision does not match reviewed code")
+    package_tree = _run_git(resolved, "rev-parse", "HEAD:src/depth_anything_3")
+    if package_tree != DA3_SOURCE_PACKAGE_TREE_SHA:
+        raise Da3RuntimeError("DA3 source package tree does not match reviewed code")
     if _run_git(resolved, "status", "--porcelain", "--untracked-files=all"):
         raise Da3RuntimeError("DA3 source checkout must be clean with no untracked files")
 
