@@ -634,7 +634,7 @@ def test_incremental_canonical_adapter_registry_contract() -> None:
     entry = _entries_by_id()[COLMAP_INCREMENTAL_CANONICAL_ADAPTER_ID]
     assert entry["capability"] == {
         "name": COLMAP_INCREMENTAL_CANONICAL_CAPABILITY_NAME.value,
-        "input_kinds": ["image.observation", "evidence.geometric_verification"],
+        "input_kinds": ["evidence.geometric_verification", "image.observation"],
         "output_kinds": [
             "geometry.camera_solution",
             "geometry.point_map",
