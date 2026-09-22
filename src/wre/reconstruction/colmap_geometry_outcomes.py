@@ -57,8 +57,7 @@ class ColmapGeometryOutcome:
         if not isinstance(self.canonical_models, tuple):
             raise TypeError("canonical_models must be an immutable tuple")
         if any(
-            not isinstance(model, CanonicalColmapSparseModel)
-            for model in self.canonical_models
+            not isinstance(model, CanonicalColmapSparseModel) for model in self.canonical_models
         ):
             raise TypeError("canonical_models members must be CanonicalColmapSparseModel")
 
