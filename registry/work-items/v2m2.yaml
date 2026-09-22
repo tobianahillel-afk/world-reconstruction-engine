@@ -595,7 +595,7 @@ work_items:
       - existing donor producer identities pycolmap.extract_features pycolmap.match_exhaustive and pycolmap.geometric_verification with exact PyCOLMAP 4.2.0 version semantics
       - existing result provenance and database-integrity checks as donor evidence while V2 identities become the production-facing cache boundary
     acceptance:
-      - Add one pure evidence-artifact module defining exactly three solver-independent output ArtifactKind values: evidence.local_features evidence.pair_matches and evidence.geometric_verification.
+      - 'Add one pure evidence-artifact module defining exactly three solver-independent output ArtifactKind values: evidence.local_features evidence.pair_matches and evidence.geometric_verification.'
       - Add immutable stage descriptors for current COLMAP feature extraction pair matching and geometric verification using existing AdapterCapabilityDescriptor rather than a new adapter framework.
       - Register distinct experimental adapter entries colmap.local_features colmap.pair_matching and colmap.geometric_verification with exact approved colmap dependency reference no model/checkpoint required hardware-key policy current producer identity and reproducibility notes; do not alter the retained colmap.sparse_sfm donor entry.
       - Feature-stage artifact planning accepts only a non-empty canonically ordered immutable tuple of image.observation ArtifactInputFingerprint values plus the exact feature configuration identity and explicit HardwareRuntimeIdentity.
