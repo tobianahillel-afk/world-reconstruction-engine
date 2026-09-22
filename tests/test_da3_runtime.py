@@ -237,9 +237,7 @@ def test_reference_config_rejects_other_execution_profiles(
 
 def test_exact_model_checkpoint_and_environment_identities() -> None:
     assert da3_runtime.DA3_MODEL.revision == da3_runtime.DA3_SOURCE_REVISION
-    assert da3_runtime.DA3_SOURCE_PACKAGE_TREE_SHA == (
-        "be87985cb286f0747d4fd9bfaec47f1b765457ea"
-    )
+    assert da3_runtime.DA3_SOURCE_PACKAGE_TREE_SHA == ("be87985cb286f0747d4fd9bfaec47f1b765457ea")
     assert da3_runtime.DA3_CHECKPOINT.identifier == "depth-anything/DA3-BASE/model.safetensors"
     assert da3_runtime.DA3_CHECKPOINT.sha256 == Sha256Digest(
         "e01067dc1659613083d9145a9a2547ccdbe6ccbbf83c4fe7b3e8a4e2bdae78b5"
