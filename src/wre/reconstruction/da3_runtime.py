@@ -57,16 +57,27 @@ DA3_CHECKPOINT_BYTE_LENGTH = 541_518_028
 # profiles are a later V2L13.6 responsibility and must receive distinct identities.
 DA3_REFERENCE_PACKAGE_VERSIONS = (
     ("addict", "2.4.0"),
+    ("antlr4-python3-runtime", "4.9.3"),
     ("einops", "0.8.0"),
+    ("filelock", "3.32.3"),
+    ("fsspec", "2026.7.0"),
     ("imageio", "2.35.1"),
+    ("Jinja2", "3.1.6"),
+    ("MarkupSafe", "3.0.3"),
+    ("mpmath", "1.3.0"),
+    ("networkx", "3.6.1"),
     ("numpy", "1.26.4"),
     ("omegaconf", "2.3.0"),
     ("opencv-python", "4.10.0.84"),
     ("Pillow", "10.4.0"),
+    ("PyYAML", "6.0.3"),
     ("safetensors", "0.4.5"),
+    ("setuptools", "78.1.0"),
+    ("sympy", "1.14.0"),
     ("torch", "2.4.1+cpu"),
     ("torchvision", "0.19.1+cpu"),
     ("tqdm", "4.66.5"),
+    ("typing-extensions", "4.16.0"),
 )
 
 _NETWORK_PREFIXES = ("http:", "https:", "ftp:", "s3:", "gs:", "hf:")
