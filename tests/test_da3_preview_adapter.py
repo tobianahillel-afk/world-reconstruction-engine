@@ -1,24 +1,17 @@
 from __future__ import annotations
 
-import importlib
 from dataclasses import FrozenInstanceError, fields
 from typing import Any, cast
 
 import pytest
 
+import wre.reconstruction.da3_preview as da3_module
 from wre.domain.camera_solutions import CameraSolutionId
 from wre.domain.cameras import ImageDimensions
 from wre.domain.depth_fields import DepthFieldId
 from wre.domain.fragments import LocalFrameId
 from wre.domain.geometry_solutions import GeometryScaleStatus, GeometrySolutionId
 from wre.domain.observations import ObservationId, Sha256Digest
-from wre.reconstruction.da3_preview import (
-    DA3_BASE_MODEL_IDENTIFIER,
-    DA3_BASE_SOURCE_REPOSITORY,
-    DA3_DEPTH_VALUE_CONVENTION,
-    Da3BaseObservationPrediction,
-    normalize_da3_base_preview,
-)
 from wre.reconstruction.feed_forward_geometry import FeedForwardGeometryResult
 
 
@@ -59,9 +52,9 @@ def _prediction(
     depth_values: Any = None,
     validity: Any = None,
     confidence: Any = _UNSET,
-) -> Da3BaseObservationPrediction:
+) -> da3_module.Da3BaseObservationPrediction:
     actual_dimensions = dimensions or ImageDimensions(width_px=2, height_px=2)
-    return Da3BaseObservationPrediction(
+    return da3_module.Da3BaseObservationPrediction(
         observation_id=ObservationId(observation),
         dimensions=actual_dimensions,
         world_to_camera_rotation=_rotation() if rotation is None else rotation,
@@ -98,13 +91,13 @@ def _apply_pose(
 
 
 def test_candidate_identity_constants_are_descriptive_only() -> None:
-    assert DA3_BASE_MODEL_IDENTIFIER == "depth-anything/DA3-BASE"
-    assert DA3_BASE_SOURCE_REPOSITORY == "ByteDance-Seed/Depth-Anything-3"
-    assert DA3_DEPTH_VALUE_CONVENTION.value == "da3.relative-depth"
+    assert da3_module.DA3_BASE_MODEL_IDENTIFIER == "depth-anything/DA3-BASE"
+    assert da3_module.DA3_BASE_SOURCE_REPOSITORY == "ByteDance-Seed/Depth-Anything-3"
+    assert da3_module.DA3_DEPTH_VALUE_CONVENTION.value == "da3.relative-depth"
 
 
 def test_candidate_prediction_has_exact_frozen_field_shape() -> None:
-    assert tuple(field.name for field in fields(Da3BaseObservationPrediction)) == (
+    assert tuple(field.name for field in fields(da3_module.Da3BaseObservationPrediction)) == (
         "observation_id",
         "dimensions",
         "world_to_camera_rotation",
@@ -270,29 +263,29 @@ def test_normalization_requires_immutable_nonempty_canonical_unique_predictions(
     prediction_b = _prediction("obs:b")
 
     with pytest.raises(TypeError, match="immutable tuple"):
-        normalize_da3_base_preview(
+        da3_module.normalize_da3_base_preview(
             cast(Any, [prediction_a]),
             normalization_identity=_identity(),
         )
     with pytest.raises(ValueError, match="at least one"):
-        normalize_da3_base_preview((), normalization_identity=_identity())
-    with pytest.raises(TypeError, match="Da3BaseObservationPrediction"):
-        normalize_da3_base_preview(
+        da3_module.normalize_da3_base_preview((), normalization_identity=_identity())
+    with pytest.raises(TypeError, match="da3_module.Da3BaseObservationPrediction"):
+        da3_module.normalize_da3_base_preview(
             cast(Any, ("prediction",)),
             normalization_identity=_identity(),
         )
     with pytest.raises(ValueError, match="duplicate"):
-        normalize_da3_base_preview(
+        da3_module.normalize_da3_base_preview(
             (prediction_a, prediction_a),
             normalization_identity=_identity(),
         )
     with pytest.raises(ValueError, match="canonical ObservationId order"):
-        normalize_da3_base_preview(
+        da3_module.normalize_da3_base_preview(
             (prediction_b, prediction_a),
             normalization_identity=_identity(),
         )
     with pytest.raises(TypeError, match="Sha256Digest"):
-        normalize_da3_base_preview(
+        da3_module.normalize_da3_base_preview(
             (prediction_a,),
             normalization_identity=cast(Any, "identity"),
         )
@@ -301,7 +294,7 @@ def test_normalization_requires_immutable_nonempty_canonical_unique_predictions(
 def test_normalization_preserves_exact_pinhole_intrinsics_and_dimensions() -> None:
     prediction = _prediction()
 
-    result = normalize_da3_base_preview(
+    result = da3_module.normalize_da3_base_preview(
         (prediction,),
         normalization_identity=_identity(),
     )
@@ -314,7 +307,7 @@ def test_normalization_preserves_exact_pinhole_intrinsics_and_dimensions() -> No
 
 def test_world_to_camera_pose_is_copied_as_camera_from_local_without_transform() -> None:
     prediction = _prediction()
-    result = normalize_da3_base_preview(
+    result = da3_module.normalize_da3_base_preview(
         (prediction,),
         normalization_identity=_identity(),
     )
@@ -356,13 +349,13 @@ def test_world_to_camera_pose_is_copied_as_camera_from_local_without_transform()
 def test_depth_is_preserved_as_explicit_relative_depth_without_point_unprojection() -> None:
     prediction = _prediction()
 
-    result = normalize_da3_base_preview(
+    result = da3_module.normalize_da3_base_preview(
         (prediction,),
         normalization_identity=_identity(),
     )
     depth = result.depth_fields[0]
 
-    assert depth.depth_value_convention is DA3_DEPTH_VALUE_CONVENTION
+    assert depth.depth_value_convention is da3_module.DA3_DEPTH_VALUE_CONVENTION
     assert depth.depth_values is prediction.depth_values
     assert depth.validity is prediction.validity
     assert depth.confidence is prediction.confidence
@@ -379,7 +372,7 @@ def test_multi_observation_result_has_exact_linkage_and_one_local_frame() -> Non
         confidence=(0.6, 0.7, 0.0, 0.8),
     )
 
-    result = normalize_da3_base_preview(
+    result = da3_module.normalize_da3_base_preview(
         (prediction_a, prediction_b),
         normalization_identity=_identity(),
     )
@@ -416,7 +409,7 @@ def test_multi_observation_result_has_exact_linkage_and_one_local_frame() -> Non
 
 
 def test_da3_base_never_promotes_scale_or_candidate_world_to_project_truth() -> None:
-    result = normalize_da3_base_preview(
+    result = da3_module.normalize_da3_base_preview(
         (_prediction(),),
         normalization_identity=_identity(),
     )
@@ -434,11 +427,11 @@ def test_normalization_identity_deterministically_separates_output_roles() -> No
     predictions = (_prediction("obs:a"), _prediction("obs:b"))
     identity = _identity("2")
 
-    first = normalize_da3_base_preview(
+    first = da3_module.normalize_da3_base_preview(
         predictions,
         normalization_identity=identity,
     )
-    second = normalize_da3_base_preview(
+    second = da3_module.normalize_da3_base_preview(
         predictions,
         normalization_identity=identity,
     )
@@ -457,7 +450,7 @@ def test_normalization_identity_deterministically_separates_output_roles() -> No
     assert all(item.value.startswith("depth:da3:") for item in depth_ids)
     assert first.geometry_solution.geometry_solution_id.value.startswith("geometry:da3:")
 
-    other = normalize_da3_base_preview(
+    other = da3_module.normalize_da3_base_preview(
         predictions,
         normalization_identity=_identity("3"),
     )
@@ -470,7 +463,7 @@ def test_normalization_identity_deterministically_separates_output_roles() -> No
 
 
 def test_output_ids_have_distinct_canonical_types() -> None:
-    result = normalize_da3_base_preview(
+    result = da3_module.normalize_da3_base_preview(
         (_prediction(),),
         normalization_identity=_identity("4"),
     )
@@ -489,7 +482,7 @@ def test_normalization_does_not_mutate_or_reorder_source_values() -> None:
     original_rotation = tuple(item.world_to_camera_rotation for item in predictions)
     original_intrinsics = tuple(item.intrinsics for item in predictions)
 
-    result = normalize_da3_base_preview(
+    result = da3_module.normalize_da3_base_preview(
         predictions,
         normalization_identity=_identity("5"),
     )
@@ -528,5 +521,4 @@ def test_da3_preview_module_has_no_external_execution_or_later_layer_surface() -
         "RuntimeScene",
     }
 
-    module = importlib.import_module("wre.reconstruction.da3_preview")
-    assert forbidden_names.isdisjoint(vars(module))
+    assert forbidden_names.isdisjoint(vars(da3_module))
