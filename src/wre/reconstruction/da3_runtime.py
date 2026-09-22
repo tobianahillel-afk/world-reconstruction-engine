@@ -158,9 +158,7 @@ class Da3EnvironmentIdentity:
         if self.source_revision != DA3_SOURCE_REVISION:
             raise ValueError("DA3 environment source revision is unsupported")
         if self.python_version != DA3_REFERENCE_PYTHON_VERSION:
-            raise ValueError(
-                "DA3 environment python_version must match the exact reference Python"
-            )
+            raise ValueError("DA3 environment python_version must match the exact reference Python")
         if not isinstance(self.package_versions, tuple):
             raise TypeError("DA3 environment package_versions must be an immutable tuple")
         if self.package_versions != DA3_REFERENCE_PACKAGE_VERSIONS:
@@ -504,16 +502,12 @@ def _load_reviewed_da3_state_dict(model: Any, state: dict[str, Any]) -> None:
     if any(prefixed) and not all(prefixed):
         raise Da3RuntimeError("DA3-BASE checkpoint has mixed model. prefixes")
     normalized = (
-        {key[len("model.") :]: value for key, value in state.items()}
-        if all(prefixed)
-        else state
+        {key[len("model.") :]: value for key, value in state.items()} if all(prefixed) else state
     )
     try:
         incompatible = model.load_state_dict(normalized, strict=False)
     except Exception as exc:
-        raise Da3RuntimeError(
-            "DA3-BASE checkpoint cannot be loaded into reviewed model"
-        ) from exc
+        raise Da3RuntimeError("DA3-BASE checkpoint cannot be loaded into reviewed model") from exc
 
     missing = tuple(sorted(incompatible.missing_keys))
     unexpected = tuple(sorted(incompatible.unexpected_keys))
@@ -626,11 +620,7 @@ class LocalDa3ReferenceRuntime:
             except Exception as exc:
                 raise Da3RuntimeError("DA3 input preprocessing failed") from exc
 
-            if (
-                batch.ndim != 4
-                or batch.shape[0] != len(images)
-                or batch.shape[1] != 3
-            ):
+            if batch.ndim != 4 or batch.shape[0] != len(images) or batch.shape[1] != 3:
                 raise Da3RuntimeError("DA3 processed image stack shape does not match inputs")
             batch = batch.to(device="cpu", dtype=torch.float32)[None]
 
@@ -645,14 +635,19 @@ class LocalDa3ReferenceRuntime:
                         use_ray_pose=config.use_ray_pose,
                         ref_view_strategy=config.ref_view_strategy,
                     )
+                if not isinstance(raw, dict):
+                    raise Da3RuntimeError("DA3-BASE raw output must be a mapping")
+                if "is_metric" in raw and raw["is_metric"] not in (0, False):
+                    raise Da3RuntimeError("DA3-BASE unexpectedly reported metric output")
+                if "scale_factor" in raw and raw["scale_factor"] is not None:
+                    raise Da3RuntimeError(
+                        "DA3-BASE unexpectedly reported a metric scale factor"
+                    )
                 prediction = output_module.OutputProcessor()(raw)
+            except Da3RuntimeError:
+                raise
             except Exception as exc:
                 raise Da3RuntimeError("DA3-BASE reference inference failed") from exc
-
-            if getattr(prediction, "is_metric", 0) not in (0, False):
-                raise Da3RuntimeError("DA3-BASE unexpectedly reported metric output")
-            if getattr(prediction, "scale_factor", None) is not None:
-                raise Da3RuntimeError("DA3-BASE unexpectedly reported a metric scale factor")
             if prediction.extrinsics is None or prediction.intrinsics is None:
                 raise Da3RuntimeError("DA3-BASE prediction is missing camera parameters")
             if len(prediction.depth) != len(images):
