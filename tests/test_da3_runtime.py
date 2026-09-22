@@ -493,7 +493,9 @@ def test_runtime_prediction_membership_must_exactly_match_inputs(
     )
 
     class _WrongRuntime:
-        def infer(self, **kwargs: object) -> tuple[
+        def infer(
+            self, **kwargs: object
+        ) -> tuple[
             da3_runtime.Da3EnvironmentIdentity,
             tuple[Da3BaseObservationPrediction, ...],
         ]:
