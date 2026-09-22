@@ -18,7 +18,6 @@ from wre.domain import (
 )
 from wre.reconstruction.feed_forward_geometry import FeedForwardGeometryResult
 
-
 _UNSET = object()
 
 
