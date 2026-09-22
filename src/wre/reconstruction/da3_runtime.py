@@ -71,6 +71,14 @@ DA3_REFERENCE_PACKAGE_VERSIONS = (
 
 _NETWORK_PREFIXES = ("http:", "https:", "ftp:", "s3:", "gs:", "hf:")
 _EXECUTABLE_SUFFIXES = (".pyc", ".pyo", ".pyd", ".so", ".dll", ".dylib")
+_DA3_EXPECTED_MISSING_STATE_KEYS = (
+    "head.scratch.output_conv2_aux.1.2.bias",
+    "head.scratch.output_conv2_aux.1.2.weight",
+    "head.scratch.output_conv2_aux.2.2.bias",
+    "head.scratch.output_conv2_aux.2.2.weight",
+    "head.scratch.output_conv2_aux.3.2.bias",
+    "head.scratch.output_conv2_aux.3.2.weight",
+)
 
 
 class Da3RuntimeError(RuntimeError):
@@ -486,6 +494,35 @@ def _isolated_da3_import(source_root: Path):
         sys.dont_write_bytecode = previous_dont_write_bytecode
 
 
+def _load_reviewed_da3_state_dict(model: Any, state: dict[str, Any]) -> None:
+    if not state:
+        raise Da3RuntimeError("DA3-BASE safetensors checkpoint must be a non-empty mapping")
+    keys = tuple(state)
+    if any(not isinstance(key, str) or not key for key in keys):
+        raise Da3RuntimeError("DA3-BASE checkpoint keys must be non-empty strings")
+    prefixed = tuple(key.startswith("model.") for key in keys)
+    if any(prefixed) and not all(prefixed):
+        raise Da3RuntimeError("DA3-BASE checkpoint has mixed model. prefixes")
+    normalized = (
+        {key[len("model.") :]: value for key, value in state.items()}
+        if all(prefixed)
+        else state
+    )
+    try:
+        incompatible = model.load_state_dict(normalized, strict=False)
+    except Exception as exc:
+        raise Da3RuntimeError(
+            "DA3-BASE checkpoint cannot be loaded into reviewed model"
+        ) from exc
+
+    missing = tuple(sorted(incompatible.missing_keys))
+    unexpected = tuple(sorted(incompatible.unexpected_keys))
+    if missing != _DA3_EXPECTED_MISSING_STATE_KEYS or unexpected:
+        raise Da3RuntimeError(
+            "DA3-BASE checkpoint/model compatibility differs from reviewed allowlist"
+        )
+
+
 def _tuple_matrix(value: Any, rows: int, cols: int, context: str) -> tuple[tuple[float, ...], ...]:
     try:
         shape = tuple(value.shape)
@@ -554,23 +591,15 @@ class LocalDa3ReferenceRuntime:
                 state = safetensors_torch.load_file(str(checkpoint_path), device="cpu")
             except Exception as exc:
                 raise Da3RuntimeError("failed to load DA3-BASE safetensors checkpoint") from exc
-            if not isinstance(state, dict) or not state:
-                raise Da3RuntimeError("DA3-BASE safetensors checkpoint must be a non-empty mapping")
-            keys = tuple(state)
-            if any(not isinstance(key, str) or not key for key in keys):
-                raise Da3RuntimeError("DA3-BASE checkpoint keys must be non-empty strings")
-            prefixed = tuple(key.startswith("model.") for key in keys)
-            if any(prefixed) and not all(prefixed):
-                raise Da3RuntimeError("DA3-BASE checkpoint has mixed model. prefixes")
-            if all(prefixed):
-                state = {key[len("model.") :]: value for key, value in state.items()}
+            if not isinstance(state, dict):
+                raise Da3RuntimeError("DA3-BASE safetensors checkpoint must be a mapping")
+            _load_reviewed_da3_state_dict(model, state)
             try:
-                model.load_state_dict(state, strict=True)
                 model.to(device="cpu")
                 model.eval()
             except Exception as exc:
                 raise Da3RuntimeError(
-                    "DA3-BASE checkpoint is incompatible with reviewed model"
+                    "DA3-BASE reviewed model cannot enter CPU evaluation mode"
                 ) from exc
 
             arrays = []
