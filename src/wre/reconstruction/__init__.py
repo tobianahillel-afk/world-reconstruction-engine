@@ -143,6 +143,13 @@ from wre.reconstruction.colmap_verification import (
     ColmapPairGeometryEvidence,
     verify_colmap_geometry,
 )
+from wre.reconstruction.da3_preview import (
+    DA3_BASE_MODEL_IDENTIFIER,
+    DA3_BASE_SOURCE_REPOSITORY,
+    DA3_DEPTH_VALUE_CONVENTION,
+    Da3BaseObservationPrediction,
+    normalize_da3_base_preview,
+)
 from wre.reconstruction.feed_forward_geometry import (
     FEED_FORWARD_GEOMETRY_CAPABILITY,
     FEED_FORWARD_GEOMETRY_CAPABILITY_NAME,
@@ -216,6 +223,9 @@ __all__ = [
     "COLMAP_PRECISION_PYCOLMAP_VERSION",
     "COLMAP_PRECISION_REPRODUCIBILITY_NOTES",
     "COLMAP_PRECISION_SHIPPING_STATUS",
+    "DA3_BASE_MODEL_IDENTIFIER",
+    "DA3_BASE_SOURCE_REPOSITORY",
+    "DA3_DEPTH_VALUE_CONVENTION",
     "FEED_FORWARD_GEOMETRY_CAPABILITY",
     "FEED_FORWARD_GEOMETRY_CAPABILITY_NAME",
     "FEED_FORWARD_GEOMETRY_INPUT_KIND",
@@ -265,6 +275,7 @@ __all__ = [
     "ColmapReconstructionImportResult",
     "ColmapReconstructionInput",
     "ColmapSparseModelArtifact",
+    "Da3BaseObservationPrediction",
     "FeedForwardGeometryResult",
     "ImportedColmapSparseModel",
     "LegacySparseGeometryConversionResult",
@@ -276,6 +287,7 @@ __all__ = [
     "inspect_colmap_environment",
     "match_colmap_pairs",
     "normalize_colmap_precision_inputs",
+    "normalize_da3_base_preview",
     "normalize_feed_forward_geometry_inputs",
     "plan_colmap_geometric_verification",
     "plan_colmap_local_features",
