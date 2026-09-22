@@ -194,7 +194,7 @@ def test_conversion_ids_are_deterministic_role_separated_and_source_scoped() -> 
     }
     assert len(all_ids) == len(first.camera_solutions) + 2
     assert first.point_map.point_map_id != other.point_map.point_map_id
-    assert first.geometry_solution.geometry_solution_id != other.geometry_solution.geometry_solution_id
+    assert (\n        first.geometry_solution.geometry_solution_id\n        != other.geometry_solution.geometry_solution_id\n    )
     assert tuple(solution.solution_id for solution in first.camera_solutions) != tuple(
         solution.solution_id for solution in other.camera_solutions
     )
