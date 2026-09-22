@@ -274,7 +274,7 @@ def test_direct_evidence_plan_construction_enforces_stage_contract() -> None:
         )
     )
 
-    with pytest.raises(ValueError, match="evidence.local_features"):
+    with pytest.raises(ValueError, match=r"evidence\.local_features"):
         ColmapEvidenceArtifactPlan(
             output_kind=PAIR_MATCHES_KIND,
             input_fingerprints=wrong_parent,
