@@ -661,32 +661,72 @@ def test_real_da3_preview_and_classical_incremental_share_one_controlled_referen
         for item in classical_metrics.observations
     )
 
+    preview_shared_ids = tuple(
+        sorted(
+            {
+                camera.observation_id.value
+                for camera in preview.geometry.camera_solutions
+            }.intersection(camera.observation_id.value for camera in references)
+        )
+    )
+    classical_shared_ids = tuple(
+        sorted(
+            {
+                camera.observation_id.value for camera in classical_cameras
+            }.intersection(camera.observation_id.value for camera in references)
+        )
+    )
+    source_asset_sha256 = tuple(
+        observation.asset.sha256.value for observation in observations
+    )
+
     record = {
         "schema_version": 1,
-        "fixture_id": "colmap-l3-end-to-end",
-        "reference_observation_count": len(references),
+        "fixture": {
+            "fixture_id": "colmap-l3-end-to-end",
+            "reference_observation_count": len(references),
+            "source_observation_ids": [
+                observation.observation_id.value for observation in observations
+            ],
+            "source_asset_sha256": list(source_asset_sha256),
+        },
         "directly_comparable_metric_names": list(_POSE_METRIC_NAMES),
         "preview": {
             "adapter_id": "da3.base_preview",
+            "model_name": preview.model.name,
             "source_revision": preview.model.revision,
             "checkpoint_identifier": preview.checkpoint.identifier,
             "checkpoint_sha256": preview.checkpoint.sha256.value,
+            "configuration_sha256": preview.producer.configuration.sha256.value,
+            "hardware_runtime_sha256": preview.hardware_runtime.sha256.value,
+            "normalization_identity_sha256": preview.normalization_identity.value,
+            "shared_observation_count": len(preview_shared_ids),
             "metrics": _metric_record(preview_metrics),
         },
         "classical": {
             "adapter_id": COLMAP_INCREMENTAL_CANONICAL_ADAPTER_ID,
             "pycolmap_version": str(pycolmap.__version__),
+            "colmap_build": str(pycolmap.COLMAP_build),
             "projection_model": "simple_radial",
+            "feature_configuration_sha256": feature_config.sha256.value,
+            "matching_configuration_sha256": matching_config.sha256.value,
+            "verification_configuration_sha256": verification_config.sha256.value,
+            "incremental_configuration_sha256": incremental_config.sha256.value,
+            "verification_database_sha256": verification_before.sha256.value,
+            "shared_observation_count": len(classical_shared_ids),
             "metrics": _metric_record(classical_metrics),
         },
         "intrinsic_comparison": "not_directly_comparable_projection_families",
-        "overall_score": None,
-        "winner": None,
-        "default_route": None,
     }
-    assert record["overall_score"] is None
-    assert record["winner"] is None
-    assert record["default_route"] is None
+    forbidden_record_fields = {
+        "default_route",
+        "overall_score",
+        "preferred_route",
+        "rank",
+        "winner",
+    }
+    assert forbidden_record_fields.isdisjoint(record)
+    assert len(preview_shared_ids) == len(classical_shared_ids) == len(references)
 
     output_path_value = os.environ.get("WRE_COMPARISON_OUTPUT")
     if output_path_value:
