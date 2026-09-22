@@ -152,6 +152,7 @@ from wre.reconstruction.da3_preview import (
 )
 from wre.reconstruction.da3_runtime import (
     DA3_CHECKPOINT,
+    DA3_CHECKPOINT_BYTE_LENGTH,
     DA3_MODEL,
     DA3_REFERENCE_PACKAGE_VERSIONS,
     DA3_REFERENCE_PYTHON_VERSION,
@@ -245,6 +246,7 @@ __all__ = [
     "DA3_BASE_MODEL_IDENTIFIER",
     "DA3_BASE_SOURCE_REPOSITORY",
     "DA3_CHECKPOINT",
+    "DA3_CHECKPOINT_BYTE_LENGTH",
     "DA3_DEPTH_VALUE_CONVENTION",
     "DA3_MODEL",
     "DA3_REFERENCE_PACKAGE_VERSIONS",
