@@ -1072,7 +1072,7 @@ work_items:
   - id: V2L13.3
     lot: V2L13
     title: Feed forward checkpoint hardware license reproducibility
-    status: ready
+    status: done
     objective: Establish the authoritative DA3-BASE external execution and reproducibility boundary for the V2 feed-forward PREVIEW candidate by pinning one exact reviewed source revision and checkpoint identity, one explicit reference runtime/hardware profile, direct and transitive license evidence, verified canonical decoded-image inputs, deterministic candidate execution into the V2L13.2 native prediction boundary, and exact producer/model/checkpoint/configuration/hardware identity without quality scoring default promotion or performance-profile optimization.
     allowed_scope:
       - src/wre/reconstruction/da3_runtime.py
@@ -1174,7 +1174,91 @@ work_items:
       - core-import regression proving fast CI requires no Torch DA3 checkout checkpoint accelerator or network
       - optional real-candidate smoke fixture only when the exact reviewed external environment source checkpoint and declared hardware are explicitly provisioned; ordinary CI never downloads them
       - full fast CI CodeQL dependency review and any dedicated optional DA3 lane activated by the implementation
-  - {id: V2L13.4, lot: V2L13, title: Feed forward geometry camera quality metrics, status: planned, depends_on: [V2L13.3]}
+  - id: V2L13.4
+    lot: V2L13
+    title: Feed forward geometry camera quality metrics
+    status: ready
+    objective: Define one pure solver-independent feed-forward camera quality evaluator over canonical CameraSolution values and one explicit trusted reference-camera set so preview geometry can retain deterministic canonical MetricVector evidence for observation coverage relative pose and pinhole intrinsic quality without changing geometry values applying thresholds emitting QualityDecision comparing against COLMAP selecting routes or promoting a default.
+    allowed_scope:
+      - src/wre/reconstruction/feed_forward_camera_quality.py
+      - focused exports in src/wre/reconstruction/__init__.py
+      - tests/test_feed_forward_camera_quality.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L13.5 can be activated without implementing it
+    out_of_scope:
+      - changing CameraSolution FeedForwardGeometryResult Da3BaseObservationPrediction Da3ExecutionResult DepthField PointMap GeometrySolution LocalFrameId GeometryScaleStatus MetricVector or QualityDecision domain semantics
+      - modifying DA3 source checkpoint execution preprocessing normalization confidence depth semantics or exact reproducibility profile established by V2L13.2 and V2L13.3
+      - modifying retained/current COLMAP execution canonicalization outcome semantics shipping status or classical precision geometry implementation
+      - evaluating depth point-map surface reprojection track-support image-feature appearance runtime or photometric quality
+      - adding bundle adjustment pose refinement Sim3 alignment frame registration metric-scale solving world Earth ECEF ENU GPS GCP anchoring or cross-local-frame geometry mutation
+      - deriving an absolute translation error directly across unrelated local frames or silently assuming candidate and reference local coordinates share an origin orientation or scale
+      - comparing DA3 against COLMAP computing a route winner score setting quality thresholds emitting PASS RETRY ESCALATE or another QualityDecision or changing PREVIEW routing/default behavior
+      - benchmark registry promotion holdout-dataset selection production scheduler cache persistence artifact publication or performance profiling
+      - integrating another learned candidate or starting V2L13.5 implementation
+    depends_on: [V2L13.3]
+    read_before:
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/06_TESTING.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md
+      - docs/28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md
+      - docs/29_PERFORMANCE_INTEGRATION_MAP.md
+      - src/wre/domain/metrics.py
+      - src/wre/domain/quality.py
+      - src/wre/domain/quality_policy.py
+      - src/wre/domain/camera_solutions.py
+      - src/wre/domain/fragments.py
+      - src/wre/reconstruction/feed_forward_geometry.py
+      - src/wre/reconstruction/da3_preview.py
+      - src/wre/reconstruction/da3_runtime.py
+      - tests/test_metrics.py
+      - tests/test_quality_decisions.py
+      - tests/test_quality_policy.py
+      - tests/test_feed_forward_geometry_adapter.py
+      - tests/test_da3_preview_adapter.py
+      - tests/test_da3_runtime.py
+    reuse:
+      - CameraSolution camera-from-local convention x_camera equals R times x_local plus t and exact pinhole intrinsic tuple semantics as the only pose/calibration inputs; candidate-private DA3 tensors or upstream objects do not enter the evaluator
+      - FeedForwardGeometryResult as the exact candidate camera collection boundary without copying rewriting refining or changing its canonical child values
+      - MetricName MetricDescriptor MetricDimension MetricUnit MetricAggregation MetricDirection MetricProvenance MetricObservation and MetricVector as the sole metric vocabulary rather than introducing adapter-local score dictionaries
+      - ArtifactProducerIdentity ConfigurationIdentity and ordered ArtifactRef inputs for exact evaluator provenance without timestamps filesystem paths Python object identity or mutable metadata
+      - ObservationId intersection as the only candidate/reference correspondence key; physical camera identity scene similarity filenames list position or nearest-pose matching are not inferred
+      - pairwise relative camera transforms derived from camera-from-local poses so rotation and translation-direction metrics remain invariant to a global proper rotation translation and positive local scale between candidate and reference frames
+      - existing pure QualityPolicy machinery only as a later consumer of MetricVector values; this item emits measurements and never evaluates thresholds or QualityDecision
+    acceptance:
+      - Add one pure module whose import and fast tests require no Torch DA3 checkout checkpoint COLMAP NumPy network GPU native solver or filesystem fixture.
+      - Define one immutable camera-quality input/evaluation boundary containing one FeedForwardGeometryResult candidate one non-empty immutable reference CameraSolution tuple and exact ordered metric-provenance ArtifactRef inputs; no generic metadata kwargs or mutable collections are accepted.
+      - Reference cameras must be unique and canonically ordered by ObservationId share one reference LocalFrameId and use valid canonical CameraSolution values; candidate cameras remain exactly those owned by the supplied FeedForwardGeometryResult.
+      - Match candidate and reference cameras only by exact ObservationId. Extra candidate observations never improve reference coverage and missing reference observations remain missing rather than being nearest-neighbor matched fabricated or reordered.
+      - Emit geometry.camera.observation_coverage_ratio as shared-reference-observation count divided by total reference-camera count with unit ratio direction HIGHER_IS_BETTER and one exact deterministic aggregation token.
+      - For every canonical shared observation pair derive relative rotation using the two camera-from-local rotations and measure the geodesic rotation-angle error in degrees between candidate and reference relative rotations. Aggregate all eligible pair errors with an explicitly implemented deterministic median into geometry.camera.relative_rotation_error_deg_median with LOWER_IS_BETTER.
+      - For every canonical shared observation pair derive the directed camera-center baseline from the lexicographically first ObservationId to the second and express that direction in the first camera coordinate frame. Compare candidate and reference baseline directions by angular error in degrees so global local-frame rotation translation and positive scale cancel without estimating an alignment.
+      - Pairs with exactly coincident camera centers in either candidate or reference are ineligible for translation-direction error rather than receiving a fabricated direction. Emit geometry.camera.translation_pair_coverage_ratio as eligible translation pairs divided by all shared observation pairs and emit geometry.camera.relative_translation_direction_error_deg_median only when at least one eligible pair exists.
+      - For each shared pinhole camera with exactly four intrinsic parameters fx fy cx cy and equal image dimensions compute focal relative error from fx and fy against the trusted reference focal values and compute principal-point Euclidean pixel error normalized by the reference image diagonal. Aggregate each deterministic sample set by median into geometry.camera.focal_relative_error_median and geometry.camera.principal_point_error_normalized_median with LOWER_IS_BETTER.
+      - Shared cameras using a non-pinhole projection token wrong intrinsic arity non-positive trusted-reference focal length or mismatched image dimensions fail closed instead of aliasing coercing resizing or silently omitting intrinsic samples.
+      - The metric evaluator must not compare absolute candidate/reference translation vectors camera centers or LocalFrameId values directly because unrelated local frames may differ by proper rigid transform and positive scale.
+      - Metric observations use exact stable descriptors dimensions units directions and aggregations and all carry one exact module-owned ArtifactProducerIdentity plus the exact caller-supplied ordered ArtifactRef provenance tuple. MetricVector output is canonical by MetricName and contains no duplicate names.
+      - A zero-shared-observation evaluation is valid only for the explicit coverage metric; relative-pose and intrinsic metrics are absent rather than zero fabricated NaN or infinity. One shared observation may emit coverage and intrinsic metrics but no pairwise rotation or translation metrics.
+      - Applying any common proper rigid transform and positive scale to every camera in one local frame without changing the represented physical cameras leaves all relative-pose quality metrics unchanged within the fixed numerical tolerance used by the evaluator.
+      - The evaluator returns measurements only. It imports or constructs no QualityPolicy QualityEvaluation QualityDecision FailureCategory route fallback retry threshold winner score default-selection or V2L13.5 comparison behavior.
+      - Candidate and reference CameraSolution values and their existing MetricVector fields remain byte-for-byte equal at the Python value layer before and after evaluation; L13.4 never annotates or rewrites geometry in place.
+    tests:
+      - immutable input/evaluation exact field-shape canonical-order uniqueness and provenance validation regressions
+      - identity candidate/reference fixture proving full observation coverage and exact zero rotation translation-direction focal and principal-point errors
+      - candidate-subset fixture proving observation coverage uses reference denominator and missing cameras are not fabricated
+      - asymmetric multi-camera fixture proving exact pairwise camera-from-local relative-rotation math and deterministic median aggregation
+      - global proper rigid-transform plus positive-scale invariance regression proving no absolute-frame or metric-scale assumption enters relative pose metrics
+      - directed relative-translation angular-error fixture plus exactly coincident-center exclusion and translation-pair coverage regression
+      - pinhole focal-relative and normalized-principal-point fixtures including unequal dimensions unsupported projection wrong arity and non-positive reference focal fail-closed negatives
+      - zero-shared and one-shared observation regressions proving unavailable pairwise metrics are absent rather than zero NaN or infinity
+      - exact stable MetricDescriptor and MetricProvenance regression including canonical MetricVector ordering and evaluator identity determinism
+      - source immutability regression proving candidate reference cameras and pre-existing metrics are not copied with altered semantic values or mutated
+      - module-surface regression proving no DA3 learned runtime COLMAP quality policy decision router threshold benchmark winner surface appearance dynamic persistence or V2L13.5 dependency enters the evaluator
+      - full fast CI CodeQL and native/compatibility lanes only where repository path triggers require them
   - {id: V2L13.5, lot: V2L13, title: Preview versus classical baseline comparison, status: planned, depends_on: [V2L13.4]}
   - {id: V2L13.6, lot: V2L13, title: Learned execution profile and stage profiling benchmark, status: planned, depends_on: [V2L13.5]}
   - {id: V2L14.1, lot: V2L14, title: Competing GeometrySolution comparison contract, status: planned, depends_on: [V2L13.6]}

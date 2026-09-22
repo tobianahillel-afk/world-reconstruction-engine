@@ -180,6 +180,29 @@ Synchronization produces `SyncHypothesis` artifacts with confidence and residual
 
 These models are excellent for proposals, previews, priors and sometimes complete geometry solutions. Quality gates decide whether a precision/global solve is still required.
 
+### First V2 feed-forward reference path
+
+V2L13.2/V2L13.3 use **Depth Anything 3 DA3-BASE** only as the first bounded
+PREVIEW integration reference, not as a benchmark winner or default route. The canonical
+normalizer preserves the reviewed OpenCV world-to-camera pose direction, keeps DA3 relative
+depth at unresolved local scale and emits no PointMap until a separate reviewed unprojection
+semantic exists.
+
+The V2L13.3 reference execution is deliberately conservative: exact source revision
+`3d835ec1a5802d64a8b8b15f817a1ab54809bfe4`, exact local DA3-BASE safetensors
+checkpoint identity and 541,518,028-byte local asset, verified
+`media.decoded_image_pyramid` inputs, Python 3.12.12 with Torch 2.4.1+cpu and
+torchvision 0.19.1+cpu on the CPU float32 reference path, single-worker deterministic
+preprocessing and no runtime network/download fallback. The runner uses
+the bounded DA3-BASE config/model/input/output modules rather than the top-level export
+facade. DA3's native depth confidence is `exp(x)+1`, not a calibrated probability, so this
+reference path does not silently coerce it into canonical `[0,1]` confidence.
+
+Source/checkpoint direct terms are recorded as Apache-2.0 while the optional external
+runtime's transitive redistribution review remains pending. CUDA/autocast/compiled execution
+and performance promotion are explicitly deferred to V2L13.6; camera/depth quality metrics
+and comparison against the classical baseline remain V2L13.4/V2L13.5 responsibilities.
+
 ## Precision/global mapping
 
 ### Baselines

@@ -206,6 +206,24 @@ def test_registry_does_not_promote_pending_candidates() -> None:
     assert experimental["dependency_refs"] == ["selavpr_plus"]
     assert dependencies["selavpr_plus"]["license_review"] == "pending"
 
+    da3 = entries["da3.base_preview"]
+    assert da3["shipping_status"] == "experimental"
+    assert da3["license"]["review"] == "pending"
+    assert da3["dependency_refs"] == ["da3_base"]
+    assert da3["artifact_key_hardware_policy"] == "required"
+    assert da3["capability"] == {
+        "name": "geometry.feed_forward",
+        "input_kinds": ["media.decoded_image_pyramid"],
+        "output_kinds": [
+            "geometry.camera_solution",
+            "geometry.depth_field",
+            "geometry.solution",
+        ],
+    }
+    assert "geometry.point_map" not in da3["capability"]["output_kinds"]
+    assert dependencies["da3_base"]["license_review"] == "pending"
+    assert dependencies["da3_base"]["license"] == "Apache-2.0"
+
     registered_dependencies = {
         dependency_ref for entry in entries.values() for dependency_ref in entry["dependency_refs"]
     }
