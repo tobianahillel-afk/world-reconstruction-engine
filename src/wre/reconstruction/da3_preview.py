@@ -57,7 +57,7 @@ def _validate_intrinsics(value: object) -> PinholeIntrinsicMatrix3x3:
         checked = tuple(
             _require_finite_float(member, "da3_preview.intrinsics member") for member in row
         )
-        rows.append(checked)
+        rows.append((checked[0], checked[1], checked[2]))
 
     matrix = (rows[0], rows[1], rows[2])
     fx = matrix[0][0]
@@ -93,7 +93,7 @@ def _validate_rotation(value: object) -> RotationMatrix3x3:
             _require_finite_float(member, "da3_preview.world_to_camera_rotation member")
             for member in row
         )
-        rows.append(checked)
+        rows.append((checked[0], checked[1], checked[2]))
 
     for row in rows:
         norm = math.sqrt(sum(member * member for member in row))
