@@ -190,8 +190,10 @@ semantic exists.
 
 The V2L13.3 reference execution is deliberately conservative: exact source revision
 `3d835ec1a5802d64a8b8b15f817a1ab54809bfe4`, exact local DA3-BASE safetensors
-checkpoint identity, verified `media.decoded_image_pyramid` inputs, CPU float32,
-single-worker deterministic preprocessing and no network/download fallback. The runner uses
+checkpoint identity and 541,518,028-byte local asset, verified
+`media.decoded_image_pyramid` inputs, Python 3.12.12 with Torch 2.4.1+cpu and
+torchvision 0.19.1+cpu on the CPU float32 reference path, single-worker deterministic
+preprocessing and no runtime network/download fallback. The runner uses
 the bounded DA3-BASE config/model/input/output modules rather than the top-level export
 facade. DA3's native depth confidence is `exp(x)+1`, not a calibrated probability, so this
 reference path does not silently coerce it into canonical `[0,1]` confidence.
