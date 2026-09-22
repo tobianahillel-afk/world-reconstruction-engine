@@ -112,7 +112,7 @@ def _hardware(value: str = "d") -> HardwareRuntimeIdentity:
 def _environment() -> da3_runtime.Da3EnvironmentIdentity:
     return da3_runtime.Da3EnvironmentIdentity(
         source_revision=da3_runtime.DA3_SOURCE_REVISION,
-        python_version="3.12.fixture",
+        python_version=da3_runtime.DA3_REFERENCE_PYTHON_VERSION,
         package_versions=da3_runtime.DA3_REFERENCE_PACKAGE_VERSIONS,
         device="cpu",
         precision="float32",
@@ -243,12 +243,15 @@ def test_exact_model_checkpoint_and_environment_identities() -> None:
         "e01067dc1659613083d9145a9a2547ccdbe6ccbbf83c4fe7b3e8a4e2bdae78b5"
     )
     environment = _environment()
+    assert environment.python_version == da3_runtime.DA3_REFERENCE_PYTHON_VERSION
     assert environment.package_versions == da3_runtime.DA3_REFERENCE_PACKAGE_VERSIONS
+    assert dict(environment.package_versions)["torch"] == "2.4.1+cpu"
+    assert dict(environment.package_versions)["torchvision"] == "0.19.1+cpu"
 
     with pytest.raises(ValueError, match="package versions"):
         da3_runtime.Da3EnvironmentIdentity(
             source_revision=da3_runtime.DA3_SOURCE_REVISION,
-            python_version="3.12.fixture",
+            python_version=da3_runtime.DA3_REFERENCE_PYTHON_VERSION,
             package_versions=(("torch", "latest"),),
             device="cpu",
             precision="float32",
@@ -396,6 +399,11 @@ def test_environment_inspection_requires_every_exact_reference_version(
         da3_runtime.importlib.metadata,
         "version",
         lambda name: expected[name],
+    )
+    monkeypatch.setattr(
+        da3_runtime.sys,
+        "version",
+        da3_runtime.DA3_REFERENCE_PYTHON_VERSION + " (fixture)",
     )
     identity = da3_runtime.inspect_da3_reference_environment()
     assert identity.package_versions == da3_runtime.DA3_REFERENCE_PACKAGE_VERSIONS
