@@ -626,9 +626,13 @@ class LocalDa3ReferenceRuntime:
             except Exception as exc:
                 raise Da3RuntimeError("DA3 input preprocessing failed") from exc
 
-            if batch.ndim != 5 or batch.shape[0] != 1 or batch.shape[1] != len(images):
-                raise Da3RuntimeError("DA3 processed batch shape does not match inputs")
-            batch = batch.to(device="cpu", dtype=torch.float32)
+            if (
+                batch.ndim != 4
+                or batch.shape[0] != len(images)
+                or batch.shape[1] != 3
+            ):
+                raise Da3RuntimeError("DA3 processed image stack shape does not match inputs")
+            batch = batch.to(device="cpu", dtype=torch.float32)[None]
 
             try:
                 with torch.inference_mode():
