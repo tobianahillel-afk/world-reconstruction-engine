@@ -217,7 +217,15 @@ components:
       - tests/test_legacy_geometry_conversion.py
       - tests/test_geometry_coordinate_conventions.py
     status: implemented
-  precision_geometry_baseline: {owner_lot: V2L12, implementation: [], tests: [], status: planned}
+  precision_geometry_baseline:
+    owner_lot: V2L12
+    implementation:
+      - src/wre/reconstruction/colmap_adapter.py
+      - src/wre/reconstruction/__init__.py
+      - registry/adapter-models.yaml
+    tests:
+      - tests/test_colmap_adapter.py
+    status: implementing
   feed_forward_geometry: {owner_lot: V2L13, implementation: [], tests: [], status: planned}
   precision_global_refinement: {owner_lot: V2L14, implementation: [], tests: [], status: planned}
   dense_depth_mvs: {owner_lot: V2L15, implementation: [], tests: [], status: planned}
