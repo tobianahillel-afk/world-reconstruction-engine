@@ -84,10 +84,13 @@ def _fingerprint(kind: ArtifactKind, character: str) -> ArtifactInputFingerprint
     return ArtifactInputFingerprint(artifact_kind=kind, sha256=_digest(character))
 
 
-def _environment() -> ColmapEnvironmentIdentity:
+def _environment(
+    *,
+    colmap_version: str = "COLMAP 4.2.0",
+) -> ColmapEnvironmentIdentity:
     return ColmapEnvironmentIdentity(
         pycolmap_version="4.2.0",
-        colmap_version="COLMAP 4.2.0",
+        colmap_version=colmap_version,
         colmap_build="Commit fixture without GPU support",
         ceres_version="2.2.0",
         upstream_has_cuda=False,
@@ -99,15 +102,17 @@ def _feature_result(
     configuration_sha256: Sha256Digest,
     database_sha256: Sha256Digest | None = None,
     database_byte_length: int = 101,
+    environment: ColmapEnvironmentIdentity | None = None,
 ) -> ColmapFeatureExtractionResult:
     actual_database_sha256 = database_sha256 or _digest("d")
+    actual_environment = environment or _environment()
     observation_id = ObservationId("obs:a")
     return ColmapFeatureExtractionResult(
         provenance=DerivedArtifactProvenance(
             producing_run_id=ReconstructionRunId("run:features"),
             source_observation_ids=(observation_id,),
         ),
-        environment=_environment(),
+        environment=actual_environment,
         configuration_sha256=configuration_sha256,
         database_path=Path("/does/not/need/to/exist/features.db"),
         database_sha256=actual_database_sha256,
@@ -251,6 +256,50 @@ def test_feature_plan_uses_existing_config_digest_exact_producer_and_hardware_ke
             hardware_runtime=hardware,
         )
     )
+
+
+def test_direct_evidence_plan_construction_enforces_stage_contract() -> None:
+    feature_plan = plan_colmap_local_features(
+        (_fingerprint(IMAGE_OBSERVATION_KIND, "1"),),
+        configuration_sha256=ColmapFeatureExtractionConfig().sha256,
+        hardware_runtime=_hardware(),
+    )
+    wrong_parent = (_fingerprint(IMAGE_OBSERVATION_KIND, "2"),)
+    wrong_parent_key = derive_artifact_key(
+        ArtifactKeyMaterial(
+            output_kind=PAIR_MATCHES_KIND,
+            input_fingerprints=wrong_parent,
+            producer=feature_plan.producer,
+            hardware_runtime=feature_plan.hardware_runtime,
+        )
+    )
+
+    with pytest.raises(ValueError, match="evidence.local_features"):
+        ColmapEvidenceArtifactPlan(
+            output_kind=PAIR_MATCHES_KIND,
+            input_fingerprints=wrong_parent,
+            producer=feature_plan.producer,
+            hardware_runtime=feature_plan.hardware_runtime,
+            artifact_key=wrong_parent_key,
+        )
+
+    correct_parent = (_fingerprint(LOCAL_FEATURES_KIND, "2"),)
+    wrong_producer_key = derive_artifact_key(
+        ArtifactKeyMaterial(
+            output_kind=PAIR_MATCHES_KIND,
+            input_fingerprints=correct_parent,
+            producer=feature_plan.producer,
+            hardware_runtime=feature_plan.hardware_runtime,
+        )
+    )
+    with pytest.raises(ValueError, match="producer does not match"):
+        ColmapEvidenceArtifactPlan(
+            output_kind=PAIR_MATCHES_KIND,
+            input_fingerprints=correct_parent,
+            producer=feature_plan.producer,
+            hardware_runtime=feature_plan.hardware_runtime,
+            artifact_key=wrong_producer_key,
+        )
 
 
 def test_colmap_evidence_key_changes_with_input_configuration_or_hardware() -> None:
@@ -522,6 +571,28 @@ def test_publication_delegates_canonical_relative_path_validation() -> None:
             plan=plan,
             result=_feature_result(configuration_sha256=config_sha256),
             relative_path="../features.db",
+        )
+
+
+def test_publication_rejects_wrong_colmap_environment_identity() -> None:
+    config_sha256 = ColmapFeatureExtractionConfig().sha256
+    plan = plan_colmap_local_features(
+        (_fingerprint(IMAGE_OBSERVATION_KIND, "1"),),
+        configuration_sha256=config_sha256,
+        hardware_runtime=_hardware(),
+    )
+    wrong_environment = _environment(colmap_version="COLMAP 4.1.0")
+
+    with pytest.raises(ValueError, match="COLMAP version"):
+        publish_colmap_local_features(
+            project_id=SceneProjectId("project:one"),
+            artifact_ref=ArtifactRef(ArtifactId("artifact:features"), LOCAL_FEATURES_KIND),
+            plan=plan,
+            result=_feature_result(
+                configuration_sha256=config_sha256,
+                environment=wrong_environment,
+            ),
+            relative_path="features.db",
         )
 
 
