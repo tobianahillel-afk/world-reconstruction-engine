@@ -239,9 +239,11 @@ components:
     owner_lot: V2L13
     implementation:
       - src/wre/reconstruction/feed_forward_geometry.py
+      - src/wre/reconstruction/da3_preview.py
       - src/wre/reconstruction/__init__.py
     tests:
       - tests/test_feed_forward_geometry_adapter.py
+      - tests/test_da3_preview_adapter.py
     status: implementing
   precision_global_refinement: {owner_lot: V2L14, implementation: [], tests: [], status: planned}
   dense_depth_mvs: {owner_lot: V2L15, implementation: [], tests: [], status: planned}
