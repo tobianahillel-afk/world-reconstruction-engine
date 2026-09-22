@@ -73,7 +73,11 @@ lot_reviews:
     reviewed_at: '2026-09-22'
     evidence:
       - docs/reviews/V2L11-canonical-geometry-contracts-review.md
-  V2L12: {status: pending, reviewed_at: null, evidence: []}
+  V2L12:
+    status: passed
+    reviewed_at: '2026-09-22'
+    evidence:
+      - docs/reviews/V2L12-classical-precision-geometry-review.md
   V2L13: {status: pending, reviewed_at: null, evidence: []}
   V2L14: {status: pending, reviewed_at: null, evidence: []}
   V2L15: {status: pending, reviewed_at: null, evidence: []}
