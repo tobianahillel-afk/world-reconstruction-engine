@@ -237,6 +237,9 @@ def test_reference_config_rejects_other_execution_profiles(
 
 def test_exact_model_checkpoint_and_environment_identities() -> None:
     assert da3_runtime.DA3_MODEL.revision == da3_runtime.DA3_SOURCE_REVISION
+    assert da3_runtime.DA3_SOURCE_PACKAGE_TREE_SHA == (
+        "be87985cb286f0747d4fd9bfaec47f1b765457ea"
+    )
     assert da3_runtime.DA3_CHECKPOINT.identifier == "depth-anything/DA3-BASE/model.safetensors"
     assert da3_runtime.DA3_CHECKPOINT.sha256 == Sha256Digest(
         "e01067dc1659613083d9145a9a2547ccdbe6ccbbf83c4fe7b3e8a4e2bdae78b5"
@@ -296,6 +299,8 @@ def test_source_root_requires_exact_clean_local_revision(
         calls.append(args)
         if args == ("rev-parse", "HEAD"):
             return da3_runtime.DA3_SOURCE_REVISION
+        if args == ("rev-parse", "HEAD:src/depth_anything_3"):
+            return da3_runtime.DA3_SOURCE_PACKAGE_TREE_SHA
         if args == ("status", "--porcelain", "--untracked-files=all"):
             return ""
         raise AssertionError(args)
@@ -304,11 +309,23 @@ def test_source_root_requires_exact_clean_local_revision(
     assert da3_runtime._verify_source_root(source) == source.resolve()
     assert calls == [
         ("rev-parse", "HEAD"),
+        ("rev-parse", "HEAD:src/depth_anything_3"),
         ("status", "--porcelain", "--untracked-files=all"),
     ]
 
     monkeypatch.setattr(da3_runtime, "_run_git", lambda root, *args: "0" * 40)
     with pytest.raises(da3_runtime.Da3RuntimeError, match="revision"):
+        da3_runtime._verify_source_root(source)
+
+    def _wrong_tree(root: Path, *args: str) -> str:
+        if args == ("rev-parse", "HEAD"):
+            return da3_runtime.DA3_SOURCE_REVISION
+        if args == ("rev-parse", "HEAD:src/depth_anything_3"):
+            return "0" * 40
+        return ""
+
+    monkeypatch.setattr(da3_runtime, "_run_git", _wrong_tree)
+    with pytest.raises(da3_runtime.Da3RuntimeError, match="package tree"):
         da3_runtime._verify_source_root(source)
 
 
@@ -321,6 +338,8 @@ def test_source_root_rejects_dirty_and_uri_like_paths(
     def _dirty(root: Path, *args: str) -> str:
         if args == ("rev-parse", "HEAD"):
             return da3_runtime.DA3_SOURCE_REVISION
+        if args == ("rev-parse", "HEAD:src/depth_anything_3"):
+            return da3_runtime.DA3_SOURCE_PACKAGE_TREE_SHA
         return "?? src/depth_anything_3/shadow.py"
 
     monkeypatch.setattr(da3_runtime, "_run_git", _dirty)
