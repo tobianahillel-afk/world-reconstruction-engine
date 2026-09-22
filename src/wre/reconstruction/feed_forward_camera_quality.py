@@ -23,9 +23,7 @@ from wre.domain.producer_identity import ArtifactProducerIdentity, Configuration
 from wre.domain.runs import ProducerRef
 from wre.reconstruction.feed_forward_geometry import FeedForwardGeometryResult
 
-FEED_FORWARD_CAMERA_QUALITY_IMPLEMENTATION = (
-    "wre.reconstruction.feed_forward_camera_quality"
-)
+FEED_FORWARD_CAMERA_QUALITY_IMPLEMENTATION = "wre.reconstruction.feed_forward_camera_quality"
 FEED_FORWARD_CAMERA_QUALITY_VERSION = "1"
 FEED_FORWARD_CAMERA_QUALITY_REVISION = "v2l13.4"
 
@@ -119,19 +117,13 @@ class FeedForwardCameraQualityRequest:
         if not isinstance(self.candidate, FeedForwardGeometryResult):
             raise TypeError("camera_quality.candidate must be FeedForwardGeometryResult")
         if not isinstance(self.reference_cameras, tuple):
-            raise TypeError(
-                "camera_quality.reference_cameras must be an immutable tuple"
-            )
+            raise TypeError("camera_quality.reference_cameras must be an immutable tuple")
         if not self.reference_cameras:
             raise ValueError("camera_quality.reference_cameras must be non-empty")
         if any(not isinstance(camera, CameraSolution) for camera in self.reference_cameras):
-            raise TypeError(
-                "camera_quality.reference_cameras members must be CameraSolution"
-            )
+            raise TypeError("camera_quality.reference_cameras members must be CameraSolution")
 
-        observation_values = tuple(
-            camera.observation_id.value for camera in self.reference_cameras
-        )
+        observation_values = tuple(camera.observation_id.value for camera in self.reference_cameras)
         if len(observation_values) != len(set(observation_values)):
             raise ValueError("camera_quality.reference_cameras observations must be unique")
         if observation_values != tuple(sorted(observation_values)):
@@ -146,13 +138,9 @@ class FeedForwardCameraQualityRequest:
             )
 
         if not isinstance(self.input_artifacts, tuple):
-            raise TypeError(
-                "camera_quality.input_artifacts must be an immutable tuple"
-            )
+            raise TypeError("camera_quality.input_artifacts must be an immutable tuple")
         if any(not isinstance(artifact, ArtifactRef) for artifact in self.input_artifacts):
-            raise TypeError(
-                "camera_quality.input_artifacts members must be ArtifactRef"
-            )
+            raise TypeError("camera_quality.input_artifacts members must be ArtifactRef")
 
 
 Matrix3x3 = tuple[
@@ -174,8 +162,7 @@ def _transpose(matrix: Matrix3x3) -> Matrix3x3:
 def _matmul(left: Matrix3x3, right: Matrix3x3) -> Matrix3x3:
     return tuple(
         tuple(
-            sum(left[row][axis] * right[axis][column] for axis in range(3))
-            for column in range(3)
+            sum(left[row][axis] * right[axis][column] for axis in range(3)) for column in range(3)
         )
         for row in range(3)
     )  # type: ignore[return-value]
@@ -259,22 +246,14 @@ def _validate_shared_pinhole(
     if reference.projection_model.value != "pinhole":
         raise ValueError("camera_quality shared reference camera must use pinhole projection")
     if len(candidate.intrinsic_parameters) != 4:
-        raise ValueError(
-            "camera_quality shared candidate pinhole camera must have fx fy cx cy"
-        )
+        raise ValueError("camera_quality shared candidate pinhole camera must have fx fy cx cy")
     if len(reference.intrinsic_parameters) != 4:
-        raise ValueError(
-            "camera_quality shared reference pinhole camera must have fx fy cx cy"
-        )
+        raise ValueError("camera_quality shared reference pinhole camera must have fx fy cx cy")
     if candidate.dimensions != reference.dimensions:
-        raise ValueError(
-            "camera_quality shared candidate/reference image dimensions must match"
-        )
+        raise ValueError("camera_quality shared candidate/reference image dimensions must match")
     reference_fx, reference_fy, _, _ = reference.intrinsic_parameters
     if reference_fx <= 0.0 or reference_fy <= 0.0:
-        raise ValueError(
-            "camera_quality trusted reference focal lengths must be strictly positive"
-        )
+        raise ValueError("camera_quality trusted reference focal lengths must be strictly positive")
 
 
 def _intrinsic_errors(
@@ -283,12 +262,8 @@ def _intrinsic_errors(
 ) -> tuple[float, float]:
     _validate_shared_pinhole(candidate, reference)
 
-    candidate_fx, candidate_fy, candidate_cx, candidate_cy = (
-        candidate.intrinsic_parameters
-    )
-    reference_fx, reference_fy, reference_cx, reference_cy = (
-        reference.intrinsic_parameters
-    )
+    candidate_fx, candidate_fy, candidate_cx, candidate_cy = candidate.intrinsic_parameters
+    reference_fx, reference_fy, reference_cx, reference_cy = reference.intrinsic_parameters
 
     focal_error = 0.5 * (
         abs(candidate_fx - reference_fx) / reference_fx
