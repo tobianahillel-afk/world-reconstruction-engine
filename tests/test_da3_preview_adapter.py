@@ -5,13 +5,13 @@ from typing import Any, cast
 
 import pytest
 
-import wre.reconstruction.da3_preview as da3_module
 from wre.domain.camera_solutions import CameraSolutionId
 from wre.domain.cameras import ImageDimensions
 from wre.domain.depth_fields import DepthFieldId
 from wre.domain.fragments import LocalFrameId
 from wre.domain.geometry_solutions import GeometryScaleStatus, GeometrySolutionId
 from wre.domain.observations import ObservationId, Sha256Digest
+from wre.reconstruction import da3_preview as da3_module
 from wre.reconstruction.da3_preview import (
     DA3_BASE_MODEL_IDENTIFIER,
     DA3_BASE_SOURCE_REPOSITORY,
