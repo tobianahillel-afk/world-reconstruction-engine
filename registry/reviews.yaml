@@ -68,7 +68,11 @@ lot_reviews:
     reviewed_at: '2026-09-21'
     evidence:
       - docs/reviews/V2L10-routing-v2m1-review.md
-  V2L11: {status: pending, reviewed_at: null, evidence: []}
+  V2L11:
+    status: passed
+    reviewed_at: '2026-09-22'
+    evidence:
+      - docs/reviews/V2L11-canonical-geometry-contracts-review.md
   V2L12: {status: pending, reviewed_at: null, evidence: []}
   V2L13: {status: pending, reviewed_at: null, evidence: []}
   V2L14: {status: pending, reviewed_at: null, evidence: []}
