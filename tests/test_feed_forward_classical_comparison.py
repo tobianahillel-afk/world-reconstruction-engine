@@ -7,6 +7,7 @@ import subprocess
 from dataclasses import FrozenInstanceError
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -29,7 +30,6 @@ from wre.domain import (
     ObservationId,
     Sha256Digest,
 )
-from wre.domain.artifacts import ArtifactId, ArtifactKind, ArtifactRef
 from wre.domain.decoded_images import DECODED_IMAGE_PYRAMID_KIND, DecodedImagePyramidSpec
 from wre.domain.hardware_identity import HardwareRuntimeIdentity
 from wre.domain.observations import ImageObservation, MediaAssetRef, SourceId, SourceRef
@@ -40,12 +40,6 @@ from wre.ingestion.decoded_images import (
 )
 from wre.ingestion.hashing import hash_file_content
 from wre.ingestion.keyframes import FFmpegToolchain
-from wre.reconstruction.feed_forward_camera_quality import (
-    CameraPoseQualityRequest,
-    FeedForwardCameraQualityRequest,
-    evaluate_camera_pose_quality,
-    evaluate_feed_forward_camera_quality,
-)
 from wre.reconstruction import (
     COLMAP_INCREMENTAL_CANONICAL_ADAPTER_ID,
     ColmapFeatureExtractionConfig,
@@ -68,6 +62,12 @@ from wre.reconstruction import (
     match_colmap_pairs,
     reconstruct_colmap_incrementally,
     verify_colmap_geometry,
+)
+from wre.reconstruction.feed_forward_camera_quality import (
+    CameraPoseQualityRequest,
+    FeedForwardCameraQualityRequest,
+    evaluate_camera_pose_quality,
+    evaluate_feed_forward_camera_quality,
 )
 from wre.reconstruction.feed_forward_geometry import FeedForwardGeometryResult
 from wre.regression import load_fixture
@@ -274,7 +274,7 @@ def test_pose_request_fails_closed_on_noncanonical_or_cross_frame_camera_sets() 
         )
 
 
-def _load_scene() -> dict[str, object]:
+def _load_scene() -> dict[str, Any]:
     fixture = load_fixture(_FIXTURE_PATH)
     raw = json.loads(fixture.resolve_input("scene.json").read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
@@ -282,14 +282,14 @@ def _load_scene() -> dict[str, object]:
     return raw
 
 
-def _number_list(scene: dict[str, object], key: str) -> tuple[float, ...]:
+def _number_list(scene: dict[str, Any], key: str) -> tuple[float, ...]:
     value = scene[key]
     if not isinstance(value, list) or not value:
         raise ValueError(f"scene.{key} must be a non-empty list")
     return tuple(float(item) for item in value)
 
 
-def _integer_list(scene: dict[str, object], key: str) -> tuple[int, ...]:
+def _integer_list(scene: dict[str, Any], key: str) -> tuple[int, ...]:
     value = scene[key]
     if not isinstance(value, list) or not value:
         raise ValueError(f"scene.{key} must be a non-empty list")
@@ -308,7 +308,7 @@ def _patch(seed: int, size: int) -> tuple[int, ...]:
     return tuple(values)
 
 
-def _render_scene(scene: dict[str, object], directory: Path) -> tuple[Path, ...]:
+def _render_scene(scene: dict[str, Any], directory: Path) -> tuple[Path, ...]:
     width = int(scene["width"])
     height = int(scene["height"])
     focal = float(scene["focal_length_px"])
@@ -401,7 +401,7 @@ def _run(
 
 
 def _reference_cameras(
-    scene: dict[str, object],
+    scene: dict[str, Any],
     observations: tuple[ImageObservation, ...],
 ) -> tuple[CameraSolution, ...]:
     width = int(scene["width"])
@@ -437,7 +437,7 @@ def _reference_cameras(
 
 def _decoded_da3_inputs(
     *,
-    scene: dict[str, object],
+    scene: dict[str, Any],
     observations: tuple[ImageObservation, ...],
     paths: tuple[Path, ...],
     root: Path,
