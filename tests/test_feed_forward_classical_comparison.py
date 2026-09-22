@@ -44,6 +44,7 @@ from wre.ingestion.hashing import hash_file_content
 from wre.ingestion.keyframes import FFmpegToolchain
 from wre.reconstruction import (
     COLMAP_INCREMENTAL_CANONICAL_ADAPTER_ID,
+    CanonicalColmapSparseModel,
     ColmapFeatureExtractionConfig,
     ColmapFeatureExtractionRequest,
     ColmapFeatureInput,
@@ -53,14 +54,13 @@ from wre.reconstruction import (
     ColmapGeometryOutcomeState,
     ColmapIncrementalReconstructionConfig,
     ColmapIncrementalReconstructionRequest,
+    ColmapModelFileArtifact,
     ColmapPairMatchingConfig,
     ColmapPairMatchingRequest,
-    ColmapModelFileArtifact,
     ColmapReconstructionInput,
     ColmapSparseModelArtifact,
     Da3ExecutionRequest,
     Da3ImageInput,
-    CanonicalColmapSparseModel,
     canonicalize_colmap_sparse_model,
     colmap_sparse_model_content_identity,
     execute_da3_base_preview,
@@ -86,7 +86,12 @@ _IDENTITY = (
 _FIXTURE_PATH = (
     Path(__file__).parent / "fixtures" / "synthetic" / "colmap-l3-end-to-end" / "fixture.json"
 )
-_REVIEW_PATH = Path(__file__).parents[1] / "docs" / "reviews" / "V2L13-preview-classical-comparison.md"
+_REVIEW_PATH = (
+    Path(__file__).parents[1]
+    / "docs"
+    / "reviews"
+    / "V2L13-preview-classical-comparison.md"
+)
 _REFERENCE_ARTIFACT = ArtifactRef(
     artifact_id=ArtifactId("fixture:colmap-l3-end-to-end"),
     artifact_kind=ArtifactKind("benchmark.camera_reference"),
