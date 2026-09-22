@@ -5,13 +5,13 @@ from typing import Any, cast
 
 import pytest
 
-import wre.reconstruction.da3_preview as da3_module
 from wre.domain.camera_solutions import CameraSolutionId
 from wre.domain.cameras import ImageDimensions
 from wre.domain.depth_fields import DepthFieldId
 from wre.domain.fragments import LocalFrameId
 from wre.domain.geometry_solutions import GeometryScaleStatus, GeometrySolutionId
 from wre.domain.observations import ObservationId, Sha256Digest
+from wre.reconstruction import da3_preview as da3_module
 from wre.reconstruction.feed_forward_geometry import FeedForwardGeometryResult
 
 
@@ -269,7 +269,7 @@ def test_normalization_requires_immutable_nonempty_canonical_unique_predictions(
         )
     with pytest.raises(ValueError, match="at least one"):
         da3_module.normalize_da3_base_preview((), normalization_identity=_identity())
-    with pytest.raises(TypeError, match="da3_module.Da3BaseObservationPrediction"):
+    with pytest.raises(TypeError, match="Da3BaseObservationPrediction"):
         da3_module.normalize_da3_base_preview(
             cast(Any, ("prediction",)),
             normalization_identity=_identity(),
