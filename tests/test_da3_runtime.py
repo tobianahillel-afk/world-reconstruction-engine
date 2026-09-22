@@ -522,6 +522,18 @@ def test_runtime_prediction_membership_must_exactly_match_inputs(
         da3_runtime.execute_da3_base_preview(request, runtime=_WrongRuntime())
 
 
+def test_isolated_import_disables_bytecode_and_restores_process_state(tmp_path: Path) -> None:
+    source = _source_root(tmp_path)
+    original = da3_runtime.sys.dont_write_bytecode
+
+    with da3_runtime._isolated_da3_import(source):
+        assert da3_runtime.sys.dont_write_bytecode is True
+        assert str(source / "src") == da3_runtime.sys.path[0]
+
+    assert da3_runtime.sys.dont_write_bytecode is original
+    assert str(source / "src") not in da3_runtime.sys.path
+
+
 def test_module_import_surface_has_no_learned_runtime_objects() -> None:
     forbidden = {
         "torch",
