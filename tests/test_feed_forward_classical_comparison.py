@@ -664,21 +664,18 @@ def test_real_da3_preview_and_classical_incremental_share_one_controlled_referen
     preview_shared_ids = tuple(
         sorted(
             {
-                camera.observation_id.value
-                for camera in preview.geometry.camera_solutions
+                camera.observation_id.value for camera in preview.geometry.camera_solutions
             }.intersection(camera.observation_id.value for camera in references)
         )
     )
     classical_shared_ids = tuple(
         sorted(
-            {
-                camera.observation_id.value for camera in classical_cameras
-            }.intersection(camera.observation_id.value for camera in references)
+            {camera.observation_id.value for camera in classical_cameras}.intersection(
+                camera.observation_id.value for camera in references
+            )
         )
     )
-    source_asset_sha256 = tuple(
-        observation.asset.sha256.value for observation in observations
-    )
+    source_asset_sha256 = tuple(observation.asset.sha256.value for observation in observations)
 
     record = {
         "schema_version": 1,
