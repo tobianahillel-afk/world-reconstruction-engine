@@ -561,7 +561,7 @@ def test_global_adapter_registry_contract_is_distinct_and_canonical() -> None:
     entry = _entries_by_id()[COLMAP_GLOBAL_CANONICAL_ADAPTER_ID]
     assert entry["capability"] == {
         "name": COLMAP_GLOBAL_CANONICAL_CAPABILITY_NAME.value,
-        "input_kinds": ["image.observation", "evidence.geometric_verification"],
+        "input_kinds": ["evidence.geometric_verification", "image.observation"],
         "output_kinds": [
             "geometry.camera_solution",
             "geometry.point_map",
