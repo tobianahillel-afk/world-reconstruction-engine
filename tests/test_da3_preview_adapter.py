@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import importlib
 from dataclasses import FrozenInstanceError, fields
 from typing import Any, cast
 
@@ -11,7 +12,6 @@ from wre.domain.depth_fields import DepthFieldId
 from wre.domain.fragments import LocalFrameId
 from wre.domain.geometry_solutions import GeometryScaleStatus, GeometrySolutionId
 from wre.domain.observations import ObservationId, Sha256Digest
-from wre.reconstruction import da3_preview as da3_module
 from wre.reconstruction.da3_preview import (
     DA3_BASE_MODEL_IDENTIFIER,
     DA3_BASE_SOURCE_REPOSITORY,
@@ -528,4 +528,5 @@ def test_da3_preview_module_has_no_external_execution_or_later_layer_surface() -
         "RuntimeScene",
     }
 
-    assert forbidden_names.isdisjoint(vars(da3_module))
+    module = importlib.import_module("wre.reconstruction.da3_preview")
+    assert forbidden_names.isdisjoint(vars(module))
