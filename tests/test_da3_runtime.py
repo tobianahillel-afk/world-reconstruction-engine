@@ -228,7 +228,7 @@ def test_reference_config_is_exact_frozen_and_content_identified() -> None:
     ],
 )
 def test_reference_config_rejects_other_execution_profiles(
-    kwargs: dict[str, object],
+    kwargs: dict[str, Any],
     message: str,
 ) -> None:
     with pytest.raises(ValueError, match=message):
