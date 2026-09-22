@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import importlib
 import importlib.metadata
+import importlib.util
 import json
 import math
 import subprocess
@@ -339,11 +340,14 @@ def _verify_source_root(source_root: Path) -> Path:
 def _verify_checkpoint(path: Path) -> Path:
     if _uri_like(path):
         raise Da3RuntimeError("DA3 checkpoint must be an explicit local path")
+    expanded = path.expanduser()
+    if expanded.is_symlink():
+        raise Da3RuntimeError("DA3 checkpoint must be a regular non-symlink file")
     try:
-        resolved = path.expanduser().resolve(strict=True)
+        resolved = expanded.resolve(strict=True)
     except (OSError, RuntimeError) as exc:
         raise Da3RuntimeError("DA3 checkpoint is unavailable") from exc
-    if not resolved.is_file() or resolved.is_symlink():
+    if not resolved.is_file():
         raise Da3RuntimeError("DA3 checkpoint must be a regular non-symlink file")
     content = hash_file_content(resolved)
     if content.byte_length != DA3_CHECKPOINT_BYTE_LENGTH:
@@ -454,6 +458,8 @@ def _normalization_identity(
 
 
 def inspect_da3_reference_environment() -> Da3EnvironmentIdentity:
+    if importlib.util.find_spec("xformers") is not None:
+        raise Da3RuntimeError("DA3 CPU reference environment must not contain xformers")
     versions: list[tuple[str, str]] = []
     for distribution, expected in DA3_REFERENCE_PACKAGE_VERSIONS:
         try:
