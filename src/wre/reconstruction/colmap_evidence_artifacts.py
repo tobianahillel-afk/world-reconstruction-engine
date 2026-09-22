@@ -112,18 +112,14 @@ class ColmapEvidenceArtifactPlan:
             raise ValueError("COLMAP evidence plan output_kind is unsupported")
         if not isinstance(self.input_fingerprints, tuple):
             raise TypeError("COLMAP evidence plan inputs must be an immutable tuple")
-        if not all(
-            isinstance(item, ArtifactInputFingerprint) for item in self.input_fingerprints
-        ):
+        if not all(isinstance(item, ArtifactInputFingerprint) for item in self.input_fingerprints):
             raise TypeError(
                 "COLMAP evidence plan inputs must contain ArtifactInputFingerprint values"
             )
         if not isinstance(self.producer, ArtifactProducerIdentity):
             raise TypeError("COLMAP evidence plan producer must be ArtifactProducerIdentity")
         if not isinstance(self.hardware_runtime, HardwareRuntimeIdentity):
-            raise TypeError(
-                "COLMAP evidence plan hardware_runtime must be HardwareRuntimeIdentity"
-            )
+            raise TypeError("COLMAP evidence plan hardware_runtime must be HardwareRuntimeIdentity")
         if not isinstance(self.artifact_key, ArtifactKey):
             raise TypeError("COLMAP evidence plan artifact_key must be ArtifactKey")
 
@@ -173,9 +169,7 @@ def _validate_inputs(
     if exact_count is not None and len(inputs) != exact_count:
         raise ValueError(f"COLMAP evidence stage requires exactly {exact_count} input fingerprint")
     if any(item.artifact_kind != expected_kind for item in inputs):
-        raise ValueError(
-            f"COLMAP evidence inputs must all have kind {expected_kind.value}"
-        )
+        raise ValueError(f"COLMAP evidence inputs must all have kind {expected_kind.value}")
     if len(inputs) != len(set(inputs)):
         raise ValueError("COLMAP evidence inputs cannot contain duplicate fingerprints")
 
