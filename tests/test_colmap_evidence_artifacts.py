@@ -7,7 +7,11 @@ import pytest
 import yaml
 
 import wre.reconstruction.colmap_evidence_artifacts as evidence_artifacts
-from wre.domain.artifact_keys import ArtifactInputFingerprint, ArtifactKeyMaterial, derive_artifact_key
+from wre.domain.artifact_keys import (
+    ArtifactInputFingerprint,
+    ArtifactKeyMaterial,
+    derive_artifact_key,
+)
 from wre.domain.artifacts import ArtifactId, ArtifactKind, ArtifactRef
 from wre.domain.hardware_identity import HardwareRuntimeIdentity
 from wre.domain.observations import ObservationId, Sha256Digest
@@ -55,9 +59,9 @@ from wre.reconstruction.colmap_features import (
     ColmapImageFeatureSummary,
 )
 from wre.reconstruction.colmap_matching import (
-    ColmapPairMatchSummary,
     ColmapPairMatchingConfig,
     ColmapPairMatchingResult,
+    ColmapPairMatchSummary,
 )
 from wre.reconstruction.colmap_verification import (
     ColmapGeometricVerificationConfig,
@@ -93,9 +97,10 @@ def _environment() -> ColmapEnvironmentIdentity:
 def _feature_result(
     *,
     configuration_sha256: Sha256Digest,
-    database_sha256: Sha256Digest = _digest("d"),
+    database_sha256: Sha256Digest | None = None,
     database_byte_length: int = 101,
 ) -> ColmapFeatureExtractionResult:
+    actual_database_sha256 = database_sha256 or _digest("d")
     observation_id = ObservationId("obs:a")
     return ColmapFeatureExtractionResult(
         provenance=DerivedArtifactProvenance(
@@ -105,7 +110,7 @@ def _feature_result(
         environment=_environment(),
         configuration_sha256=configuration_sha256,
         database_path=Path("/does/not/need/to/exist/features.db"),
-        database_sha256=database_sha256,
+        database_sha256=actual_database_sha256,
         database_byte_length=database_byte_length,
         images=(
             ColmapImageFeatureSummary(
@@ -124,9 +129,10 @@ def _matching_result(
     *,
     configuration_sha256: Sha256Digest,
     source_feature_database_sha256: Sha256Digest,
-    database_sha256: Sha256Digest = _digest("e"),
+    database_sha256: Sha256Digest | None = None,
     database_byte_length: int = 202,
 ) -> ColmapPairMatchingResult:
+    actual_database_sha256 = database_sha256 or _digest("e")
     first = ObservationId("obs:a")
     second = ObservationId("obs:b")
     return ColmapPairMatchingResult(
@@ -138,7 +144,7 @@ def _matching_result(
         configuration_sha256=configuration_sha256,
         source_feature_database_sha256=source_feature_database_sha256,
         database_path=Path("/does/not/need/to/exist/matches.db"),
-        database_sha256=database_sha256,
+        database_sha256=actual_database_sha256,
         database_byte_length=database_byte_length,
         attempted_pair_count=1,
         unverified_two_view_placeholder_count=1,
@@ -158,9 +164,10 @@ def _verification_result(
     *,
     configuration_sha256: Sha256Digest,
     source_matching_database_sha256: Sha256Digest,
-    database_sha256: Sha256Digest = _digest("f"),
+    database_sha256: Sha256Digest | None = None,
     database_byte_length: int = 303,
 ) -> ColmapGeometricVerificationResult:
+    actual_database_sha256 = database_sha256 or _digest("f")
     return ColmapGeometricVerificationResult(
         provenance=DerivedArtifactProvenance(
             producing_run_id=ReconstructionRunId("run:verification"),
@@ -170,7 +177,7 @@ def _verification_result(
         configuration_sha256=configuration_sha256,
         source_matching_database_sha256=source_matching_database_sha256,
         database_path=Path("/does/not/need/to/exist/verification.db"),
-        database_sha256=database_sha256,
+        database_sha256=actual_database_sha256,
         database_byte_length=database_byte_length,
         geometries=(),
     )
