@@ -411,6 +411,39 @@ def test_verified_rgb_input_reads_only_canonical_materialization(tmp_path: Path)
         da3_runtime._verified_rgb_image(item)
 
 
+def test_checkpoint_state_compatibility_accepts_only_reviewed_missing_keys() -> None:
+    class _Incompatible:
+        missing_keys = list(da3_runtime._DA3_EXPECTED_MISSING_STATE_KEYS)
+        unexpected_keys: list[str] = []
+
+    class _Model:
+        def load_state_dict(self, state: dict[str, object], *, strict: bool) -> _Incompatible:
+            assert strict is False
+            assert tuple(state) == ("weight",)
+            return _Incompatible()
+
+    da3_runtime._load_reviewed_da3_state_dict(
+        _Model(),
+        {"model.weight": object()},
+    )
+
+
+def test_checkpoint_state_compatibility_rejects_any_other_divergence() -> None:
+    class _Incompatible:
+        missing_keys = [*da3_runtime._DA3_EXPECTED_MISSING_STATE_KEYS, "foreign.weight"]
+        unexpected_keys: list[str] = []
+
+    class _Model:
+        def load_state_dict(self, state: dict[str, object], *, strict: bool) -> _Incompatible:
+            return _Incompatible()
+
+    with pytest.raises(da3_runtime.Da3RuntimeError, match="compatibility differs"):
+        da3_runtime._load_reviewed_da3_state_dict(
+            _Model(),
+            {"model.weight": object()},
+        )
+
+
 def test_environment_inspection_requires_every_exact_reference_version(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
