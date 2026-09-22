@@ -53,11 +53,22 @@ def _matmul(
     left: tuple[tuple[float, float, float], ...],
     right: tuple[tuple[float, float, float], ...],
 ) -> tuple[tuple[float, float, float], ...]:
-    return tuple(
-        tuple(
-            sum(left[row][axis] * right[axis][column] for axis in range(3)) for column in range(3)
-        )
-        for row in range(3)
+    return (
+        (
+            sum((left[0][axis] * right[axis][0] for axis in range(3)), 0.0),
+            sum((left[0][axis] * right[axis][1] for axis in range(3)), 0.0),
+            sum((left[0][axis] * right[axis][2] for axis in range(3)), 0.0),
+        ),
+        (
+            sum((left[1][axis] * right[axis][0] for axis in range(3)), 0.0),
+            sum((left[1][axis] * right[axis][1] for axis in range(3)), 0.0),
+            sum((left[1][axis] * right[axis][2] for axis in range(3)), 0.0),
+        ),
+        (
+            sum((left[2][axis] * right[axis][0] for axis in range(3)), 0.0),
+            sum((left[2][axis] * right[axis][1] for axis in range(3)), 0.0),
+            sum((left[2][axis] * right[axis][2] for axis in range(3)), 0.0),
+        ),
     )
 
 
