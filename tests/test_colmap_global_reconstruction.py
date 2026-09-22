@@ -618,6 +618,9 @@ def test_real_pycolmap_global_mapping_is_cpu_bounded_audited_and_canonical(
         options.num_cameras_per_rig = 1
         options.num_frames_per_rig = 7
         options.num_points3D = 50
+        options.camera_width = 8
+        options.camera_height = 8
+        options.camera_params = [10.0, 4.0, 4.0, 0.05]
         options.camera_has_prior_focal_length = False
         ground_truth = pycolmap.synthesize_dataset(options, database)
 
