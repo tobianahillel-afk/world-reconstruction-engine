@@ -965,7 +965,7 @@ work_items:
   - id: V2L13.2
     lot: V2L13
     title: First approved feed forward preview candidate
-    status: ready
+    status: done
     objective: Integrate Depth Anything 3 DA3-BASE as the first bounded feed-forward PREVIEW candidate behind the V2L13.1 contract by defining candidate-specific immutable native prediction semantics and direct normalization into canonical CameraSolution DepthField optional PointMap and GeometrySolution values, while keeping actual external model environment checkpoint execution hardware profile and authoritative reproducibility pinning in V2L13.3.
     candidate_refresh:
       reviewed_at: '2026-09-22'
@@ -1069,7 +1069,111 @@ work_items:
       - FeedForwardGeometryResult integration regression proving exact child references and no candidate-private object leaks past normalization
       - module-surface regression proving no Torch xformers huggingface NumPy filesystem network model execution registry routing quality comparison surface appearance dynamic or V2L13.3 dependency enters the adapter
       - full fast CI and CodeQL plus native lanes only where repository path triggers require them
-  - {id: V2L13.3, lot: V2L13, title: Feed forward checkpoint hardware license reproducibility, status: planned, depends_on: [V2L13.2]}
+  - id: V2L13.3
+    lot: V2L13
+    title: Feed forward checkpoint hardware license reproducibility
+    status: ready
+    objective: Establish the authoritative DA3-BASE external execution and reproducibility boundary for the V2 feed-forward PREVIEW candidate by pinning one exact reviewed source revision and checkpoint identity, one explicit reference runtime/hardware profile, direct and transitive license evidence, verified canonical decoded-image inputs, deterministic candidate execution into the V2L13.2 native prediction boundary, and exact producer/model/checkpoint/configuration/hardware identity without quality scoring default promotion or performance-profile optimization.
+    allowed_scope:
+      - src/wre/reconstruction/da3_runtime.py
+      - focused reuse or identity hooks in src/wre/reconstruction/da3_preview.py without changing its canonical normalization semantics
+      - focused exports in src/wre/reconstruction/__init__.py
+      - registry/dependencies.yaml for the exact optional DA3 external environment and reviewed direct/transitive license records actually required by the reference path
+      - registry/adapter-models.yaml for one experimental DA3-BASE geometry.feed_forward adapter registration with exact producer model checkpoint hardware policy and license posture
+      - tests/test_da3_runtime.py
+      - focused updates to tests/test_adapter_model_registry_baselines.py only when required by the new explicit experimental adapter entry
+      - one optional dedicated DA3 integration workflow or fixture if real candidate execution cannot belong in ordinary fast CI and can run without implicit source or checkpoint download
+      - docs/14_TECHNOLOGY_SELECTION.md only for a focused note recording the exact first DA3 reference path as experimental and not benchmark-promoted
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L13.4 can be activated without implementing it
+    out_of_scope:
+      - changing FeedForwardGeometryResult Da3BaseObservationPrediction CameraSolution DepthField PointMap GeometrySolution LocalFrameId or GeometryScaleStatus semantics
+      - changing the DA3-BASE relative-depth token world-to-camera copy semantics unresolved-scale policy no-PointMap decision or deterministic canonical ID rules established by V2L13.2
+      - integrating another DA3 variant including SMALL LARGE GIANT METRIC NESTED Gaussian or streaming paths
+      - integrating MapAnything VGGT VGGT-Omega Pi3 Pi3X CUT3R Uni3R TokenSplat or another feed-forward candidate
+      - making torch numpy Pillow huggingface_hub safetensors xformers or DA3 mandatory core WRE dependencies; the learned runtime remains an optional exact external environment
+      - implicit Git clone pip install torch.hub Hugging Face download checkpoint download model-code download URI resolution or any runtime network fallback
+      - accepting floating latest main unpinned package versions unchecked source trees dirty executable shadows or checkpoint identities without exact local byte verification
+      - training finetuning checkpoint conversion quantization TensorRT torch.compile CUDA graphs mixed precision alternatives or multiple execution profiles owned by V2L13.6
+      - inventing metric scale from DA3-BASE or treating candidate local world as project Earth ECEF ENU geographic or cross-run world truth
+      - geometry camera quality metrics controlled holdout evaluation comparison against COLMAP or default promotion owned by V2L13.4 and V2L13.5
+      - PREVIEW router/default fallback retry QualityDecision route graph or automatic candidate selection
+      - dense MVS fusion SurfaceModel appearance dynamic chronology MasterScene RuntimeScene or later milestone work
+      - starting V2L13.4 implementation in this work item
+    depends_on: [V2L13.2]
+    read_before:
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/06_TESTING.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md
+      - docs/27_RESEARCH_CANDIDATE_COVERAGE.md
+      - docs/28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md
+      - docs/29_PERFORMANCE_INTEGRATION_MAP.md
+      - registry/dependencies.yaml
+      - registry/adapter-models.yaml
+      - src/wre/domain/artifact_materialization.py
+      - src/wre/domain/decoded_images.py
+      - src/wre/domain/hardware_identity.py
+      - src/wre/domain/producer_identity.py
+      - src/wre/ingestion/decoded_images.py
+      - src/wre/materialization.py
+      - src/wre/reconstruction/feed_forward_geometry.py
+      - src/wre/reconstruction/da3_preview.py
+      - src/wre/retrieval/selavpr_plus.py
+      - tests/test_decoded_image_pyramids.py
+      - tests/test_da3_preview_adapter.py
+      - tests/test_selavpr_plus_retrieval.py
+    external_evidence:
+      - ByteDance-Seed/Depth-Anything-3 source repository at exact reviewed revision 3d835ec1a5802d64a8b8b15f817a1ab54809bfe4
+      - ByteDance-Seed/Depth-Anything-3 LICENSE and the exact source files imported by the bounded DA3-BASE reference path
+      - ByteDance-Seed/Depth-Anything-3 README.md docs/API.md src/depth_anything_3/api.py src/depth_anything_3/specs.py and input/output processor code at that revision
+      - Hugging Face depth-anything/DA3-BASE model card config and model.safetensors with checkpoint SHA-256 e01067dc1659613083d9145a9a2547ccdbe6ccbbf83c4fe7b3e8a4e2bdae78b5
+      - concrete package metadata and license texts for every runtime package admitted to the reference environment rather than the full optional demo server or training dependency surface
+    reuse:
+      - Da3BaseObservationPrediction and normalize_da3_base_preview as the only candidate-to-canonical semantic boundary; external execution ends by constructing the already-reviewed V2L13.2 value rather than writing canonical geometry directly
+      - DecodedImagePyramidMaterializationResult plus verify_local_artifact_materialization as the canonical verified image input boundary so DA3 never reopens raw media
+      - ModelIdentity CheckpointIdentity ArtifactProducerIdentity ConfigurationIdentity Sha256Digest and HardwareRuntimeIdentity as the exact reproducibility vocabulary
+      - SelaVPR++ external-environment patterns for local source-tree audit exact checkpoint-byte verification safe no-network loading optional learned runtime separation and core-import independence, adapted only where DA3 actually requires different packages or preprocessing
+      - source revision 3d835ec1a5802d64a8b8b15f817a1ab54809bfe4 and checkpoint depth-anything/DA3-BASE SHA-256 e01067dc1659613083d9145a9a2547ccdbe6ccbbf83c4fe7b3e8a4e2bdae78b5 as the reviewed starting identities; V2L13.3 must re-verify them authoritatively before registry approval
+      - Apache-2.0 source and checkpoint terms as direct-license evidence only; transitive runtime licenses remain separately recorded and cannot be inferred from the top-level DA3 license
+    acceptance:
+      - Define one exact DA3-BASE ModelIdentity and CheckpointIdentity tied to source revision 3d835ec1a5802d64a8b8b15f817a1ab54809bfe4 and checkpoint identifier depth-anything/DA3-BASE with SHA-256 e01067dc1659613083d9145a9a2547ccdbe6ccbbf83c4fe7b3e8a4e2bdae78b5; floating tags latest aliases or unverified alternate files fail closed.
+      - Define one immutable bounded reference execution config with a canonical ConfigurationIdentity covering every material DA3 inference choice used before Da3BaseObservationPrediction construction, including process resolution/method reference-view strategy pose head choice Gaussian disablement and any deterministic seed/thread/precision settings actually exposed by the selected reference runtime; no generic kwargs bag exists.
+      - Select and document exactly one reference device/runtime profile after verifying the upstream path works there; encode its material environment/hardware identity explicitly and do not claim byte-equivalence across different devices drivers accelerators or math modes.
+      - Keep the DA3 learned environment outside the mandatory core uv runtime; pin the exact concrete package versions used by the reference path and record direct/transitive license posture in registry/dependencies.yaml before registering the executable adapter as anything beyond experimental.
+      - Source execution receives an explicit already-local DA3 source root or installed exact source environment and verifies the exact reviewed revision plus a bounded executable-source manifest before import; unexpected executable Python bytecode native-module shadows or source hash mismatch fail closed.
+      - Checkpoint execution receives an explicit already-local regular model.safetensors file or equivalent locally materialized exact checkpoint asset whose bytes match CheckpointIdentity; no implicit Hugging Face torch.hub Git requests urllib or other network path is permitted.
+      - Prefer the upstream safe safetensors loading path for the reviewed model; if another loader is required it must reject executable checkpoint payloads and validate expected model/config structure before use.
+      - Each input is a VERIFIED canonical decoded-image pyramid materialization with exact source observation identity RGB8 packed source-pixel semantics and auditable level selection; the runtime does not reopen original image/video media.
+      - Preprocessing and any upstream resize/crop behavior affecting returned dimensions intrinsics or depth are pinned explicitly enough that the produced Da3BaseObservationPrediction dimensions and pinhole intrinsics can be traced back to the exact processed candidate image semantics without silent EXIF autorotation or hidden caller-dependent defaults.
+      - Real execution returns exactly one candidate-native prediction per input observation in canonical ObservationId order with finite reviewed world-to-camera pose pinhole intrinsics depth validity and optional confidence semantics accepted by Da3BaseObservationPrediction; malformed count shape NaN Inf unsupported camera output or missing required prediction values fail closed before canonical normalization.
+      - DA3-BASE execution never sets metric scale and does not create PointMap values; it hands only accepted Da3BaseObservationPrediction values plus one explicit deterministic normalization identity into normalize_da3_base_preview.
+      - The normalization identity used for canonical IDs is derived deterministically from exact producer/model/checkpoint/configuration/input artifact identities and material hardware identity where required, never from filesystem paths process IDs timestamps Python object identity or remote URLs.
+      - Define an immutable DA3 execution result/evidence value retaining exact model checkpoint source/configuration/hardware environment identity and the normalized FeedForwardGeometryResult without leaking upstream tensors modules latent features or mutable NumPy/Torch values.
+      - Register one experimental adapter entry whose capability consumes media.decoded_image_pyramid and emits geometry.camera_solution geometry.depth_field and geometry.solution, with exact dependency/model/checkpoint identities artifact_key_hardware_policy required and no geometry.point_map output claim for DA3-BASE.
+      - The registry direct license records Apache-2.0 for the reviewed DA3 source and exact DA3-BASE checkpoint, while transitive notes enumerate the concrete reference runtime review and redistribution notes make clear that WRE does not implicitly fetch or bundle source/checkpoint bytes.
+      - Ordinary WRE imports and fast unit tests remain runnable without Torch DA3 source checkpoint GPU or network; real-candidate execution lives in an explicitly provisioned optional integration lane or local fixture.
+      - Repeating the pure reproducibility fixture with identical supplied candidate outputs producer/model/checkpoint/configuration/input/hardware identities yields equal normalization identity and equal canonical Python values; changing any identity dimension that is declared material changes the reproducibility identity rather than silently reusing artifacts.
+      - No quality metric benchmark default promotion route decision performance optimization or V2L13.4 behavior is introduced.
+    tests:
+      - exact model checkpoint source-revision configuration and hardware identity value tests including floating latest wrong digest wrong type and unreviewed variant negatives
+      - reference config exact field-set immutability canonical SHA determinism and unsupported hidden-default/precision/device option negatives
+      - source-root exact-revision source-manifest executable-shadow and checkpoint hash/length/local-only fail-before-model-execution fixtures
+      - dependency/environment inspection tests proving exact package versions and fail-closed mismatch behavior without importing the learned stack during ordinary module import
+      - canonical decoded-image materialization verification tests covering corrupt bytes wrong observation identity wrong RGB layout/orientation/level and no raw-media reopen
+      - fake runtime fixture proving exact DA3 inference arguments deterministic observation mapping one prediction per input and construction through Da3BaseObservationPrediction rather than direct canonical object manufacture
+      - malformed fake outputs for wrong count shape NaN Inf unsupported pose/intrinsics depth/confidence proving failure before normalize_da3_base_preview
+      - normalization-identity fixture proving exact producer model checkpoint configuration input and hardware identity participation with no path timestamp or URL dependence
+      - result exact field-set immutability identity retention and regression proving no tensor ndarray module source path checkpoint path or mutable upstream object leaks to the stable result
+      - adapter-model/dependency registry regression proving experimental status exact Apache-2.0 direct-license evidence required hardware-key policy and absence of PointMap output
+      - core-import regression proving fast CI requires no Torch DA3 checkout checkpoint accelerator or network
+      - optional real-candidate smoke fixture only when the exact reviewed external environment source checkpoint and declared hardware are explicitly provisioned; ordinary CI never downloads them
+      - full fast CI CodeQL dependency review and any dedicated optional DA3 lane activated by the implementation
   - {id: V2L13.4, lot: V2L13, title: Feed forward geometry camera quality metrics, status: planned, depends_on: [V2L13.3]}
   - {id: V2L13.5, lot: V2L13, title: Preview versus classical baseline comparison, status: planned, depends_on: [V2L13.4]}
   - {id: V2L13.6, lot: V2L13, title: Learned execution profile and stage profiling benchmark, status: planned, depends_on: [V2L13.5]}
