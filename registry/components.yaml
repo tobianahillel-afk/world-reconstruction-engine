@@ -235,7 +235,14 @@ components:
       - tests/test_colmap_geometry_outcomes.py
       - tests/test_colmap_precision_route_regression.py
     status: implemented
-  feed_forward_geometry: {owner_lot: V2L13, implementation: [], tests: [], status: planned}
+  feed_forward_geometry:
+    owner_lot: V2L13
+    implementation:
+      - src/wre/reconstruction/feed_forward_geometry.py
+      - src/wre/reconstruction/__init__.py
+    tests:
+      - tests/test_feed_forward_geometry_adapter.py
+    status: implementing
   precision_global_refinement: {owner_lot: V2L14, implementation: [], tests: [], status: planned}
   dense_depth_mvs: {owner_lot: V2L15, implementation: [], tests: [], status: planned}
   physical_surface: {owner_lot: V2L16, implementation: [], tests: [], status: planned}
