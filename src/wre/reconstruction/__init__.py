@@ -51,6 +51,10 @@ from wre.reconstruction.colmap_verification import (
     ColmapPairGeometryEvidence,
     verify_colmap_geometry,
 )
+from wre.reconstruction.legacy_geometry_conversion import (
+    LegacySparseGeometryConversionResult,
+    convert_sparse_reconstruction_estimate,
+)
 
 __all__ = [
     "COLMAP_IMPORTER_VERSION",
@@ -86,6 +90,8 @@ __all__ = [
     "ColmapReconstructionInput",
     "ColmapSparseModelArtifact",
     "ImportedColmapSparseModel",
+    "LegacySparseGeometryConversionResult",
+    "convert_sparse_reconstruction_estimate",
     "extract_colmap_features",
     "import_colmap_reconstruction",
     "inspect_colmap_environment",
