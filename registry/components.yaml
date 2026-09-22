@@ -248,6 +248,7 @@ components:
       - tests/test_da3_preview_adapter.py
       - tests/test_da3_runtime.py
       - tests/test_feed_forward_camera_quality.py
+      - tests/test_feed_forward_classical_comparison.py
     status: implementing
   precision_global_refinement: {owner_lot: V2L14, implementation: [], tests: [], status: planned}
   dense_depth_mvs: {owner_lot: V2L15, implementation: [], tests: [], status: planned}

@@ -181,7 +181,9 @@ from wre.reconstruction.feed_forward_camera_quality import (
     RELATIVE_ROTATION_ERROR_DESCRIPTOR,
     RELATIVE_TRANSLATION_DIRECTION_ERROR_DESCRIPTOR,
     TRANSLATION_PAIR_COVERAGE_DESCRIPTOR,
+    CameraPoseQualityRequest,
     FeedForwardCameraQualityRequest,
+    evaluate_camera_pose_quality,
     evaluate_feed_forward_camera_quality,
 )
 from wre.reconstruction.feed_forward_geometry import (
@@ -289,6 +291,7 @@ __all__ = [
     "SUPPORTED_COLMAP_VERSION",
     "SUPPORTED_PYCOLMAP_VERSION",
     "TRANSLATION_PAIR_COVERAGE_DESCRIPTOR",
+    "CameraPoseQualityRequest",
     "CanonicalColmapSparseModel",
     "ColmapCanonicalGeometryError",
     "ColmapEnvironmentError",
@@ -343,6 +346,7 @@ __all__ = [
     "canonicalize_colmap_sparse_model",
     "colmap_sparse_model_content_identity",
     "convert_sparse_reconstruction_estimate",
+    "evaluate_camera_pose_quality",
     "evaluate_feed_forward_camera_quality",
     "execute_da3_base_preview",
     "extract_colmap_features",

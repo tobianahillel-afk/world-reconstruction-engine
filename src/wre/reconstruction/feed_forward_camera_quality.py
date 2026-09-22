@@ -143,6 +143,55 @@ class FeedForwardCameraQualityRequest:
             raise TypeError("camera_quality.input_artifacts members must be ArtifactRef")
 
 
+@dataclass(frozen=True, slots=True, kw_only=True)
+class CameraPoseQualityRequest:
+    """Projection-independent relative-pose quality over canonical camera tuples."""
+
+    candidate_cameras: tuple[CameraSolution, ...]
+    reference_cameras: tuple[CameraSolution, ...]
+    input_artifacts: tuple[ArtifactRef, ...]
+
+    def __post_init__(self) -> None:
+        _validate_camera_tuple(
+            self.candidate_cameras,
+            context="camera_pose_quality.candidate_cameras",
+            allow_empty=True,
+        )
+        _validate_camera_tuple(
+            self.reference_cameras,
+            context="camera_pose_quality.reference_cameras",
+            allow_empty=False,
+        )
+        if not isinstance(self.input_artifacts, tuple):
+            raise TypeError("camera_pose_quality.input_artifacts must be an immutable tuple")
+        if any(not isinstance(artifact, ArtifactRef) for artifact in self.input_artifacts):
+            raise TypeError("camera_pose_quality.input_artifacts members must be ArtifactRef")
+
+
+def _validate_camera_tuple(
+    cameras: object,
+    *,
+    context: str,
+    allow_empty: bool,
+) -> tuple[CameraSolution, ...]:
+    if not isinstance(cameras, tuple):
+        raise TypeError(f"{context} must be an immutable tuple")
+    if not cameras and not allow_empty:
+        raise ValueError(f"{context} must be non-empty")
+    if any(not isinstance(camera, CameraSolution) for camera in cameras):
+        raise TypeError(f"{context} members must be CameraSolution")
+    observation_values = tuple(camera.observation_id.value for camera in cameras)
+    if len(observation_values) != len(set(observation_values)):
+        raise ValueError(f"{context} observations must be unique")
+    if observation_values != tuple(sorted(observation_values)):
+        raise ValueError(f"{context} must use canonical ObservationId order")
+    if cameras:
+        local_frame = cameras[0].local_frame_id
+        if any(camera.local_frame_id != local_frame for camera in cameras):
+            raise ValueError(f"{context} must share one LocalFrameId")
+    return cameras
+
+
 Matrix3x3 = tuple[
     tuple[float, float, float],
     tuple[float, float, float],
@@ -292,20 +341,20 @@ def _observation(
     )
 
 
-def evaluate_feed_forward_camera_quality(
-    request: FeedForwardCameraQualityRequest,
+def evaluate_camera_pose_quality(
+    request: CameraPoseQualityRequest,
 ) -> MetricVector:
-    """Measure camera quality without alignment, thresholds, routing or mutation."""
+    """Measure projection-independent camera coverage and relative pose only."""
 
-    if not isinstance(request, FeedForwardCameraQualityRequest):
-        raise TypeError("request must be FeedForwardCameraQualityRequest")
+    if not isinstance(request, CameraPoseQualityRequest):
+        raise TypeError("request must be CameraPoseQualityRequest")
 
     provenance = MetricProvenance(
         evaluator=FEED_FORWARD_CAMERA_QUALITY_EVALUATOR,
         input_artifacts=request.input_artifacts,
     )
     candidate_by_observation = {
-        camera.observation_id: camera for camera in request.candidate.camera_solutions
+        camera.observation_id: camera for camera in request.candidate_cameras
     }
     reference_by_observation = {
         camera.observation_id: camera for camera in request.reference_cameras
@@ -324,32 +373,6 @@ def evaluate_feed_forward_camera_quality(
             provenance,
         )
     ]
-
-    if shared_ids:
-        focal_errors: list[float] = []
-        principal_errors: list[float] = []
-        for observation_id in shared_ids:
-            focal_error, principal_error = _intrinsic_errors(
-                candidate_by_observation[observation_id],
-                reference_by_observation[observation_id],
-            )
-            focal_errors.append(focal_error)
-            principal_errors.append(principal_error)
-
-        observations.extend(
-            (
-                _observation(
-                    FOCAL_RELATIVE_ERROR_DESCRIPTOR,
-                    _median(tuple(focal_errors)),
-                    provenance,
-                ),
-                _observation(
-                    PRINCIPAL_POINT_ERROR_DESCRIPTOR,
-                    _median(tuple(principal_errors)),
-                    provenance,
-                ),
-            )
-        )
 
     if len(shared_ids) >= 2:
         rotation_errors: list[float] = []
@@ -412,6 +435,75 @@ def evaluate_feed_forward_camera_quality(
                     provenance,
                 )
             )
+
+    return MetricVector(
+        observations=tuple(
+            sorted(
+                observations,
+                key=lambda observation: observation.descriptor.name.value,
+            )
+        )
+    )
+
+
+def evaluate_feed_forward_camera_quality(
+    request: FeedForwardCameraQualityRequest,
+) -> MetricVector:
+    """Measure feed-forward camera quality without alignment, thresholds or mutation."""
+
+    if not isinstance(request, FeedForwardCameraQualityRequest):
+        raise TypeError("request must be FeedForwardCameraQualityRequest")
+
+    pose_metrics = evaluate_camera_pose_quality(
+        CameraPoseQualityRequest(
+            candidate_cameras=request.candidate.camera_solutions,
+            reference_cameras=request.reference_cameras,
+            input_artifacts=request.input_artifacts,
+        )
+    )
+    provenance = MetricProvenance(
+        evaluator=FEED_FORWARD_CAMERA_QUALITY_EVALUATOR,
+        input_artifacts=request.input_artifacts,
+    )
+    candidate_by_observation = {
+        camera.observation_id: camera for camera in request.candidate.camera_solutions
+    }
+    reference_by_observation = {
+        camera.observation_id: camera for camera in request.reference_cameras
+    }
+    shared_ids = tuple(
+        sorted(
+            set(candidate_by_observation).intersection(reference_by_observation),
+            key=lambda observation_id: observation_id.value,
+        )
+    )
+
+    observations = list(pose_metrics.observations)
+    if shared_ids:
+        focal_errors: list[float] = []
+        principal_errors: list[float] = []
+        for observation_id in shared_ids:
+            focal_error, principal_error = _intrinsic_errors(
+                candidate_by_observation[observation_id],
+                reference_by_observation[observation_id],
+            )
+            focal_errors.append(focal_error)
+            principal_errors.append(principal_error)
+
+        observations.extend(
+            (
+                _observation(
+                    FOCAL_RELATIVE_ERROR_DESCRIPTOR,
+                    _median(tuple(focal_errors)),
+                    provenance,
+                ),
+                _observation(
+                    PRINCIPAL_POINT_ERROR_DESCRIPTOR,
+                    _median(tuple(principal_errors)),
+                    provenance,
+                ),
+            )
+        )
 
     return MetricVector(
         observations=tuple(
