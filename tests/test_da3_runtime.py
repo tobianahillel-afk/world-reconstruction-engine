@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import FrozenInstanceError, fields
+import os
 from pathlib import Path
 from typing import Any, cast
 
@@ -559,6 +560,46 @@ def test_isolated_import_disables_bytecode_and_restores_process_state(tmp_path: 
 
     assert da3_runtime.sys.dont_write_bytecode is original
     assert str(source / "src") not in da3_runtime.sys.path
+
+
+@pytest.mark.skipif(
+    os.environ.get("WRE_DA3_INTEGRATION") != "1",
+    reason="exact DA3 reference source/checkpoint environment is not provisioned",
+)
+def test_real_da3_base_reference_integration(tmp_path: Path) -> None:
+    source_root = Path(os.environ["WRE_DA3_SOURCE_ROOT"])
+    checkpoint_path = Path(os.environ["WRE_DA3_CHECKPOINT_PATH"])
+    hardware_sha256 = Sha256Digest(os.environ["WRE_DA3_HARDWARE_RUNTIME_SHA256"])
+    image = _decoded_input(
+        tmp_path,
+        "obs:da3-real",
+        rgb8=b"\x20\x40\x60\x80\xa0\xc0",
+        artifact_key="e",
+    )
+    request = da3_runtime.Da3ExecutionRequest(
+        inputs=(image,),
+        source_root=source_root,
+        checkpoint_path=checkpoint_path,
+        hardware_runtime=HardwareRuntimeIdentity(sha256=hardware_sha256),
+    )
+
+    result = da3_runtime.execute_da3_base_preview(request)
+
+    assert result.environment.python_version == da3_runtime.DA3_REFERENCE_PYTHON_VERSION
+    assert result.environment.package_versions == da3_runtime.DA3_REFERENCE_PACKAGE_VERSIONS
+    assert result.environment.device == "cpu"
+    assert result.environment.precision == "float32"
+    assert result.model == da3_runtime.DA3_MODEL
+    assert result.checkpoint == da3_runtime.DA3_CHECKPOINT
+    assert result.hardware_runtime.sha256 == hardware_sha256
+    assert result.geometry.geometry_solution.scale_status is GeometryScaleStatus.UNRESOLVED
+    assert result.geometry.point_maps == ()
+    assert len(result.geometry.camera_solutions) == 1
+    assert len(result.geometry.depth_fields) == 1
+    assert result.geometry.camera_solutions[0].observation_id == ObservationId("obs:da3-real")
+    assert result.geometry.depth_fields[0].observation_id == ObservationId("obs:da3-real")
+    assert result.geometry.depth_fields[0].confidence is None
+    assert da3_runtime._verify_source_root(source_root) == source_root.resolve()
 
 
 def test_module_import_surface_has_no_learned_runtime_objects() -> None:
