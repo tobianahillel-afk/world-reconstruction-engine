@@ -161,6 +161,34 @@ entries:
     failure_signals: []
     metric_names: []
     resume_mode: unsupported
+  - adapter_id: da3.base_preview
+    capability:
+      name: geometry.feed_forward
+      input_kinds: [media.decoded_image_pyramid]
+      output_kinds: [geometry.camera_solution, geometry.depth_field, geometry.solution]
+    producer:
+      implementation: wre.reconstruction.da3_runtime
+      version: "1"
+      revision: 3d835ec1a5802d64a8b8b15f817a1ab54809bfe4
+    dependency_refs: [da3_base]
+    model:
+      name: depth_anything_3.da3_base
+      version: "1"
+      revision: 3d835ec1a5802d64a8b8b15f817a1ab54809bfe4
+    checkpoint:
+      identifier: depth-anything/DA3-BASE/model.safetensors
+      sha256: e01067dc1659613083d9145a9a2547ccdbe6ccbbf83c4fe7b3e8a4e2bdae78b5
+    artifact_key_hardware_policy: required
+    license:
+      direct: Apache-2.0
+      review: pending
+      transitive_notes: "Reviewed DA3 source and DA3-BASE checkpoint report Apache-2.0. The exact optional CPU float32 Python/Torch reference stack is recorded in registry/dependencies.yaml but remains under transitive redistribution review."
+      redistribution_notes: "WRE accepts only already-local exact source and checkpoint material, verifies identity before execution, and neither bundles nor implicitly downloads DA3 source, weights, or the optional learned runtime."
+    shipping_status: experimental
+    reproducibility_notes: "V2L13.3 fixes the DA3-BASE source revision and checkpoint digest, a CPU float32 deterministic reference config, verified canonical decoded-image inputs, exact external package identity, caller-supplied hardware-runtime identity, and deterministic normalization identity. DA3 confidence uses exp(x)+1 and is therefore not coerced into canonical probability confidence; V2L13.3 emits confidence=None. Metric scale, PointMap, default promotion and accelerated profiles remain out of scope."
+    failure_signals: [checkpoint_incompatibility, dependency_unavailable, source_identity_mismatch]
+    metric_names: []
+    resume_mode: unsupported
   - adapter_id: exifread.raw_exif
     capability:
       name: metadata.raw_exif
