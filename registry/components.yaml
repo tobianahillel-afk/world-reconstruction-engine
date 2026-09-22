@@ -233,7 +233,8 @@ components:
       - tests/test_colmap_canonical_geometry.py
       - tests/test_colmap_global_reconstruction.py
       - tests/test_colmap_geometry_outcomes.py
-    status: implementing
+      - tests/test_colmap_precision_route_regression.py
+    status: implemented
   feed_forward_geometry: {owner_lot: V2L13, implementation: [], tests: [], status: planned}
   precision_global_refinement: {owner_lot: V2L14, implementation: [], tests: [], status: planned}
   dense_depth_mvs: {owner_lot: V2L15, implementation: [], tests: [], status: planned}
