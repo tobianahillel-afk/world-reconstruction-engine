@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
 
 from wre.domain.geometry_solutions import GeometryScaleStatus
 from wre.domain.observations import (
@@ -56,6 +57,15 @@ from wre.regression import load_fixture
 
 _FIXTURE_PATH = (
     Path(__file__).parent / "fixtures" / "synthetic" / "colmap-l3-end-to-end" / "fixture.json"
+)
+_REGISTRY_PATH = Path(__file__).resolve().parents[1] / "registry" / "adapter-models.yaml"
+_V2L12_ADAPTER_IDS = (
+    "colmap.geometric_verification",
+    "colmap.global_precision_geometry",
+    "colmap.incremental_precision_geometry",
+    "colmap.local_features",
+    "colmap.pair_matching",
+    "colmap.precision_geometry",
 )
 
 
@@ -244,6 +254,23 @@ def test_v2l12_5_reuses_versioned_image_based_fixture_without_new_benchmark_trut
     assert fixture.deterministic is True
     assert fixture.seed == scene["seed"] == 7301
     assert len(_number_list(scene, "camera_centers_x")) == 12
+
+
+def test_v2l12_shipping_decision_remains_explicitly_experimental() -> None:
+    document = yaml.safe_load(_REGISTRY_PATH.read_text(encoding="utf-8"))
+    entries = {
+        entry["adapter_id"]: entry
+        for entry in document["entries"]
+        if entry["adapter_id"] in _V2L12_ADAPTER_IDS
+    }
+
+    assert tuple(sorted(entries)) == _V2L12_ADAPTER_IDS
+    assert all(entry["shipping_status"] == "experimental" for entry in entries.values())
+    assert all(entry["dependency_refs"] == ["colmap"] for entry in entries.values())
+    assert all(entry["model"] is None for entry in entries.values())
+    assert all(entry["checkpoint"] is None for entry in entries.values())
+    assert all(entry["artifact_key_hardware_policy"] == "required" for entry in entries.values())
+    assert all(entry["license"]["review"] == "approved" for entry in entries.values())
 
 
 @pytest.mark.skipif(
