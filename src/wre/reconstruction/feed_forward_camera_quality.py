@@ -6,7 +6,7 @@ import math
 from dataclasses import dataclass
 
 from wre.domain.artifacts import ArtifactRef
-from wre.domain.camera_solutions import CameraSolution, RotationMatrix3x3
+from wre.domain.camera_solutions import CameraSolution
 from wre.domain.metrics import (
     MetricAggregation,
     MetricDescriptor,
@@ -118,10 +118,12 @@ class FeedForwardCameraQualityRequest:
     def __post_init__(self) -> None:
         if not isinstance(self.candidate, FeedForwardGeometryResult):
             raise TypeError("camera_quality.candidate must be FeedForwardGeometryResult")
-        if not isinstance(self.reference_cameras, tuple) or not self.reference_cameras:
-            raise ValueError(
-                "camera_quality.reference_cameras must be a non-empty immutable tuple"
+        if not isinstance(self.reference_cameras, tuple):
+            raise TypeError(
+                "camera_quality.reference_cameras must be an immutable tuple"
             )
+        if not self.reference_cameras:
+            raise ValueError("camera_quality.reference_cameras must be non-empty")
         if any(not isinstance(camera, CameraSolution) for camera in self.reference_cameras):
             raise TypeError(
                 "camera_quality.reference_cameras members must be CameraSolution"
