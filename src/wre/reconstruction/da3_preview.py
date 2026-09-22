@@ -219,7 +219,11 @@ class Da3BaseObservationPrediction:
         _validate_confidence(self.confidence, validity, pixel_count)
 
 
-def _derive_id(identity: Sha256Digest, role: str, observation_id: ObservationId | None = None) -> str:
+def _derive_id(
+    identity: Sha256Digest,
+    role: str,
+    observation_id: ObservationId | None = None,
+) -> str:
     material = f"da3-base\0{identity.value}\0{role}"
     if observation_id is not None:
         material = f"{material}\0{observation_id.value}"
