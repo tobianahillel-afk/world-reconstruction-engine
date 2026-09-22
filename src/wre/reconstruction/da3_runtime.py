@@ -13,6 +13,7 @@ from pathlib import Path
 from typing import Any, Protocol
 
 from wre.domain.artifact_materialization import ArtifactMaterializationVerificationStatus
+from wre.domain.cameras import ImageDimensions
 from wre.domain.decoded_images import (
     DECODED_IMAGE_PYRAMID_KIND,
     DecodedImageOrientationPolicy,
@@ -669,10 +670,10 @@ class LocalDa3ReferenceRuntime:
                 predictions.append(
                     Da3BaseObservationPrediction(
                         observation_id=image.observation_id,
-                        dimensions=__import__(
-                            "wre.domain.cameras",
-                            fromlist=["ImageDimensions"],
-                        ).ImageDimensions(width_px=width_px, height_px=height_px),
+                        dimensions=ImageDimensions(
+                            width_px=width_px,
+                            height_px=height_px,
+                        ),
                         world_to_camera_rotation=rotation,
                         world_to_camera_translation=translation,
                         intrinsics=intrinsics,
