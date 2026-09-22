@@ -395,7 +395,7 @@ def test_global_config_is_canonical_deterministic_and_cpu_only() -> None:
     ],
 )
 def test_global_config_rejects_nondeterministic_or_accelerated_reference_modes(
-    kwargs: dict[str, object],
+    kwargs: dict[str, Any],
     message: str,
 ) -> None:
     with pytest.raises(ValueError, match=message):
