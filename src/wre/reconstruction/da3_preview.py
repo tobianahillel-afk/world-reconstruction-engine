@@ -86,9 +86,7 @@ def _validate_rotation(value: object) -> RotationMatrix3x3:
     rows: list[tuple[float, float, float]] = []
     for row in value:
         if not isinstance(row, tuple) or len(row) != 3:
-            raise TypeError(
-                "da3_preview.world_to_camera_rotation rows must be immutable 3-tuples"
-            )
+            raise TypeError("da3_preview.world_to_camera_rotation rows must be immutable 3-tuples")
         checked = tuple(
             _require_finite_float(member, "da3_preview.world_to_camera_rotation member")
             for member in row
