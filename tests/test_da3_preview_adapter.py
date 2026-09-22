@@ -22,6 +22,9 @@ from wre.reconstruction.da3_preview import (
 from wre.reconstruction.feed_forward_geometry import FeedForwardGeometryResult
 
 
+_UNSET = object()
+
+
 def _rotation() -> tuple[
     tuple[float, float, float],
     tuple[float, float, float],
@@ -55,7 +58,7 @@ def _prediction(
     intrinsics: Any = None,
     depth_values: Any = None,
     validity: Any = None,
-    confidence: Any = None,
+    confidence: Any = _UNSET,
 ) -> Da3BaseObservationPrediction:
     actual_dimensions = dimensions or ImageDimensions(width_px=2, height_px=2)
     return Da3BaseObservationPrediction(
@@ -70,7 +73,7 @@ def _prediction(
             (1.0, 2.0, 0.0, 4.0) if depth_values is None else depth_values
         ),
         validity=(True, True, False, True) if validity is None else validity,
-        confidence=(0.9, 0.8, 0.0, 0.7) if confidence is None else confidence,
+        confidence=(0.9, 0.8, 0.0, 0.7) if confidence is _UNSET else confidence,
     )
 
 
