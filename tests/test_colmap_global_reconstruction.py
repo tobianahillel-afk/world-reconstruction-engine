@@ -115,10 +115,7 @@ class _FakeDatabase:
             ).fetchall()
         finally:
             connection.close()
-        return [
-            SimpleNamespace(image_id=int(image_id), name=str(name))
-            for image_id, name in rows
-        ]
+        return [SimpleNamespace(image_id=int(image_id), name=str(name)) for image_id, name in rows]
 
     def close(self) -> None:
         return None
@@ -225,9 +222,7 @@ class _FakePycolmap:
         if self.mutate_during_mapping:
             connection = sqlite3.connect(database)
             try:
-                connection.execute(
-                    "CREATE TABLE wre_private_mapping(marker INTEGER)"
-                )
+                connection.execute("CREATE TABLE wre_private_mapping(marker INTEGER)")
                 connection.commit()
             finally:
                 connection.close()
@@ -258,9 +253,7 @@ class _FakePycolmap:
 def _write_database(path: Path, image_names: tuple[str, ...]) -> None:
     connection = sqlite3.connect(path)
     try:
-        connection.execute(
-            "CREATE TABLE images(image_id INTEGER PRIMARY KEY, name TEXT NOT NULL)"
-        )
+        connection.execute("CREATE TABLE images(image_id INTEGER PRIMARY KEY, name TEXT NOT NULL)")
         connection.executemany(
             "INSERT INTO images(image_id, name) VALUES(?, ?)",
             [(index + 1, name) for index, name in enumerate(image_names)],
@@ -334,9 +327,7 @@ def _request(
             version="4.2.0",
             revision=_FakePycolmap.COLMAP_build,
         ),
-        input_observation_ids=tuple(
-            observation.observation_id for observation in observations
-        ),
+        input_observation_ids=tuple(observation.observation_id for observation in observations),
         started_at=datetime(2026, 9, 22, tzinfo=UTC),
         configuration_sha256=config.sha256,
     )
@@ -422,9 +413,7 @@ def test_global_route_uses_private_calibrated_database_and_explicit_cpu_controls
 
     assert database_path.read_bytes() == parent_before
     assert result.model_count == 1
-    assert result.source_verification_database_sha256 == (
-        request.verification.database_sha256
-    )
+    assert result.source_verification_database_sha256 == (request.verification.database_sha256)
     assert result.provenance.source_observation_ids == request.run.input_observation_ids
     assert module.random_seed == 0
     assert len(module.calibration_calls) == 1
@@ -451,9 +440,7 @@ def test_global_route_uses_private_calibrated_database_and_explicit_cpu_controls
     assert options.mapper.num_threads == 1
     assert options.mapper.random_seed == 0
     assert options.mapper.global_positioning.use_gpu is False
-    assert options.mapper.bundle_adjustment.backend == (
-        _FakeBundleAdjustmentBackend.CERES
-    )
+    assert options.mapper.bundle_adjustment.backend == (_FakeBundleAdjustmentBackend.CERES)
     assert options.mapper.bundle_adjustment.ceres.use_gpu is False
     assert mapping["staged"] == {
         "000000-a.pgm": b"P5\n1 1\n255\n\x40",
@@ -626,12 +613,8 @@ def test_real_pycolmap_global_mapping_is_cpu_bounded_audited_and_canonical(
 
     connection = sqlite3.connect(database_path)
     try:
-        rows = connection.execute(
-            "SELECT image_id FROM images ORDER BY image_id"
-        ).fetchall()
-        image_names = tuple(
-            f"{index:06d}-synthetic.pgm" for index in range(len(rows))
-        )
+        rows = connection.execute("SELECT image_id FROM images ORDER BY image_id").fetchall()
+        image_names = tuple(f"{index:06d}-synthetic.pgm" for index in range(len(rows)))
         for name, (image_id,) in zip(image_names, rows, strict=True):
             connection.execute(
                 "UPDATE images SET name = ? WHERE image_id = ?",
