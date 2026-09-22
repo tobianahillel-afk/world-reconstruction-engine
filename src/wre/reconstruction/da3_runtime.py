@@ -48,9 +48,10 @@ DA3_MODEL = ModelIdentity(
     revision=DA3_SOURCE_REVISION,
 )
 DA3_CHECKPOINT = CheckpointIdentity(
-    identifier="depth-anything/DA3-BASE/model.safetensors",
+    identifier="depth-anything/DA3-BASE",
     sha256=Sha256Digest("e01067dc1659613083d9145a9a2547ccdbe6ccbbf83c4fe7b3e8a4e2bdae78b5"),
 )
+DA3_CHECKPOINT_BYTE_LENGTH = 541_518_028
 
 # Reference-v1 is intentionally a conservative CPU/float32 path. Accelerated GPU
 # profiles are a later V2L13.6 responsibility and must receive distinct identities.
@@ -328,8 +329,8 @@ def _verify_checkpoint(path: Path) -> Path:
     if not resolved.is_file() or resolved.is_symlink():
         raise Da3RuntimeError("DA3 checkpoint must be a regular non-symlink file")
     content = hash_file_content(resolved)
-    if content.byte_length <= 0:
-        raise Da3RuntimeError("DA3 checkpoint must not be empty")
+    if content.byte_length != DA3_CHECKPOINT_BYTE_LENGTH:
+        raise Da3RuntimeError("DA3 checkpoint byte length does not match DA3-BASE")
     if content.sha256 != DA3_CHECKPOINT.sha256:
         raise Da3RuntimeError("DA3 checkpoint SHA-256 does not match DA3-BASE")
     return resolved
