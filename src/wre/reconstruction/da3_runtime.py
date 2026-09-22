@@ -41,6 +41,7 @@ DA3_SOURCE_REVISION = "3d835ec1a5802d64a8b8b15f817a1ab54809bfe4"
 DA3_SOURCE_PACKAGE_TREE_SHA = "be87985cb286f0747d4fd9bfaec47f1b765457ea"
 DA3_RUNTIME_IMPLEMENTATION = "wre.reconstruction.da3_runtime"
 DA3_RUNTIME_VERSION = "1"
+DA3_REFERENCE_PYTHON_VERSION = "3.12.12"
 DA3_MODEL = ModelIdentity(
     name="depth_anything_3.da3_base",
     version="1",
@@ -62,8 +63,8 @@ DA3_REFERENCE_PACKAGE_VERSIONS = (
     ("opencv-python", "4.10.0.84"),
     ("Pillow", "10.4.0"),
     ("safetensors", "0.4.5"),
-    ("torch", "2.4.1"),
-    ("torchvision", "0.19.1"),
+    ("torch", "2.4.1+cpu"),
+    ("torchvision", "0.19.1+cpu"),
     ("tqdm", "4.66.5"),
 )
 
@@ -147,8 +148,10 @@ class Da3EnvironmentIdentity:
     def __post_init__(self) -> None:
         if self.source_revision != DA3_SOURCE_REVISION:
             raise ValueError("DA3 environment source revision is unsupported")
-        if not isinstance(self.python_version, str) or not self.python_version.strip():
-            raise ValueError("DA3 environment python_version must be non-blank")
+        if self.python_version != DA3_REFERENCE_PYTHON_VERSION:
+            raise ValueError(
+                "DA3 environment python_version must match the exact reference Python"
+            )
         if not isinstance(self.package_versions, tuple):
             raise TypeError("DA3 environment package_versions must be an immutable tuple")
         if self.package_versions != DA3_REFERENCE_PACKAGE_VERSIONS:
@@ -444,9 +447,14 @@ def inspect_da3_reference_environment() -> Da3EnvironmentIdentity:
                 f"DA3 reference package {distribution!r} must be exactly {expected!r}"
             )
         versions.append((distribution, actual))
+    python_version = sys.version.split()[0]
+    if python_version != DA3_REFERENCE_PYTHON_VERSION:
+        raise Da3RuntimeError(
+            f"DA3 reference Python must be exactly {DA3_REFERENCE_PYTHON_VERSION!r}"
+        )
     return Da3EnvironmentIdentity(
         source_revision=DA3_SOURCE_REVISION,
-        python_version=sys.version.split()[0],
+        python_version=python_version,
         package_versions=tuple(versions),
         device="cpu",
         precision="float32",
