@@ -4,18 +4,17 @@ project_name: World Reconstruction Engine
 roadmap_version: '2.0'
 phase: implementation
 milestone: V2M2
-lot: V2L11
-active_work_item: V2L11.6
+lot: V2L12
+active_work_item: V2L12.1
 status: ready
-last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5, V2L3.6, V2L4.1, V2L4.2, V2L4.3, V2L4.4, V2L4.5, V2L4.6, V2L5.1, V2L5.2, V2L5.3, V2L5.4, V2L5.5, V2L5.6, V2L6.1, V2L6.2, V2L6.3, V2L6.4, V2L6.5, V2L6.6, V2L7.1, V2L7.2, V2L7.3, V2L7.4, V2L7.5, V2L7.6, V2L8.1, V2L8.2, V2L8.3, V2L8.4, V2L8.5, V2L9.1, V2L9.2, V2L9.3, V2L9.4, V2L9.5, V2L10.1, V2L10.2, V2L10.3, V2L10.4, V2L10.5, V2L10.6, V2L11.1, V2L11.2, V2L11.3, V2L11.4, V2L11.5]
-last_merged_pr: 105
+last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5, V2L3.6, V2L4.1, V2L4.2, V2L4.3, V2L4.4, V2L4.5, V2L4.6, V2L5.1, V2L5.2, V2L5.3, V2L5.4, V2L5.5, V2L5.6, V2L6.1, V2L6.2, V2L6.3, V2L6.4, V2L6.5, V2L6.6, V2L7.1, V2L7.2, V2L7.3, V2L7.4, V2L7.5, V2L7.6, V2L8.1, V2L8.2, V2L8.3, V2L8.4, V2L8.5, V2L9.1, V2L9.2, V2L9.3, V2L9.4, V2L9.5, V2L10.1, V2L10.2, V2L10.3, V2L10.4, V2L10.5, V2L10.6, V2L11.1, V2L11.2, V2L11.3, V2L11.4, V2L11.5, V2L11.6]
+last_merged_pr: 106
 current_goal: >-
-  Close V2L11 with one deterministic coordinate-convention regression fixture proving the canonical camera point-map geometry
-  contracts and retained legacy bridge preserve camera-from-local-frame semantics explicit local frames and scale truth without
-  inventing world placement or a generic coordinate-conversion subsystem.
+  Begin the classical precision geometry baseline by declaring the current pinned COLMAP 4.2.0 adapter capability through existing
+  V2 adapter and artifact contracts with explicit image-observation inputs and canonical camera point-map and geometry output kinds.
 next_action: >-
-  Complete only V2L11.6 from its executable contract in registry/work-items/v2m2.yaml: add the focused coordinate-convention
-  regression fixture and V2L11 lot review evidence; do not begin V2L12.1 until the fixture review lifecycle and exact-head gates pass.
+  Complete only V2L12.1 from its executable contract in registry/work-items/v2m2.yaml: add the pure current-COLMAP adapter descriptor
+  and V2 artifact-kind normalization plus focused registry regressions; do not execute feature matching verification mapping or begin V2L12.2.
 blockers: []
 architecture:
   product_blueprint: docs/01_PRODUCT.md
