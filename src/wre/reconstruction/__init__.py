@@ -143,6 +143,14 @@ from wre.reconstruction.colmap_verification import (
     ColmapPairGeometryEvidence,
     verify_colmap_geometry,
 )
+from wre.reconstruction.feed_forward_geometry import (
+    FEED_FORWARD_GEOMETRY_CAPABILITY,
+    FEED_FORWARD_GEOMETRY_CAPABILITY_NAME,
+    FEED_FORWARD_GEOMETRY_INPUT_KIND,
+    FEED_FORWARD_GEOMETRY_OUTPUT_KINDS,
+    FeedForwardGeometryResult,
+    normalize_feed_forward_geometry_inputs,
+)
 from wre.reconstruction.legacy_geometry_conversion import (
     LegacySparseGeometryConversionResult,
     convert_sparse_reconstruction_estimate,
@@ -208,6 +216,10 @@ __all__ = [
     "COLMAP_PRECISION_PYCOLMAP_VERSION",
     "COLMAP_PRECISION_REPRODUCIBILITY_NOTES",
     "COLMAP_PRECISION_SHIPPING_STATUS",
+    "FEED_FORWARD_GEOMETRY_CAPABILITY",
+    "FEED_FORWARD_GEOMETRY_CAPABILITY_NAME",
+    "FEED_FORWARD_GEOMETRY_INPUT_KIND",
+    "FEED_FORWARD_GEOMETRY_OUTPUT_KINDS",
     "GEOMETRIC_VERIFICATION_KIND",
     "IMAGE_OBSERVATION_KIND",
     "LOCAL_FEATURES_KIND",
@@ -253,6 +265,7 @@ __all__ = [
     "ColmapReconstructionImportResult",
     "ColmapReconstructionInput",
     "ColmapSparseModelArtifact",
+    "FeedForwardGeometryResult",
     "ImportedColmapSparseModel",
     "LegacySparseGeometryConversionResult",
     "canonicalize_colmap_sparse_model",
@@ -263,6 +276,7 @@ __all__ = [
     "inspect_colmap_environment",
     "match_colmap_pairs",
     "normalize_colmap_precision_inputs",
+    "normalize_feed_forward_geometry_inputs",
     "plan_colmap_geometric_verification",
     "plan_colmap_local_features",
     "plan_colmap_pair_matches",
