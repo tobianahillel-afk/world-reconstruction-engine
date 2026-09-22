@@ -92,6 +92,52 @@ entries:
     failure_signals: []
     metric_names: []
     resume_mode: unsupported
+  - adapter_id: colmap.incremental_precision_geometry
+    capability:
+      name: geometry.precision_sfm.incremental
+      input_kinds: [image.observation, evidence.geometric_verification]
+      output_kinds: [geometry.camera_solution, geometry.point_map, geometry.solution]
+    producer:
+      implementation: pycolmap.incremental_mapping
+      version: 4.2.0
+      revision: null
+    dependency_refs: [colmap]
+    model: null
+    checkpoint: null
+    artifact_key_hardware_policy: required
+    license:
+      direct: BSD-3-Clause
+      review: approved
+      transitive_notes: "The approved dependency record notes that a concrete COLMAP build can include separately licensed dependencies; this executable V2 adapter does not broaden those terms."
+      redistribution_notes: "WRE retains PyCOLMAP/COLMAP as an exact external solver environment; V2L12.3 adds direct canonical geometry normalization and does not approve alternate builds or bundled redistribution."
+    shipping_status: experimental
+    reproducibility_notes: "V2L12.3 executes the retained deterministic PyCOLMAP 4.2.0 incremental mapper and normalizes each audited native sparse model directly into canonical CameraSolution, PointMap and GeometrySolution values in one explicit unresolved-scale local frame. The retained legacy sparse estimate is regression evidence only, not the V2 output path."
+    failure_signals: []
+    metric_names: []
+    resume_mode: unsupported
+  - adapter_id: colmap.global_precision_geometry
+    capability:
+      name: geometry.precision_sfm.global
+      input_kinds: [image.observation, evidence.geometric_verification]
+      output_kinds: [geometry.camera_solution, geometry.point_map, geometry.solution]
+    producer:
+      implementation: pycolmap.global_mapping
+      version: 4.2.0
+      revision: null
+    dependency_refs: [colmap]
+    model: null
+    checkpoint: null
+    artifact_key_hardware_policy: required
+    license:
+      direct: BSD-3-Clause
+      review: approved
+      transitive_notes: "The approved dependency record notes that a concrete COLMAP build can include separately licensed dependencies; this executable V2 adapter does not broaden those terms."
+      redistribution_notes: "WRE retains PyCOLMAP/COLMAP as an exact external solver environment; V2L12.3 adds the current global mapper behind a private copied verification database and does not approve alternate builds or bundled redistribution."
+    shipping_status: experimental
+    reproducibility_notes: "V2L12.3 runs PyCOLMAP 4.2.0 global_mapping only on a fresh verified private copy of the geometric-verification database, with an explicit non-negative seed, one mapper thread, global-positioning GPU disabled, Ceres bundle adjustment selected and Ceres GPU disabled. View-graph calibration is also restricted to the private copy; PyCOLMAP 4.2.0 exposes its random seed but not its internal Ceres thread setting."
+    failure_signals: []
+    metric_names: []
+    resume_mode: unsupported
   - adapter_id: colmap.sparse_sfm
     capability:
       name: geometry.sparse_sfm
