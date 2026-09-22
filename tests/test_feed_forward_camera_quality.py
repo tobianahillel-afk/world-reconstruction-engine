@@ -55,8 +55,7 @@ def _matmul(
 ) -> tuple[tuple[float, float, float], ...]:
     return tuple(
         tuple(
-            sum(left[row][axis] * right[axis][column] for axis in range(3))
-            for column in range(3)
+            sum(left[row][axis] * right[axis][column] for axis in range(3)) for column in range(3)
         )
         for row in range(3)
     )
@@ -168,10 +167,7 @@ def _request(
 def _metrics(
     result: MetricVector,
 ) -> dict[str, float]:
-    return {
-        item.descriptor.name.value: item.value
-        for item in result.observations
-    }
+    return {item.descriptor.name.value: item.value for item in result.observations}
 
 
 def _pose_from_center(
@@ -338,15 +334,11 @@ def test_observation_coverage_uses_reference_denominator_only() -> None:
     )
 
     values = _metrics(
-        camera_quality.evaluate_feed_forward_camera_quality(
-            _request(candidate, references)
-        )
+        camera_quality.evaluate_feed_forward_camera_quality(_request(candidate, references))
     )
 
     assert values["geometry.camera.observation_coverage_ratio"] == pytest.approx(2.0 / 3.0)
-    assert "obs:extra" not in {
-        camera.observation_id.value for camera in references
-    }
+    assert "obs:extra" not in {camera.observation_id.value for camera in references}
 
 
 def test_asymmetric_pairwise_rotation_uses_deterministic_median() -> None:
@@ -377,9 +369,7 @@ def test_asymmetric_pairwise_rotation_uses_deterministic_median() -> None:
     )
 
     values = _metrics(
-        camera_quality.evaluate_feed_forward_camera_quality(
-            _request(candidate, references)
-        )
+        camera_quality.evaluate_feed_forward_camera_quality(_request(candidate, references))
     )
 
     assert values["geometry.camera.relative_rotation_error_deg_median"] == pytest.approx(
@@ -449,14 +439,10 @@ def test_translation_direction_error_and_coincident_pair_coverage() -> None:
     )
 
     values = _metrics(
-        camera_quality.evaluate_feed_forward_camera_quality(
-            _request(candidate, references)
-        )
+        camera_quality.evaluate_feed_forward_camera_quality(_request(candidate, references))
     )
 
-    assert values["geometry.camera.translation_pair_coverage_ratio"] == pytest.approx(
-        2.0 / 3.0
-    )
+    assert values["geometry.camera.translation_pair_coverage_ratio"] == pytest.approx(2.0 / 3.0)
     assert values[
         "geometry.camera.relative_translation_direction_error_deg_median"
     ] == pytest.approx(90.0)
@@ -484,9 +470,9 @@ def test_intrinsic_errors_have_explicit_axis_and_diagonal_semantics() -> None:
     )
 
     assert values["geometry.camera.focal_relative_error_median"] == pytest.approx(0.1)
-    assert values[
-        "geometry.camera.principal_point_error_normalized_median"
-    ] == pytest.approx(10.0 / math.hypot(100.0, 100.0))
+    assert values["geometry.camera.principal_point_error_normalized_median"] == pytest.approx(
+        10.0 / math.hypot(100.0, 100.0)
+    )
 
 
 @pytest.mark.parametrize(
@@ -526,9 +512,7 @@ def test_zero_shared_emits_only_coverage_and_one_shared_has_no_pair_metrics() ->
 
     zero = camera_quality.evaluate_feed_forward_camera_quality(
         _request(
-            _geometry(
-                _pose_from_center("obs:x", (0.0, 0.0, 0.0), frame="candidate")
-            ),
+            _geometry(_pose_from_center("obs:x", (0.0, 0.0, 0.0), frame="candidate")),
             references,
         )
     )
@@ -536,9 +520,7 @@ def test_zero_shared_emits_only_coverage_and_one_shared_has_no_pair_metrics() ->
 
     one = camera_quality.evaluate_feed_forward_camera_quality(
         _request(
-            _geometry(
-                _pose_from_center("obs:a", (0.0, 0.0, 0.0), frame="candidate")
-            ),
+            _geometry(_pose_from_center("obs:a", (0.0, 0.0, 0.0), frame="candidate")),
             references,
         )
     )
@@ -576,19 +558,12 @@ def test_metric_descriptors_and_provenance_are_exact_and_canonical() -> None:
         "geometry.camera.relative_translation_direction_error_deg_median",
         "geometry.camera.translation_pair_coverage_ratio",
     )
+    assert all(item.descriptor.dimension.value == "geometry.camera" for item in result.observations)
     assert all(
-        item.descriptor.dimension.value == "geometry.camera"
+        item.provenance.evaluator == camera_quality.FEED_FORWARD_CAMERA_QUALITY_EVALUATOR
         for item in result.observations
     )
-    assert all(
-        item.provenance.evaluator
-        == camera_quality.FEED_FORWARD_CAMERA_QUALITY_EVALUATOR
-        for item in result.observations
-    )
-    assert all(
-        item.provenance.input_artifacts == artifacts
-        for item in result.observations
-    )
+    assert all(item.provenance.input_artifacts == artifacts for item in result.observations)
 
     descriptors = {item.descriptor.name.value: item.descriptor for item in result.observations}
     assert descriptors["geometry.camera.observation_coverage_ratio"].direction is (
@@ -610,9 +585,7 @@ def test_evaluation_does_not_mutate_candidate_reference_or_existing_metrics() ->
     candidate_before = candidate
     reference_before = reference_camera
 
-    camera_quality.evaluate_feed_forward_camera_quality(
-        _request(candidate, (reference_camera,))
-    )
+    camera_quality.evaluate_feed_forward_camera_quality(_request(candidate, (reference_camera,)))
 
     assert candidate == candidate_before
     assert candidate.camera_solutions[0] is candidate_camera
@@ -625,9 +598,7 @@ def test_evaluator_returns_metrics_only_without_quality_decision_surface() -> No
     reference = _camera("obs:a", frame="reference")
     candidate = _geometry(_camera("obs:a", frame="candidate"))
 
-    result = camera_quality.evaluate_feed_forward_camera_quality(
-        _request(candidate, (reference,))
-    )
+    result = camera_quality.evaluate_feed_forward_camera_quality(_request(candidate, (reference,)))
 
     assert isinstance(result, MetricVector)
     for attribute in (
