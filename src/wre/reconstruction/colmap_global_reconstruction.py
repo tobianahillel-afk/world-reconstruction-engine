@@ -36,9 +36,7 @@ from wre.reconstruction.colmap_reconstruction import (
 from wre.reconstruction.colmap_verification import ColmapGeometricVerificationResult
 
 COLMAP_GLOBAL_CANONICAL_ADAPTER_ID = "colmap.global_precision_geometry"
-COLMAP_GLOBAL_CANONICAL_CAPABILITY_NAME = AdapterCapabilityName(
-    "geometry.precision_sfm.global"
-)
+COLMAP_GLOBAL_CANONICAL_CAPABILITY_NAME = AdapterCapabilityName("geometry.precision_sfm.global")
 COLMAP_GLOBAL_CANONICAL_CAPABILITY = AdapterCapabilityDescriptor(
     capability=COLMAP_GLOBAL_CANONICAL_CAPABILITY_NAME,
     input_kinds=frozenset({IMAGE_OBSERVATION_KIND, GEOMETRIC_VERIFICATION_KIND}),
@@ -109,9 +107,7 @@ class ColmapGlobalReconstructionConfig:
         if not self.multiple_models:
             raise ValueError("global reference must preserve disconnected mapper models")
         if not self.calibrate_view_graph:
-            raise ValueError(
-                "global reference requires explicit private view-graph calibration"
-            )
+            raise ValueError("global reference requires explicit private view-graph calibration")
         if self.global_positioning_use_gpu:
             raise ValueError("global reference requires CPU global positioning")
         if self.bundle_adjustment_backend != "CERES":
@@ -313,10 +309,8 @@ def reconstruct_colmap_globally(
                 "ReconstructionRun producer revision must match COLMAP_build when supplied"
             )
         if (
-            environment.pycolmap_version
-            != request.verification.environment.pycolmap_version
-            or environment.colmap_version
-            != request.verification.environment.colmap_version
+            environment.pycolmap_version != request.verification.environment.pycolmap_version
+            or environment.colmap_version != request.verification.environment.colmap_version
         ):
             raise ValueError(
                 "global mapper and verification artifact must use the same COLMAP format version"
