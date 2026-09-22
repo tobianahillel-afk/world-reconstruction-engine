@@ -534,7 +534,7 @@ work_items:
   - id: V2L12.2
     lot: V2L12
     title: Current COLMAP evidence stages use V2 artifact identities
-    status: ready
+    status: done
     objective: Put the retained deterministic COLMAP feature extraction raw pair matching and geometric verification donor stages behind explicit V2 evidence-artifact planning and publication contracts so every stage has solver-independent ArtifactKind input/output semantics canonical content-addressed ArtifactKey material exact producer/configuration/hardware identity and verifiable materialization metadata while preserving the existing PyCOLMAP 4.2.0 donor algorithms and deferring mapper geometry emission to V2L12.3.
     allowed_scope:
       - src/wre/reconstruction/colmap_evidence_artifacts.py
@@ -622,7 +622,104 @@ work_items:
       - regression proving retained donor execution request/result APIs and deterministic configuration digests remain unchanged
       - module-surface regression proving no PyCOLMAP sqlite persistence router quality mapper or solver execution dependency is introduced in the pure evidence-artifact layer
       - full fast CI CodeQL native COLMAP integration and any registry-triggered compatibility lanes
-  - {id: V2L12.3, lot: V2L12, title: COLMAP incremental and global mappers emit canonical geometry, status: planned, depends_on: [V2L12.2]}
+  - id: V2L12.3
+    lot: V2L12
+    title: COLMAP incremental and global mappers emit canonical geometry
+    status: ready
+    objective: Implement explicit pinned PyCOLMAP 4.2.0 incremental and global precision-mapper boundaries whose audited native sparse models are normalized directly into canonical V2 CameraSolution PointMap and GeometrySolution values one source model at a time in deterministic explicit LocalFrameId domains with unresolved local scale while preserving the existing incremental donor behavior keeping global-mapper source evidence immutable and avoiding any dependency on SparseReconstructionEstimate as the V2 production target.
+    allowed_scope:
+      - src/wre/reconstruction/colmap_canonical_geometry.py
+      - src/wre/reconstruction/colmap_global_reconstruction.py
+      - focused exports in src/wre/reconstruction/__init__.py
+      - focused reuse hooks in src/wre/reconstruction/colmap_reconstruction.py and src/wre/reconstruction/colmap_import.py only when needed to share audited native-model identity or file-verification logic without changing retained donor semantics
+      - tests/test_colmap_canonical_geometry.py
+      - tests/test_colmap_global_reconstruction.py
+      - focused registry/adapter-models.yaml additions for distinct current incremental and global executable precision-geometry adapter entries while preserving colmap.precision_geometry and colmap.sparse_sfm
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L12.4 can be activated without implementing it
+    out_of_scope:
+      - deleting rewriting or changing the retained ColmapIncrementalReconstructionRequest ColmapIncrementalReconstructionResult ColmapReconstructionImportRequest ColmapReconstructionImportResult or legacy sparse-reconstruction contracts except bounded sharing refactors proven semantically identical
+      - using SparseReconstructionEstimate convert_sparse_reconstruction_estimate or legacy CameraCalibrationEstimate CameraPoseEstimate Point3DEstimate values as the V2 production output path
+      - changing canonical CameraSolution PointMap GeometrySolution LocalFrameId MetricVector ArtifactKind ArtifactKey or provenance contracts
+      - feature extraction pair matching or geometric verification semantics already closed by V2L12.2
+      - selecting merging ranking aligning or reconciling multiple disconnected mapper models or defining the zero-model route outcome owned by V2L12.4
+      - end-to-end route comparison shipping promotion or V2L12 lot review owned by V2L12.5
+      - hierarchical mapping large-collection routing learned geometry hybrid consensus MVS dense depth fusion SurfaceModel mesh collision navigation appearance dynamic historical or runtime work
+      - inferring physical CameraId calibration ownership rig identity rolling-shutter semantics metric scale scale factors world Earth ECEF ENU geographic GPS GCP anchoring fragment placement or cross-local-frame compatibility
+      - silently enabling GPU Caspar or another accelerated bundle-adjustment backend under the reference incremental or global adapter identity
+      - automatic cache lookup persistence mutation scheduling fallback retry quality-gate execution or generalized mapper orchestration
+      - starting V2L12.4 implementation in this work item
+    depends_on: [V2L12.2]
+    read_before:
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/19_COLMAP_RECONSTRUCTION_IMPORT.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md
+      - docs/reviews/V2L11-canonical-geometry-contracts-review.md
+      - registry/adapter-models.yaml
+      - registry/dependencies.yaml
+      - src/wre/domain/camera_solutions.py
+      - src/wre/domain/point_maps.py
+      - src/wre/domain/geometry_solutions.py
+      - src/wre/domain/fragments.py
+      - src/wre/domain/metrics.py
+      - src/wre/domain/observations.py
+      - src/wre/reconstruction/colmap_adapter.py
+      - src/wre/reconstruction/colmap_evidence_artifacts.py
+      - src/wre/reconstruction/colmap_environment.py
+      - src/wre/reconstruction/colmap_features.py
+      - src/wre/reconstruction/colmap_verification.py
+      - src/wre/reconstruction/colmap_reconstruction.py
+      - src/wre/reconstruction/colmap_import.py
+      - src/wre/reconstruction/legacy_geometry_conversion.py
+      - tests/test_colmap_incremental_reconstruction.py
+      - tests/test_colmap_reconstruction_import.py
+      - tests/test_colmap_track_normalization.py
+      - tests/test_geometry_coordinate_conventions.py
+    reuse:
+      - the exact approved PyCOLMAP 4.2.0 environment and existing deterministic incremental-mapping donor as the retained classical reference rather than replacing its solver behavior
+      - PyCOLMAP 4.2.0 global_mapping and GlobalPipelineOptions as a distinct current global SfM specialist with a separate adapter identity and explicit deterministic CPU reference profile
+      - ColmapSparseModelArtifact and its audited canonical native-file manifest as solver-private evidence that may be read only after exact membership hash and byte-length verification
+      - the existing feature-stage image-name to ObservationId mapping as the source of registered-view observation identity without inferring physical CameraId
+      - V2L11 CameraSolution PointMap GeometrySolution GeometryScaleStatus and camera-from-local-frame coordinate convention as the only canonical geometry target
+      - the retained legacy COLMAP importer and V2L11 legacy bridge only as regression evidence for equivalent source models not as an intermediate production representation
+      - empty MetricVector values where no canonical metric is explicitly owned rather than inventing confidence or repackaging donor-only track and reprojection metadata
+      - explicit hardware-sensitive adapter identity so any future accelerated BA profile cannot alias the deterministic CPU reference key or capability
+    acceptance:
+      - Add a direct native-COLMAP-to-canonical-V2 normalization boundary that never constructs SparseReconstructionEstimate CameraCalibrationEstimate CameraPoseEstimate Point3DEstimate or another legacy geometry value.
+      - Normalize exactly one audited ColmapSparseModelArtifact at a time and return one immutable adapter-local aggregate containing its source model index and identity plus canonical CameraSolution values one canonical PointMap and one canonical GeometrySolution.
+      - Derive one stable LocalFrameId from the audited source-model content identity and retain that exact object across every CameraSolution PointMap and GeometrySolution emitted for the model.
+      - Every registered COLMAP image maps to exactly one known ObservationId and emits exactly one CameraSolution using image.cam_from_world as camera-from-local-frame without inversion transpose translation sign change rescaling or world Earth renaming.
+      - CameraSolution image dimensions and intrinsic parameter sequence come from the registered COLMAP camera values as finite exact floats and the projection-model token is lowercased only before canonical token validation with no vendor alias table or physical CameraId inference.
+      - PointMap source observations are the canonical registered-model observation membership and positions are the native 3D point coordinates in deterministic source point-ID order with no dedup fusion rescaling topology inference or synthetic confidence.
+      - GeometrySolution uses GeometryScaleStatus.UNRESOLVED references the exact emitted CameraSolution identifiers and PointMap identifier contains no depth fields and carries no metric world geographic or fragment claim.
+      - Native model directories are read only after exact audited relative-file membership SHA-256 and byte-length verification; symlinks changed bytes missing files extra files malformed camera values malformed poses unknown image names and unsupported canonical projection syntax fail closed.
+      - Preserve the established non-identity camera-from-local-frame regression and add a direct-native canonicalization regression that agrees with the retained legacy donor plus V2L11 bridge on camera rotations translations local points observation membership and unresolved scale without requiring production use of that bridge.
+      - Add a deterministic current incremental V2 adapter entry distinct from colmap.precision_geometry and colmap.sparse_sfm whose semantic inputs are image.observation plus evidence.geometric_verification and whose outputs are geometry.camera_solution geometry.point_map and geometry.solution.
+      - Add a deterministic current global V2 adapter entry using the exact pinned PyCOLMAP 4.2.0 global_mapping capability with the same canonical output kinds and a distinct adapter and capability identity from the incremental route.
+      - The global reference route must never mutate the caller verification database. Any view-graph calibration or global-mapper database mutation occurs only on a fresh verified workspace copy whose source SHA-256 and byte length match the supplied verification result before copying.
+      - The global reference configuration uses explicit deterministic random-seed and thread settings and disables exposed GPU acceleration for positioning and bundle adjustment. Any accelerated or Caspar profile must use a different explicit configuration adapter or hardware identity and is not silently selected.
+      - Global and incremental native output models use the same audited ColmapSparseModelArtifact file-manifest boundary before canonical geometry normalization so mapper choice cannot alter core geometry semantics.
+      - Multiple returned models may each be normalized independently but this item does not choose merge rank align discard or reinterpret components and does not define the no-model outcome. Those route-level outcomes remain V2L12.4.
+      - Existing incremental donor execution import safety tests and legacy donor semantics remain unchanged except for explicitly shared helper refactors whose pre-existing regressions prove identical behavior.
+      - No mapper output is promoted to physical SurfaceModel accepted world placement or metric geometry merely because canonical values were constructed.
+    tests:
+      - exact canonical aggregate field and immutability regression for one native model
+      - exact camera count observation mapping dimensions intrinsic sequence projection token and camera-from-local-frame rotation translation regression
+      - exact deterministic native point-ID ordering PointMap source membership empty-confidence and unresolved GeometrySolution assembly regression
+      - stable source-model content identity and LocalFrameId regression with changed native file digest producing a different identity rather than a hidden alias
+      - fail-closed native manifest membership hash byte-length symlink unknown image malformed camera malformed pose and unsupported projection cases
+      - direct native canonicalization versus retained legacy importer plus V2L11 bridge equivalence fixture for camera pose local points membership and unresolved scale
+      - existing incremental donor suite remains green with no changed solver calls options ordering or safety semantics
+      - exact PyCOLMAP 4.2.0 global_mapping native-lane fixture with deterministic CPU configuration and audited model files
+      - global workspace-copy regression proving source verification database bytes remain unchanged even when the global preparation path calibrates or mutates its private copy
+      - registry parity proving distinct experimental incremental and global executable mapper entries exact approved colmap dependency null model checkpoint required hardware policy and canonical V2 output kinds
+      - regression proving colmap.precision_geometry and retained colmap.sparse_sfm entries remain semantically unchanged
+      - module-surface regression proving canonicalization owns no routing fallback quality scale anchoring surface appearance dynamic or persistence responsibility
+      - full fast CI CodeQL native PyCOLMAP integration and any registry-triggered compatibility lanes
   - {id: V2L12.4, lot: V2L12, title: Disconnected and zero model explicit outcomes, status: planned, depends_on: [V2L12.3]}
   - {id: V2L12.5, lot: V2L12, title: COLMAP current route regression comparison and lot review, status: planned, depends_on: [V2L12.4]}
   - {id: V2L13.1, lot: V2L13, title: Feed forward geometry adapter interface, status: planned, depends_on: [V2L12.5]}
