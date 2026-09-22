@@ -1262,7 +1262,7 @@ work_items:
   - id: V2L13.5
     lot: V2L13
     title: Preview versus classical baseline comparison
-    status: ready
+    status: done
     objective: Exercise the exact DA3-BASE preview route and the current pinned COLMAP incremental precision baseline on one shared controlled image fixture with explicit trusted reference cameras, evaluate both through the same frame/scale-invariant camera-pose metric semantics established by V2L13.4 where directly comparable, retain projection-family limitations explicitly, and record side-by-side evidence without computing a winner score promoting a default route or changing shipping status.
     allowed_scope:
       - tests/test_feed_forward_classical_comparison.py
@@ -1352,7 +1352,111 @@ work_items:
       - source immutability regression for DA3 source/checkpoint inputs COLMAP verification database and canonical geometry values across comparison
       - documentation evidence regression confirming the controlled fixture limitations and explicit no-default-promotion conclusion
       - full fast CI CodeQL exact PyCOLMAP lane exact DA3 lane and the dedicated combined comparison lane when added
-  - {id: V2L13.6, lot: V2L13, title: Learned execution profile and stage profiling benchmark, status: planned, depends_on: [V2L13.5]}
+  - id: V2L13.6
+    lot: V2L13
+    title: Learned execution profile and stage profiling benchmark
+    status: ready
+    objective: Benchmark the exact validated DA3-BASE PREVIEW execution end to end and by material execution stage, compare the V2L13.3 reference path only against one or more genuinely applicable bounded execution profiles on the same declared hardware, retain solver-independent BenchmarkRecord and performance evidence together with camera-quality evidence needed to detect semantic regression, and close the V2L13 lot without turning an execution-profile result into a global backend mandate or starting competing-geometry work.
+    allowed_scope:
+      - src/wre/reconstruction/da3_execution_benchmark.py
+      - focused hooks in src/wre/reconstruction/da3_runtime.py only when needed to expose explicit benchmark stage boundaries or a bounded execution-profile seam without changing the accepted V2L13.3 reference profile semantics
+      - focused exports in src/wre/reconstruction/__init__.py
+      - tests/test_da3_execution_benchmark.py
+      - one dedicated .github/workflows/da3-execution-profile.yml benchmark/integration lane when ordinary CI cannot provide the exact learned environment or required benchmark hardware
+      - registry/dependencies.yaml and registry/adapter-models.yaml only for exact additional runtime/profile dependencies and reproducibility notes actually exercised by the benchmark; no shipping/default promotion
+      - docs/reviews/V2L13-feed-forward-geometry-review.md for the lot review and retained performance/quality findings
+      - focused lifecycle/review updates to registry/components.yaml registry/reviews.yaml PROJECT_STATE.yaml and this work-item registry only after benchmark and review evidence are green so V2L14.1 can be activated without implementing it
+    out_of_scope:
+      - changing FeedForwardGeometryResult CameraSolution DepthField PointMap GeometrySolution LocalFrameId GeometryScaleStatus or the V2L13.4 camera-quality metric semantics
+      - changing DA3-BASE model source revision checkpoint bytes relative-depth semantics confidence handling preprocessing canonical normalization or the accepted CPU float32 reference identity from V2L13.2 and V2L13.3
+      - changing the V2L13.5 preview-versus-classical comparison evidence or using performance to retroactively select a geometry winner
+      - changing COLMAP adapters routes configurations shipping status or classical comparison behavior
+      - introducing another learned geometry model checkpoint or route
+      - making CUDA mixed precision torch.compile TensorRT Torch-TensorRT CUDA graphs xformers GPU decode or another optimization mandatory when it is unavailable unsupported slower or not quality-equivalent on the declared benchmark hardware
+      - hiding compile warmup graph capture model load transfer decode resize or artifact-write cost outside retained evidence when those costs are material to the compared profile
+      - comparing performance numbers obtained on different material hardware/runtime identities as if they were a controlled speedup ratio
+      - lowering image resolution observation membership model variant quality semantics provenance confidence validity or output responsibilities to create an artificial speedup
+      - quality thresholds QualityDecision router fallback retry default-route changes adapter shipping-status promotion or production scheduler policy
+      - custom Triton CUDA kernels quantization TensorRT engine packaging persistent production workers distributed inference or broad resource-scheduler work unless a specifically selected bounded candidate profile requires a minimal experimental implementation and the work item is explicitly updated before implementation
+      - dense depth physical surface appearance dynamic chronology MasterScene RuntimeScene or any V2L14.1 implementation
+    depends_on: [V2L13.5]
+    read_before:
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/06_TESTING.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md
+      - docs/28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md
+      - docs/29_PERFORMANCE_INTEGRATION_MAP.md
+      - docs/reviews/V2L4-quality-failure-benchmark-review.md
+      - docs/reviews/V2L13-preview-classical-comparison.md
+      - registry/dependencies.yaml
+      - registry/adapter-models.yaml
+      - registry/reviews.yaml
+      - src/wre/domain/benchmarks.py
+      - src/wre/domain/metrics.py
+      - src/wre/domain/hardware_identity.py
+      - src/wre/reconstruction/da3_runtime.py
+      - src/wre/reconstruction/da3_preview.py
+      - src/wre/reconstruction/feed_forward_camera_quality.py
+      - tests/test_benchmarks.py
+      - tests/test_da3_runtime.py
+      - tests/test_feed_forward_camera_quality.py
+      - tests/test_feed_forward_classical_comparison.py
+    candidate_refresh:
+      reviewed_at: '2026-09-23'
+      reference_profile: exact V2L13.3 CPU float32 eager DA3-BASE execution
+      candidate_families:
+        - eager execution on explicitly available accelerator hardware
+        - torch.compile or equivalent maintained PyTorch compilation when supported by the exact pinned model/runtime
+        - mixed precision only when the declared hardware supports it and camera/depth quality evidence remains comparable
+        - TensorRT or Torch-TensorRT class execution only when an exact reproducible compatible environment can be provisioned without changing the stable WRE contract
+      selection_rule: >-
+        Benchmark only profiles that are actually executable on the declared comparison hardware and preserve the same DA3-BASE input/output responsibility. Absence or failure of a candidate is retained as unavailable evidence rather than silently substituted with another profile.
+    reuse:
+      - BenchmarkRecord BenchmarkFixtureIdentity HardwareRuntimeIdentity ArtifactProducerIdentity MetricVector and canonical performance_evidence ArtifactRef values as the retained benchmark vocabulary rather than introducing a profile-specific score object
+      - the exact V2L13.3 DA3 source checkpoint package and reference execution identity as the required baseline profile
+      - the V2L13.4 camera-quality evaluator and the same controlled camera-reference semantics to detect camera-quality regression where a candidate profile changes numerical execution
+      - the V2L13.5 controlled fixture as a compact learned-geometry benchmark input when appropriate; the performance review must state when its synthetic nature limits conclusions
+      - standard-library monotonic timing plus exact framework/device synchronization needed for the chosen profile before reading elapsed execution time; profiler/vendor trace tools are optional retained evidence rather than core types
+      - explicit stage boundaries for source/checkpoint verification model construction/checkpoint load decoded-input preparation preprocessing host-to-device transfer when present model execution device-to-host transfer when present postprocess/candidate construction canonical normalization and end-to-end wall time
+      - cold-start and steady-state measurements as distinct evidence so compilation/model-load/setup cost is never silently amortized away
+    acceptance:
+      - Add one immutable bounded learned-execution benchmark request/result layer that names the exact fixture producer/configuration/hardware identity reference profile and candidate execution profile without generic kwargs mutable dictionaries timestamps paths or hidden global profile selection.
+      - The V2L13.3 reference execution remains callable with exactly its accepted semantics and identity; profiling hooks do not change its default behavior output responsibilities source/checkpoint verification or deterministic configuration.
+      - Select at least one genuinely executable comparison profile only after a feasibility probe on the declared benchmark hardware. Unsupported unavailable or failed candidate profiles are retained explicitly and are not replaced by a different optimization under the same profile identity.
+      - Reference and candidate profile runs use the same exact source observations decoded-input semantics DA3 model checkpoint and requested geometry responsibilities. A performance profile may change execution backend device precision or compilation only when those choices are explicit identity material.
+      - Every compared profile records exact hardware/runtime identity and material profile configuration. Controlled speedup statements are permitted only for profiles measured on the same material hardware fixture and input identity.
+      - Retain end-to-end cold-start wall time and steady-state wall time using an explicit deterministic sample-count/warmup policy. Compile graph-capture model-load and other one-time setup costs remain visible rather than being silently excluded from all reported results.
+      - Retain stage-level elapsed evidence for every material stage exercised by the selected profile, including preprocessing model execution postprocess/canonical normalization and host-device/device-host transfers when present. A stage that does not exist for a CPU profile is absent or explicitly zero by documented contract, never guessed from another device path.
+      - Retain peak process RAM and, when a GPU profile is exercised, peak allocated/reserved VRAM or the closest exact framework-supported memory evidence together with the device identity. Missing GPU telemetry on a non-GPU profile is not fabricated.
+      - Performance values use canonical MetricDescriptor/MetricObservation/MetricVector semantics and one BenchmarkRecord per measured profile with QualityMode.PREVIEW, exact BenchmarkFixtureIdentity, exact producer/configuration/hardware identity and explicit comparison_baseline linkage for candidate profiles.
+      - BenchmarkRecord contains no winner rank promoted default threshold route decision or shipping promotion. The retained review may state measured deltas on the controlled hardware but must not generalize one machine/profile result into a global backend mandate.
+      - Before any candidate profile can be described as quality-compatible, compare its canonical camera observation membership projection dimensions unresolved-scale status no-PointMap responsibility and V2L13.4 camera-quality metrics against the reference on the same controlled fixture. Numerical tolerance must be explicit and evidence-backed; no blanket mixed-precision or compiled equivalence assumption is allowed.
+      - Depth output from every accepted candidate profile remains finite strictly positive on valid samples with unchanged raster dimensions/validity semantics and no invented metric scale or probability confidence. Any materially changed depth semantics makes the profile non-equivalent even if it is faster.
+      - Report cold-versus-steady behavior separately for compiled profiles so compile time is not treated as free. Recompilation caused by incompatible input shape/profile must remain visible rather than being hidden behind an already-warmed cache.
+      - If the selected benchmark hardware has no supported accelerator candidate, the work item may retain reference profiling plus explicit unavailable candidate evidence, but the lot review must not claim accelerated-profile validation or speedup. Closing V2L13 still requires the implemented profiling/benchmark contract and an honest review of the hardware evidence actually available.
+      - Add a V2L13 lot review covering V2L13.1 through V2L13.6: generic feed-forward contract DA3 candidate semantics exact runtime/reproducibility camera quality preview-versus-classical comparison execution-profile evidence and explicit remaining non-capabilities.
+      - The V2L13 review must confirm DA3-BASE is an experimental preview candidate rather than a permanent whole-engine default and that V2L14 owns generic competing-GeometrySolution comparison refinement consensus/disagreement and hybrid/global candidate work.
+      - Only after exact-head benchmark/review evidence is green may registry/reviews.yaml mark V2L13 passed feed_forward_geometry become implemented PROJECT_STATE hand off to V2L14.1 and the V2L14.1 work item become ready without adding V2L14 implementation.
+    tests:
+      - exact immutable execution-profile request/result field-shape identity canonical-order and unsupported-profile fail-closed tests
+      - regression proving ordinary DA3 reference execution is semantically unchanged when profiling is not requested
+      - deterministic fixture/profile identity and same-hardware comparison-baseline linkage tests using BenchmarkRecord
+      - cold-start versus steady-state sample-policy and median/aggregation tests with fake clocks or bounded fake runtime stages
+      - stage-timing coverage tests proving preprocessing model postprocess normalization and conditional transfer stages are retained without negative NaN infinity or hidden unaccounted profile-specific stages
+      - RAM and conditional GPU-memory evidence tests with unavailable telemetry represented explicitly rather than fabricated
+      - candidate feasibility/unavailable/failure evidence tests proving no hidden profile substitution
+      - camera-quality and geometry-semantic equivalence regressions across reference and accepted candidate outputs including observation membership dimensions projection unresolved scale no PointMap and positive depth validity
+      - compile/warmup accounting regression proving cold compile/setup cost and steady-state samples are retained separately
+      - BenchmarkRecord regression proving no score rank winner default threshold QualityDecision route shipping mutation or profile promotion field is introduced
+      - V2L13 lot-review evidence regression covering V2L13.1 through V2L13.6 and explicit handoff boundary to V2L14.1
+      - full fast CI CodeQL exact DA3 reference lane and any dedicated execution-profile lane activated by the implementation
   - {id: V2L14.1, lot: V2L14, title: Competing GeometrySolution comparison contract, status: planned, depends_on: [V2L13.6]}
   - {id: V2L14.2, lot: V2L14, title: Geometry initialization refinement adapter boundary, status: planned, depends_on: [V2L14.1]}
   - {id: V2L14.3, lot: V2L14, title: Classical BA global refinement path, status: planned, depends_on: [V2L14.2]}
