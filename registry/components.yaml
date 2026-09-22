@@ -224,6 +224,7 @@ components:
       - src/wre/reconstruction/colmap_evidence_artifacts.py
       - src/wre/reconstruction/colmap_canonical_geometry.py
       - src/wre/reconstruction/colmap_global_reconstruction.py
+      - src/wre/reconstruction/colmap_geometry_outcomes.py
       - src/wre/reconstruction/__init__.py
       - registry/adapter-models.yaml
     tests:
@@ -231,6 +232,7 @@ components:
       - tests/test_colmap_evidence_artifacts.py
       - tests/test_colmap_canonical_geometry.py
       - tests/test_colmap_global_reconstruction.py
+      - tests/test_colmap_geometry_outcomes.py
     status: implementing
   feed_forward_geometry: {owner_lot: V2L13, implementation: [], tests: [], status: planned}
   precision_global_refinement: {owner_lot: V2L14, implementation: [], tests: [], status: planned}

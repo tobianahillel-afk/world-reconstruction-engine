@@ -86,6 +86,10 @@ from wre.reconstruction.colmap_features import (
     ColmapImageFeatureSummary,
     extract_colmap_features,
 )
+from wre.reconstruction.colmap_geometry_outcomes import (
+    ColmapGeometryOutcome,
+    ColmapGeometryOutcomeState,
+)
 from wre.reconstruction.colmap_global_reconstruction import (
     COLMAP_GLOBAL_CANONICAL_ADAPTER_ID,
     COLMAP_GLOBAL_CANONICAL_ARTIFACT_KEY_HARDWARE_POLICY,
@@ -225,6 +229,8 @@ __all__ = [
     "ColmapGeometricVerificationError",
     "ColmapGeometricVerificationRequest",
     "ColmapGeometricVerificationResult",
+    "ColmapGeometryOutcome",
+    "ColmapGeometryOutcomeState",
     "ColmapGlobalReconstructionConfig",
     "ColmapGlobalReconstructionError",
     "ColmapGlobalReconstructionRequest",

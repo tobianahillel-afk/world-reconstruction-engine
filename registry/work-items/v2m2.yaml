@@ -724,7 +724,7 @@ work_items:
   - id: V2L12.4
     lot: V2L12
     title: Disconnected and zero model explicit outcomes
-    status: ready
+    status: done
     objective: Represent the outcome of either current COLMAP precision mapper explicitly after V2L12.3 so zero native models remain a truthful no-geometry outcome one audited model remains one canonical local-frame solution and multiple audited models remain an ordered set of disconnected independent canonical local-frame solutions without selecting ranking merging aligning discarding retrying or inventing geometry.
     allowed_scope:
       - src/wre/reconstruction/colmap_geometry_outcomes.py
@@ -786,7 +786,91 @@ work_items:
       - contradictory manually constructed outcome state rejection so state always agrees with validated model cardinality
       - module-surface regression proving no PyCOLMAP filesystem database legacy geometry routing quality surface appearance dynamic persistence or V2L12.5 dependency enters the pure outcome layer
       - full fast CI CodeQL native COLMAP integration and any registry-triggered compatibility lanes
-  - {id: V2L12.5, lot: V2L12, title: COLMAP current route regression comparison and lot review, status: planned, depends_on: [V2L12.4]}
+  - id: V2L12.5
+    lot: V2L12
+    title: COLMAP current route regression comparison and lot review
+    status: ready
+    objective: Add one deterministic real PyCOLMAP 4.2.0 regression and comparison fixture that exercises the retained incremental donor and the current incremental and global V2 precision geometry paths over the same controlled verified source model evidence, proves canonical geometry and explicit outcome semantics without selecting a winner, records an evidence-based shipping-status decision for the V2L12 adapters, and closes the V2L12 lot review without implementing feed-forward geometry or competing-solution policy.
+    allowed_scope:
+      - tests/test_colmap_precision_route_regression.py
+      - .github/workflows/colmap-integration.yml only to execute the V2L12.5 regression in the existing exact PyCOLMAP 4.2.0 native lane
+      - docs/reviews/V2L12-classical-precision-geometry-review.md
+      - registry/adapter-models.yaml only for evidence-backed shipping-status and reproducibility-note updates to V2L12-owned COLMAP adapters without changing their capability input output producer dependency model checkpoint or hardware-key semantics
+      - focused corrections to V2L12-owned reconstruction files only if the comparison fixture demonstrates an existing V2L12 contract violation and without adding a new solver route or responsibility
+      - focused lifecycle and review updates to registry/components.yaml registry/reviews.yaml PROJECT_STATE.yaml and this work-item registry only after fixture and lot-review evidence are green so V2L13.1 can be activated without implementing it
+    out_of_scope:
+      - introducing another classical solver mapper matching method bundle-adjustment backend learned model checkpoint or external dependency
+      - hierarchical mapping large-collection submaps retrieval routing fallback retry scheduler cache executor or generalized mapper orchestration
+      - ranking incremental versus global as an overall winner selecting a default route from dataset characteristics or defining route-choice heuristics
+      - comparing or fusing independent disconnected models across LocalFrameId values aligning frames resolving scale merging points or choosing one component
+      - changing CameraSolution PointMap GeometrySolution ColmapGeometryOutcome artifact identity provenance coordinate convention or local-scale contracts
+      - metric-scale solving rescaling world Earth ECEF ENU geographic GPS GCP anchoring fragment placement SurfaceModel MVS dense depth appearance dynamic historical or runtime work
+      - feed-forward geometry adapter candidate integration preview comparison or any V2L13 implementation
+      - precision global refinement hybrid solver comparison consensus policy or any V2L14 implementation
+      - claiming that a shipping-status promotion makes one route globally preferred or that COLMAP remains the permanent best algorithm
+      - starting V2L13.1 implementation in this work item
+    depends_on: [V2L12.4]
+    read_before:
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/06_TESTING.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/19_COLMAP_RECONSTRUCTION_IMPORT.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md
+      - docs/reviews/L3-M1-colmap-baseline-review.md
+      - docs/reviews/V2L11-canonical-geometry-contracts-review.md
+      - registry/adapter-models.yaml
+      - registry/dependencies.yaml
+      - registry/reviews.yaml
+      - src/wre/reconstruction/colmap_features.py
+      - src/wre/reconstruction/colmap_matching.py
+      - src/wre/reconstruction/colmap_verification.py
+      - src/wre/reconstruction/colmap_reconstruction.py
+      - src/wre/reconstruction/colmap_import.py
+      - src/wre/reconstruction/legacy_geometry_conversion.py
+      - src/wre/reconstruction/colmap_canonical_geometry.py
+      - src/wre/reconstruction/colmap_global_reconstruction.py
+      - src/wre/reconstruction/colmap_geometry_outcomes.py
+      - tests/test_colmap_incremental_reconstruction.py
+      - tests/test_colmap_reconstruction_import.py
+      - tests/test_colmap_canonical_geometry.py
+      - tests/test_colmap_global_reconstruction.py
+      - tests/test_colmap_geometry_outcomes.py
+    reuse:
+      - exact external PyCOLMAP 4.2.0 and the existing native COLMAP integration lane rather than adding another solver or environment
+      - one controlled PyCOLMAP synthetic verified database and corresponding deterministic image observations as shared source evidence for retained and current mapper paths
+      - reconstruct_colmap_incrementally as the retained deterministic incremental execution donor and ColmapReconstructionImportResult plus convert_sparse_reconstruction_estimate only as historical regression evidence
+      - canonicalize_colmap_sparse_model as the direct current native-to-V2 normalization path for both incremental and global native models
+      - reconstruct_colmap_globally as the distinct current global specialist using its verified private database copy
+      - ColmapGeometryOutcome as the only V2L12 route-result cardinality boundary for no model one model and disconnected models
+      - existing adapter registry shipping_status values as maturity metadata only and not route selection or benchmark ranking
+      - the established lot-review document and registry process used by V2L11 without creating a new review framework
+    acceptance:
+      - Add one dedicated exact PyCOLMAP 4.2.0 native regression fixture using the same controlled source evidence to exercise the retained incremental donor path the direct current incremental V2 path and the current global V2 path.
+      - The fixture must verify source verification database immutability for both mapper executions and exact audited ColmapSparseModelArtifact file manifests before canonical normalization.
+      - For at least one retained incremental source model compare direct native canonicalization with the retained importer plus V2L11 bridge and prove equal registered observation membership camera rotation translation projection intrinsics local point coordinates and unresolved scale semantics without requiring identical derived opaque target IDs.
+      - Wrap current incremental and global canonical model tuples in ColmapGeometryOutcome and prove state is derived from exact model cardinality with no placeholder geometry merge rank alignment or hidden selection.
+      - The fixture may report structural comparison facts such as model count registered observation count point count and per-model membership but must not compute an overall winner score default-route recommendation or cross-local-frame geometric error where frames are not explicitly aligned.
+      - The global and incremental current routes retain distinct adapter identities and every canonical model remains in its own deterministic LocalFrameId with GeometryScaleStatus.UNRESOLVED unless an existing accepted contract explicitly proves metric scale.
+      - Existing feature matching verification evidence stages remain separately covered by their native tests and the lot review must state that the route-comparison fixture begins from verified source evidence rather than pretending a synthetic database is an image-feature-quality benchmark.
+      - Record one explicit shipping-status decision for colmap.precision_geometry colmap.incremental_precision_geometry colmap.global_precision_geometry colmap.local_features colmap.pair_matching and colmap.geometric_verification based on the complete V2L12 evidence. A promotion may only change experimental to approved and must be justified per adapter; leaving an adapter experimental is valid and must have an explicit limitation.
+      - No shipping-status decision may alter capability producer dependency model checkpoint hardware identity failure policy or imply route preference.
+      - Add a V2L12 lot review documenting composition across V2L12.1 through V2L12.5 including V2 artifact identities direct canonical geometry incremental and global execution zero single disconnected outcome semantics comparison evidence shipping decisions and explicit remaining non-capabilities.
+      - The V2L12 review must explicitly confirm that COLMAP is the current classical precision baseline rather than the permanent whole-engine algorithm; feed-forward geometry hybrid global refinement dense depth physical surface appearance dynamic chronology and runtime remain later work.
+      - Only after the native fixture and review evidence are green may registry/reviews.yaml mark V2L12 passed precision_geometry_baseline become implemented PROJECT_STATE hand off to V2L13.1 and the V2L13.1 work item become ready without adding any V2L13 implementation.
+    tests:
+      - exact shared-source retained incremental direct-incremental and current-global native execution regression
+      - retained importer plus V2L11 bridge versus direct native canonical incremental equivalence on pose intrinsics local points membership and unresolved scale
+      - exact parent verification database byte-identity preservation across mapper executions
+      - exact audited native model manifest and canonical source-model identity checks
+      - explicit ColmapGeometryOutcome state and model-order preservation for current incremental and global results
+      - regression proving comparison records no winner default route cross-frame alignment metric upgrade surface or later-layer claim
+      - adapter registry shipping-status decision regression with unchanged capability producer dependency model checkpoint and hardware-policy semantics
+      - V2L12 lot review evidence covers V2L12.1 through V2L12.5 and the explicit handoff boundary to V2L13.1
+      - full fast CI CodeQL exact PyCOLMAP 4.2.0 native integration and any registry-triggered compatibility lanes
   - {id: V2L13.1, lot: V2L13, title: Feed forward geometry adapter interface, status: planned, depends_on: [V2L12.5]}
   - {id: V2L13.2, lot: V2L13, title: First approved feed forward preview candidate, status: planned, depends_on: [V2L13.1]}
   - {id: V2L13.3, lot: V2L13, title: Feed forward checkpoint hardware license reproducibility, status: planned, depends_on: [V2L13.2]}
