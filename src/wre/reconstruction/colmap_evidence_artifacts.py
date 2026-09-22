@@ -22,7 +22,11 @@ from wre.domain.producer_identity import ArtifactProducerIdentity, Configuration
 from wre.domain.projects import SceneProjectId
 from wre.domain.provenance import ProvenanceClass
 from wre.domain.runs import ProducerRef
-from wre.reconstruction.colmap_environment import SUPPORTED_PYCOLMAP_VERSION
+from wre.reconstruction.colmap_environment import (
+    SUPPORTED_COLMAP_VERSION,
+    SUPPORTED_PYCOLMAP_VERSION,
+    ColmapEnvironmentIdentity,
+)
 
 if TYPE_CHECKING:
     from wre.reconstruction.colmap_features import ColmapFeatureExtractionResult
@@ -122,6 +126,40 @@ class ColmapEvidenceArtifactPlan:
             raise TypeError("COLMAP evidence plan hardware_runtime must be HardwareRuntimeIdentity")
         if not isinstance(self.artifact_key, ArtifactKey):
             raise TypeError("COLMAP evidence plan artifact_key must be ArtifactKey")
+
+        stage_contracts = {
+            LOCAL_FEATURES_KIND: (
+                IMAGE_OBSERVATION_KIND,
+                None,
+                COLMAP_LOCAL_FEATURES_PRODUCER_IMPLEMENTATION,
+            ),
+            PAIR_MATCHES_KIND: (
+                LOCAL_FEATURES_KIND,
+                1,
+                COLMAP_PAIR_MATCHING_PRODUCER_IMPLEMENTATION,
+            ),
+            GEOMETRIC_VERIFICATION_KIND: (
+                PAIR_MATCHES_KIND,
+                1,
+                COLMAP_GEOMETRIC_VERIFICATION_PRODUCER_IMPLEMENTATION,
+            ),
+        }
+        expected_input_kind, exact_count, expected_implementation = stage_contracts[
+            self.output_kind
+        ]
+        _validate_inputs(
+            self.input_fingerprints,
+            expected_kind=expected_input_kind,
+            exact_count=exact_count,
+        )
+        if self.producer.producer.implementation != expected_implementation:
+            raise ValueError("COLMAP evidence plan producer does not match its output stage")
+        if self.producer.producer.version != COLMAP_EVIDENCE_PRODUCER_VERSION:
+            raise ValueError("COLMAP evidence plan producer version must be PyCOLMAP 4.2.0")
+        if self.producer.producer.revision is not None:
+            raise ValueError("COLMAP evidence plan producer revision must be null")
+        if self.producer.model is not None or self.producer.checkpoint is not None:
+            raise ValueError("COLMAP evidence plan must not declare a model or checkpoint")
 
         expected = derive_artifact_key(
             ArtifactKeyMaterial(
@@ -295,8 +333,12 @@ def _result_database_identity(
         raise ValueError("COLMAP donor result configuration does not match artifact plan")
 
     environment = getattr(result, "environment", None)
-    if getattr(environment, "pycolmap_version", None) != COLMAP_EVIDENCE_PRODUCER_VERSION:
+    if not isinstance(environment, ColmapEnvironmentIdentity):
+        raise TypeError("COLMAP donor result environment must be ColmapEnvironmentIdentity")
+    if environment.pycolmap_version != COLMAP_EVIDENCE_PRODUCER_VERSION:
         raise ValueError("COLMAP donor result PyCOLMAP version does not match artifact plan")
+    if environment.colmap_version != SUPPORTED_COLMAP_VERSION:
+        raise ValueError("COLMAP donor result COLMAP version does not match artifact plan")
 
     if source_digest_attribute is not None:
         source_sha256 = getattr(result, source_digest_attribute, None)
