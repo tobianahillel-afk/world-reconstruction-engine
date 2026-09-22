@@ -55,9 +55,7 @@ def test_colmap_precision_descriptor_uses_exact_v2_semantic_kinds() -> None:
     assert COLMAP_PRECISION_CAPABILITY_NAME.value == "geometry.precision_sfm"
     assert COLMAP_PRECISION_CAPABILITY.capability is COLMAP_PRECISION_CAPABILITY_NAME
     assert COLMAP_PRECISION_INPUT_KIND == ArtifactKind("image.observation")
-    assert COLMAP_PRECISION_CAPABILITY.input_kinds == frozenset(
-        {ArtifactKind("image.observation")}
-    )
+    assert COLMAP_PRECISION_CAPABILITY.input_kinds == frozenset({ArtifactKind("image.observation")})
     assert COLMAP_PRECISION_OUTPUT_KINDS == frozenset(
         {
             ArtifactKind("geometry.camera_solution"),
@@ -134,10 +132,7 @@ def test_registry_v2_colmap_entry_matches_pure_module_contract() -> None:
     assert entry["dependency_refs"] == [COLMAP_PRECISION_DEPENDENCY_REF]
     assert entry["model"] is COLMAP_PRECISION_MODEL
     assert entry["checkpoint"] is COLMAP_PRECISION_CHECKPOINT
-    assert (
-        entry["artifact_key_hardware_policy"]
-        == COLMAP_PRECISION_ARTIFACT_KEY_HARDWARE_POLICY
-    )
+    assert entry["artifact_key_hardware_policy"] == COLMAP_PRECISION_ARTIFACT_KEY_HARDWARE_POLICY
     assert entry["shipping_status"] == COLMAP_PRECISION_SHIPPING_STATUS
     assert entry["reproducibility_notes"] == COLMAP_PRECISION_REPRODUCIBILITY_NOTES
     assert entry["failure_signals"] == []
