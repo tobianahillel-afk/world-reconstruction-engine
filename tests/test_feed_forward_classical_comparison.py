@@ -642,7 +642,10 @@ def test_real_da3_preview_and_classical_incremental_share_one_controlled_referen
     preview_names = tuple(item.descriptor.name.value for item in preview_metrics.observations)
     classical_names = tuple(item.descriptor.name.value for item in classical_metrics.observations)
     assert preview_names == classical_names == _POSE_METRIC_NAMES
-    assert all(item.provenance == preview_metrics.observations[0].provenance for item in preview_metrics.observations)
+    assert all(
+        item.provenance == preview_metrics.observations[0].provenance
+        for item in preview_metrics.observations
+    )
     assert all(
         item.provenance == classical_metrics.observations[0].provenance
         for item in classical_metrics.observations
