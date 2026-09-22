@@ -625,7 +625,7 @@ work_items:
   - id: V2L12.3
     lot: V2L12
     title: COLMAP incremental and global mappers emit canonical geometry
-    status: ready
+    status: done
     objective: Implement explicit pinned PyCOLMAP 4.2.0 incremental and global precision-mapper boundaries whose audited native sparse models are normalized directly into canonical V2 CameraSolution PointMap and GeometrySolution values one source model at a time in deterministic explicit LocalFrameId domains with unresolved local scale while preserving the existing incremental donor behavior keeping global-mapper source evidence immutable and avoiding any dependency on SparseReconstructionEstimate as the V2 production target.
     allowed_scope:
       - src/wre/reconstruction/colmap_canonical_geometry.py
@@ -721,7 +721,71 @@ work_items:
       - regression proving colmap.precision_geometry and retained colmap.sparse_sfm entries remain semantically unchanged
       - module-surface regression proving canonicalization owns no routing fallback quality scale anchoring surface appearance dynamic or persistence responsibility
       - full fast CI CodeQL native PyCOLMAP integration and any registry-triggered compatibility lanes
-  - {id: V2L12.4, lot: V2L12, title: Disconnected and zero model explicit outcomes, status: planned, depends_on: [V2L12.3]}
+  - id: V2L12.4
+    lot: V2L12
+    title: Disconnected and zero model explicit outcomes
+    status: ready
+    objective: Represent the outcome of either current COLMAP precision mapper explicitly after V2L12.3 so zero native models remain a truthful no-geometry outcome one audited model remains one canonical local-frame solution and multiple audited models remain an ordered set of disconnected independent canonical local-frame solutions without selecting ranking merging aligning discarding retrying or inventing geometry.
+    allowed_scope:
+      - src/wre/reconstruction/colmap_geometry_outcomes.py
+      - focused exports in src/wre/reconstruction/__init__.py
+      - tests/test_colmap_geometry_outcomes.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L12.5 can be activated without implementing it
+    out_of_scope:
+      - changing PyCOLMAP incremental_mapping global_mapping view-graph calibration deterministic CPU options native-model auditing or direct native-to-canonical normalization implemented by V2L12.3
+      - changing retained legacy sparse reconstruction import donor contracts or V2L11 canonical CameraSolution PointMap GeometrySolution LocalFrameId GeometryScaleStatus contracts
+      - choosing a preferred mapper or preferred model ranking scoring filtering discarding merging aligning registering rescaling or reconciling disconnected models
+      - converting a no-model result into fallback cameras points empty GeometrySolution generated geometry or another plausible-looking success
+      - retry fallback escalation quality-gate router scheduling cache persistence benchmark or default-promotion policy
+      - metric-scale solving world Earth ECEF ENU geographic GPS GCP anchoring fragment placement cross-local-frame compatibility SurfaceModel MVS dense depth appearance dynamic historical or runtime work
+      - end-to-end current-route comparison shipping promotion V2L12 lot review or any V2L12.5 implementation
+      - starting V2L12.5 implementation in this work item
+    depends_on: [V2L12.3]
+    read_before:
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md
+      - docs/reviews/V2L11-canonical-geometry-contracts-review.md
+      - registry/adapter-models.yaml
+      - src/wre/domain/geometry_solutions.py
+      - src/wre/domain/fragments.py
+      - src/wre/reconstruction/colmap_canonical_geometry.py
+      - src/wre/reconstruction/colmap_global_reconstruction.py
+      - src/wre/reconstruction/colmap_reconstruction.py
+      - tests/test_colmap_canonical_geometry.py
+      - tests/test_colmap_global_reconstruction.py
+      - tests/test_colmap_incremental_reconstruction.py
+    reuse:
+      - CanonicalColmapSparseModel as the exact per-model canonical V2 payload already established by V2L12.3 rather than introducing another geometry representation
+      - ColmapSparseModelArtifact model index and audited source-model content identity as the source evidence that must correspond exactly to each canonical model
+      - the two distinct current executable adapter identities colmap.incremental_precision_geometry and colmap.global_precision_geometry as mapper provenance without introducing a generalized mapper registry or route selector
+      - positive-domain immutable outcome states for no model one model and disconnected models rather than inferring route truth from bool has_reconstruction alone
+      - canonical mapper model-index order from the audited V2L12.3 results with no hidden sorting ranking or coercion at the outcome boundary
+    acceptance:
+      - Add one immutable adapter-local COLMAP geometry outcome contract with exactly three semantic states representing no native model exactly one independent model and multiple disconnected independent models.
+      - The outcome records which current executable precision mapper identity produced the source result and accepts only colmap.incremental_precision_geometry or colmap.global_precision_geometry without guessing or collapsing those identities.
+      - The no-model state contains no CanonicalColmapSparseModel CameraSolution PointMap or GeometrySolution value and does not manufacture placeholder empty or generated geometry.
+      - The single-model state contains exactly one CanonicalColmapSparseModel and preserves its source model index source content identity LocalFrameId cameras PointMap GeometrySolution and unresolved scale unchanged.
+      - The disconnected-model state contains at least two CanonicalColmapSparseModel values in the exact audited source model-index order and preserves every distinct LocalFrameId and source content identity without merge alignment selection ranking filtering or cross-frame compatibility claims.
+      - Outcome construction cross-checks the supplied audited ColmapSparseModelArtifact tuple against canonical models by exact count source model index and source-model content identity so missing duplicated reordered foreign or mismatched canonical models fail closed rather than being repaired silently.
+      - The audited native model tuple must already be immutable unique and canonically ordered exactly as emitted by the V2L12.3 mapper boundary; mutable collections duplicate indices or non-canonical order fail closed without sorting or coercion.
+      - The outcome state is derived only from the exact audited model count after all structural validation; callers cannot label zero one or multiple models with a contradictory state.
+      - Existing incremental and global mapper execution canonicalization donor and registry semantics remain unchanged and this item performs no PyCOLMAP native model filesystem database or solver execution.
+      - No quality decision retry fallback router preferred-solution policy metric/world placement SurfaceModel or V2L12.5 comparison behavior is introduced.
+    tests:
+      - exact immutable outcome-state vocabulary and field-shape regression
+      - incremental and global source adapter identity acceptance plus unknown or legacy adapter identity rejection
+      - zero-model outcome regression proving no canonical geometry payload or placeholder is created
+      - single-model outcome regression preserving the exact CanonicalColmapSparseModel object and all child local-frame unresolved-scale semantics
+      - disconnected two-or-more model regression preserving exact source order independent LocalFrameId identities and canonical payload objects without ranking merge alignment or filtering
+      - mutable duplicate non-canonical audited model tuple rejection without sorting or coercion
+      - canonical model count index order source-content-identity duplicate missing extra and mismatch fail-closed regressions
+      - contradictory manually constructed outcome state rejection so state always agrees with validated model cardinality
+      - module-surface regression proving no PyCOLMAP filesystem database legacy geometry routing quality surface appearance dynamic persistence or V2L12.5 dependency enters the pure outcome layer
+      - full fast CI CodeQL native COLMAP integration and any registry-triggered compatibility lanes
   - {id: V2L12.5, lot: V2L12, title: COLMAP current route regression comparison and lot review, status: planned, depends_on: [V2L12.4]}
   - {id: V2L13.1, lot: V2L13, title: Feed forward geometry adapter interface, status: planned, depends_on: [V2L12.5]}
   - {id: V2L13.2, lot: V2L13, title: First approved feed forward preview candidate, status: planned, depends_on: [V2L13.1]}
