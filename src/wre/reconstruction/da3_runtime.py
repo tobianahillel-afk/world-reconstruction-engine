@@ -8,6 +8,7 @@ import json
 import math
 import subprocess
 import sys
+import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -53,6 +54,31 @@ DA3_CHECKPOINT = CheckpointIdentity(
     sha256=Sha256Digest("e01067dc1659613083d9145a9a2547ccdbe6ccbbf83c4fe7b3e8a4e2bdae78b5"),
 )
 DA3_CHECKPOINT_BYTE_LENGTH = 541_518_028
+
+DA3_PROFILE_STAGE_SOURCE_VERIFICATION = "source_verification"
+DA3_PROFILE_STAGE_CHECKPOINT_VERIFICATION = "checkpoint_verification"
+DA3_PROFILE_STAGE_DECODED_INPUT_VERIFICATION = "decoded_input_verification"
+DA3_PROFILE_STAGE_ENVIRONMENT_VERIFICATION = "environment_verification"
+DA3_PROFILE_STAGE_RUNTIME_IMPORT = "runtime_import"
+DA3_PROFILE_STAGE_MODEL_CONSTRUCTION = "model_construction"
+DA3_PROFILE_STAGE_CHECKPOINT_LOAD = "checkpoint_load"
+DA3_PROFILE_STAGE_PREPROCESSING = "preprocessing"
+DA3_PROFILE_STAGE_MODEL_EXECUTION = "model_execution"
+DA3_PROFILE_STAGE_POSTPROCESS = "postprocess_candidate_construction"
+DA3_PROFILE_STAGE_CANONICAL_NORMALIZATION = "canonical_normalization"
+DA3_PROFILE_STAGE_NAMES = (
+    DA3_PROFILE_STAGE_SOURCE_VERIFICATION,
+    DA3_PROFILE_STAGE_CHECKPOINT_VERIFICATION,
+    DA3_PROFILE_STAGE_DECODED_INPUT_VERIFICATION,
+    DA3_PROFILE_STAGE_ENVIRONMENT_VERIFICATION,
+    DA3_PROFILE_STAGE_RUNTIME_IMPORT,
+    DA3_PROFILE_STAGE_MODEL_CONSTRUCTION,
+    DA3_PROFILE_STAGE_CHECKPOINT_LOAD,
+    DA3_PROFILE_STAGE_PREPROCESSING,
+    DA3_PROFILE_STAGE_MODEL_EXECUTION,
+    DA3_PROFILE_STAGE_POSTPROCESS,
+    DA3_PROFILE_STAGE_CANONICAL_NORMALIZATION,
+)
 
 # Reference-v1 is intentionally a conservative CPU/float32 path. Accelerated GPU
 # profiles are a later V2L13.6 responsibility and must receive distinct identities.
@@ -266,6 +292,23 @@ class Da3ExecutionResult:
             raise TypeError("DA3 result normalization_identity must be Sha256Digest")
         if not isinstance(self.geometry, FeedForwardGeometryResult):
             raise TypeError("DA3 result geometry must be FeedForwardGeometryResult")
+
+
+class Da3StageObserver(Protocol):
+    def __call__(self, stage: str, elapsed_seconds: float) -> None: ...
+
+
+@contextmanager
+def _observed_stage(observer: Da3StageObserver | None, stage: str):
+    started = time.perf_counter()
+    try:
+        yield
+    finally:
+        if observer is not None:
+            elapsed = float(time.perf_counter() - started)
+            if not math.isfinite(elapsed) or elapsed < 0.0:
+                raise Da3RuntimeError("DA3 profiling clock produced an invalid elapsed duration")
+            observer(stage, elapsed)
 
 
 class Da3Runtime(Protocol):
@@ -560,6 +603,9 @@ class LocalDa3ReferenceRuntime:
     checkpoint and decoded input verification has completed.
     """
 
+    def __init__(self, *, stage_observer: Da3StageObserver | None = None) -> None:
+        self._stage_observer = stage_observer
+
     def infer(
         self,
         *,
@@ -568,20 +614,29 @@ class LocalDa3ReferenceRuntime:
         images: tuple[_VerifiedRgbImage, ...],
         config: Da3ReferenceConfig,
     ) -> tuple[Da3EnvironmentIdentity, tuple[Da3BaseObservationPrediction, ...]]:
-        environment = inspect_da3_reference_environment()
+        with _observed_stage(
+            self._stage_observer,
+            DA3_PROFILE_STAGE_ENVIRONMENT_VERIFICATION,
+        ):
+            environment = inspect_da3_reference_environment()
 
         with _isolated_da3_import(source_root):
-            try:
-                np = importlib.import_module("numpy")
-                torch = importlib.import_module("torch")
-                safetensors_torch = importlib.import_module("safetensors.torch")
-                cfg = importlib.import_module("depth_anything_3.cfg")
-                input_module = importlib.import_module("depth_anything_3.utils.io.input_processor")
-                output_module = importlib.import_module(
-                    "depth_anything_3.utils.io.output_processor"
-                )
-            except Exception as exc:
-                raise Da3RuntimeError("failed to import exact local DA3 reference runtime") from exc
+            with _observed_stage(self._stage_observer, DA3_PROFILE_STAGE_RUNTIME_IMPORT):
+                try:
+                    np = importlib.import_module("numpy")
+                    torch = importlib.import_module("torch")
+                    safetensors_torch = importlib.import_module("safetensors.torch")
+                    cfg = importlib.import_module("depth_anything_3.cfg")
+                    input_module = importlib.import_module(
+                        "depth_anything_3.utils.io.input_processor"
+                    )
+                    output_module = importlib.import_module(
+                        "depth_anything_3.utils.io.output_processor"
+                    )
+                except Exception as exc:
+                    raise Da3RuntimeError(
+                        "failed to import exact local DA3 reference runtime"
+                    ) from exc
 
             if torch.cuda.is_available():
                 # The reference identity is deliberately CPU-only; a machine having CUDA does
@@ -592,149 +647,178 @@ class LocalDa3ReferenceRuntime:
             torch.use_deterministic_algorithms(True)
 
             config_path = source_root / "src" / "depth_anything_3" / "configs" / "da3-base.yaml"
-            try:
-                model_config = cfg.load_config(str(config_path))
-                model = cfg.create_object(model_config)
-            except Exception as exc:
-                raise Da3RuntimeError("failed to construct reviewed DA3-BASE model") from exc
+            with _observed_stage(self._stage_observer, DA3_PROFILE_STAGE_MODEL_CONSTRUCTION):
+                try:
+                    model_config = cfg.load_config(str(config_path))
+                    model = cfg.create_object(model_config)
+                except Exception as exc:
+                    raise Da3RuntimeError("failed to construct reviewed DA3-BASE model") from exc
 
-            try:
-                state = safetensors_torch.load_file(str(checkpoint_path), device="cpu")
-            except Exception as exc:
-                raise Da3RuntimeError("failed to load DA3-BASE safetensors checkpoint") from exc
-            if not isinstance(state, dict):
-                raise Da3RuntimeError("DA3-BASE safetensors checkpoint must be a mapping")
-            _load_reviewed_da3_state_dict(model, state)
-            try:
-                model.to(device="cpu")
-                model.eval()
-            except Exception as exc:
-                raise Da3RuntimeError(
-                    "DA3-BASE reviewed model cannot enter CPU evaluation mode"
-                ) from exc
+            with _observed_stage(self._stage_observer, DA3_PROFILE_STAGE_CHECKPOINT_LOAD):
+                try:
+                    state = safetensors_torch.load_file(str(checkpoint_path), device="cpu")
+                except Exception as exc:
+                    raise Da3RuntimeError(
+                        "failed to load DA3-BASE safetensors checkpoint"
+                    ) from exc
+                if not isinstance(state, dict):
+                    raise Da3RuntimeError("DA3-BASE safetensors checkpoint must be a mapping")
+                _load_reviewed_da3_state_dict(model, state)
+                try:
+                    model.to(device="cpu")
+                    model.eval()
+                except Exception as exc:
+                    raise Da3RuntimeError(
+                        "DA3-BASE reviewed model cannot enter CPU evaluation mode"
+                    ) from exc
 
-            arrays = []
-            for image in images:
-                array = np.frombuffer(image.rgb8, dtype=np.uint8).reshape(
-                    image.height_px,
-                    image.width_px,
-                    3,
-                )
-                arrays.append(array.copy())
-
-            processor = input_module.InputProcessor()
-            try:
-                batch, _, _ = processor(
-                    image=arrays,
-                    extrinsics=None,
-                    intrinsics=None,
-                    process_res=config.process_res,
-                    process_res_method=config.process_res_method,
-                    num_workers=config.num_workers,
-                    print_progress=False,
-                    sequential=True,
-                )
-            except Exception as exc:
-                raise Da3RuntimeError("DA3 input preprocessing failed") from exc
-
-            if batch.ndim != 4 or batch.shape[0] != len(images) or batch.shape[1] != 3:
-                raise Da3RuntimeError("DA3 processed image stack shape does not match inputs")
-            batch = batch.to(device="cpu", dtype=torch.float32)[None]
-
-            try:
-                with torch.inference_mode():
-                    raw = model(
-                        batch,
-                        None,
-                        None,
-                        export_feat_layers=[],
-                        infer_gs=config.infer_gs,
-                        use_ray_pose=config.use_ray_pose,
-                        ref_view_strategy=config.ref_view_strategy,
+            with _observed_stage(self._stage_observer, DA3_PROFILE_STAGE_PREPROCESSING):
+                arrays = []
+                for image in images:
+                    array = np.frombuffer(image.rgb8, dtype=np.uint8).reshape(
+                        image.height_px,
+                        image.width_px,
+                        3,
                     )
+                    arrays.append(array.copy())
+
+                processor = input_module.InputProcessor()
+                try:
+                    batch, _, _ = processor(
+                        image=arrays,
+                        extrinsics=None,
+                        intrinsics=None,
+                        process_res=config.process_res,
+                        process_res_method=config.process_res_method,
+                        num_workers=config.num_workers,
+                        print_progress=False,
+                        sequential=True,
+                    )
+                except Exception as exc:
+                    raise Da3RuntimeError("DA3 input preprocessing failed") from exc
+
+                if batch.ndim != 4 or batch.shape[0] != len(images) or batch.shape[1] != 3:
+                    raise Da3RuntimeError(
+                        "DA3 processed image stack shape does not match inputs"
+                    )
+                batch = batch.to(device="cpu", dtype=torch.float32)[None]
+
+            with _observed_stage(self._stage_observer, DA3_PROFILE_STAGE_MODEL_EXECUTION):
+                try:
+                    with torch.inference_mode():
+                        raw = model(
+                            batch,
+                            None,
+                            None,
+                            export_feat_layers=[],
+                            infer_gs=config.infer_gs,
+                            use_ray_pose=config.use_ray_pose,
+                            ref_view_strategy=config.ref_view_strategy,
+                        )
+                except Exception as exc:
+                    raise Da3RuntimeError("DA3-BASE reference inference failed") from exc
+
+            with _observed_stage(self._stage_observer, DA3_PROFILE_STAGE_POSTPROCESS):
                 if not isinstance(raw, dict):
                     raise Da3RuntimeError("DA3-BASE raw output must be a mapping")
                 if "is_metric" in raw and raw["is_metric"] not in (0, False):
                     raise Da3RuntimeError("DA3-BASE unexpectedly reported metric output")
                 if "scale_factor" in raw and raw["scale_factor"] is not None:
-                    raise Da3RuntimeError("DA3-BASE unexpectedly reported a metric scale factor")
-                prediction = output_module.OutputProcessor()(raw)
-            except Da3RuntimeError:
-                raise
-            except Exception as exc:
-                raise Da3RuntimeError("DA3-BASE reference inference failed") from exc
-            if prediction.extrinsics is None or prediction.intrinsics is None:
-                raise Da3RuntimeError("DA3-BASE prediction is missing camera parameters")
-            if len(prediction.depth) != len(images):
-                raise Da3RuntimeError("DA3-BASE depth count does not match inputs")
-            if len(prediction.extrinsics) != len(images) or len(prediction.intrinsics) != len(
-                images
-            ):
-                raise Da3RuntimeError("DA3-BASE camera count does not match inputs")
-
-            predictions: list[Da3BaseObservationPrediction] = []
-            for index, image in enumerate(images):
-                depth = prediction.depth[index]
-                if getattr(depth, "ndim", None) != 2:
-                    raise Da3RuntimeError("DA3-BASE depth must be one HxW raster per observation")
-                height_px, width_px = int(depth.shape[0]), int(depth.shape[1])
-                flat_depth: list[float] = []
-                for raw_value in depth.reshape(-1):
-                    numeric = float(raw_value)
-                    if not math.isfinite(numeric) or numeric <= 0.0:
-                        raise Da3RuntimeError(
-                            "DA3-BASE relative depth must be finite and strictly positive"
-                        )
-                    flat_depth.append(numeric)
-
-                extrinsic = _tuple_matrix(
-                    prediction.extrinsics[index],
-                    int(prediction.extrinsics[index].shape[0]),
-                    4,
-                    "DA3 extrinsic",
-                )
-                if len(extrinsic) not in (3, 4):
-                    raise Da3RuntimeError("DA3 extrinsic must be 3x4 or 4x4")
-                if len(extrinsic) == 4 and extrinsic[3] != (0.0, 0.0, 0.0, 1.0):
-                    raise Da3RuntimeError("DA3 homogeneous extrinsic bottom row is invalid")
-                rotation = (
-                    (extrinsic[0][0], extrinsic[0][1], extrinsic[0][2]),
-                    (extrinsic[1][0], extrinsic[1][1], extrinsic[1][2]),
-                    (extrinsic[2][0], extrinsic[2][1], extrinsic[2][2]),
-                )
-                translation = (
-                    extrinsic[0][3],
-                    extrinsic[1][3],
-                    extrinsic[2][3],
-                )
-                intrinsic_matrix = _tuple_matrix(
-                    prediction.intrinsics[index],
-                    3,
-                    3,
-                    "DA3 intrinsic",
-                )
-                intrinsics = (
-                    (intrinsic_matrix[0][0], intrinsic_matrix[0][1], intrinsic_matrix[0][2]),
-                    (intrinsic_matrix[1][0], intrinsic_matrix[1][1], intrinsic_matrix[1][2]),
-                    (intrinsic_matrix[2][0], intrinsic_matrix[2][1], intrinsic_matrix[2][2]),
-                )
-                predictions.append(
-                    Da3BaseObservationPrediction(
-                        observation_id=image.observation_id,
-                        dimensions=ImageDimensions(
-                            width_px=width_px,
-                            height_px=height_px,
-                        ),
-                        world_to_camera_rotation=rotation,
-                        world_to_camera_translation=translation,
-                        intrinsics=intrinsics,
-                        depth_values=tuple(flat_depth),
-                        validity=(True,) * (width_px * height_px),
-                        # DA3 uses exp(x)+1 confidence, not a calibrated [0,1]
-                        # probability. Do not invent a normalization here.
-                        confidence=None,
+                    raise Da3RuntimeError(
+                        "DA3-BASE unexpectedly reported a metric scale factor"
                     )
-                )
+                try:
+                    prediction = output_module.OutputProcessor()(raw)
+                except Exception as exc:
+                    raise Da3RuntimeError("DA3-BASE output postprocessing failed") from exc
+                if prediction.extrinsics is None or prediction.intrinsics is None:
+                    raise Da3RuntimeError("DA3-BASE prediction is missing camera parameters")
+                if len(prediction.depth) != len(images):
+                    raise Da3RuntimeError("DA3-BASE depth count does not match inputs")
+                if len(prediction.extrinsics) != len(images) or len(
+                    prediction.intrinsics
+                ) != len(images):
+                    raise Da3RuntimeError("DA3-BASE camera count does not match inputs")
+
+                predictions: list[Da3BaseObservationPrediction] = []
+                for index, image in enumerate(images):
+                    depth = prediction.depth[index]
+                    if getattr(depth, "ndim", None) != 2:
+                        raise Da3RuntimeError(
+                            "DA3-BASE depth must be one HxW raster per observation"
+                        )
+                    height_px, width_px = int(depth.shape[0]), int(depth.shape[1])
+                    flat_depth: list[float] = []
+                    for raw_value in depth.reshape(-1):
+                        numeric = float(raw_value)
+                        if not math.isfinite(numeric) or numeric <= 0.0:
+                            raise Da3RuntimeError(
+                                "DA3-BASE relative depth must be finite and strictly positive"
+                            )
+                        flat_depth.append(numeric)
+
+                    extrinsic = _tuple_matrix(
+                        prediction.extrinsics[index],
+                        int(prediction.extrinsics[index].shape[0]),
+                        4,
+                        "DA3 extrinsic",
+                    )
+                    if len(extrinsic) not in (3, 4):
+                        raise Da3RuntimeError("DA3 extrinsic must be 3x4 or 4x4")
+                    if len(extrinsic) == 4 and extrinsic[3] != (0.0, 0.0, 0.0, 1.0):
+                        raise Da3RuntimeError(
+                            "DA3 homogeneous extrinsic bottom row is invalid"
+                        )
+                    rotation = (
+                        (extrinsic[0][0], extrinsic[0][1], extrinsic[0][2]),
+                        (extrinsic[1][0], extrinsic[1][1], extrinsic[1][2]),
+                        (extrinsic[2][0], extrinsic[2][1], extrinsic[2][2]),
+                    )
+                    translation = (
+                        extrinsic[0][3],
+                        extrinsic[1][3],
+                        extrinsic[2][3],
+                    )
+                    intrinsic_matrix = _tuple_matrix(
+                        prediction.intrinsics[index],
+                        3,
+                        3,
+                        "DA3 intrinsic",
+                    )
+                    intrinsics = (
+                        (
+                            intrinsic_matrix[0][0],
+                            intrinsic_matrix[0][1],
+                            intrinsic_matrix[0][2],
+                        ),
+                        (
+                            intrinsic_matrix[1][0],
+                            intrinsic_matrix[1][1],
+                            intrinsic_matrix[1][2],
+                        ),
+                        (
+                            intrinsic_matrix[2][0],
+                            intrinsic_matrix[2][1],
+                            intrinsic_matrix[2][2],
+                        ),
+                    )
+                    predictions.append(
+                        Da3BaseObservationPrediction(
+                            observation_id=image.observation_id,
+                            dimensions=ImageDimensions(
+                                width_px=width_px,
+                                height_px=height_px,
+                            ),
+                            world_to_camera_rotation=rotation,
+                            world_to_camera_translation=translation,
+                            intrinsics=intrinsics,
+                            depth_values=tuple(flat_depth),
+                            validity=(True,) * (width_px * height_px),
+                            # DA3 uses exp(x)+1 confidence, not a calibrated [0,1]
+                            # probability. Do not invent a normalization here.
+                            confidence=None,
+                        )
+                    )
 
         return environment, tuple(predictions)
 
@@ -743,12 +827,16 @@ def execute_da3_base_preview(
     request: Da3ExecutionRequest,
     *,
     runtime: Da3Runtime | None = None,
+    stage_observer: Da3StageObserver | None = None,
 ) -> Da3ExecutionResult:
     if not isinstance(request, Da3ExecutionRequest):
         raise TypeError("request must be Da3ExecutionRequest")
-    source_root = _verify_source_root(request.source_root)
-    checkpoint_path = _verify_checkpoint(request.checkpoint_path)
-    images = tuple(_verified_rgb_image(item) for item in request.inputs)
+    with _observed_stage(stage_observer, DA3_PROFILE_STAGE_SOURCE_VERIFICATION):
+        source_root = _verify_source_root(request.source_root)
+    with _observed_stage(stage_observer, DA3_PROFILE_STAGE_CHECKPOINT_VERIFICATION):
+        checkpoint_path = _verify_checkpoint(request.checkpoint_path)
+    with _observed_stage(stage_observer, DA3_PROFILE_STAGE_DECODED_INPUT_VERIFICATION):
+        images = tuple(_verified_rgb_image(item) for item in request.inputs)
 
     producer = _producer(request.config)
     normalization_identity = _normalization_identity(
@@ -756,7 +844,11 @@ def execute_da3_base_preview(
         images=images,
         hardware_runtime=request.hardware_runtime,
     )
-    selected_runtime = runtime if runtime is not None else LocalDa3ReferenceRuntime()
+    selected_runtime = (
+        runtime
+        if runtime is not None
+        else LocalDa3ReferenceRuntime(stage_observer=stage_observer)
+    )
     environment, predictions = selected_runtime.infer(
         source_root=source_root,
         checkpoint_path=checkpoint_path,
@@ -774,10 +866,11 @@ def execute_da3_base_preview(
     if actual_ids != expected_ids:
         raise Da3RuntimeError("DA3 runtime prediction observations do not match inputs")
 
-    geometry = normalize_da3_base_preview(
-        predictions,
-        normalization_identity=normalization_identity,
-    )
+    with _observed_stage(stage_observer, DA3_PROFILE_STAGE_CANONICAL_NORMALIZATION):
+        geometry = normalize_da3_base_preview(
+            predictions,
+            normalization_identity=normalization_identity,
+        )
     return Da3ExecutionResult(
         producer=producer,
         model=DA3_MODEL,
