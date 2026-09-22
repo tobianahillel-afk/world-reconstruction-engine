@@ -144,7 +144,8 @@ class FeedForwardGeometryResult:
             camera = cameras_by_observation.get(depth.observation_id)
             if camera is None:
                 raise ValueError(
-                    "feed_forward_geometry DepthField observation must have an emitted CameraSolution"
+                    "feed_forward_geometry DepthField observation must have an "
+                    "emitted CameraSolution"
                 )
             if depth.camera_solution_id != camera.solution_id:
                 raise ValueError(
@@ -163,7 +164,10 @@ class FeedForwardGeometryResult:
                 )
 
         expected_camera_ids = tuple(
-            sorted((item.solution_id for item in self.camera_solutions), key=lambda item: item.value)
+            sorted(
+                (item.solution_id for item in self.camera_solutions),
+                key=lambda item: item.value,
+            )
         )
         expected_depth_ids = tuple(
             sorted((item.depth_field_id for item in self.depth_fields), key=lambda item: item.value)
@@ -182,5 +186,6 @@ class FeedForwardGeometryResult:
             )
         if self.geometry_solution.point_map_ids != expected_point_map_ids:
             raise ValueError(
-                "feed_forward_geometry GeometrySolution must reference exactly all emitted point maps"
+                "feed_forward_geometry GeometrySolution must reference exactly all "
+                "emitted point maps"
             )
