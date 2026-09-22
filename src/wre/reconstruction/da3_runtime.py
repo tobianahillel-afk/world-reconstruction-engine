@@ -465,7 +465,9 @@ def inspect_da3_reference_environment() -> Da3EnvironmentIdentity:
 def _isolated_da3_import(source_root: Path):
     package_parent = source_root / "src"
     preexisting = tuple(
-        name for name in sys.modules if name == "depth_anything_3" or name.startswith("depth_anything_3.")
+        name
+        for name in sys.modules
+        if name == "depth_anything_3" or name.startswith("depth_anything_3.")
     )
     if preexisting:
         raise Da3RuntimeError("DA3 modules were already imported before source audit")
@@ -565,7 +567,9 @@ class LocalDa3ReferenceRuntime:
                 model.to(device="cpu")
                 model.eval()
             except Exception as exc:
-                raise Da3RuntimeError("DA3-BASE checkpoint is incompatible with reviewed model") from exc
+                raise Da3RuntimeError(
+                    "DA3-BASE checkpoint is incompatible with reviewed model"
+                ) from exc
 
             arrays = []
             for image in images:
@@ -618,7 +622,10 @@ class LocalDa3ReferenceRuntime:
                 raise Da3RuntimeError("DA3-BASE prediction is missing camera parameters")
             if len(prediction.depth) != len(images):
                 raise Da3RuntimeError("DA3-BASE depth count does not match inputs")
-            if len(prediction.extrinsics) != len(images) or len(prediction.intrinsics) != len(images):
+            if (
+                len(prediction.extrinsics) != len(images)
+                or len(prediction.intrinsics) != len(images)
+            ):
                 raise Da3RuntimeError("DA3-BASE camera count does not match inputs")
 
             predictions: list[Da3BaseObservationPrediction] = []
