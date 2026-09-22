@@ -1177,7 +1177,7 @@ work_items:
   - id: V2L13.4
     lot: V2L13
     title: Feed forward geometry camera quality metrics
-    status: ready
+    status: done
     objective: Define one pure solver-independent feed-forward camera quality evaluator over canonical CameraSolution values and one explicit trusted reference-camera set so preview geometry can retain deterministic canonical MetricVector evidence for observation coverage relative pose and pinhole intrinsic quality without changing geometry values applying thresholds emitting QualityDecision comparing against COLMAP selecting routes or promoting a default.
     allowed_scope:
       - src/wre/reconstruction/feed_forward_camera_quality.py
@@ -1259,7 +1259,99 @@ work_items:
       - source immutability regression proving candidate reference cameras and pre-existing metrics are not copied with altered semantic values or mutated
       - module-surface regression proving no DA3 learned runtime COLMAP quality policy decision router threshold benchmark winner surface appearance dynamic persistence or V2L13.5 dependency enters the evaluator
       - full fast CI CodeQL and native/compatibility lanes only where repository path triggers require them
-  - {id: V2L13.5, lot: V2L13, title: Preview versus classical baseline comparison, status: planned, depends_on: [V2L13.4]}
+  - id: V2L13.5
+    lot: V2L13
+    title: Preview versus classical baseline comparison
+    status: ready
+    objective: Exercise the exact DA3-BASE preview route and the current pinned COLMAP incremental precision baseline on one shared controlled image fixture with explicit trusted reference cameras, evaluate both through the same frame/scale-invariant camera-pose metric semantics established by V2L13.4 where directly comparable, retain projection-family limitations explicitly, and record side-by-side evidence without computing a winner score promoting a default route or changing shipping status.
+    allowed_scope:
+      - tests/test_feed_forward_classical_comparison.py
+      - one dedicated .github/workflows/feed-forward-classical-comparison.yml integration lane if the exact DA3 and PyCOLMAP environments cannot coexist in ordinary CI
+      - focused reuse extraction in src/wre/reconstruction/feed_forward_camera_quality.py only to expose solver-independent pose-only camera metric evaluation for canonical CameraSolution tuples while preserving every existing V2L13.4 FeedForwardCameraQualityRequest result exactly
+      - focused exports in src/wre/reconstruction/__init__.py only if the shared pose-only evaluator becomes a stable public reuse boundary
+      - the existing versioned tests/fixtures/synthetic/colmap-l3-end-to-end controlled scene as read-only source evidence; a new bounded fixture may be added only if the existing scene cannot exercise both exact routes without changing their accepted configurations
+      - docs/reviews/V2L13-preview-classical-comparison.md for focused retained comparison evidence and explicit limitations without closing the V2L13 lot
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after comparison evidence is green so V2L13.6 can be activated without implementing it
+    out_of_scope:
+      - changing the DA3-BASE source revision checkpoint reference runtime package closure preprocessing normalization confidence scale or adapter identity established by V2L13.2 and V2L13.3
+      - changing COLMAP feature matching verification incremental-mapper configuration canonicalization outcome semantics adapter identity shipping status or dependency identity established by V2L12
+      - using colmap.precision_geometry or colmap.global_precision_geometry as a hidden product default; this item names colmap.incremental_precision_geometry only as the controlled classical comparison baseline
+      - selecting ranking merging aligning or repairing multiple classical sparse models; the controlled comparison must require one explicit comparable native model or report the comparison unresolved
+      - coercing COLMAP SIMPLE_RADIAL cameras into pinhole cameras dropping distortion to manufacture intrinsic comparability or changing the V2L13.4 rule that feed-forward intrinsic metrics require exact pinhole semantics
+      - comparing absolute translation vectors camera centers LocalFrameId values or raw coordinate tuples across unrelated local frames
+      - Sim3 alignment metric-scale solving world Earth ECEF ENU GPS GCP placement bundle adjustment refinement or any geometry mutation
+      - depth-field point-map sparse-point reprojection track-support surface appearance photometric runtime or resource-efficiency comparison
+      - introducing a generic competing-GeometrySolution comparison contract winner policy consensus policy or disagreement contract owned by V2L14
+      - quality thresholds QualityDecision retry fallback escalation router/default changes benchmark-registry promotion or adapter shipping-status promotion
+      - learned CUDA autocast compilation execution-profile timing resource profiling or V2L13.6 implementation
+      - integrating another learned candidate or another classical solver route
+    depends_on: [V2L13.4]
+    read_before:
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/06_TESTING.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md
+      - docs/28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md
+      - docs/29_PERFORMANCE_INTEGRATION_MAP.md
+      - docs/reviews/V2L12-classical-precision-geometry-review.md
+      - registry/adapter-models.yaml
+      - registry/dependencies.yaml
+      - src/wre/reconstruction/feed_forward_camera_quality.py
+      - src/wre/reconstruction/da3_runtime.py
+      - src/wre/reconstruction/da3_preview.py
+      - src/wre/reconstruction/colmap_features.py
+      - src/wre/reconstruction/colmap_matching.py
+      - src/wre/reconstruction/colmap_verification.py
+      - src/wre/reconstruction/colmap_reconstruction.py
+      - src/wre/reconstruction/colmap_canonical_geometry.py
+      - src/wre/reconstruction/colmap_geometry_outcomes.py
+      - tests/test_feed_forward_camera_quality.py
+      - tests/test_da3_runtime.py
+      - tests/test_colmap_precision_route_regression.py
+      - tests/fixtures/synthetic/colmap-l3-end-to-end/fixture.json
+      - tests/fixtures/synthetic/colmap-l3-end-to-end/scene.json
+    reuse:
+      - exact DA3-BASE local execution boundary and experimental adapter identity da3.base_preview from V2L13.3 rather than a fake candidate or alternate model profile
+      - exact PyCOLMAP 4.2.0 incremental baseline route colmap.incremental_precision_geometry from V2L12 as a named comparison baseline only, not a router or default-route decision
+      - the versioned colmap-l3-end-to-end synthetic image generator and its known camera centers focal length image dimensions and deterministic ObservationId mapping as controlled reference evidence when compatible with both routes
+      - V2L13.4 observation coverage relative rotation translation-pair coverage and relative translation-direction metric descriptors as the directly comparable pose metric vocabulary
+      - V2L13.4 pinhole focal and principal-point metrics only for the DA3 pinhole candidate; COLMAP SIMPLE_RADIAL calibration remains projection-native and is not aliased to pinhole for the sake of a symmetric score
+      - exact ArtifactProducerIdentity MetricDescriptor MetricObservation MetricProvenance and MetricVector values rather than untyped benchmark dictionaries
+      - ColmapGeometryOutcome SINGLE_MODEL semantics to require one independent classical local-frame solution for the controlled comparison without selecting among disconnected models
+      - explicit adapter producer model checkpoint configuration hardware and input identities from the two accepted runtime boundaries as comparison provenance
+    acceptance:
+      - Add one controlled comparison fixture in which the exact same rendered source observations and trusted camera-reference semantics are supplied to both the exact DA3-BASE preview path and the exact PyCOLMAP 4.2.0 incremental classical baseline.
+      - The fixture source bytes observation identities image dimensions and trusted reference cameras are deterministic and shared. A route-specific decode or staging representation may differ only through its already accepted adapter boundary and cannot change observation membership silently.
+      - Real DA3 execution uses the exact V2L13.3 source revision checkpoint digest byte length Python package profile CPU float32 configuration and explicit hardware identity; no fake runtime candidate-native fixture substitutes for this comparison evidence.
+      - Real classical execution uses the exact current feature matching geometric-verification and incremental precision-mapper configurations already accepted by V2L12; this work item does not tune COLMAP to improve the comparison.
+      - The controlled classical outcome must contain exactly one canonical model for comparison. Zero models or disconnected multiple models produce an explicit unresolved comparison fixture failure rather than selecting the largest model merging frames or discarding alternatives.
+      - Evaluate both preview and classical camera sets against the same trusted reference cameras using identical ObservationId correspondence and the same pose-only descriptors geometry.camera.observation_coverage_ratio geometry.camera.relative_rotation_error_deg_median geometry.camera.translation_pair_coverage_ratio and geometry.camera.relative_translation_direction_error_deg_median.
+      - If V2L13.4 is refactored to expose a solver-independent canonical-camera pose evaluator, evaluate_feed_forward_camera_quality must delegate to or compose with it while preserving the exact six-metric V2L13.4 behavior descriptors values provenance ordering and fail-closed pinhole intrinsic rules for all existing tests.
+      - Do not directly compare candidate/reference absolute translations centers coordinate tuples scale or LocalFrameId strings; the controlled comparison remains based on the frame/scale-invariant relative-pose semantics already accepted in V2L13.4.
+      - DA3 pinhole focal/principal-point metrics may be retained as route-specific evidence against the trusted reference. COLMAP SIMPLE_RADIAL cameras must not be coerced into pinhole or have distortion silently discarded to fabricate the same intrinsic metrics; the comparison evidence records those intrinsic metrics as not directly comparable for the classical route.
+      - Produce one deterministic side-by-side comparison record or retained review section containing exact adapter identities source/checkpoint or dependency versions relevant to each route reference fixture identity shared observation count and the two canonical pose MetricVector values. The record has no overall scalar score rank winner preferred-route boolean or default-selection field.
+      - Metric names descriptor directions units and provenance remain canonical and finite. Missing pairwise evidence remains absent or explicitly unavailable according to V2L13.4 semantics rather than zero NaN infinity or an invented penalty.
+      - The comparison may describe factual differences between the two metric vectors but must not promote either adapter change shipping_status define routing thresholds or assert universal superiority from one controlled synthetic fixture.
+      - The comparison evidence explicitly states that colmap-l3-end-to-end is a deterministic synthetic integration fixture and not a representative natural-image quality benchmark; broader benchmark/default evidence remains future work.
+      - Existing DA3 and COLMAP runtime/source/checkpoint/database immutability guarantees remain unchanged before and after comparison execution.
+      - No timing memory throughput execution-profile CUDA compilation stage profiling or V2L13.6 behavior is introduced.
+    tests:
+      - pure regression proving any shared pose-only evaluator exactly preserves all existing V2L13.4 feed-forward camera metric values and metric provenance
+      - shared-fixture identity regression proving preview and classical routes receive the same canonical observation membership and trusted camera-reference set
+      - exact real DA3-BASE plus exact PyCOLMAP incremental comparison integration in one explicitly provisioned lane with no runtime implicit downloads
+      - classical SINGLE_MODEL requirement plus zero/disconnected explicit unresolved negatives without model selection ranking merge or alignment
+      - direct comparable-pose descriptor regression proving both routes emit the same four metric names semantics units directions and canonical ordering against one reference set
+      - projection-mismatch regression proving DA3 pinhole intrinsic metrics are never synthesized for COLMAP SIMPLE_RADIAL cameras and no distortion-dropping alias enters the comparison
+      - relative-pose frame/scale invariance regression for both route camera sets and prohibition of absolute local-frame translation comparison
+      - side-by-side evidence regression proving exact route identities and absence of score winner default threshold QualityDecision retry fallback or shipping-status mutation
+      - source immutability regression for DA3 source/checkpoint inputs COLMAP verification database and canonical geometry values across comparison
+      - documentation evidence regression confirming the controlled fixture limitations and explicit no-default-promotion conclusion
+      - full fast CI CodeQL exact PyCOLMAP lane exact DA3 lane and the dedicated combined comparison lane when added
   - {id: V2L13.6, lot: V2L13, title: Learned execution profile and stage profiling benchmark, status: planned, depends_on: [V2L13.5]}
   - {id: V2L14.1, lot: V2L14, title: Competing GeometrySolution comparison contract, status: planned, depends_on: [V2L13.6]}
   - {id: V2L14.2, lot: V2L14, title: Geometry initialization refinement adapter boundary, status: planned, depends_on: [V2L14.1]}

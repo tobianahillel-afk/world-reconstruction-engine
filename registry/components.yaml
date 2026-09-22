@@ -241,11 +241,13 @@ components:
       - src/wre/reconstruction/feed_forward_geometry.py
       - src/wre/reconstruction/da3_preview.py
       - src/wre/reconstruction/da3_runtime.py
+      - src/wre/reconstruction/feed_forward_camera_quality.py
       - src/wre/reconstruction/__init__.py
     tests:
       - tests/test_feed_forward_geometry_adapter.py
       - tests/test_da3_preview_adapter.py
       - tests/test_da3_runtime.py
+      - tests/test_feed_forward_camera_quality.py
     status: implementing
   precision_global_refinement: {owner_lot: V2L14, implementation: [], tests: [], status: planned}
   dense_depth_mvs: {owner_lot: V2L15, implementation: [], tests: [], status: planned}
