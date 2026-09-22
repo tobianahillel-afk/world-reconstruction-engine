@@ -329,9 +329,7 @@ def test_direct_native_geometry_preserves_pose_intrinsics_points_and_unresolved_
     assert result.source_model_identity_sha256 == colmap_sparse_model_content_identity(model)
     assert len(module.read_paths) == 1
 
-    cameras_by_observation = {
-        camera.observation_id: camera for camera in result.camera_solutions
-    }
+    cameras_by_observation = {camera.observation_id: camera for camera in result.camera_solutions}
     assert set(cameras_by_observation) == {
         ObservationId("obs:a"),
         ObservationId("obs:b"),
@@ -371,9 +369,7 @@ def test_camera_from_local_pose_is_not_inverted_transposed_or_rescaled(
 ) -> None:
     result, _, _, _ = _canonicalize(tmp_path)
     camera = next(
-        item
-        for item in result.camera_solutions
-        if item.observation_id == ObservationId("obs:a")
+        item for item in result.camera_solutions if item.observation_id == ObservationId("obs:a")
     )
     point = (2.0, 7.0, -1.0)
 
@@ -579,12 +575,8 @@ def test_direct_native_matches_retained_legacy_importer_and_bridge(
     )
     bridged = convert_sparse_reconstruction_estimate(legacy.models[0].estimate)
 
-    direct_cameras = {
-        camera.observation_id: camera for camera in direct.camera_solutions
-    }
-    bridged_cameras = {
-        camera.observation_id: camera for camera in bridged.camera_solutions
-    }
+    direct_cameras = {camera.observation_id: camera for camera in direct.camera_solutions}
+    bridged_cameras = {camera.observation_id: camera for camera in bridged.camera_solutions}
     assert set(direct_cameras) == set(bridged_cameras)
     for observation_id in direct_cameras:
         assert (
@@ -654,9 +646,7 @@ def test_incremental_canonical_adapter_registry_contract() -> None:
         == COLMAP_INCREMENTAL_CANONICAL_ARTIFACT_KEY_HARDWARE_POLICY
     )
     assert entry["shipping_status"] == COLMAP_INCREMENTAL_CANONICAL_SHIPPING_STATUS
-    assert entry["reproducibility_notes"] == (
-        COLMAP_INCREMENTAL_CANONICAL_REPRODUCIBILITY_NOTES
-    )
+    assert entry["reproducibility_notes"] == (COLMAP_INCREMENTAL_CANONICAL_REPRODUCIBILITY_NOTES)
 
 
 def test_existing_precision_and_legacy_registry_entries_remain_distinct() -> None:
