@@ -651,9 +651,7 @@ class LocalDa3ReferenceRuntime:
                 if "is_metric" in raw and raw["is_metric"] not in (0, False):
                     raise Da3RuntimeError("DA3-BASE unexpectedly reported metric output")
                 if "scale_factor" in raw and raw["scale_factor"] is not None:
-                    raise Da3RuntimeError(
-                        "DA3-BASE unexpectedly reported a metric scale factor"
-                    )
+                    raise Da3RuntimeError("DA3-BASE unexpectedly reported a metric scale factor")
                 prediction = output_module.OutputProcessor()(raw)
             except Da3RuntimeError:
                 raise
