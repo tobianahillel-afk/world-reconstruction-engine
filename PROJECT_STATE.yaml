@@ -4,17 +4,17 @@ project_name: World Reconstruction Engine
 roadmap_version: '2.0'
 phase: implementation
 milestone: V2M2
-lot: V2L12
-active_work_item: V2L12.5
+lot: V2L13
+active_work_item: V2L13.1
 status: ready
-last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5, V2L3.6, V2L4.1, V2L4.2, V2L4.3, V2L4.4, V2L4.5, V2L4.6, V2L5.1, V2L5.2, V2L5.3, V2L5.4, V2L5.5, V2L5.6, V2L6.1, V2L6.2, V2L6.3, V2L6.4, V2L6.5, V2L6.6, V2L7.1, V2L7.2, V2L7.3, V2L7.4, V2L7.5, V2L7.6, V2L8.1, V2L8.2, V2L8.3, V2L8.4, V2L8.5, V2L9.1, V2L9.2, V2L9.3, V2L9.4, V2L9.5, V2L10.1, V2L10.2, V2L10.3, V2L10.4, V2L10.5, V2L10.6, V2L11.1, V2L11.2, V2L11.3, V2L11.4, V2L11.5, V2L11.6, V2L12.1, V2L12.2, V2L12.3, V2L12.4]
-last_merged_pr: 110
+last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5, V2L3.6, V2L4.1, V2L4.2, V2L4.3, V2L4.4, V2L4.5, V2L4.6, V2L5.1, V2L5.2, V2L5.3, V2L5.4, V2L5.5, V2L5.6, V2L6.1, V2L6.2, V2L6.3, V2L6.4, V2L6.5, V2L6.6, V2L7.1, V2L7.2, V2L7.3, V2L7.4, V2L7.5, V2L7.6, V2L8.1, V2L8.2, V2L8.3, V2L8.4, V2L8.5, V2L9.1, V2L9.2, V2L9.3, V2L9.4, V2L9.5, V2L10.1, V2L10.2, V2L10.3, V2L10.4, V2L10.5, V2L10.6, V2L11.1, V2L11.2, V2L11.3, V2L11.4, V2L11.5, V2L11.6, V2L12.1, V2L12.2, V2L12.3, V2L12.4, V2L12.5]
+last_merged_pr: 111
 current_goal: >-
-  Exercise the retained incremental donor and the current incremental and global COLMAP 4.2.0 V2 precision paths over shared verified
-  source evidence compare their canonical semantics without ranking a winner and close the V2L12 classical precision geometry lot review.
+  Define the pure solver-independent feed-forward geometry adapter boundary over canonical decoded image artifacts and V2 camera depth point
+  and geometry values without selecting integrating or executing a learned model and without weakening the closed V2L12 classical baseline.
 next_action: >-
-  Complete only V2L12.5 from its executable contract in registry/work-items/v2m2.yaml: add the exact native regression comparison fixture
-  make evidence-backed V2L12 shipping-status decisions and close the lot review; do not implement feed-forward geometry from V2L13.
+  Complete only V2L13.1 from its executable contract in registry/work-items/v2m2.yaml: implement the pure feed-forward geometry capability
+  and normalized canonical result aggregate; do not integrate a learned candidate checkpoint runtime or V2L13.2 behavior.
 blockers: []
 architecture:
   product_blueprint: docs/01_PRODUCT.md
