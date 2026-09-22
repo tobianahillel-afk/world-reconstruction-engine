@@ -874,7 +874,7 @@ work_items:
   - id: V2L13.1
     lot: V2L13
     title: Feed forward geometry adapter interface
-    status: ready
+    status: done
     objective: Define the pure solver-independent V2 feed-forward geometry adapter boundary over canonical decoded image artifacts and canonical CameraSolution DepthField PointMap and GeometrySolution values so later learned candidates can normalize camera depth and optional point geometry without leaking model-private tensors hidden neural state or checkpoint-specific structures into core contracts and without selecting or integrating any learned model yet.
     allowed_scope:
       - src/wre/reconstruction/feed_forward_geometry.py
@@ -962,7 +962,111 @@ work_items:
       - source immutability regression proving aggregate validation does not reorder or mutate supplied canonical child values
       - module-surface regression proving no Torch CUDA TensorRT ONNX JAX NumPy model checkpoint filesystem network persistence routing quality surface appearance dynamic or V2L13.2 dependency enters the pure interface layer
       - full fast CI and CodeQL plus native lanes only where repository path triggers require them
-  - {id: V2L13.2, lot: V2L13, title: First approved feed forward preview candidate, status: planned, depends_on: [V2L13.1]}
+  - id: V2L13.2
+    lot: V2L13
+    title: First approved feed forward preview candidate
+    status: ready
+    objective: Integrate Depth Anything 3 DA3-BASE as the first bounded feed-forward PREVIEW candidate behind the V2L13.1 contract by defining candidate-specific immutable native prediction semantics and direct normalization into canonical CameraSolution DepthField optional PointMap and GeometrySolution values, while keeping actual external model environment checkpoint execution hardware profile and authoritative reproducibility pinning in V2L13.3.
+    candidate_refresh:
+      reviewed_at: '2026-09-22'
+      selected_family: Depth Anything 3
+      selected_variant: DA3-BASE
+      upstream_repository: ByteDance-Seed/Depth-Anything-3
+      observed_source_revision: 3d835ec1a5802d64a8b8b15f817a1ab54809bfe4
+      observed_checkpoint_identifier: depth-anything/DA3-BASE
+      observed_checkpoint_sha256: e01067dc1659613083d9145a9a2547ccdbe6ccbbf83c4fe7b3e8a4e2bdae78b5
+      source_license: Apache-2.0
+      checkpoint_license: Apache-2.0
+      selection_notes: >-
+        DA3-BASE is selected only as the first integration candidate because its current public API
+        exposes relative depth confidence OpenCV world-to-camera extrinsics and pinhole intrinsics,
+        its 0.12B variant is materially smaller than one-billion-parameter preview alternatives, and
+        both reviewed source and checkpoint report Apache-2.0 terms. This is not a benchmark winner,
+        default promotion, metric-scale claim or permanent specialist decision. VGGT-Omega remains
+        noncommercial/gated under its current FAIR research license, Pi3/Pi3X public weights remain
+        noncommercial, and MapAnything Apache remains a valid heavier comparison candidate.
+    allowed_scope:
+      - src/wre/reconstruction/da3_preview.py
+      - focused exports in src/wre/reconstruction/__init__.py
+      - tests/test_da3_preview_adapter.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L13.3 can be activated without implementing it
+    out_of_scope:
+      - importing executing downloading or vendoring Depth Anything 3 torch xformers huggingface_hub safetensors Pillow OpenCV NumPy or another learned runtime dependency inside WRE core
+      - adding an authoritative dependency adapter-model checkpoint hardware or shipping registry entry before V2L13.3
+      - treating the observed source revision checkpoint digest or current upstream license evidence in candidate_refresh as the final V2L13.3 reproducibility manifest
+      - integrating DA3-SMALL DA3-LARGE DA3-GIANT nested metric Gaussian streaming or another DA3 variant
+      - integrating MapAnything VGGT VGGT-Omega Pi3 Pi3X CUT3R Uni3R TokenSplat or another learned candidate
+      - changing FeedForwardGeometryResult CameraSolution DepthField PointMap GeometrySolution LocalFrameId GeometryScaleStatus decoded-image or ArtifactRef contracts
+      - raw media reading decoding resize crop color normalization tensor conversion batching device transfer inference mixed precision compilation or model output persistence
+      - inferring metric scale from DA3-BASE because upstream exposes metric variants; DA3-BASE prediction is treated as unresolved-scale unless later explicit candidate evidence proves otherwise
+      - using predicted world wording to claim Earth geographic global project or cross-run world identity
+      - route selection PREVIEW default promotion quality scoring fallback retry comparison against COLMAP or any V2L13.4 V2L13.5 V2L13.6 behavior
+      - physical SurfaceModel mesh collision measurement appearance dynamic chronology MasterScene RuntimeScene or later milestone work
+      - starting V2L13.3 implementation in this work item
+    depends_on: [V2L13.1]
+    read_before:
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/06_TESTING.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md
+      - docs/27_RESEARCH_CANDIDATE_COVERAGE.md
+      - docs/28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md
+      - docs/29_PERFORMANCE_INTEGRATION_MAP.md
+      - docs/reviews/V2L12-classical-precision-geometry-review.md
+      - registry/dependencies.yaml
+      - registry/adapter-models.yaml
+      - src/wre/reconstruction/feed_forward_geometry.py
+      - src/wre/domain/camera_solutions.py
+      - src/wre/domain/depth_fields.py
+      - src/wre/domain/point_maps.py
+      - src/wre/domain/geometry_solutions.py
+      - src/wre/domain/fragments.py
+      - src/wre/domain/metrics.py
+      - tests/test_feed_forward_geometry_adapter.py
+      - upstream ByteDance-Seed/Depth-Anything-3 README.md at the reviewed revision
+      - upstream ByteDance-Seed/Depth-Anything-3 docs/API.md at the reviewed revision
+      - upstream ByteDance-Seed/Depth-Anything-3 src/depth_anything_3/specs.py at the reviewed revision
+      - upstream ByteDance-Seed/Depth-Anything-3 src/depth_anything_3/api.py at the reviewed revision
+    reuse:
+      - FeedForwardGeometryResult as the exact normalized aggregate boundary; DA3-specific values must disappear after normalization
+      - the reviewed DA3 Prediction semantics depth N-H-W confidence N-H-W extrinsics N-by-4-by-4 world-to-camera and intrinsics N-by-3-by-3 as candidate-private input semantics
+      - DA3 world-to-camera OpenCV extrinsics as the same mathematical camera-from-local direction required by CameraSolution, copied without inversion transpose sign flip or world/Earth promotion
+      - canonical pinhole intrinsics fx fy cx cy extracted from the candidate matrix without solver-private calibration objects
+      - one explicit deterministic LocalFrameId namespace for one candidate prediction set, treated only as a candidate-local scene frame
+      - GeometryScaleStatus.UNRESOLVED for DA3-BASE because the reviewed Any-view BASE checkpoint is not the metric/nested series
+      - pure Python immutable tuples and exact finite-float validation so V2L13.2 does not require NumPy Torch or model execution
+    acceptance:
+      - Add one pure DA3 preview normalization module whose import and tests require no DA3 repository learned framework checkpoint GPU filesystem network or external environment.
+      - Define one immutable candidate-native prediction value with exact observation identity image dimensions world-to-camera 3x3 rotation translation pinhole 3x3 intrinsics row-major depth validity/confidence data and no generic metadata latent tensors features model object path or mutable arrays.
+      - Candidate-native tuples must be immutable non-empty canonically ordered by ObservationId and contain unique observations; malformed mutable duplicate unsorted wrong-type NaN infinity or shape-invalid evidence fails closed without reordering coercion or repair.
+      - Validate pinhole intrinsics as finite exact floats with homogeneous matrix structure and positive focal lengths; preserve fx fy cx cy exactly into canonical CameraSolution intrinsic_parameters without hidden rescaling.
+      - Validate every candidate world-to-camera rotation as the canonical CameraSolution camera-from-local rotation convention and copy rotation and translation directly into canonical values without inversion transpose sign change axis swap coordinate rescaling or renaming the local frame to world.
+      - Validate each depth raster against its exact image dimensions; valid samples are finite strictly positive floats and invalid samples use canonical 0.0, with optional confidence finite in zero-to-one and canonical 0.0 on invalid pixels.
+      - Emit exactly one canonical CameraSolution and one DepthField per candidate observation, all sharing one explicit deterministic LocalFrameId; DA3-specific upstream world wording creates no Earth project-world or cross-run compatibility claim.
+      - Use one explicit open canonical depth convention token owned by this adapter and document whether the candidate values are interpreted as camera-z or another exact reviewed DA3 convention; do not guess a convention from exporter behavior if upstream evidence is insufficient.
+      - DA3-BASE canonical GeometrySolution scale_status must be UNRESOLVED and V2L13.2 must contain a negative regression preventing metric promotion from checkpoint family names scale-factor fields or other absent metric-series evidence.
+      - PointMap output is optional; if V2L13.2 cannot derive a point map without adding an unreviewed depth-unprojection convention it must emit no PointMap and rely on canonical DepthField values only.
+      - GeometrySolution must reference exactly every emitted CameraSolution and DepthField and any emitted PointMap, then the result must validate through FeedForwardGeometryResult without a DA3-specific downstream branch.
+      - Stable role-separated canonical output IDs and LocalFrameId must derive only from an explicit immutable normalization identity supplied by the caller plus observation roles, never from Python object identity filesystem path timestamps hardware or mutable upstream values.
+      - Repeating normalization over equal candidate-native values and the same normalization identity must produce equal canonical values byte-for-byte at the Python value layer.
+      - The module must not expose execution download checkpoint registry route quality benchmark surface appearance dynamic or V2L13.3 symbols.
+    tests:
+      - candidate-native prediction exact frozen field shape immutable tuple canonical ordering uniqueness type finite-float matrix and raster validation regressions
+      - asymmetric world-to-camera fixture proving direct R-x-plus-t CameraSolution semantics and rejecting transpose inverse translation-sign and hidden-axis alternatives
+      - pinhole intrinsic extraction exactness fixture for fx fy cx cy plus malformed homogeneous matrix and non-positive focal negatives
+      - depth validity confidence boundary fixtures including invalid-zero canonicalization contract and no silent masking threshold
+      - deterministic output LocalFrameId CameraSolutionId DepthFieldId GeometrySolutionId derivation from caller normalization identity with repeat equality
+      - multi-observation normalization proving one camera and one depth per observation exact observation linkage dimensions and one shared local frame
+      - DA3-BASE unresolved-scale regression proving no metric world Earth geographic or cross-run claim
+      - regression proving no PointMap is fabricated unless the accepted reviewed depth convention supports explicit unprojection within this item
+      - FeedForwardGeometryResult integration regression proving exact child references and no candidate-private object leaks past normalization
+      - module-surface regression proving no Torch xformers huggingface NumPy filesystem network model execution registry routing quality comparison surface appearance dynamic or V2L13.3 dependency enters the adapter
+      - full fast CI and CodeQL plus native lanes only where repository path triggers require them
   - {id: V2L13.3, lot: V2L13, title: Feed forward checkpoint hardware license reproducibility, status: planned, depends_on: [V2L13.2]}
   - {id: V2L13.4, lot: V2L13, title: Feed forward geometry camera quality metrics, status: planned, depends_on: [V2L13.3]}
   - {id: V2L13.5, lot: V2L13, title: Preview versus classical baseline comparison, status: planned, depends_on: [V2L13.4]}
