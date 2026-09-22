@@ -634,6 +634,7 @@ work_items:
       - focused reuse hooks in src/wre/reconstruction/colmap_reconstruction.py and src/wre/reconstruction/colmap_import.py only when needed to share audited native-model identity or file-verification logic without changing retained donor semantics
       - tests/test_colmap_canonical_geometry.py
       - tests/test_colmap_global_reconstruction.py
+      - .github/workflows/colmap-integration.yml only to include the two V2L12.3 test files in the existing exact PyCOLMAP 4.2.0 native lane so required real global-mapping acceptance evidence actually executes
       - focused registry/adapter-models.yaml additions for distinct current incremental and global executable precision-geometry adapter entries while preserving colmap.precision_geometry and colmap.sparse_sfm
       - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L12.4 can be activated without implementing it
     out_of_scope:
