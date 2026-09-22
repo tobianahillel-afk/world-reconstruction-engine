@@ -165,11 +165,7 @@ def _two_camera_fixture(
         _depth("obs:a", "depth:z", camera_a),
         _depth("obs:b", "depth:a", camera_b),
     )
-    points = (
-        (_point_map("points:a", local_frame, ("obs:a", "obs:b")),)
-        if include_point_map
-        else ()
-    )
+    points = (_point_map("points:a", local_frame, ("obs:a", "obs:b")),) if include_point_map else ()
     geometry = _geometry(
         local_frame,
         cameras,
@@ -183,9 +179,7 @@ def _two_camera_fixture(
 def test_feed_forward_capability_is_pure_and_uses_canonical_geometry_kinds() -> None:
     assert FEED_FORWARD_GEOMETRY_CAPABILITY_NAME.value == "geometry.feed_forward"
     assert FEED_FORWARD_GEOMETRY_INPUT_KIND == ArtifactKind("media.decoded_image_pyramid")
-    assert FEED_FORWARD_GEOMETRY_CAPABILITY.capability is (
-        FEED_FORWARD_GEOMETRY_CAPABILITY_NAME
-    )
+    assert FEED_FORWARD_GEOMETRY_CAPABILITY.capability is (FEED_FORWARD_GEOMETRY_CAPABILITY_NAME)
     assert FEED_FORWARD_GEOMETRY_CAPABILITY.input_kinds == frozenset(
         {ArtifactKind("media.decoded_image_pyramid")}
     )
@@ -197,9 +191,7 @@ def test_feed_forward_capability_is_pure_and_uses_canonical_geometry_kinds() -> 
             ArtifactKind("geometry.solution"),
         }
     )
-    assert FEED_FORWARD_GEOMETRY_CAPABILITY.output_kinds is (
-        FEED_FORWARD_GEOMETRY_OUTPUT_KINDS
-    )
+    assert FEED_FORWARD_GEOMETRY_CAPABILITY.output_kinds is (FEED_FORWARD_GEOMETRY_OUTPUT_KINDS)
     assert ArtifactKind("geometry.sparse_reconstruction_estimate") not in (
         FEED_FORWARD_GEOMETRY_OUTPUT_KINDS
     )
@@ -306,9 +298,7 @@ def test_unresolved_depth_only_result_preserves_exact_children_and_references() 
 
 
 def test_optional_point_map_is_supported_without_becoming_mandatory() -> None:
-    local_frame, cameras, depths, points, geometry = _two_camera_fixture(
-        include_point_map=True
-    )
+    local_frame, cameras, depths, points, geometry = _two_camera_fixture(include_point_map=True)
 
     result = FeedForwardGeometryResult(cameras, depths, points, geometry)
 
