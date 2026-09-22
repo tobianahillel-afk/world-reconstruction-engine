@@ -130,7 +130,12 @@ def _geometry(
         depth_field_ids=(
             depth_ids
             if depth_ids is not None
-            else tuple(sorted((item.depth_field_id for item in depths), key=lambda item: item.value))
+            else tuple(
+                sorted(
+                    (item.depth_field_id for item in depths),
+                    key=lambda item: item.value,
+                )
+            )
         ),
         point_map_ids=(
             point_ids
