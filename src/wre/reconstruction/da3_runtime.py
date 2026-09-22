@@ -463,6 +463,8 @@ def _isolated_da3_import(source_root: Path):
     )
     if preexisting:
         raise Da3RuntimeError("DA3 modules were already imported before source audit")
+    previous_dont_write_bytecode = sys.dont_write_bytecode
+    sys.dont_write_bytecode = True
     sys.path.insert(0, str(package_parent))
     try:
         yield
@@ -472,6 +474,7 @@ def _isolated_da3_import(source_root: Path):
         for name in tuple(sys.modules):
             if name == "depth_anything_3" or name.startswith("depth_anything_3."):
                 sys.modules.pop(name, None)
+        sys.dont_write_bytecode = previous_dont_write_bytecode
 
 
 def _tuple_matrix(value: Any, rows: int, cols: int, context: str) -> tuple[tuple[float, ...], ...]:
