@@ -593,7 +593,17 @@ def test_real_da3_preview_and_classical_incremental_share_one_controlled_referen
     )
     assert classical_outcome.state is ColmapGeometryOutcomeState.SINGLE_MODEL
     assert classical_outcome.model_count == 1
-    classical_cameras = classical_outcome.canonical_models[0].camera_solutions
+    native_classical_cameras = classical_outcome.canonical_models[0].camera_solutions
+    classical_cameras = tuple(
+        sorted(
+            native_classical_cameras,
+            key=lambda camera: camera.observation_id.value,
+        )
+    )
+    assert len(classical_cameras) == len(native_classical_cameras)
+    assert {camera.solution_id for camera in classical_cameras} == {
+        camera.solution_id for camera in native_classical_cameras
+    }
     assert all(camera.projection_model.value == "simple_radial" for camera in classical_cameras)
 
     source_root = Path(os.environ["WRE_DA3_SOURCE_ROOT"])
