@@ -1028,10 +1028,12 @@ work_items:
       - src/wre/domain/fragments.py
       - src/wre/domain/metrics.py
       - tests/test_feed_forward_geometry_adapter.py
-      - upstream ByteDance-Seed/Depth-Anything-3 README.md at the reviewed revision
-      - upstream ByteDance-Seed/Depth-Anything-3 docs/API.md at the reviewed revision
-      - upstream ByteDance-Seed/Depth-Anything-3 src/depth_anything_3/specs.py at the reviewed revision
-      - upstream ByteDance-Seed/Depth-Anything-3 src/depth_anything_3/api.py at the reviewed revision
+    external_evidence:
+      - ByteDance-Seed/Depth-Anything-3 README.md at revision 3d835ec1a5802d64a8b8b15f817a1ab54809bfe4
+      - ByteDance-Seed/Depth-Anything-3 docs/API.md at revision 3d835ec1a5802d64a8b8b15f817a1ab54809bfe4
+      - ByteDance-Seed/Depth-Anything-3 src/depth_anything_3/specs.py at revision 3d835ec1a5802d64a8b8b15f817a1ab54809bfe4
+      - ByteDance-Seed/Depth-Anything-3 src/depth_anything_3/api.py at revision 3d835ec1a5802d64a8b8b15f817a1ab54809bfe4
+      - Hugging Face depth-anything/DA3-BASE model card and model.safetensors identity observed on 2026-09-22
     reuse:
       - FeedForwardGeometryResult as the exact normalized aggregate boundary; DA3-specific values must disappear after normalization
       - the reviewed DA3 Prediction semantics depth N-H-W confidence N-H-W extrinsics N-by-4-by-4 world-to-camera and intrinsics N-by-3-by-3 as candidate-private input semantics
