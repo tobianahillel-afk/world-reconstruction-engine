@@ -265,7 +265,10 @@ class Da3MeasuredExecutionProfile:
             raise ValueError("measured profile steady_samples must be non-empty tuple")
         if any(item.kind is not Da3ExecutionSampleKind.STEADY for item in self.steady_samples):
             raise ValueError("measured profile steady samples must all be steady")
-        if any(item.observation.profile != self.profile for item in (self.cold_sample, *self.steady_samples)):
+        if any(
+            item.observation.profile != self.profile
+            for item in (self.cold_sample, *self.steady_samples)
+        ):
             raise ValueError("measured profile samples must use the profile identity")
         if not isinstance(self.benchmark_record, BenchmarkRecord):
             raise TypeError("measured profile benchmark_record must be BenchmarkRecord")
