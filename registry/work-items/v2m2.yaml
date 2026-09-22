@@ -1105,7 +1105,6 @@ work_items:
       - docs/02_ARCHITECTURE.md
       - docs/03_PIPELINE.md
       - docs/06_TESTING.md
-      - docs/13_DEPENDENCY_AND_MODEL_POLICY.md
       - docs/14_TECHNOLOGY_SELECTION.md
       - docs/15_PRODUCTION_RUNTIME.md
       - docs/23_ENGINEERING_EXECUTION.md
