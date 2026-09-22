@@ -108,15 +108,9 @@ def _inverse_pose_interpretation(
         point[2] - _TRANSLATION[2],
     )
     return (
-        _ROTATION[0][0] * shifted[0]
-        + _ROTATION[1][0] * shifted[1]
-        + _ROTATION[2][0] * shifted[2],
-        _ROTATION[0][1] * shifted[0]
-        + _ROTATION[1][1] * shifted[1]
-        + _ROTATION[2][1] * shifted[2],
-        _ROTATION[0][2] * shifted[0]
-        + _ROTATION[1][2] * shifted[1]
-        + _ROTATION[2][2] * shifted[2],
+        _ROTATION[0][0] * shifted[0] + _ROTATION[1][0] * shifted[1] + _ROTATION[2][0] * shifted[2],
+        _ROTATION[0][1] * shifted[0] + _ROTATION[1][1] * shifted[1] + _ROTATION[2][1] * shifted[2],
+        _ROTATION[0][2] * shifted[0] + _ROTATION[1][2] * shifted[1] + _ROTATION[2][2] * shifted[2],
     )
 
 
