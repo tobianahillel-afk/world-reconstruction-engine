@@ -359,9 +359,7 @@ def canonicalize_colmap_sparse_model(
             image = reconstruction.image(image_id)
             image_name = image.name
         except Exception as exc:
-            raise ColmapCanonicalGeometryError(
-                "COLMAP registered image is not readable"
-            ) from exc
+            raise ColmapCanonicalGeometryError("COLMAP registered image is not readable") from exc
         if not isinstance(image_name, str):
             raise ColmapCanonicalGeometryError("COLMAP registered image name must be text")
         try:
@@ -437,9 +435,7 @@ def canonicalize_colmap_sparse_model(
             ) from exc
         camera_solutions.append(camera_solution)
 
-    model_observations = tuple(
-        sorted(image_observations.values(), key=lambda item: item.value)
-    )
+    model_observations = tuple(sorted(image_observations.values(), key=lambda item: item.value))
     positions: list[tuple[float, float, float]] = []
     for point_id in point_ids:
         try:
@@ -451,9 +447,7 @@ def canonicalize_colmap_sparse_model(
             raise ColmapCanonicalGeometryError("COLMAP 3D point is not readable") from exc
         positions.append(position)
 
-    canonical_cameras = tuple(
-        sorted(camera_solutions, key=lambda item: item.solution_id.value)
-    )
+    canonical_cameras = tuple(sorted(camera_solutions, key=lambda item: item.solution_id.value))
     point_map = PointMap(
         point_map_id=_point_map_id(source_identity),
         local_frame_id=local_frame_id,
