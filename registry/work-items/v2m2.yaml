@@ -452,7 +452,7 @@ work_items:
   - id: V2L12.1
     lot: V2L12
     title: Current COLMAP adapter descriptor and V2 artifact normalization
-    status: ready
+    status: done
     objective: Define one pure solver-independent V2 descriptor for the current approved PyCOLMAP/COLMAP 4.2.0 precision-geometry baseline by reusing the existing AdapterCapabilityDescriptor ArtifactKind ArtifactRef producer and artifact-key contracts, with exact image-observation inputs and canonical V2 camera point-map and geometry output kinds, while retaining the legacy sparse-SfM registry entry as donor evidence and without importing or executing PyCOLMAP or beginning the feature matching verification or mapper work owned by later V2L12 items.
     allowed_scope:
       - src/wre/reconstruction/colmap_adapter.py
@@ -531,7 +531,97 @@ work_items:
       - focused input-normalization canonical tuple wrong-kind duplicate mutable and non-canonical-order tests only if the helper is part of the implementation
       - module-surface regression proving no filesystem network database subprocess PyCOLMAP import solver execution mapper feature matcher verifier or native-model parsing dependency is introduced
       - full fast CI and CodeQL plus native lanes only where repository path triggers require them
-  - {id: V2L12.2, lot: V2L12, title: Current COLMAP evidence stages use v2 artifact identities, status: planned, depends_on: [V2L12.1]}
+  - id: V2L12.2
+    lot: V2L12
+    title: Current COLMAP evidence stages use V2 artifact identities
+    status: ready
+    objective: Put the retained deterministic COLMAP feature extraction raw pair matching and geometric verification donor stages behind explicit V2 evidence-artifact planning and publication contracts so every stage has solver-independent ArtifactKind input/output semantics canonical content-addressed ArtifactKey material exact producer/configuration/hardware identity and verifiable materialization metadata while preserving the existing PyCOLMAP 4.2.0 donor algorithms and deferring mapper geometry emission to V2L12.3.
+    allowed_scope:
+      - src/wre/reconstruction/colmap_evidence_artifacts.py
+      - focused exports in src/wre/reconstruction/__init__.py
+      - focused compatibility hooks in src/wre/reconstruction/colmap_features.py src/wre/reconstruction/colmap_matching.py and src/wre/reconstruction/colmap_verification.py only when required to expose already-computed canonical configuration or result evidence without changing solver behavior
+      - tests/test_colmap_evidence_artifacts.py
+      - focused registry/adapter-models.yaml additions for current COLMAP feature matching and geometric-verification evidence capabilities
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L12.3 can be activated without implementing it
+    out_of_scope:
+      - changing V2L12.1 colmap.precision_geometry capability output semantics or promoting it from experimental before the later route regression closes
+      - changing existing V2 ArtifactRef ArtifactKind ArtifactKey ArtifactInputFingerprint ArtifactMetadata ArtifactMaterializationMetadata ArtifactProducerIdentity HardwareRuntimeIdentity or persistence/cache semantics
+      - replacing or deleting the retained ColmapFeatureExtractionRequest/Result ColmapPairMatchingRequest/Result or ColmapGeometricVerificationRequest/Result donor contracts
+      - changing SIFT extraction exhaustive matching geometric-verification thresholds random seeds CPU determinism PyCOLMAP calls COLMAP database schema or current safety/integrity checks
+      - introducing a new generic adapter cache framework CorrespondenceSet domain model or solver-private object into core
+      - automatic cache lookup persistence mutation invalidation execution scheduling retry fallback or resume behavior; V2L2 generic cache services remain separate
+      - incremental global hierarchical mapping bundle adjustment native sparse-model import canonical CameraSolution PointMap GeometrySolution materialization or local-frame creation owned by V2L12.3
+      - disconnected zero-model or multi-model outcome policy owned by V2L12.4
+      - end-to-end route comparison fixture V2L12 lot review or shipping promotion owned by V2L12.5
+      - metric-scale solving rescaling world Earth ECEF ENU geographic GPS GCP anchoring fragment alignment SurfaceModel dense MVS appearance dynamic historical or runtime work
+      - starting V2L12.3 implementation in this work item
+    depends_on: [V2L12.1]
+    read_before:
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md
+      - docs/reviews/V2L2-artifact-dag-cache-review.md
+      - docs/reviews/V2L11-canonical-geometry-contracts-review.md
+      - registry/adapter-models.yaml
+      - registry/dependencies.yaml
+      - src/wre/domain/artifacts.py
+      - src/wre/domain/artifact_keys.py
+      - src/wre/domain/artifact_metadata.py
+      - src/wre/domain/artifact_materialization.py
+      - src/wre/domain/hardware_identity.py
+      - src/wre/domain/producer_identity.py
+      - src/wre/domain/provenance.py
+      - src/wre/reconstruction/colmap_adapter.py
+      - src/wre/reconstruction/colmap_environment.py
+      - src/wre/reconstruction/colmap_features.py
+      - src/wre/reconstruction/colmap_matching.py
+      - src/wre/reconstruction/colmap_verification.py
+      - tests/test_artifact_keys.py
+      - tests/test_artifact_metadata.py
+      - tests/test_artifact_materialization.py
+      - tests/test_colmap_features.py
+      - tests/test_colmap_matching.py
+      - tests/test_colmap_geometric_verification.py
+    reuse:
+      - ArtifactKind and ArtifactRef as solver-independent evidence identities rather than COLMAP database table names or Python result classes
+      - ArtifactInputFingerprint ArtifactKeyMaterial and derive_artifact_key as the only canonical computation-cache identity path with caller-supplied ordered input fingerprints
+      - ArtifactProducerIdentity plus exact existing ColmapFeatureExtractionConfig ColmapPairMatchingConfig and ColmapGeometricVerificationConfig SHA-256 values as stage configuration identity
+      - explicit HardwareRuntimeIdentity in key material because the current COLMAP adapter registry policy is hardware-sensitive
+      - ArtifactMetadata with OBSERVED_RECONSTRUCTED provenance and ArtifactMaterializationMetadata built from exact already-computed result database SHA-256 and byte length rather than rehashing or reading files in the pure publication layer
+      - existing donor producer identities pycolmap.extract_features pycolmap.match_exhaustive and pycolmap.geometric_verification with exact PyCOLMAP 4.2.0 version semantics
+      - existing result provenance and database-integrity checks as donor evidence while V2 identities become the production-facing cache boundary
+    acceptance:
+      - Add one pure evidence-artifact module defining exactly three solver-independent output ArtifactKind values: evidence.local_features evidence.pair_matches and evidence.geometric_verification.
+      - Add immutable stage descriptors for current COLMAP feature extraction pair matching and geometric verification using existing AdapterCapabilityDescriptor rather than a new adapter framework.
+      - Register distinct experimental adapter entries colmap.local_features colmap.pair_matching and colmap.geometric_verification with exact approved colmap dependency reference no model/checkpoint required hardware-key policy current producer identity and reproducibility notes; do not alter the retained colmap.sparse_sfm donor entry.
+      - Feature-stage artifact planning accepts only a non-empty canonically ordered immutable tuple of image.observation ArtifactInputFingerprint values plus the exact feature configuration identity and explicit HardwareRuntimeIdentity.
+      - Matching-stage artifact planning consumes exactly one evidence.local_features ArtifactInputFingerprint and the exact matching configuration identity plus explicit HardwareRuntimeIdentity.
+      - Verification-stage artifact planning consumes exactly one evidence.pair_matches ArtifactInputFingerprint and the exact verification configuration identity plus explicit HardwareRuntimeIdentity.
+      - Every stage derives ArtifactKey only through ArtifactKeyMaterial and derive_artifact_key; no filename timestamp path database row ID ReconstructionRunId or mutable object identity participates in the cache key.
+      - Producer identity contains exact stage implementation and PyCOLMAP 4.2.0 version with null model/checkpoint; configuration identity uses the existing canonical config SHA-256 without reserializing a second competing config format.
+      - Input fingerprints must already be canonical and fail closed on mutable collections duplicates wrong ArtifactKind members or non-canonical feature-input ordering; the module does not silently sort or coerce them.
+      - Publication helpers accept a caller-supplied output ArtifactRef of the exact stage output kind a SceneProjectId the derived ArtifactKey/producer identity and the already-computed donor result, then emit ArtifactMetadata plus ArtifactMaterializationMetadata whose one database entry preserves the result SHA-256 and byte length exactly.
+      - Publication does not read hash or mutate the result database path; relative materialization path is explicit canonical POSIX caller input and the generic ArtifactMaterializationMetadata validator remains authoritative.
+      - Stage publication retains OBSERVED_RECONSTRUCTED provenance and does not promote local matches or two-view geometry into accepted scene truth CameraSolution GeometrySolution SurfaceModel or world placement.
+      - Existing donor extraction matching verification execution APIs remain usable and semantically unchanged; V2 wrappers may compose them but must not alter current solver calls options safety checks or result ordering.
+      - The evidence-artifact module imports no PyCOLMAP sqlite3 subprocess socket requests persistence store router quality or mapper execution dependency.
+      - No mapper or bundle-adjustment execution canonical camera/geometry output native sparse-model reading local-frame creation or V2L12.3 behavior is added.
+    tests:
+      - exact three evidence ArtifactKind and three AdapterCapabilityDescriptor input/output semantics
+      - exact producer implementation PyCOLMAP 4.2.0 configuration SHA and explicit HardwareRuntimeIdentity participation in deterministic ArtifactKey golden/regression cases
+      - feature-input canonical ordering duplicate mutable wrong-kind and empty fail-closed cases
+      - matching and verification exact single-parent-kind fail-closed cases
+      - key regression proving configuration input digest producer or hardware identity changes invalidate only the corresponding stage key and filenames paths run IDs do not enter key material
+      - publication regression for feature matching and verification donor results preserving exact result database SHA-256 byte length output ArtifactRef project identity producer key and OBSERVED_RECONSTRUCTED provenance
+      - canonical relative materialization-path rejection delegated to ArtifactMaterializationMetadata with no hidden path normalization
+      - registry-to-module parity for all three new stage entries and regression proving colmap.sparse_sfm remains unchanged
+      - regression proving retained donor execution request/result APIs and deterministic configuration digests remain unchanged
+      - module-surface regression proving no PyCOLMAP sqlite persistence router quality mapper or solver execution dependency is introduced in the pure evidence-artifact layer
+      - full fast CI CodeQL native COLMAP integration and any registry-triggered compatibility lanes
   - {id: V2L12.3, lot: V2L12, title: COLMAP incremental and global mappers emit canonical geometry, status: planned, depends_on: [V2L12.2]}
   - {id: V2L12.4, lot: V2L12, title: Disconnected and zero model explicit outcomes, status: planned, depends_on: [V2L12.3]}
   - {id: V2L12.5, lot: V2L12, title: COLMAP current route regression comparison and lot review, status: planned, depends_on: [V2L12.4]}
