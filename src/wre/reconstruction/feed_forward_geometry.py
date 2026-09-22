@@ -76,9 +76,7 @@ class FeedForwardGeometryResult:
         if not self.camera_solutions:
             raise ValueError("feed_forward_geometry requires at least one CameraSolution")
         if any(not isinstance(item, CameraSolution) for item in self.camera_solutions):
-            raise TypeError(
-                "feed_forward_geometry.camera_solutions members must be CameraSolution"
-            )
+            raise TypeError("feed_forward_geometry.camera_solutions members must be CameraSolution")
 
         camera_observation_values = tuple(
             item.observation_id.value for item in self.camera_solutions
@@ -121,9 +119,7 @@ class FeedForwardGeometryResult:
             )
 
         if not self.depth_fields and not self.point_maps:
-            raise ValueError(
-                "feed_forward_geometry requires at least one DepthField or PointMap"
-            )
+            raise ValueError("feed_forward_geometry requires at least one DepthField or PointMap")
         if not isinstance(self.geometry_solution, GeometrySolution):
             raise TypeError("feed_forward_geometry.geometry_solution must be GeometrySolution")
 
@@ -137,9 +133,7 @@ class FeedForwardGeometryResult:
                 "feed_forward_geometry PointMaps and GeometrySolution must share one LocalFrameId"
             )
 
-        cameras_by_observation = {
-            item.observation_id: item for item in self.camera_solutions
-        }
+        cameras_by_observation = {item.observation_id: item for item in self.camera_solutions}
         for depth in self.depth_fields:
             camera = cameras_by_observation.get(depth.observation_id)
             if camera is None:
