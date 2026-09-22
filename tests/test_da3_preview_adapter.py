@@ -61,13 +61,9 @@ def _prediction(
         observation_id=ObservationId(observation),
         dimensions=actual_dimensions,
         world_to_camera_rotation=_rotation() if rotation is None else rotation,
-        world_to_camera_translation=(
-            (1.0, 2.0, 3.0) if translation is None else translation
-        ),
+        world_to_camera_translation=((1.0, 2.0, 3.0) if translation is None else translation),
         intrinsics=_intrinsics() if intrinsics is None else intrinsics,
-        depth_values=(
-            (1.0, 2.0, 0.0, 4.0) if depth_values is None else depth_values
-        ),
+        depth_values=((1.0, 2.0, 0.0, 4.0) if depth_values is None else depth_values),
         validity=(True, True, False, True) if validity is None else validity,
         confidence=(0.9, 0.8, 0.0, 0.7) if confidence is _UNSET else confidence,
     )
@@ -87,8 +83,7 @@ def _apply_pose(
     point: tuple[float, float, float],
 ) -> tuple[float, float, float]:
     return tuple(
-        sum(rotation[row][axis] * point[axis] for axis in range(3))
-        + translation[row]
+        sum(rotation[row][axis] * point[axis] for axis in range(3)) + translation[row]
         for row in range(3)
     )  # type: ignore[return-value]
 
@@ -336,9 +331,7 @@ def test_world_to_camera_pose_is_copied_as_camera_from_local_without_transform()
         prediction.world_to_camera_translation,
         local_point,
     )
-    sign_flipped_translation = tuple(
-        -member for member in prediction.world_to_camera_translation
-    )
+    sign_flipped_translation = tuple(-member for member in prediction.world_to_camera_translation)
     sign_flipped_point = _apply_pose(
         prediction.world_to_camera_rotation,
         cast(Any, sign_flipped_translation),
@@ -494,9 +487,7 @@ def test_normalization_does_not_mutate_or_reorder_source_values() -> None:
     assert tuple(item.world_to_camera_rotation for item in predictions) == original_rotation
     assert tuple(item.intrinsics for item in predictions) == original_intrinsics
     assert result.depth_fields[0].depth_values is predictions[0].depth_values
-    assert result.camera_solutions[0].rotation_matrix is (
-        predictions[0].world_to_camera_rotation
-    )
+    assert result.camera_solutions[0].rotation_matrix is (predictions[0].world_to_camera_rotation)
 
 
 def test_da3_preview_module_has_no_external_execution_or_later_layer_surface() -> None:
