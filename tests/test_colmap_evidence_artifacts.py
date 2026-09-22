@@ -213,9 +213,7 @@ def test_colmap_evidence_stage_descriptors_have_exact_v2_semantics() -> None:
         COLMAP_GEOMETRIC_VERIFICATION_CAPABILITY.capability
         is COLMAP_GEOMETRIC_VERIFICATION_CAPABILITY_NAME
     )
-    assert COLMAP_GEOMETRIC_VERIFICATION_CAPABILITY.input_kinds == frozenset(
-        {PAIR_MATCHES_KIND}
-    )
+    assert COLMAP_GEOMETRIC_VERIFICATION_CAPABILITY.input_kinds == frozenset({PAIR_MATCHES_KIND})
     assert COLMAP_GEOMETRIC_VERIFICATION_CAPABILITY.output_kinds == frozenset(
         {GEOMETRIC_VERIFICATION_KIND}
     )
@@ -279,14 +277,17 @@ def test_colmap_evidence_key_changes_with_input_configuration_or_hardware() -> N
         hardware_runtime=_hardware("5"),
     )
 
-    assert len(
-        {
-            base.artifact_key,
-            changed_input.artifact_key,
-            changed_config.artifact_key,
-            changed_hardware.artifact_key,
-        }
-    ) == 4
+    assert (
+        len(
+            {
+                base.artifact_key,
+                changed_input.artifact_key,
+                changed_config.artifact_key,
+                changed_hardware.artifact_key,
+            }
+        )
+        == 4
+    )
 
 
 @pytest.mark.parametrize(
@@ -591,10 +592,7 @@ def test_registry_entries_match_colmap_evidence_module_contract() -> None:
         assert entry["dependency_refs"] == [COLMAP_EVIDENCE_DEPENDENCY_REF]
         assert entry["model"] is COLMAP_EVIDENCE_MODEL
         assert entry["checkpoint"] is COLMAP_EVIDENCE_CHECKPOINT
-        assert (
-            entry["artifact_key_hardware_policy"]
-            == COLMAP_EVIDENCE_ARTIFACT_KEY_HARDWARE_POLICY
-        )
+        assert entry["artifact_key_hardware_policy"] == COLMAP_EVIDENCE_ARTIFACT_KEY_HARDWARE_POLICY
         assert entry["shipping_status"] == COLMAP_EVIDENCE_SHIPPING_STATUS
         assert entry["reproducibility_notes"] == expected_entry["notes"]
         assert entry["failure_signals"] == []
@@ -623,10 +621,7 @@ def test_registry_preserves_legacy_colmap_sparse_sfm_donor_semantics() -> None:
 def test_existing_donor_configuration_digests_remain_authoritative() -> None:
     assert ColmapFeatureExtractionConfig().sha256 == ColmapFeatureExtractionConfig().sha256
     assert ColmapPairMatchingConfig().sha256 == ColmapPairMatchingConfig().sha256
-    assert (
-        ColmapGeometricVerificationConfig().sha256
-        == ColmapGeometricVerificationConfig().sha256
-    )
+    assert ColmapGeometricVerificationConfig().sha256 == ColmapGeometricVerificationConfig().sha256
     assert COLMAP_EVIDENCE_PRODUCER_VERSION == "4.2.0"
 
 
