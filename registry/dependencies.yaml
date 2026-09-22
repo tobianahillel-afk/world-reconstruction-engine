@@ -50,6 +50,44 @@ dependencies:
       BSD-3-Clause but separately licensed dependencies can affect a concrete build/distribution.
       Any alternate COLMAP build, bundled redistribution, mandatory-runtime packaging, or other
       integration mode requires a fresh dependency and license review.
+  da3_base:
+    status: candidate_optional
+    role: [feed_forward_geometry_preview]
+    integration: optional_exact_external_environment
+    version_policy: pin_exact_external_environment
+    pinned_version: 3d835ec1a5802d64a8b8b15f817a1ab54809bfe4
+    upstream_repository: ByteDance-Seed/Depth-Anything-3
+    model_repository: depth-anything/DA3-BASE
+    checkpoint_identifier: depth-anything/DA3-BASE/model.safetensors
+    checkpoint_sha256: e01067dc1659613083d9145a9a2547ccdbe6ccbbf83c4fe7b3e8a4e2bdae78b5
+    license: Apache-2.0
+    license_review: pending
+    reference_profile:
+      python: 3.12
+      device: cpu
+      precision: float32
+      packages:
+        addict: 2.4.0
+        einops: 0.8.0
+        imageio: 2.35.1
+        numpy: 1.26.4
+        omegaconf: 2.3.0
+        opencv-python: 4.10.0.84
+        Pillow: 10.4.0
+        safetensors: 0.4.5
+        torch: 2.4.1
+        torchvision: 0.19.1
+        tqdm: 4.66.5
+    notes: >-
+      V2L13.3 evaluates only DA3-BASE from ByteDance-Seed/Depth-Anything-3 at exact source
+      revision 3d835ec1a5802d64a8b8b15f817a1ab54809bfe4 with the exact local
+      model.safetensors SHA-256 e01067dc1659613083d9145a9a2547ccdbe6ccbbf83c4fe7b3e8a4e2bdae78b5.
+      Source and model-card/checkpoint terms report Apache-2.0, but the concrete external
+      reference package stack remains under transitive redistribution review, so this dependency
+      is experimental and cannot become a shipping default. WRE uses a deliberately conservative
+      CPU float32 reference path through the reviewed DA3-BASE config/model/input/output modules,
+      not the top-level export facade, and performs no implicit Git/Hugging Face/network fetch.
+      Faster CUDA, autocast, compilation and alternate execution profiles are deferred to V2L13.6.
   limap:
     status: candidate_core
     role: [lines, structural_sfm, planes, vanishing_points, wireframe]
