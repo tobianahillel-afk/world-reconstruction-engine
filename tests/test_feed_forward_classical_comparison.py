@@ -28,6 +28,8 @@ from wre.domain import (
     LocalFrameId,
     MetricVector,
     ObservationId,
+    PointMap,
+    PointMapId,
     Sha256Digest,
 )
 from wre.domain.decoded_images import DECODED_IMAGE_PYRAMID_KIND, DecodedImagePyramidSpec
@@ -53,10 +55,14 @@ from wre.reconstruction import (
     ColmapIncrementalReconstructionRequest,
     ColmapPairMatchingConfig,
     ColmapPairMatchingRequest,
+    ColmapModelFileArtifact,
     ColmapReconstructionInput,
+    ColmapSparseModelArtifact,
     Da3ExecutionRequest,
     Da3ImageInput,
+    CanonicalColmapSparseModel,
     canonicalize_colmap_sparse_model,
+    colmap_sparse_model_content_identity,
     execute_da3_base_preview,
     extract_colmap_features,
     match_colmap_pairs,
@@ -80,6 +86,7 @@ _IDENTITY = (
 _FIXTURE_PATH = (
     Path(__file__).parent / "fixtures" / "synthetic" / "colmap-l3-end-to-end" / "fixture.json"
 )
+_REVIEW_PATH = Path(__file__).parents[1] / "docs" / "reviews" / "V2L13-preview-classical-comparison.md"
 _REFERENCE_ARTIFACT = ArtifactRef(
     artifact_id=ArtifactId("fixture:colmap-l3-end-to-end"),
     artifact_kind=ArtifactKind("benchmark.camera_reference"),
@@ -272,6 +279,165 @@ def test_pose_request_fails_closed_on_noncanonical_or_cross_frame_camera_sets() 
             reference_cameras=(),
             input_artifacts=(),
         )
+
+
+class _ComparisonUnresolvedError(RuntimeError):
+    """Raised by the controlled fixture when classical evidence is not one model."""
+
+
+def _require_single_classical_cameras(
+    outcome: ColmapGeometryOutcome,
+) -> tuple[CameraSolution, ...]:
+    if outcome.state is not ColmapGeometryOutcomeState.SINGLE_MODEL or outcome.model_count != 1:
+        raise _ComparisonUnresolvedError(
+            "controlled comparison requires exactly one classical canonical model"
+        )
+    cameras = outcome.canonical_models[0].camera_solutions
+    return tuple(sorted(cameras, key=lambda camera: camera.observation_id.value))
+
+
+def _native_model(index: int, digest_char: str) -> ColmapSparseModelArtifact:
+    return ColmapSparseModelArtifact(
+        model_index=index,
+        relative_path=str(index),
+        num_registered_images=1,
+        num_points3d=1,
+        files=(
+            ColmapModelFileArtifact(
+                relative_path="cameras.bin",
+                sha256=Sha256Digest(digest_char * 64),
+                byte_length=10,
+            ),
+            ColmapModelFileArtifact(
+                relative_path="images.bin",
+                sha256=Sha256Digest(digest_char * 64),
+                byte_length=20,
+            ),
+            ColmapModelFileArtifact(
+                relative_path="points3D.bin",
+                sha256=Sha256Digest(digest_char * 64),
+                byte_length=30,
+            ),
+        ),
+    )
+
+
+def _canonical_model(native: ColmapSparseModelArtifact) -> CanonicalColmapSparseModel:
+    identity = colmap_sparse_model_content_identity(native)
+    frame = LocalFrameId(f"frame:comparison:{identity.value}")
+    observation = ObservationId(f"obs:comparison:{native.model_index}")
+    camera = CameraSolution(
+        solution_id=CameraSolutionId(f"camera:comparison:{native.model_index}"),
+        observation_id=observation,
+        local_frame_id=frame,
+        projection_model=CameraProjectionModelName("simple_radial"),
+        dimensions=ImageDimensions(width_px=100, height_px=80),
+        intrinsic_parameters=(100.0, 50.0, 40.0, 0.01),
+        rotation_matrix=_IDENTITY,
+        translation_xyz=(float(native.model_index), 0.0, 0.0),
+        uncertainty_artifacts=(),
+        metrics=MetricVector(observations=()),
+    )
+    point_map = PointMap(
+        point_map_id=PointMapId(f"points:comparison:{native.model_index}"),
+        local_frame_id=frame,
+        source_observation_ids=(observation,),
+        positions_xyz=((0.0, 0.0, 1.0),),
+        confidence=None,
+        metrics=MetricVector(observations=()),
+    )
+    geometry = GeometrySolution(
+        geometry_solution_id=GeometrySolutionId(f"geometry:comparison:{native.model_index}"),
+        local_frame_id=frame,
+        scale_status=GeometryScaleStatus.UNRESOLVED,
+        camera_solution_ids=(camera.solution_id,),
+        depth_field_ids=(),
+        point_map_ids=(point_map.point_map_id,),
+        metrics=MetricVector(observations=()),
+    )
+    return CanonicalColmapSparseModel(
+        source_model_index=native.model_index,
+        source_model_identity_sha256=identity,
+        camera_solutions=(camera,),
+        point_map=point_map,
+        geometry_solution=geometry,
+    )
+
+
+def test_controlled_comparison_refuses_zero_or_disconnected_classical_models() -> None:
+    zero = ColmapGeometryOutcome(
+        source_adapter_id=COLMAP_INCREMENTAL_CANONICAL_ADAPTER_ID,
+        native_models=(),
+        canonical_models=(),
+    )
+    with pytest.raises(_ComparisonUnresolvedError, match="exactly one"):
+        _require_single_classical_cameras(zero)
+
+    native_zero = _native_model(0, "a")
+    native_one = _native_model(1, "b")
+    disconnected = ColmapGeometryOutcome(
+        source_adapter_id=COLMAP_INCREMENTAL_CANONICAL_ADAPTER_ID,
+        native_models=(native_zero, native_one),
+        canonical_models=(
+            _canonical_model(native_zero),
+            _canonical_model(native_one),
+        ),
+    )
+    with pytest.raises(_ComparisonUnresolvedError, match="exactly one"):
+        _require_single_classical_cameras(disconnected)
+
+
+def test_simple_radial_is_pose_comparable_but_not_pinhole_intrinsic_comparable() -> None:
+    references = (
+        _camera("obs:a", frame="reference", center_x=0.0),
+        _camera("obs:b", frame="reference", center_x=1.0),
+    )
+    classical = (
+        _camera(
+            "obs:a",
+            frame="classical",
+            center_x=0.0,
+            projection="simple_radial",
+            intrinsics=(100.0, 50.0, 40.0, 0.01),
+        ),
+        _camera(
+            "obs:b",
+            frame="classical",
+            center_x=1.0,
+            projection="simple_radial",
+            intrinsics=(100.0, 50.0, 40.0, 0.01),
+        ),
+    )
+
+    pose = evaluate_camera_pose_quality(
+        CameraPoseQualityRequest(
+            candidate_cameras=classical,
+            reference_cameras=references,
+            input_artifacts=(_artifact(),),
+        )
+    )
+    assert tuple(item.descriptor.name.value for item in pose.observations) == _POSE_METRIC_NAMES
+
+    with pytest.raises(ValueError, match="pinhole projection"):
+        evaluate_feed_forward_camera_quality(
+            FeedForwardCameraQualityRequest(
+                candidate=_geometry(*classical),
+                reference_cameras=references,
+                input_artifacts=(_artifact(),),
+            )
+        )
+
+
+def test_retained_review_records_fixture_scope_and_no_default_promotion() -> None:
+    text_value = _REVIEW_PATH.read_text(encoding="utf-8")
+
+    assert "colmap-l3-end-to-end" in text_value
+    assert "da3.base_preview" in text_value
+    assert "colmap.incremental_precision_geometry" in text_value
+    assert "not a representative natural-image quality benchmark" in text_value
+    assert "SIMPLE_RADIAL" in text_value
+    assert "no winner" in text_value.lower()
+    assert "no default" in text_value.lower()
 
 
 def _load_scene() -> dict[str, Any]:
@@ -594,12 +760,7 @@ def test_real_da3_preview_and_classical_incremental_share_one_controlled_referen
     assert classical_outcome.state is ColmapGeometryOutcomeState.SINGLE_MODEL
     assert classical_outcome.model_count == 1
     native_classical_cameras = classical_outcome.canonical_models[0].camera_solutions
-    classical_cameras = tuple(
-        sorted(
-            native_classical_cameras,
-            key=lambda camera: camera.observation_id.value,
-        )
-    )
+    classical_cameras = _require_single_classical_cameras(classical_outcome)
     assert len(classical_cameras) == len(native_classical_cameras)
     assert {camera.solution_id for camera in classical_cameras} == {
         camera.solution_id for camera in native_classical_cameras
@@ -635,6 +796,9 @@ def test_real_da3_preview_and_classical_incremental_share_one_controlled_referen
     )
     assert git_status.stdout.strip() == ""
 
+    preview_geometry_before = preview.geometry
+    classical_cameras_before = classical_cameras
+
     preview_metrics = evaluate_camera_pose_quality(
         CameraPoseQualityRequest(
             candidate_cameras=preview.geometry.camera_solutions,
@@ -649,6 +813,14 @@ def test_real_da3_preview_and_classical_incremental_share_one_controlled_referen
             input_artifacts=(_REFERENCE_ARTIFACT,),
         )
     )
+    assert preview.geometry == preview_geometry_before
+    assert preview.geometry is preview_geometry_before
+    assert classical_cameras == classical_cameras_before
+    assert all(
+        current is previous
+        for current, previous in zip(classical_cameras, classical_cameras_before, strict=True)
+    )
+
     preview_names = tuple(item.descriptor.name.value for item in preview_metrics.observations)
     classical_names = tuple(item.descriptor.name.value for item in classical_metrics.observations)
     assert preview_names == classical_names == _POSE_METRIC_NAMES
