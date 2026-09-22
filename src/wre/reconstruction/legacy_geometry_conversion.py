@@ -77,7 +77,7 @@ class LegacySparseGeometryConversionResult:
                 "must be SparseReconstructionEstimateId"
             )
         if not isinstance(self.camera_solutions, tuple):
-            raise TypeError("legacy_geometry_conversion.camera_solutions must be an immutable tuple")
+            raise TypeError(\n                "legacy_geometry_conversion.camera_solutions must be an immutable tuple"\n            )
         if any(not isinstance(solution, CameraSolution) for solution in self.camera_solutions):
             raise TypeError(
                 "legacy_geometry_conversion.camera_solutions members must be CameraSolution"
