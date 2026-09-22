@@ -789,7 +789,7 @@ work_items:
   - id: V2L12.5
     lot: V2L12
     title: COLMAP current route regression comparison and lot review
-    status: ready
+    status: done
     objective: Add one deterministic real PyCOLMAP 4.2.0 regression and comparison fixture that exercises the retained incremental donor and the current incremental and global V2 precision geometry paths over the same controlled verified source model evidence, proves canonical geometry and explicit outcome semantics without selecting a winner, records an evidence-based shipping-status decision for the V2L12 adapters, and closes the V2L12 lot review without implementing feed-forward geometry or competing-solution policy.
     allowed_scope:
       - tests/test_colmap_precision_route_regression.py
@@ -871,7 +871,97 @@ work_items:
       - adapter registry shipping-status decision regression with unchanged capability producer dependency model checkpoint and hardware-policy semantics
       - V2L12 lot review evidence covers V2L12.1 through V2L12.5 and the explicit handoff boundary to V2L13.1
       - full fast CI CodeQL exact PyCOLMAP 4.2.0 native integration and any registry-triggered compatibility lanes
-  - {id: V2L13.1, lot: V2L13, title: Feed forward geometry adapter interface, status: planned, depends_on: [V2L12.5]}
+  - id: V2L13.1
+    lot: V2L13
+    title: Feed forward geometry adapter interface
+    status: ready
+    objective: Define the pure solver-independent V2 feed-forward geometry adapter boundary over canonical decoded image artifacts and canonical CameraSolution DepthField PointMap and GeometrySolution values so later learned candidates can normalize camera depth and optional point geometry without leaking model-private tensors hidden neural state or checkpoint-specific structures into core contracts and without selecting or integrating any learned model yet.
+    allowed_scope:
+      - src/wre/reconstruction/feed_forward_geometry.py
+      - focused exports in src/wre/reconstruction/__init__.py
+      - tests/test_feed_forward_geometry_adapter.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L13.2 can be activated without implementing it
+    out_of_scope:
+      - integrating downloading importing executing benchmarking or selecting DA3 VGGT-omega Pi3 Pi3X MapAnything CUT3R Uni3R TokenSplat or any other learned repository model checkpoint or runtime
+      - adding Torch CUDA TensorRT ONNX JAX NumPy model-serving or another external dependency to the feed-forward interface module
+      - adding or promoting a concrete adapter-model registry entry before V2L13.2 performs candidate freshness license checkpoint and runtime review
+      - changing CameraSolution DepthField PointMap GeometrySolution LocalFrameId GeometryScaleStatus MetricVector ArtifactRef ArtifactKind or decoded-image-pyramid contracts
+      - reading raw media decoding resizing recoloring normalizing tensors or inspecting filesystem model environment hardware network persistence or cache state
+      - inferring physical CameraId rig identity rolling-shutter semantics metric scale absolute scale factor world Earth ECEF ENU geographic GPS GCP placement or cross-local-frame compatibility
+      - silently converting arbitrary predicted units to metric or treating a model claim as metric evidence without a candidate-specific accepted contract
+      - generating a SurfaceModel mesh collision navigation measurement appearance material environment dynamic historical MasterScene or RuntimeScene product
+      - route selection quality-gate fallback retry scheduler resource-budget execution default promotion or comparison against COLMAP
+      - defining learned execution profiles compile mixed-precision GPU profiling or performance benchmarks owned by V2L13.6
+      - starting V2L13.2 implementation in this work item
+    depends_on: [V2L12.5]
+    read_before:
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/06_TESTING.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md
+      - docs/27_RESEARCH_CANDIDATE_COVERAGE.md
+      - docs/28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md
+      - docs/29_PERFORMANCE_INTEGRATION_MAP.md
+      - docs/reviews/V2L11-canonical-geometry-contracts-review.md
+      - docs/reviews/V2L12-classical-precision-geometry-review.md
+      - registry/adapter-models.yaml
+      - registry/dependencies.yaml
+      - src/wre/domain/adapter_capabilities.py
+      - src/wre/domain/artifacts.py
+      - src/wre/domain/camera_solutions.py
+      - src/wre/domain/depth_fields.py
+      - src/wre/domain/point_maps.py
+      - src/wre/domain/geometry_solutions.py
+      - src/wre/domain/fragments.py
+      - src/wre/domain/metrics.py
+      - src/wre/ingestion/decoded_images.py
+      - src/wre/reconstruction/colmap_adapter.py
+      - src/wre/reconstruction/colmap_canonical_geometry.py
+      - tests/test_camera_solutions.py
+      - tests/test_depth_fields.py
+      - tests/test_point_maps.py
+      - tests/test_geometry_solutions.py
+      - tests/test_colmap_adapter.py
+    reuse:
+      - AdapterCapabilityDescriptor and AdapterCapabilityName as the existing semantic capability contract rather than defining a second generic adapter framework
+      - media.decoded_image_pyramid ArtifactRef values from V2L6 as the reusable canonical image-byte input boundary so learned candidates do not re-read raw media or define private decode truth
+      - CameraSolution as the only canonical per-observation camera output including camera-from-local-frame semantics and explicit LocalFrameId
+      - DepthField as the canonical per-observation dense depth carrier with explicit validity confidence and open depth-value convention
+      - PointMap as an optional canonical local-frame point carrier when a candidate natively supports point predictions without making it mandatory for every feed-forward method
+      - GeometrySolution as the only assembled feed-forward geometry hypothesis referencing exactly the emitted canonical child identities with explicit unresolved or independently-supported metric local scale
+      - immutable positive-domain aggregate validation rather than generic dictionaries model tensors or optional bags
+    acceptance:
+      - Add one pure feed-forward geometry module whose import and contract construction require no learned framework model checkpoint GPU filesystem network persistence cache registry or solver execution.
+      - Define one stable feed-forward geometry capability name and descriptor consuming only media.decoded_image_pyramid artifacts and exposing the canonical geometry responsibilities required by later candidate adapters without reusing the legacy geometry.sparse_reconstruction_estimate kind.
+      - If an input normalization helper is exposed it accepts only a non-empty immutable tuple of unique canonically ordered media.decoded_image_pyramid ArtifactRef values and fails closed on mutable empty duplicate wrong-kind or non-canonical inputs without sorting coercion or filesystem access.
+      - Define one immutable normalized feed-forward geometry result aggregate containing canonical camera_solutions depth_fields point_maps and exactly one geometry_solution with no model-private tensor latent state feature track checkpoint runtime or generic metadata field.
+      - camera_solutions depth_fields and point_maps are immutable tuples containing only their accepted V2L11 domain values; at least one camera solution is required and the aggregate must contain at least one canonical geometry carrier through depth_fields or point_maps.
+      - CameraSolution values must share exactly one LocalFrameId with every emitted PointMap and the GeometrySolution; the aggregate does not align or reconcile multiple local frames.
+      - CameraSolution observation IDs must be unique and canonical; each emitted DepthField observation must correspond to exactly one emitted CameraSolution and reference that exact camera solution ID with matching image dimensions.
+      - PointMap source observations must stay inside the emitted camera observation membership and every emitted PointMap must use the exact aggregate LocalFrameId.
+      - GeometrySolution must reuse the exact aggregate LocalFrameId and reference exactly all emitted CameraSolutionId DepthFieldId and PointMapId values in their canonical contract order with no missing foreign duplicate or unreferenced child.
+      - The aggregate preserves GeometryScaleStatus exactly as supplied by the candidate-specific adapter and performs no scale inference coordinate rescaling metric promotion world placement or unit conversion.
+      - An unresolved GeometrySolution remains valid; a metric GeometrySolution is accepted structurally only when the candidate adapter explicitly supplies that already-validated canonical status and V2L13.1 itself adds no metric-evidence claim.
+      - Repeated validation of the same canonical values returns equal values and does not clone mutate reorder normalize convert or derive new child geometry.
+      - The feed-forward interface makes no quality mode route default classical fallback or preferred-candidate decision and does not compare against the V2L12 COLMAP baseline.
+      - No adapter-model registry candidate entry external dependency checkpoint identity model preprocessing execution profile quality metric or benchmark is introduced by V2L13.1.
+    tests:
+      - stable pure capability descriptor input and output kind regression with no legacy sparse estimate output
+      - decoded-image input immutable canonical tuple empty wrong-kind duplicate and non-canonical fail-closed tests if an input helper is implemented
+      - exact frozen normalized-result field shape and wrong child-type regressions
+      - one unresolved local-frame fixture with multiple cameras and depths proving exact camera-depth observation ID dimension and LocalFrameId relationships
+      - optional PointMap fixture proving source membership exact local frame and GeometrySolution linkage without requiring point output for depth-only candidates
+      - zero geometry-carrier rejection plus missing foreign duplicate or unreferenced CameraSolution DepthField and PointMap child-reference fail-closed regressions
+      - exact LocalFrameId continuity and regression proving no world Earth geographic fragment or cross-frame compatibility claim
+      - unresolved and metric status preservation test proving the interface performs no rescaling unit conversion or implicit metric promotion
+      - source immutability regression proving aggregate validation does not reorder or mutate supplied canonical child values
+      - module-surface regression proving no Torch CUDA TensorRT ONNX JAX NumPy model checkpoint filesystem network persistence routing quality surface appearance dynamic or V2L13.2 dependency enters the pure interface layer
+      - full fast CI and CodeQL plus native lanes only where repository path triggers require them
   - {id: V2L13.2, lot: V2L13, title: First approved feed forward preview candidate, status: planned, depends_on: [V2L13.1]}
   - {id: V2L13.3, lot: V2L13, title: Feed forward checkpoint hardware license reproducibility, status: planned, depends_on: [V2L13.2]}
   - {id: V2L13.4, lot: V2L13, title: Feed forward geometry camera quality metrics, status: planned, depends_on: [V2L13.3]}
