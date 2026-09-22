@@ -87,9 +87,7 @@ class LegacySparseGeometryConversionResult:
         if not isinstance(self.point_map, PointMap):
             raise TypeError("legacy_geometry_conversion.point_map must be PointMap")
         if not isinstance(self.geometry_solution, GeometrySolution):
-            raise TypeError(
-                "legacy_geometry_conversion.geometry_solution must be GeometrySolution"
-            )
+            raise TypeError("legacy_geometry_conversion.geometry_solution must be GeometrySolution")
 
 
 def convert_sparse_reconstruction_estimate(
