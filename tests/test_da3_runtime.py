@@ -394,6 +394,11 @@ def test_checkpoint_is_local_nonempty_and_exact_sha(
     with pytest.raises(da3_runtime.Da3RuntimeError, match="local"):
         da3_runtime._verify_checkpoint(Path("https://example.invalid/model.safetensors"))
 
+    symlink = tmp_path / "checkpoint-link.safetensors"
+    symlink.symlink_to(checkpoint)
+    with pytest.raises(da3_runtime.Da3RuntimeError, match="non-symlink"):
+        da3_runtime._verify_checkpoint(symlink)
+
 
 def test_verified_rgb_input_reads_only_canonical_materialization(tmp_path: Path) -> None:
     item = _decoded_input(tmp_path, "obs:a")
@@ -453,6 +458,7 @@ def test_environment_inspection_requires_every_exact_reference_version(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     expected = dict(da3_runtime.DA3_REFERENCE_PACKAGE_VERSIONS)
+    monkeypatch.setattr(da3_runtime.importlib.util, "find_spec", lambda name: None)
     monkeypatch.setattr(
         da3_runtime.importlib.metadata,
         "version",
@@ -472,6 +478,15 @@ def test_environment_inspection_requires_every_exact_reference_version(
         lambda name: "999" if name == "torch" else expected[name],
     )
     with pytest.raises(da3_runtime.Da3RuntimeError, match="torch"):
+        da3_runtime.inspect_da3_reference_environment()
+
+    monkeypatch.setattr(
+        da3_runtime.importlib.metadata,
+        "version",
+        lambda name: expected[name],
+    )
+    monkeypatch.setattr(da3_runtime.importlib.util, "find_spec", lambda name: object())
+    with pytest.raises(da3_runtime.Da3RuntimeError, match="xformers"):
         da3_runtime.inspect_da3_reference_environment()
 
 
