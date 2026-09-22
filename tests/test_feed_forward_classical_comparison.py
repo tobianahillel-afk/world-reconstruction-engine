@@ -87,10 +87,7 @@ _FIXTURE_PATH = (
     Path(__file__).parent / "fixtures" / "synthetic" / "colmap-l3-end-to-end" / "fixture.json"
 )
 _REVIEW_PATH = (
-    Path(__file__).parents[1]
-    / "docs"
-    / "reviews"
-    / "V2L13-preview-classical-comparison.md"
+    Path(__file__).parents[1] / "docs" / "reviews" / "V2L13-preview-classical-comparison.md"
 )
 _REFERENCE_ARTIFACT = ArtifactRef(
     artifact_id=ArtifactId("fixture:colmap-l3-end-to-end"),
