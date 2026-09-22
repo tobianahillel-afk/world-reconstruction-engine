@@ -33,9 +33,7 @@ from wre.reconstruction.legacy_geometry_conversion import (
 def _provenance(*observation_values: str) -> DerivedArtifactProvenance:
     return DerivedArtifactProvenance(
         producing_run_id=ReconstructionRunId("run:legacy-conversion"),
-        source_observation_ids=tuple(
-            ObservationId(value) for value in observation_values
-        ),
+        source_observation_ids=tuple(ObservationId(value) for value in observation_values),
     )
 
 
@@ -179,12 +177,10 @@ def test_conversion_ids_are_deterministic_role_separated_and_source_scoped() -> 
         )
 
     assert first.point_map.point_map_id.value == (
-        "legacy-points:"
-        + _expected_digest("point-map", source.estimate_id.value)
+        "legacy-points:" + _expected_digest("point-map", source.estimate_id.value)
     )
     assert first.geometry_solution.geometry_solution_id.value == (
-        "legacy-geometry:"
-        + _expected_digest("geometry-solution", source.estimate_id.value)
+        "legacy-geometry:" + _expected_digest("geometry-solution", source.estimate_id.value)
     )
 
     all_ids = {
@@ -195,8 +191,7 @@ def test_conversion_ids_are_deterministic_role_separated_and_source_scoped() -> 
     assert len(all_ids) == len(first.camera_solutions) + 2
     assert first.point_map.point_map_id != other.point_map.point_map_id
     assert (
-        first.geometry_solution.geometry_solution_id
-        != other.geometry_solution.geometry_solution_id
+        first.geometry_solution.geometry_solution_id != other.geometry_solution.geometry_solution_id
     )
     assert tuple(solution.solution_id for solution in first.camera_solutions) != tuple(
         solution.solution_id for solution in other.camera_solutions
@@ -204,13 +199,11 @@ def test_conversion_ids_are_deterministic_role_separated_and_source_scoped() -> 
 
 
 def test_uppercase_legacy_projection_model_is_lowercased_only() -> None:
-    result = convert_sparse_reconstruction_estimate(
-        _estimate(projection_model="SIMPLE_RADIAL")
-    )
+    result = convert_sparse_reconstruction_estimate(_estimate(projection_model="SIMPLE_RADIAL"))
 
-    assert {
-        solution.projection_model.value for solution in result.camera_solutions
-    } == {"simple_radial"}
+    assert {solution.projection_model.value for solution in result.camera_solutions} == {
+        "simple_radial"
+    }
 
 
 @pytest.mark.parametrize(
@@ -241,9 +234,7 @@ def test_camera_conversion_preserves_per_observation_geometry_and_shared_calibra
         sorted(solution.solution_id.value for solution in result.camera_solutions)
     )
 
-    sources_by_observation = {
-        pose.observation_id: pose for pose in source.camera_poses
-    }
+    sources_by_observation = {pose.observation_id: pose for pose in source.camera_poses}
     for solution in result.camera_solutions:
         pose = sources_by_observation[solution.observation_id]
         assert solution.local_frame_id is pose.local_frame_id
@@ -281,12 +272,9 @@ def test_scale_mapping_preserves_coordinates_without_rescaling_or_anchoring(
         pose.observation_id: pose.translation_xyz for pose in source.camera_poses
     }
     assert {
-        solution.observation_id: solution.translation_xyz
-        for solution in result.camera_solutions
+        solution.observation_id: solution.translation_xyz for solution in result.camera_solutions
     } == source_translations
-    assert result.point_map.positions_xyz == tuple(
-        point.position_xyz for point in source.points3d
-    )
+    assert result.point_map.positions_xyz == tuple(point.position_xyz for point in source.points3d)
 
     assert not hasattr(result.geometry_solution, "scale_factor")
     assert not hasattr(result.geometry_solution, "world_transform")
@@ -391,10 +379,7 @@ def test_source_only_legacy_evidence_is_not_promoted_into_canonical_outputs() ->
             "gps",
             "metadata",
         }
-        assert all(
-            not hasattr(solution, attribute)
-            for attribute in forbidden_camera_attributes
-        )
+        assert all(not hasattr(solution, attribute) for attribute in forbidden_camera_attributes)
 
     forbidden_point_attributes = {
         "tracks",
@@ -413,10 +398,7 @@ def test_source_only_legacy_evidence_is_not_promoted_into_canonical_outputs() ->
         "gps",
         "metadata",
     }
-    assert all(
-        not hasattr(result.point_map, attribute)
-        for attribute in forbidden_point_attributes
-    )
+    assert all(not hasattr(result.point_map, attribute) for attribute in forbidden_point_attributes)
 
     forbidden_geometry_attributes = {
         "tracks",
