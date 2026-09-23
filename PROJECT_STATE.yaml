@@ -14,11 +14,14 @@ current_goal: >-
   experimental candidate after source checkpoint license hardware reproducibility and cross-version COLMAP evidence is complete, while keeping
   WRE geometry contracts solver-independent and preserving the classical V2L14.3 baseline.
 next_action: >-
-  Start V2L14.4 with qualification only: re-verify the current hybrid/global shortlist, then pin and review the bounded GLUEMAP plus
-  Apache-licensed MapAnything profile including exact source/checkpoint identities, transitive licenses, supported GPU runtime and a real GPU
-  integration path. Do not add the adapter until every gate passes; if supported GPU or license evidence cannot be established, mark V2L14.4
-  record the unresolved gate in PROJECT_STATE.blockers and leave the adapter unimplemented rather than creating an unverified route.
-blockers: []
+  Continue V2L14.4 qualification only. The current GLUEMAP and Apache MapAnything source/checkpoint identities are pinned in
+  registry/dependencies.yaml; next establish a supported reproducible GPU execution lane, prove the reduced profile does not import or execute
+  excluded third-party components, complete the exact transitive license/redistribution review, and exercise a real GLUEMAP-output to WRE
+  PyCOLMAP 4.2.0 cross-read fixture. Do not add the adapter while any technology-gate blocker remains.
+blockers:
+  - V2L14.4 has no executable supported GPU runner in repository CI; the reviewed GLUEMAP reference environment is CUDA/GPU while current WRE workflows are CPU-hosted.
+  - V2L14.4 reduced-profile transitive import license and redistribution closure is incomplete; excluded SALAD Doppelgangers++ and VGGSfM components must be proven absent from the executed path before adapter code is added.
+  - V2L14.4 has not yet produced a real GLUEMAP native sparse model for WRE PyCOLMAP 4.2.0 cross-read compatibility evidence against GLUEMAP's isolated pycolmap-cuda12 4.0.4 environment.
 architecture:
   product_blueprint: docs/01_PRODUCT.md
   architecture_blueprint: docs/02_ARCHITECTURE.md
