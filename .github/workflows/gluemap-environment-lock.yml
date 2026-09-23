@@ -100,6 +100,8 @@ jobs:
               for field in ("name", "version", "build_string", "channel", "subdir", "url"):
                   assert package.get(field), (field, package)
               assert package.get("sha256"), ("missing sha256", package["name"])
+              license_expression = str(package.get("license") or "").strip()
+              assert license_expression, ("missing license", package["name"])
               packages.append(
                   {
                       "name": package["name"],
@@ -111,6 +113,7 @@ jobs:
                       "url": package["url"],
                       "sha256": package["sha256"],
                       "md5": package.get("md5"),
+                      "license": license_expression,
                   }
               )
 
