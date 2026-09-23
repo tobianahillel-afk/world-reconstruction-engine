@@ -58,7 +58,7 @@ jobs:
         run: |
           raw="$RUNNER_TEMP/gluemap-micromamba-raw.json"
           set +e
-          micromamba create --name wre-gluemap-lock --platform linux-64 --override-channels --channel conda-forge --strict-channel-priority --no-rc --dry-run --json \
+          env -u CONDARC micromamba create --name wre-gluemap-lock --platform linux-64 --override-channels --channel conda-forge --strict-channel-priority --no-rc --dry-run --json \
             "python=3.12.12" "pip" "cmake>=3.18" "ninja" "pkg-config" "pybind11>=3.0" "scikit-build-core>=0.10" "cxx-compiler" \
             "eigen=3.4.0" "ceres-solver=2.2.0=cpulgpl*" "metis=5.1.0" "boost=1.85.0" "libstdcxx-ng=15.2.0" "libgomp=15.2.0" \
             "pytorch-gpu=2.4.1" "torchvision=0.19.1" "cuda-version=12.4" > "$raw"
