@@ -1543,7 +1543,7 @@ work_items:
   - id: V2L14.2
     lot: V2L14
     title: Geometry initialization refinement adapter boundary
-    status: ready
+    status: done
     objective: Define one pure solver-independent geometry-refinement adapter boundary that receives exactly one complete canonical GeometrySolutionCandidate as an initialization together with explicit canonical supporting artifact evidence and returns one complete new canonical GeometrySolutionCandidate with exact initialization lineage, without executing a solver, mutating the initialization, requiring one coordinate gauge, selecting among alternatives, or defining refinement quality policy.
     allowed_scope:
       - src/wre/reconstruction/geometry_refinement.py
@@ -1617,7 +1617,106 @@ work_items:
       - source immutability regression proving request/result construction leaves all candidate and child Python values unchanged
       - module-surface regression proving no Torch DA3 PyCOLMAP BA optimization alignment metrics quality decision routing persistence surface appearance dynamic or V2L14.3 dependency enters the interface
       - full fast CI CodeQL and native/compatibility lanes only where repository path triggers require them
-  - {id: V2L14.3, lot: V2L14, title: Classical BA global refinement path, status: planned, depends_on: [V2L14.2]}
+  - id: V2L14.3
+    lot: V2L14
+    title: Classical BA global refinement path
+    status: ready
+    objective: Implement one concrete classical GeometryRefinementAdapter using the already-approved exact PyCOLMAP/COLMAP 4.2.0 environment and Ceres CPU bundle adjustment on one audited solver-native COLMAP sparse model that exactly corresponds to the request initialization, producing one freshly audited and canonicalized GeometrySolutionCandidate with explicit refinement lineage without synthesizing missing solver state, mutating the source model, aligning arbitrary local frames, scoring alternatives, or introducing hybrid/global learned methods.
+    allowed_scope:
+      - src/wre/reconstruction/colmap_geometry_refinement.py
+      - focused exports in src/wre/reconstruction/__init__.py
+      - focused reuse or public exposure of the existing native sparse-model audit helper in src/wre/reconstruction/colmap_reconstruction.py only if required, without changing mapper behavior
+      - tests/test_colmap_geometry_refinement.py
+      - registry/adapter-models.yaml
+      - focused test wiring in .github/workflows/colmap-integration.yml only if required to execute the exact PyCOLMAP 4.2.0 refinement fixture
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L14.4 can be activated without implementing it
+    out_of_scope:
+      - changing GeometryRefinementRequest GeometryRefinementResult GeometryRefinementAdapter GeometrySolutionCandidate or canonical CameraSolution DepthField PointMap GeometrySolution LocalFrameId GeometryScaleStatus semantics
+      - reconstructing or guessing solver-private 2D-to-3D tracks correspondences residual blocks or database state from a generic canonical candidate
+      - accepting DA3 or another non-COLMAP initialization unless an exact audited native COLMAP sparse model is independently supplied and proven to correspond to that canonical initialization
+      - running incremental_mapping global_mapping hierarchical_mapping point triangulation rematching feature extraction or any new scene reconstruction route
+      - CASPAR GPU bundle adjustment CUDA solver promotion GTSAM Open3D pose-graph optimization or any new external dependency
+      - computing SE3 Sim3 or another explicit alignment between initialization and refined local frames or assuming raw coordinate compatibility solely from lineage
+      - resolving local scale to metric or adding geographic GPS GCP ECEF ENU or absolute-anchor semantics
+      - scoring ranking selecting accepting rejecting thresholding QualityDecision consensus disagreement or comparison metrics owned by V2L14.5 and V2L14.6
+      - implementing the first hybrid/global candidate owned by V2L14.4
+      - route fallback retry scheduler cache general artifact persistence default promotion shipping promotion or loser cleanup
+      - dense MVS physical surface appearance dynamic chronology MasterScene RuntimeScene or later-lot behavior
+    depends_on: [V2L14.2]
+    read_before:
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/06_TESTING.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md
+      - docs/27_RESEARCH_CANDIDATE_COVERAGE.md
+      - docs/28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md
+      - docs/29_PERFORMANCE_INTEGRATION_MAP.md
+      - docs/reviews/V2L12-classical-precision-geometry-review.md
+      - docs/reviews/V2L13-feed-forward-geometry-review.md
+      - registry/dependencies.yaml
+      - registry/adapter-models.yaml
+      - src/wre/domain/artifacts.py
+      - src/wre/domain/producer_identity.py
+      - src/wre/domain/geometry_solutions.py
+      - src/wre/reconstruction/geometry_solution_comparison.py
+      - src/wre/reconstruction/geometry_refinement.py
+      - src/wre/reconstruction/colmap_environment.py
+      - src/wre/reconstruction/colmap_reconstruction.py
+      - src/wre/reconstruction/colmap_canonical_geometry.py
+      - src/wre/reconstruction/colmap_global_reconstruction.py
+      - tests/test_geometry_refinement.py
+      - tests/test_colmap_canonical_geometry.py
+      - tests/test_colmap_incremental_reconstruction.py
+      - tests/test_colmap_global_reconstruction.py
+      - tests/test_colmap_precision_route_regression.py
+    reuse:
+      - GeometryRefinementRequest GeometryRefinementResult and GeometryRefinementAdapter as the only public refinement-lineage boundary; the concrete COLMAP adapter must not introduce a second generic refinement contract
+      - the already-approved colmap dependency record and exact external pycolmap==4.2.0 plus numpy==2.5.3 native integration environment rather than adding a new solver dependency
+      - pycolmap.bundle_adjustment as the first classical refinement baseline with the Ceres backend on CPU; Caspar and GPU execution remain unapproved alternatives
+      - ColmapSparseModelArtifact and the existing solver-native manifest hashing and symlink/tamper checks as the source-state evidence rather than reconstructing COLMAP private state from canonical geometry
+      - canonicalize_colmap_sparse_model and colmap_sparse_model_content_identity for the refined output so camera pose direction projection semantics unresolved scale PointMap responsibility and content-derived canonical IDs remain identical to the accepted V2L12 normalization path
+      - ColmapFeatureExtractionResult only for the already-reviewed image-name to ObservationId mapping required by canonical normalization
+      - ArtifactRef supporting evidence and ArtifactProducerIdentity producer/configuration identity to retain exact lineage without solver-private dictionaries
+      - copy-on-write private native model handling from the existing COLMAP routes so retained source model bytes are immutable
+    acceptance:
+      - Add one concrete COLMAP refinement module whose ordinary import remains lazy with respect to PyCOLMAP NumPy native libraries filesystem execution and GPU state.
+      - Define an immutable exact classical refinement configuration for PyCOLMAP 4.2.0 bundle adjustment using the Ceres backend CPU-only with GPU disabled one solver thread and explicit intrinsic/point refinement choices; the configuration has deterministic canonical identity and contains no routing score threshold retry fallback or quality-policy fields.
+      - Define one immutable COLMAP refinement source binding one audited ColmapSparseModelArtifact its retained model root exact ColmapFeatureExtractionResult expected ColmapEnvironmentIdentity and one explicit ArtifactRef identifying that solver-native source evidence.
+      - The concrete adapter conforms to GeometryRefinementAdapter and exposes refine(request) only as its public execution operation; solver source configuration and destination are adapter construction state rather than additions to the generic protocol.
+      - The request must explicitly contain the bound solver-native ArtifactRef in supporting_artifacts. Missing mismatched duplicate or conflicting evidence fails closed before native solver execution.
+      - Before bundle adjustment the adapter re-verifies the source native-model manifest byte lengths hashes file membership regular-file status and absence of symlinks, canonicalizes that exact source through the accepted V2L12 normalizer, and proves its GeometrySolution cameras and PointMap exactly match the request initialization. A generic depth-only feed-forward candidate or any canonical candidate that does not exactly correspond to the bound native model is rejected before solver execution.
+      - The original audited source directory and files are never modified. Refinement executes only on a fresh private copy and publishes only to a fresh destination owned by the refinement operation.
+      - The adapter re-inspects the exact PyCOLMAP/COLMAP environment and requires the already-approved 4.2.0 identity before native reconstruction load or bundle adjustment.
+      - Execute pycolmap.bundle_adjustment exactly once on the verified private reconstruction using the bounded Ceres CPU configuration. Do not call incremental global hierarchical mapping feature extraction matching triangulation or another reconstruction route.
+      - After optimization write the refined native reconstruction to the fresh destination, audit the complete emitted native model manifest, and canonicalize it only through canonicalize_colmap_sparse_model with the same reviewed feature-name mapping semantics.
+      - Construct one refined GeometrySolutionCandidate with producer implementation pycolmap.bundle_adjustment version 4.2.0 exact configuration identity and canonical source evidence derived from the request inputs; initialization producer and source_artifacts remain untouched.
+      - Refined output retains the classical sparse responsibility with canonical cameras plus one PointMap no fabricated DepthField and GeometryScaleStatus.UNRESOLVED; bundle adjustment alone must not promote metric scale or geographic truth.
+      - The refined GeometrySolutionId must be distinct from the initialization GeometrySolutionId. If exact audited output canonicalizes to the same GeometrySolutionId because optimization produced no content change the adapter fails closed rather than relabeling identical geometry as a new hypothesis.
+      - A changed refined native model may canonicalize to a different content-derived LocalFrameId. The adapter records only initialization lineage and makes no implicit SE3 Sim3 coordinate-delta or quality-improvement claim between the two frames.
+      - The source native model remains byte-identical after success and every failure path; partial private/destination outputs are removed or left explicitly unpublished according to one deterministic ownership rule.
+      - Register the concrete adapter as experimental using the existing approved colmap dependency record. Do not change COLMAP dependency version license status existing adapter shipping status or any default route.
+      - No result or registry surface adds score winner rank QualityDecision consensus residual threshold route retry fallback alignment transform or default semantics.
+    tests:
+      - exact frozen classical config and source-binding field-shape type identity and fail-closed validation tests
+      - supporting ArtifactRef membership regression proving the bound native source must be explicit additional request evidence before solver execution
+      - source manifest tamper missing extra file symlink and environment-mismatch regressions proving failure before bundle_adjustment
+      - initialization/source exact-match regressions covering camera pose/intrinsics PointMap GeometrySolutionId source model identity depth-bearing feed-forward-style input and foreign LocalFrameId mismatch without synthesizing tracks
+      - fake PyCOLMAP execution regression proving one private source copy one Reconstruction load exactly one bundle_adjustment call Ceres CPU configuration and no mapping matching triangulation or GPU/Caspar path
+      - successful refinement regression proving a fresh audited native output is canonicalized through the existing V2L12 path into a distinct complete GeometrySolutionCandidate with unresolved scale cameras PointMap and no DepthField
+      - unchanged-output regression proving an identical resulting GeometrySolutionId fails closed rather than being relabeled
+      - same source bytes before and after success plus failure-cleanup regression proving the retained native input is immutable
+      - producer and source-provenance regression proving initialization provenance remains exact and refined producer/configuration/supporting evidence are independently retained
+      - local-frame regression proving a content-derived refined frame creates no transform delta metric score or quality claim
+      - adapter registry regression proving exact PyCOLMAP 4.2.0 Ceres CPU experimental dependency identity without default or shipping promotion
+      - module-surface regression proving no DA3 Torch learned hybrid GTSAM Open3D CASPAR alignment metrics quality decision routing persistence surface appearance dynamic or V2L14.4 dependency enters the classical baseline
+      - exact real PyCOLMAP 4.2.0 native integration fixture in the existing colmap-integration lane exercising a deliberately refinable audited sparse model and the complete initialization-to-refined canonical path
+      - full fast CI CodeQL colmap-integration and any other repository path-triggered compatibility lanes
+
   - {id: V2L14.4, lot: V2L14, title: First approved hybrid global candidate, status: planned, depends_on: [V2L14.3]}
   - {id: V2L14.5, lot: V2L14, title: Geometry consensus disagreement metrics, status: planned, depends_on: [V2L14.4]}
   - {id: V2L14.6, lot: V2L14, title: Controlled geometry comparison benchmark, status: planned, depends_on: [V2L14.5]}
