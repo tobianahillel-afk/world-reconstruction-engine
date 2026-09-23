@@ -183,7 +183,7 @@ The benchmark records:
 - peak process RSS;
 - conditional GPU-memory evidence only when a GPU profile actually exists.
 
-The latest retained exact-head profiling artifact for PR #117 run `da3-execution-profile #7` has:
+The retained green implementation-head profiling artifact for PR #117 run `da3-execution-profile #7` has:
 
 - artifact name: `v2l13-6-da3-execution-profile`;
 - artifact id: `10737667873`;
