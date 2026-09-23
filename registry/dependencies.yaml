@@ -135,18 +135,24 @@ dependencies:
       openmp_build: h7148c6a_0
       openmp_mutex_build: 8_kmp_llvm
       conda_environment_lock: registry/external-environments/gluemap-linux-64-cuda12.4.conda-lock.json
-      conda_environment_lock_sha256: 88112dbfd8149e58e28b1e7309ea6933001058bb058ac6bff8338ea41a6aee52
+      conda_environment_lock_sha256: 371baabc470cf0312f05ccab5ad5ececa404540a8d9c56cd4d4a6a9dc7488827
       conda_environment_lock_packages: 157
       conda_build_strings: locked
-      source_materialization_manifest: registry/external-sources/gluemap-bounded-materialization.json
-      source_materialization_files: 91
-      source_materialization_byte_length: 1058652
-      source_materialization_sha256: 6503a2ea5d4c46c6273a3bd56ef5150b59c3e249c350bdc14dbed20b95664ca8
-      source_materialization_runtime_execution_evidence: false
+      previous_mapanything_source_materialization_manifest: registry/external-sources/gluemap-bounded-materialization.json
+      previous_mapanything_source_materialization_files: 91
+      previous_mapanything_source_materialization_byte_length: 1058652
+      previous_mapanything_source_materialization_sha256: 6503a2ea5d4c46c6273a3bd56ef5150b59c3e249c350bdc14dbed20b95664ca8
+      previous_mapanything_source_materialization_runtime_execution_evidence: false
+      source_materialization_manifest: unresolved_pending_vggt_qualification
       cuda: '12.4'
       cuda_package_set: locked_in_environment_lock
       gpu_execution_evidence: false
-      chosen_model: map_anything
+      chosen_model: vggt
+      chosen_model_source_revision: 44b3afbd1869d8bde4894dd8ea1e293112dd5eba
+      chosen_model_source_tree: 5ebbc58776783ad1acd6d4901e01161717e5d385
+      chosen_model_checkpoint_repository: facebook/VGGT-1B-Commercial
+      chosen_model_checkpoint_file: model.safetensors
+      chosen_model_checkpoint_identity: unresolved_pending_official_gated_asset
       skip_doppelgangers: true
       use_dummy_tracks: true
       coarse_only: true
@@ -161,40 +167,42 @@ dependencies:
       route can bypass SALAD by constructing BaseTwoViewDataset directly with no descriptor cache,
       skip Doppelgangers++ with skip_doppelgangers=true, avoid VGGSfM model loading with
       use_dummy_tracks=true, and stop after the global coarse COLMAP model with coarse_only=true.
-      However gluemap.utils.model_loader imports thirdparty.path_to_thirdparty at module load, and
-      that helper requires directory sentinels for unused Pi3, Doppelgangers++, VGGT and VGGSfM
-      paths even when those modules are never imported. The exact upstream tree also vendors
-      VGGSfM-derived tracker source with Meta copyright headers while facebookresearch/vggsfm
-      publishes its root under CC-BY-NC-4.0. Therefore the future executable profile must use a
-      verified allowlisted materialization derived from the pinned GLUEMAP revision: retain only
-      reviewed GLUEMAP core bytes plus the separately pinned Apache MapAnything source, create
-      empty temporary path sentinels for unused third-party checks, invoke BaseTwoViewDataset and
-      GluemapPipeline directly rather than gluemap.cli demo preprocessing, and prove at runtime
-      that SALAD, mast3r/dust3r and vggsfm modules never enter sys.modules. This qualification
-      strategy must be validated before adapter code is added. Upstream currently pins
+      Earlier qualification used MapAnything and produced PR #129's bounded source
+      manifest, but deeper exact-source review found that MapAnything's UniCeption import path
+      reaches CroCo/DUSt3R-derived CC-BY-NC-SA-4.0 code. That route is therefore retained only
+      as superseded audit evidence. The new provisional shipping-oriented backbone is the exact
+      GLUEMAP-pinned VGGT source revision 44b3afbd1869d8bde4894dd8ea1e293112dd5eba.
+      The future executable profile must use a new verified allowlisted GLUEMAP+VGGT
+      materialization, construct the model outside GLUEMAP from the exact source plus a locally
+      supplied and verified official VGGT-1B-Commercial model.safetensors, and inject it through
+      GluemapPipeline models={"vggt": model}. This bypasses gluemap.utils.model_loader and must
+      prove at runtime that SALAD, mast3r/dust3r, CroCo, UniCeption, MapAnything, Pi3 and vggsfm
+      modules never enter sys.modules and that no Git/Hugging Face/torch.hub network fetch occurs.
+      This qualification strategy must be validated before adapter code is added. Upstream currently pins
       pycolmap-cuda12==4.0.4 in its external GPU environment, which remains isolated from WRE's
       PyCOLMAP 4.2.0 canonicalization environment. Static native review now identifies the
       source-level Ceres 2.2.0 Eigen 3.4.0 METIS 5.1.0 Boost 1.85.0 and GNU 15.2.0
       runtime terms, and confirms Ceres CUDA is optional for pygluemap. Exact-tree inspection
       found no upstream conda-lock pixi lock environment export or equivalent build-string manifest.
       WRE therefore uses the separate CPU-only linux-64 micromamba resolution lane with an explicit
-      CUDA 12.4 virtual-package override as dependency-lock evidence only. PR #127 froze and
-      exactly regenerated registry/external-environments/gluemap-linux-64-cuda12.4.conda-lock.json
-      with 157 packages and SHA-256
-      88112dbfd8149e58e28b1e7309ea6933001058bb058ac6bff8338ea41a6aee52.
+      CUDA 12.4 virtual-package override as dependency-lock evidence only. PR #127 first froze
+      the 157-package closure; PR #131 added the direct license expression for every exact build,
+      and the current resolver request now pins LLVM OpenMP 23.1.1 build h7148c6a_0 explicitly.
+      The current registry/external-environments/gluemap-linux-64-cuda12.4.conda-lock.json
+      identity is SHA-256
+      371baabc470cf0312f05ccab5ad5ececa404540a8d9c56cd4d4a6a9dc7488827.
       The accepted solve uses Ceres build cpulgplh45c08c3_10 with no SuiteSparse,
       Clang++ 22.1.8 plus LLVM OpenMP 23.1.1 and no libgomp, and the exact CUDA 12.4
       package closure recorded in that lock. A GNU-only OpenMP solve was rejected because
       conda-forge PyTorch GPU 2.4.1 requires the LLVM/KMP OpenMP family. This lock is still
       dependency-resolution evidence only, not GPU execution. PR #129 separately froze and
-      exactly regenerated registry/external-sources/gluemap-bounded-materialization.json:
-      91 regular files, 1,058,652 bytes and canonical materialization SHA-256
+      exactly regenerated registry/external-sources/gluemap-bounded-materialization.json
+      with 91 regular files, 1,058,652 bytes and canonical materialization SHA-256
       6503a2ea5d4c46c6273a3bd56ef5150b59c3e249c350bdc14dbed20b95664ca8.
-      That manifest retains 72 reviewed GLUEMAP core/build files plus 19 MapAnything
-      core/inference files, contains no forbidden third-party source-file prefix, and
-      records runtime_execution_evidence=false and gpu_execution_evidence=false.
-      Exact locked-package/model redistribution review, supported real GPU evidence and
-      cross-version native-model evidence remain unresolved.
+      It remains immutable evidence for the rejected MapAnything candidate, not the active
+      executable source identity. The active VGGT source materialization, official gated
+      checkpoint identity, exact Python closure, custom-license review, supported real GPU
+      evidence and cross-version native-model evidence remain unresolved.
   mapanything_apache:
     status: candidate_optional
     role: [hybrid_global_geometry_backbone]
@@ -220,11 +228,47 @@ dependencies:
       4914062480 bytes with SHA-256
       fa06c0fdccefc5048e072c85935d5789b1e36b307f3859033c17f9dcb9fd5201.
       PR #129's bounded source materialization retains only the MapAnything root
-      license/pyproject, core MapAnything model package, and the transitively required
-      inference utilities; mapanything/models/external is excluded from the executable
-      source manifest. License review remains pending until the exact composed GLUEMAP
-      runtime dependency/model redistribution posture is reviewed; this record does not
-      authorize shipping or default promotion.
+      license/pyproject, core MapAnything model package, and selected inference utilities;
+      mapanything/models/external is excluded. Subsequent exact-source review found that
+      this apparently Apache-only route still imports UniCeption modules whose embedded
+      CroCo/DUSt3R-derived files explicitly carry CC-BY-NC-SA-4.0 non-commercial terms.
+      The first shipping-oriented GLUEMAP qualification therefore no longer uses
+      MapAnything as its backbone. This record is retained as audit evidence only and
+      does not authorize execution, shipping or default promotion.
+  vggt_commercial:
+    status: candidate_optional
+    role: [hybrid_global_geometry_backbone]
+    integration: optional_exact_external_checkpoint
+    version_policy: pin_exact_external_environment
+    pinned_version: 44b3afbd1869d8bde4894dd8ea1e293112dd5eba
+    source_tree_sha: 5ebbc58776783ad1acd6d4901e01161717e5d385
+    upstream_repository: facebookresearch/vggt
+    model_repository: facebook/VGGT-1B-Commercial
+    checkpoint_identifier: facebook/VGGT-1B-Commercial/model.safetensors
+    checkpoint_revision: unresolved_pending_official_gated_access
+    checkpoint_sha256: unresolved_pending_official_gated_access
+    checkpoint_byte_length: unresolved_pending_official_gated_access
+    license: LicenseRef-VGGT-License-v1
+    license_review: pending
+    notes: >-
+      GLUEMAP's exact pinned submodule revision for VGGT is
+      44b3afbd1869d8bde4894dd8ea1e293112dd5eba with Git tree
+      5ebbc58776783ad1acd6d4901e01161717e5d385. That commit dates from
+      2025-10-11 and contains the VGGT License v1 last updated 2025-07-29.
+      Upstream documents that the code is commercially usable under this custom
+      license subject to its Acceptable Use Policy, while only the separately
+      released facebook/VGGT-1B-Commercial checkpoint is the commercial model
+      asset; the original VGGT-1B checkpoint remains non-commercial. The license
+      is not treated as OSI-permissive and includes use restrictions, including
+      military-use restrictions, so shipping approval remains pending.
+      The official commercial checkpoint repository is gated. WRE must not use a
+      checksum copied from an unofficial mirror: checkpoint revision, SHA-256 and
+      byte length remain unresolved until the exact official gated file is supplied
+      locally and re-hashed. The preferred future path constructs VGGT from the
+      exact reviewed source, loads only that verified local model.safetensors, and
+      injects it into GluemapPipeline through models={"vggt": model}, bypassing
+      gluemap.utils.model_loader and all runtime Hugging Face or torch.hub fetches.
+      No execution or adapter implementation is authorized by this record.
   aliked_n16:
     status: candidate_optional
     role: [hybrid_global_query_points]
@@ -316,12 +360,17 @@ dependencies:
     notes: >-
       MapAnything imports UniCeption model blocks directly in the reviewed inference
       path. The exact v0.1.7 tag resolves to
-      802ebc1783d71bbaa9d139c88d87d062ad18ce62 and declares BSD-3-Clause.
-      UniCeption's base package pulls a wider Python dependency set and exposes
-      optional checkpoint/download helpers; WRE must use only the modules exercised
-      by the pinned MapAnything source and must not invoke UniCeption checkpoint
-      download helpers. Full transitive package and redistribution review remains
-      pending.
+      802ebc1783d71bbaa9d139c88d87d062ad18ce62 and has a BSD-3-Clause root
+      LICENSE, but that root license is not the complete executable-source closure.
+      Exact-source inspection proves that uniception/models/libs/croco/blocks.py,
+      pos_embed.py and dpt_block.py, plus croco/patch_embed.py, carry explicit
+      CC-BY-NC-SA-4.0 non-commercial notices inherited from CroCo/DUSt3R. These
+      files are not merely dormant: MapAnything directly imports CroCo RoPE/DPT
+      helpers and uniception.models.encoders eagerly imports CroCoEncoder.
+      Consequently the current MapAnything+UniCeption route is blocked for the
+      first shipping-oriented V2L14.4 profile unless a separately reviewed clean
+      replacement removes that closure. Do not infer approval from the BSD root
+      license and do not install or execute this route in the bounded profile.
   ceres_solver:
     status: candidate_optional
     role: [hybrid_global_native_optimization]

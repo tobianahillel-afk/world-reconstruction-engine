@@ -14,15 +14,19 @@ current_goal: >-
   experimental candidate after source checkpoint license hardware reproducibility and cross-version COLMAP evidence is complete, while keeping
   WRE geometry contracts solver-independent and preserving the classical V2L14.3 baseline.
 next_action: >-
-  Continue V2L14.4 qualification only. PR #127 froze the exact 157-package linux-64/CUDA-12.4 dependency lock and PR #129 froze the exact
-  91-file bounded GLUEMAP plus MapAnything source materialization with no forbidden third-party source bytes and no runtime/GPU claim. Next
-  enrich the existing exact micromamba solve evidence with the direct license expression reported for every resolved package, regenerate that
-  enriched lock deterministically, and use the resulting exact-build inventory to narrow the remaining redistribution review. Then establish a
-  supported real GPU lane and exercise a real GLUEMAP-output to WRE PyCOLMAP 4.2.0 cross-read fixture. Do not add the adapter while any
-  technology-gate blocker remains.
+  Continue V2L14.4 qualification only. PR #127 froze the exact 157-package linux-64/CUDA-12.4 dependency build closure, PR #129 froze the
+  superseded MapAnything source candidate, and PR #131 preserved a direct license expression for all 157 exact package builds. Exact-source
+  review then proved that MapAnything's UniCeption import path reaches CroCo/DUSt3R CC-BY-NC-SA-4.0 non-commercial code, so do not execute that
+  backbone. Qualify the exact GLUEMAP-pinned VGGT revision 44b3afbd1869d8bde4894dd8ea1e293112dd5eba instead: first freeze a new CPU-only
+  GLUEMAP+VGGT allowlisted source manifest and retain the VGGT License v1 identity. Then obtain the official gated
+  facebook/VGGT-1B-Commercial model.safetensors locally and record its exact official revision, SHA-256 and byte length; no mirror checksum may
+  satisfy the gate. After that complete redistribution review, establish a supported real GPU lane, and exercise a real GLUEMAP-output to WRE
+  PyCOLMAP 4.2.0 cross-read fixture. Do not add the adapter while any technology-gate blocker remains.
 blockers:
   - V2L14.4 has no executable supported GPU runner in repository CI; the reviewed GLUEMAP reference environment is CUDA/GPU while current WRE workflows are CPU-hosted.
-  - V2L14.4 transitive license/redistribution closure is incomplete. PR #127 closed the exact package/build lock and PR #129 closed the allowlisted executable-source byte manifest: no forbidden VGGSfM/Doppelgangers++/SALAD/Pi3/VGGT or MapAnything external-model source bytes enter the reviewed materialization. The gate remains blocked until every exact resolved package and model asset has direct-license metadata recorded and the redistribution posture of reciprocal/restricted/EULA packages is explicitly reviewed; no shipping/default promotion is authorized by the source gate alone.
+  - V2L14.4 MapAnything plus UniCeption is blocked for the first shipping-oriented profile. Exact source inspection found CC-BY-NC-SA-4.0 non-commercial CroCo/DUSt3R files on the actual MapAnything import path despite UniCeption's BSD root LICENSE; PR #129 is retained only as superseded qualification evidence and that route must not execute.
+  - V2L14.4 VGGT-1B-Commercial qualification is incomplete. The exact GLUEMAP submodule source revision 44b3afbd1869d8bde4894dd8ea1e293112dd5eba and tree 5ebbc58776783ad1acd6d4901e01161717e5d385 are known under VGGT License v1, but the official commercial checkpoint is gated and its immutable repository revision, model.safetensors SHA-256 and byte length have not yet been obtained from official bytes. No unofficial mirror identity is acceptable.
+  - V2L14.4 transitive redistribution review remains incomplete. PR #131 records non-blank direct license metadata for all 157 exact conda builds, but NVIDIA/cuDNN/Intel LicenseRef terms, reciprocal/copyleft components, the custom VGGT license and every later exact Python/model dependency still require use-mode and redistribution review; inventory is not shipping approval.
   - V2L14.4 has not yet produced a real GLUEMAP native sparse model for WRE PyCOLMAP 4.2.0 cross-read compatibility evidence against GLUEMAP's isolated pycolmap-cuda12 4.0.4 environment.
 architecture:
   product_blueprint: docs/01_PRODUCT.md
