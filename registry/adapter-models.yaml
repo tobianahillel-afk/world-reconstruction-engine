@@ -1,5 +1,28 @@
 schema_version: 1
 entries:
+  - adapter_id: colmap.bundle_adjustment_refinement
+    capability:
+      name: geometry.refinement.classical_bundle_adjustment
+      input_kinds: [geometry.colmap_native_sparse_model, geometry.solution]
+      output_kinds: [geometry.camera_solution, geometry.point_map, geometry.solution]
+    producer:
+      implementation: pycolmap.bundle_adjustment
+      version: 4.2.0
+      revision: null
+    dependency_refs: [colmap]
+    model: null
+    checkpoint: null
+    artifact_key_hardware_policy: required
+    license:
+      direct: BSD-3-Clause
+      review: approved
+      transitive_notes: "The approved COLMAP dependency record already covers the exact external PyCOLMAP/COLMAP 4.2.0 environment used by this refinement adapter; no new solver dependency is introduced."
+      redistribution_notes: "WRE executes bundle adjustment only through the retained external PyCOLMAP 4.2.0 environment on caller-retained native sparse-model bytes and does not bundle or redistribute an alternate COLMAP build."
+    shipping_status: experimental
+    reproducibility_notes: "V2L14.3 refines exactly one audited solver-native COLMAP sparse model through PyCOLMAP 4.2.0 bundle_adjustment using the Ceres backend on CPU with one solver thread, on a private copy only, then audits and normalizes the fresh result through the accepted V2L12 canonical COLMAP path. It does not synthesize solver state, resolve metric scale, align unrelated local frames, score candidates, or promote a default route."
+    failure_signals: []
+    metric_names: []
+    resume_mode: unsupported
   - adapter_id: colmap.geometric_verification
     capability:
       name: evidence.geometric_verification
