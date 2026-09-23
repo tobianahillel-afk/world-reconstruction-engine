@@ -127,18 +127,29 @@ dependencies:
       coarse_only: true
       pair_generation: exhaustive_without_salad_descriptor_cache
     notes: >-
-      V2L14.4 qualification currently targets exact GLUEMAP source revision
+      V2L14.4 qualification targets exact GLUEMAP source revision
       adc9e4bb5f41014d3f7c157a879edc278588c829 with Git tree
-      9f4b6090baca9ad6da78a138372afb17a7f70626. GLUEMAP's top-level source
+      9f4b6090baca9ad6da78a138372afb17a7f70626 as provenance evidence, not as
+      permission to execute or redistribute the entire upstream tree. GLUEMAP's top-level source
       is BSD-3-Clause-style, but upstream explicitly warns that third-party dependencies are
-      separately licensed. The first bounded WRE profile therefore excludes SALAD,
-      Doppelgangers++ and VGGSfM execution, uses the upstream exhaustive-pair fallback,
-      skip_doppelgangers=true, use_dummy_tracks=true and coarse_only=true, and selects only
-      the separately reviewed Apache MapAnything dependency below. Upstream currently pins
-      pycolmap-cuda12==4.0.4 in its external GPU environment, which remains isolated from
-      WRE's PyCOLMAP 4.2.0 canonicalization environment. Full transitive import/license
-      closure and a supported real GPU execution lane remain unresolved, so no adapter may
-      be implemented or enabled from this record alone.
+      separately licensed. Static review of this exact revision confirms that the bounded WRE
+      route can bypass SALAD by constructing BaseTwoViewDataset directly with no descriptor cache,
+      skip Doppelgangers++ with skip_doppelgangers=true, avoid VGGSfM model loading with
+      use_dummy_tracks=true, and stop after the global coarse COLMAP model with coarse_only=true.
+      However gluemap.utils.model_loader imports thirdparty.path_to_thirdparty at module load, and
+      that helper requires directory sentinels for unused Pi3, Doppelgangers++, VGGT and VGGSfM
+      paths even when those modules are never imported. The exact upstream tree also vendors
+      VGGSfM-derived tracker source with Meta copyright headers while facebookresearch/vggsfm
+      publishes its root under CC-BY-NC-4.0. Therefore the future executable profile must use a
+      verified allowlisted materialization derived from the pinned GLUEMAP revision: retain only
+      reviewed GLUEMAP core bytes plus the separately pinned Apache MapAnything source, create
+      empty temporary path sentinels for unused third-party checks, invoke BaseTwoViewDataset and
+      GluemapPipeline directly rather than gluemap.cli demo preprocessing, and prove at runtime
+      that SALAD, mast3r/dust3r and vggsfm modules never enter sys.modules. This qualification
+      strategy must be validated before adapter code is added. Upstream currently pins
+      pycolmap-cuda12==4.0.4 in its external GPU environment, which remains isolated from WRE's
+      PyCOLMAP 4.2.0 canonicalization environment. Full executed-package license closure, supported
+      real GPU evidence and cross-version native-model evidence remain unresolved.
   mapanything_apache:
     status: candidate_optional
     role: [hybrid_global_geometry_backbone]
