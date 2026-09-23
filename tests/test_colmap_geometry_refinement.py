@@ -456,9 +456,7 @@ def test_source_binding_requires_exact_environment_and_native_artifact_ref(
         "expected_environment",
         "artifact_ref",
     )
-    assert source.artifact_ref == colmap_native_sparse_model_artifact_ref(
-        source.model_artifact
-    )
+    assert source.artifact_ref == colmap_native_sparse_model_artifact_ref(source.model_artifact)
     assert source.artifact_ref.artifact_kind == COLMAP_NATIVE_SPARSE_MODEL_KIND
 
     with pytest.raises(ValueError, match="exact audited native"):
@@ -638,10 +636,7 @@ def test_success_uses_private_copy_one_ceres_cpu_ba_and_fresh_canonical_output(
     assert result.refined_candidate.geometry_solution_id != initialization.geometry_solution_id
     assert result.refined_candidate.depth_fields == ()
     assert len(result.refined_candidate.point_maps) == 1
-    assert (
-        result.refined_candidate.geometry_solution.scale_status
-        is GeometryScaleStatus.UNRESOLVED
-    )
+    assert result.refined_candidate.geometry_solution.scale_status is GeometryScaleStatus.UNRESOLVED
     assert result.refined_candidate.producer.producer == ProducerRef(
         implementation=COLMAP_BUNDLE_ADJUSTMENT_REFINEMENT_PRODUCER_IMPLEMENTATION,
         version=COLMAP_BUNDLE_ADJUSTMENT_REFINEMENT_PRODUCER_VERSION,
@@ -875,9 +870,7 @@ def test_real_pycolmap_bundle_adjustment_refines_audited_native_model(
     )
 
     image_ids = sorted(int(value) for value in reconstruction.reg_image_ids())
-    observations = tuple(
-        ObservationId(f"obs:ba:{index:04d}") for index in range(len(image_ids))
-    )
+    observations = tuple(ObservationId(f"obs:ba:{index:04d}") for index in range(len(image_ids)))
     image_names = tuple(str(reconstruction.image(image_id).name) for image_id in image_ids)
     database_digest = hash_file_content(database_path)
     features = ColmapFeatureExtractionResult(
