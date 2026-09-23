@@ -5,7 +5,7 @@ This repository is designed to be resumed by an AI coding agent with no conversa
 ## Mandatory startup sequence
 
 1. Read `docs/00_START_HERE.md`.
-2. Read the canonical blueprint documents referenced there: `docs/01_PRODUCT.md`, `docs/02_ARCHITECTURE.md`, `docs/03_PIPELINE.md`, `docs/14_TECHNOLOGY_SELECTION.md`, `docs/27_RESEARCH_CANDIDATE_COVERAGE.md`, `docs/15_PRODUCTION_RUNTIME.md`, `docs/28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md`, `docs/29_PERFORMANCE_INTEGRATION_MAP.md`, `docs/23_ENGINEERING_EXECUTION.md`, `docs/24_SYSTEM_INVARIANTS.md`, `docs/25_V2_ROADMAP.md`, and `docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md`.
+2. Read the canonical blueprint and living research documents referenced there: `docs/01_PRODUCT.md`, `docs/02_ARCHITECTURE.md`, `docs/03_PIPELINE.md`, `docs/14_TECHNOLOGY_SELECTION.md`, `docs/27_RESEARCH_CANDIDATE_COVERAGE.md`, `docs/30_RESEARCH_HANDOFF_2026-09-23.md`, `docs/15_PRODUCTION_RUNTIME.md`, `docs/28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md`, `docs/29_PERFORMANCE_INTEGRATION_MAP.md`, `docs/23_ENGINEERING_EXECUTION.md`, `docs/24_SYSTEM_INVARIANTS.md`, `docs/25_V2_ROADMAP.md`, and `docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md`.
 3. Read `PROJECT_STATE.yaml`.
 4. Read the roadmap index `registry/work-items.yaml`, follow its `work_item_files`, and locate the exact `active_work_item` in the corresponding milestone file under `registry/work-items/`.
 5. Verify the active item has a complete executable contract: objective, allowed scope, out-of-scope, dependencies, read-before, reuse, acceptance and tests.
@@ -23,6 +23,8 @@ If the blueprint advances beyond the machine-readable roadmap, follow the transi
 `docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md` is authoritative for the V2 product/architecture freeze and legacy-v1 policy. V1 is an implementation donor and source of regression evidence, not a compatibility target. If a legacy interface or sequencing assumption conflicts with a frozen v2 contract, the v2 contract wins.
 
 `docs/27_RESEARCH_CANDIDATE_COVERAGE.md` is intentionally living rather than frozen. It maps the current research landscape into the stable v2 responsibilities. A new method should normally update the candidate/benchmark landscape, not the core architecture.
+
+`docs/30_RESEARCH_HANDOFF_2026-09-23.md` records the latest frontier-research audit against the actual repository state. Treat it as candidate-refresh guidance, not as permission to widen the active work item. Named methods in that handoff must still be re-verified for current code, checkpoint, license, hardware and benchmark evidence when their owning work item activates.
 
 `docs/28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md` and `docs/29_PERFORMANCE_INTEGRATION_MAP.md` are also intentionally living. They record optimization strategies and where/when those strategies belong in the frozen architecture. Hardware/vendor-specific acceleration must remain behind the owning adapter/runtime/resource responsibility and must not become a new core semantic type merely because it is currently fast.
 
