@@ -11,13 +11,14 @@ Before interpreting the implementation roadmap, read the current product/archite
 3. [`03_PIPELINE.md`](03_PIPELINE.md) — adaptive reconstruction routes by data profile.
 4. [`14_TECHNOLOGY_SELECTION.md`](14_TECHNOLOGY_SELECTION.md) — current candidate technologies and benchmark policy.
 5. [`27_RESEARCH_CANDIDATE_COVERAGE.md`](27_RESEARCH_CANDIDATE_COVERAGE.md) — living map from current research families/candidates to the frozen WRE contracts and roadmap lots; candidate names are intentionally not frozen.
-6. [`15_PRODUCTION_RUNTIME.md`](15_PRODUCTION_RUNTIME.md) — professional orchestration, caching, scheduling, runtime compilation and distribution.
-7. [`28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md`](28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md) — living cross-cutting strategies for work avoidance, decode/preprocess reuse, GPU execution, compression, LOD and streaming without weakening quality contracts.
-8. [`29_PERFORMANCE_INTEGRATION_MAP.md`](29_PERFORMANCE_INTEGRATION_MAP.md) — living ownership/timing map that places advanced profiling, execution, storage, compression and runtime optimizations into the existing frozen architecture and executable roadmap.
-9. [`23_ENGINEERING_EXECUTION.md`](23_ENGINEERING_EXECUTION.md) — how blueprint capabilities are split into one-run work items and implemented safely.
-10. [`24_SYSTEM_INVARIANTS.md`](24_SYSTEM_INVARIANTS.md) — cross-cutting fail-closed product invariants every subsystem must preserve.
-11. [`25_V2_ROADMAP.md`](25_V2_ROADMAP.md) — executable capability sequence for WRE v2.0.
-12. [`26_V2_PRODUCT_ARCHITECTURE_FREEZE.md`](26_V2_PRODUCT_ARCHITECTURE_FREEZE.md) — frozen v2 product/architecture authority, scientific replacement rule and legacy-v1 donor policy.
+6. [`30_RESEARCH_HANDOFF_2026-09-23.md`](30_RESEARCH_HANDOFF_2026-09-23.md) — latest frontier-research handoff: missing/new candidate families, milestone mapping and strict guidance for absorbing them without widening the active work item.
+7. [`15_PRODUCTION_RUNTIME.md`](15_PRODUCTION_RUNTIME.md) — professional orchestration, caching, scheduling, runtime compilation and distribution.
+8. [`28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md`](28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md) — living cross-cutting strategies for work avoidance, decode/preprocess reuse, GPU execution, compression, LOD and streaming without weakening quality contracts.
+9. [`29_PERFORMANCE_INTEGRATION_MAP.md`](29_PERFORMANCE_INTEGRATION_MAP.md) — living ownership/timing map that places advanced profiling, execution, storage, compression and runtime optimizations into the existing frozen architecture and executable roadmap.
+10. [`23_ENGINEERING_EXECUTION.md`](23_ENGINEERING_EXECUTION.md) — how blueprint capabilities are split into one-run work items and implemented safely.
+11. [`24_SYSTEM_INVARIANTS.md`](24_SYSTEM_INVARIANTS.md) — cross-cutting fail-closed product invariants every subsystem must preserve.
+12. [`25_V2_ROADMAP.md`](25_V2_ROADMAP.md) — executable capability sequence for WRE v2.0.
+13. [`26_V2_PRODUCT_ARCHITECTURE_FREEZE.md`](26_V2_PRODUCT_ARCHITECTURE_FREEZE.md) — frozen v2 product/architecture authority, scientific replacement rule and legacy-v1 donor policy.
 
 These documents define the current target product. WRE is an independent visual spatiotemporal reconstruction engine; it is not defined as a MONDE subsystem and is not a single COLMAP-to-splat pipeline. The v2 product/architecture is authoritative over legacy v1 structure; v1 is only an implementation donor and regression/reference source where useful.
 
