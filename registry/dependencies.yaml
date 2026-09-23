@@ -138,6 +138,11 @@ dependencies:
       conda_environment_lock_sha256: 88112dbfd8149e58e28b1e7309ea6933001058bb058ac6bff8338ea41a6aee52
       conda_environment_lock_packages: 157
       conda_build_strings: locked
+      source_materialization_manifest: registry/external-sources/gluemap-bounded-materialization.json
+      source_materialization_files: 91
+      source_materialization_byte_length: 1058652
+      source_materialization_sha256: 6503a2ea5d4c46c6273a3bd56ef5150b59c3e249c350bdc14dbed20b95664ca8
+      source_materialization_runtime_execution_evidence: false
       cuda: '12.4'
       cuda_package_set: locked_in_environment_lock
       gpu_execution_evidence: false
@@ -181,9 +186,15 @@ dependencies:
       Clang++ 22.1.8 plus LLVM OpenMP 23.1.1 and no libgomp, and the exact CUDA 12.4
       package closure recorded in that lock. A GNU-only OpenMP solve was rejected because
       conda-forge PyTorch GPU 2.4.1 requires the LLVM/KMP OpenMP family. This lock is still
-      dependency-resolution evidence only, not GPU execution. Allowlisted source materialization,
-      exact locked-package redistribution review, supported real GPU evidence and cross-version
-      native-model evidence remain unresolved.
+      dependency-resolution evidence only, not GPU execution. PR #129 separately froze and
+      exactly regenerated registry/external-sources/gluemap-bounded-materialization.json:
+      91 regular files, 1,058,652 bytes and canonical materialization SHA-256
+      6503a2ea5d4c46c6273a3bd56ef5150b59c3e249c350bdc14dbed20b95664ca8.
+      That manifest retains 72 reviewed GLUEMAP core/build files plus 19 MapAnything
+      core/inference files, contains no forbidden third-party source-file prefix, and
+      records runtime_execution_evidence=false and gpu_execution_evidence=false.
+      Exact locked-package/model redistribution review, supported real GPU evidence and
+      cross-version native-model evidence remain unresolved.
   mapanything_apache:
     status: candidate_optional
     role: [hybrid_global_geometry_backbone]
@@ -208,9 +219,12 @@ dependencies:
       00f9c245bbcb60522d1ed7f9e9d88462c6e3f38a and its model.safetensors is exactly
       4914062480 bytes with SHA-256
       fa06c0fdccefc5048e072c85935d5789b1e36b307f3859033c17f9dcb9fd5201.
-      License review remains pending until the exact composed GLUEMAP runtime dependency
-      closure and redistribution posture are reviewed; this record does not authorize
-      shipping or default promotion.
+      PR #129's bounded source materialization retains only the MapAnything root
+      license/pyproject, core MapAnything model package, and the transitively required
+      inference utilities; mapanything/models/external is excluded from the executable
+      source manifest. License review remains pending until the exact composed GLUEMAP
+      runtime dependency/model redistribution posture is reviewed; this record does not
+      authorize shipping or default promotion.
   aliked_n16:
     status: candidate_optional
     role: [hybrid_global_query_points]
