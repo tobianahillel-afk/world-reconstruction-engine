@@ -179,14 +179,19 @@ jobs:
       - name: Verify committed lock or expose first qualification solve
         run: |
           generated_lock="$RUNNER_TEMP/gluemap-linux-64-cuda12.4.conda-lock.json"
+          diff_status=0
           if test -f "$LOCK_PATH"; then
+            set +e
             diff --unified "$LOCK_PATH" "$generated_lock"
+            diff_status=$?
+            set -e
           else
             echo "No committed GLUEMAP conda lock exists yet; this run is first-solve qualification evidence."
           fi
           echo "----- BEGIN GENERATED GLUEMAP CONDA LOCK -----"
           cat "$generated_lock"
           echo "----- END GENERATED GLUEMAP CONDA LOCK -----"
+          exit "$diff_status"
 
       - name: Retain machine-readable dependency-resolution evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
