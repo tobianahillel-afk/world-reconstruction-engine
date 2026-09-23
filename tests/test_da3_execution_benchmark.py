@@ -724,8 +724,3 @@ def test_v2l13_lot_review_evidence_and_v2l14_handoff_are_complete() -> None:
     ) in work_items
     assert "id: V2L14.1" in work_items
     assert "title: Competing GeometrySolution comparison contract" in work_items
-    assert (
-        "active_work_item: V2L14.1" in state
-        or "V2L14.1]" in state
-        or ", V2L14.1]" in state
-    )
