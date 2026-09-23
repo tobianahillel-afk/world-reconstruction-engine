@@ -52,7 +52,7 @@ jobs:
           raw="$RUNNER_TEMP/gluemap-micromamba-raw.json"
           set +e
           env -u CONDARC micromamba create --name wre-gluemap-lock --platform linux-64 --override-channels --channel conda-forge --strict-channel-priority --no-rc --dry-run --json \
-            "python=3.12.12" "pip" "cmake>=3.18" "ninja" "pkg-config" "pybind11>=3.0" "scikit-build-core>=0.10" "clangxx" \
+            "python=3.12.12" "numpy=2.4.3" "pip" "cmake>=3.18" "ninja" "pkg-config" "pybind11>=3.0" "scikit-build-core>=0.10" "clangxx" \
             "eigen=3.4.0" "ceres-solver=2.2.0=cpulgpl*" "metis=5.1.0" "boost=1.85.0" "libstdcxx-ng=15.2.0" "llvm-openmp=23.1.1=h7148c6a_0" "_openmp_mutex=*=*_llvm" \
             "pytorch-gpu=2.4.1" "torchvision=0.19.1" "cuda-version=12.4" > "$raw"
           status=$?
@@ -76,6 +76,7 @@ jobs:
 
           requested_specs = [
               "python=3.12.12",
+              "numpy=2.4.3",
               "pip",
               "cmake>=3.18",
               "ninja",
@@ -133,6 +134,8 @@ jobs:
           assert ceres["build_string"].startswith("cpulgpl"), ceres
           assert "suitesparse" not in by_name, "SuiteSparse/GPL Ceres closure is forbidden"
 
+          assert by_name["python"]["version"] == "3.12.12", by_name["python"]
+          assert by_name["numpy"]["version"] == "2.4.3", by_name["numpy"]
           assert by_name["eigen"]["version"] == "3.4.0"
           assert by_name["metis"]["version"] == "5.1.0"
           assert by_name["boost"]["version"] == "1.85.0"
@@ -176,14 +179,19 @@ jobs:
       - name: Verify committed lock or expose first qualification solve
         run: |
           generated_lock="$RUNNER_TEMP/gluemap-linux-64-cuda12.4.conda-lock.json"
+          diff_status=0
           if test -f "$LOCK_PATH"; then
+            set +e
             diff --unified "$LOCK_PATH" "$generated_lock"
+            diff_status=$?
+            set -e
           else
             echo "No committed GLUEMAP conda lock exists yet; this run is first-solve qualification evidence."
           fi
           echo "----- BEGIN GENERATED GLUEMAP CONDA LOCK -----"
           cat "$generated_lock"
           echo "----- END GENERATED GLUEMAP CONDA LOCK -----"
+          exit "$diff_status"
 
       - name: Retain machine-readable dependency-resolution evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

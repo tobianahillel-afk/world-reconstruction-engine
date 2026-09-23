@@ -135,7 +135,7 @@ dependencies:
       openmp_build: h7148c6a_0
       openmp_mutex_build: 8_kmp_llvm
       conda_environment_lock: registry/external-environments/gluemap-linux-64-cuda12.4.conda-lock.json
-      conda_environment_lock_sha256: 371baabc470cf0312f05ccab5ad5ececa404540a8d9c56cd4d4a6a9dc7488827
+      conda_environment_lock_sha256: 903171a212d7e5f01cbfdf323853c7f949ddb05bae6f615af23f07b822872f31
       conda_environment_lock_packages: 157
       conda_build_strings: locked
       previous_mapanything_source_materialization_manifest: registry/external-sources/gluemap-bounded-materialization.json
@@ -196,7 +196,8 @@ dependencies:
       and the current resolver request now pins LLVM OpenMP 23.1.1 build h7148c6a_0 explicitly.
       The current registry/external-environments/gluemap-linux-64-cuda12.4.conda-lock.json
       identity is SHA-256
-      371baabc470cf0312f05ccab5ad5ececa404540a8d9c56cd4d4a6a9dc7488827.
+      903171a212d7e5f01cbfdf323853c7f949ddb05bae6f615af23f07b822872f31.
+      The active resolver request also pins NumPy 2.4.3 exactly to match the reviewed GLUEMAP pyproject; the prior transitive NumPy 2.5.3 build is superseded.
       The accepted solve uses Ceres build cpulgplh45c08c3_10 with no SuiteSparse,
       Clang++ 22.1.8 plus LLVM OpenMP 23.1.1 and no libgomp, and the exact CUDA 12.4
       package closure recorded in that lock. A GNU-only OpenMP solve was rejected because
