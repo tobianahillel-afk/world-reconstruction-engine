@@ -158,9 +158,13 @@ dependencies:
       pycolmap-cuda12==4.0.4 in its external GPU environment, which remains isolated from WRE's
       PyCOLMAP 4.2.0 canonicalization environment. Static native review now identifies the
       source-level Ceres 2.2.0 Eigen 3.4.0 METIS 5.1.0 Boost 1.85.0 and GNU 15.2.0
-      runtime terms, and confirms Ceres CUDA is optional for pygluemap. Exact conda build strings,
-      the chosen non-SuiteSparse Ceres variant, the OpenMP provider, the concrete CUDA 12.4 package
-      set, supported real GPU evidence and cross-version native-model evidence remain unresolved.
+      runtime terms, and confirms Ceres CUDA is optional for pygluemap. Exact-tree inspection
+      found no upstream conda-lock pixi lock environment export or equivalent build-string manifest.
+      WRE therefore permits a separate CPU-only linux-64 micromamba resolution lane with an explicit
+      CUDA 12.4 virtual-package override to generate dependency-lock evidence; this solve does not
+      count as GPU execution. Exact conda build strings, the chosen non-SuiteSparse Ceres variant,
+      the OpenMP provider, the concrete CUDA 12.4 package set, supported real GPU evidence and
+      cross-version native-model evidence remain unresolved until that lock is generated and reviewed.
   mapanything_apache:
     status: candidate_optional
     role: [hybrid_global_geometry_backbone]
