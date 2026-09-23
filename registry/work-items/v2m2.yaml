@@ -1460,7 +1460,7 @@ work_items:
   - id: V2L14.1
     lot: V2L14
     title: Competing GeometrySolution comparison contract
-    status: ready
+    status: done
     objective: Define one pure solver-independent immutable contract for retaining two or more complete canonical GeometrySolution hypotheses as explicit alternatives with their exact canonical camera depth point children producer identity and source evidence, plus deterministic unordered comparison-pair topology, without aligning refining rescaling scoring ranking selecting fusing or mutating any candidate.
     allowed_scope:
       - src/wre/reconstruction/geometry_solution_comparison.py
@@ -1539,7 +1539,83 @@ work_items:
       - source immutability regression proving candidate and child Python values remain exactly equal before and after aggregate/pair construction
       - module-surface regression proving no Torch DA3 PyCOLMAP optimization alignment metrics quality decision routing persistence surface appearance dynamic or V2L14.2 dependency enters the pure comparison layer
       - full fast CI CodeQL and native/compatibility lanes only where repository path triggers require them
-  - {id: V2L14.2, lot: V2L14, title: Geometry initialization refinement adapter boundary, status: planned, depends_on: [V2L14.1]}
+  - id: V2L14.2
+    lot: V2L14
+    title: Geometry initialization refinement adapter boundary
+    status: ready
+    objective: Define one pure solver-independent geometry-refinement adapter boundary that receives exactly one complete canonical GeometrySolutionCandidate as an initialization together with explicit canonical supporting artifact evidence and returns one complete new canonical GeometrySolutionCandidate with exact initialization lineage, without executing a solver, mutating the initialization, requiring one coordinate gauge, selecting among alternatives, or defining refinement quality policy.
+    allowed_scope:
+      - src/wre/reconstruction/geometry_refinement.py
+      - focused exports in src/wre/reconstruction/__init__.py
+      - tests/test_geometry_refinement.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L14.3 can be activated without implementing it
+    out_of_scope:
+      - changing GeometrySolutionCandidate CompetingGeometrySolutions GeometrySolutionPair CameraSolution DepthField PointMap GeometrySolution LocalFrameId GeometryScaleStatus or canonical domain semantics
+      - executing COLMAP PyCOLMAP DA3 bundle adjustment global mapping pose graph optimization learned optimization or another external solver
+      - implementing the classical BA/global refinement path owned by V2L14.3 or the first hybrid/global candidate owned by V2L14.4
+      - computing SE3 Sim3 registration alignment transforms between arbitrary competing candidates or asserting that initialization and refined output raw coordinates are directly comparable when their LocalFrameId values differ
+      - requiring refinement output to preserve the initialization LocalFrameId scale status projection family observation support depth/point responsibility or opaque child IDs unless a later concrete adapter explicitly guarantees those properties
+      - mutating replacing or relabeling the supplied initialization candidate as the refined output
+      - scoring ranking selecting accepting rejecting thresholding or attaching QualityDecision to initialization or output
+      - consensus disagreement reprojection depth point surface or comparison metrics owned by V2L14.5 and V2L14.6
+      - route fallback retry scheduler cache artifact persistence default promotion shipping-status changes or loser cleanup
+      - dense MVS physical surface appearance dynamic chronology MasterScene RuntimeScene or any V2L14.3 implementation
+    depends_on: [V2L14.1]
+    read_before:
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/06_TESTING.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md
+      - docs/27_RESEARCH_CANDIDATE_COVERAGE.md
+      - docs/reviews/V2L12-classical-precision-geometry-review.md
+      - docs/reviews/V2L13-feed-forward-geometry-review.md
+      - src/wre/domain/artifacts.py
+      - src/wre/domain/producer_identity.py
+      - src/wre/domain/geometry_solutions.py
+      - src/wre/reconstruction/geometry_solution_comparison.py
+      - src/wre/reconstruction/feed_forward_geometry.py
+      - src/wre/reconstruction/colmap_canonical_geometry.py
+      - tests/test_geometry_solution_comparison.py
+      - tests/test_feed_forward_geometry_adapter.py
+      - tests/test_colmap_canonical_geometry.py
+    reuse:
+      - GeometrySolutionCandidate as the exact complete initialization and refined-output payload so the refinement boundary does not introduce another geometry representation
+      - ArtifactRef canonical identity tuples as explicit supporting evidence consumed in addition to the initialization candidate and its own source evidence
+      - ArtifactProducerIdentity already carried by each GeometrySolutionCandidate as exact producer provenance for both initialization and output rather than a refinement-specific metadata dictionary
+      - GeometrySolutionId as explicit immutable lineage endpoints; refinement produces a new hypothesis identity instead of silently updating the input geometry
+      - LocalFrameId and GeometryScaleStatus as candidate-owned semantics that are preserved as supplied but are not assumed equal across initialization and refined output
+      - pure Python immutable Protocol/request/result boundaries so concrete V2L14.3 and V2L14.4 adapters can plug in later without solver-private structures entering core
+    acceptance:
+      - Add one pure module whose import and fast tests require no Torch DA3 PyCOLMAP NumPy filesystem network GPU native solver or optimization backend.
+      - Define one immutable GeometryRefinementRequest containing exactly one GeometrySolutionCandidate initialization and one immutable canonical supporting_artifacts tuple of ArtifactRef values; no generic kwargs paths timestamps solver objects scores thresholds or mutable dictionaries exist.
+      - supporting_artifacts may be empty, but when present they must be unique and canonically ordered by ArtifactId and ArtifactKind without sorting or coercion.
+      - Define one solver-independent GeometryRefinementAdapter Protocol with one refine(request) operation returning GeometryRefinementResult; the protocol contains no device solver checkpoint route retry or persistence API.
+      - Define one immutable GeometryRefinementResult retaining the exact GeometryRefinementRequest object and one complete refined GeometrySolutionCandidate.
+      - Refined output must use a GeometrySolutionId distinct from the initialization GeometrySolutionId so refinement cannot masquerade as an in-place update of canonical truth.
+      - Result construction preserves both complete hypotheses simultaneously. The initialization candidate remains reachable exactly through the request and is not copied with changed semantics overwritten filtered or deleted.
+      - The refined candidate may reuse or change LocalFrameId GeometryScaleStatus projection family observation membership depth/point responsibilities and canonical child IDs according to the future concrete adapter; the pure boundary makes no compatibility or alignment claim from lineage alone.
+      - A same-LocalFrameId output creates no automatic coordinate-delta or quality claim, and a different-LocalFrameId output creates no implicit SE3/Sim3 transform.
+      - The request supporting_artifacts are additional refinement evidence only. They do not replace the initialization candidate source_artifacts or rewrite either candidate producer/source provenance.
+      - Define one pure validation/helper path for constructing results from typed request and candidate values only; it performs no solver execution metric computation candidate selection coordinate conversion or artifact I/O.
+      - GeometryRefinementRequest GeometryRefinementResult and the Protocol expose no score winner rank QualityDecision threshold transform alignment matrix residual retry fallback route or default field.
+      - The module surface contains no COLMAP DA3 learned runtime BA optimization consensus metric quality policy scheduler persistence surface appearance dynamic or V2L14.3 dependency.
+    tests:
+      - exact frozen GeometryRefinementRequest and GeometryRefinementResult field-shape typed-member immutability tests
+      - supporting-artifact empty unique duplicate mutable wrong-type and canonical-order fail-closed regressions
+      - protocol surface regression proving exactly one typed refine operation without solver-private configuration surface
+      - depth-only feed-forward-style initialization to point-based refined candidate fixture proving responsibility changes are representable without mutation or coercion
+      - same-frame refinement fixture proving both distinct GeometrySolutionIds are retained and no delta transform/metric is invented
+      - different-frame and unresolved-to-metric lineage fixtures proving the boundary preserves explicit output semantics without claiming coordinate compatibility
+      - identical GeometrySolutionId rejection proving refinement cannot silently overwrite initialization identity
+      - initialization and refined candidate source/producers remain independently preserved and supporting evidence does not replace them
+      - source immutability regression proving request/result construction leaves all candidate and child Python values unchanged
+      - module-surface regression proving no Torch DA3 PyCOLMAP BA optimization alignment metrics quality decision routing persistence surface appearance dynamic or V2L14.3 dependency enters the interface
+      - full fast CI CodeQL and native/compatibility lanes only where repository path triggers require them
   - {id: V2L14.3, lot: V2L14, title: Classical BA global refinement path, status: planned, depends_on: [V2L14.2]}
   - {id: V2L14.4, lot: V2L14, title: First approved hybrid global candidate, status: planned, depends_on: [V2L14.3]}
   - {id: V2L14.5, lot: V2L14, title: Geometry consensus disagreement metrics, status: planned, depends_on: [V2L14.4]}
