@@ -1,0 +1,623 @@
+{
+  "evidence_kind": "source_materialization_only",
+  "files": [
+    {
+      "byte_length": 1872,
+      "path": "LICENSE",
+      "sha256": "d27c2ac268d959f76655ed424e2e2918049320432ca852346cf4b444227f8e41",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 127,
+      "path": "gluemap/__init__.py",
+      "sha256": "1dd08b6d3760ceae75b61bdee1beec15b7359add1536037acf515cca3e1cdabe",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 2005,
+      "path": "gluemap/cli.py",
+      "sha256": "364bd4d4f57dcfcd099707aa7fd081d00be76246ec3d7d88a7547ff95e92e3dd",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 0,
+      "path": "gluemap/controllers/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 23601,
+      "path": "gluemap/controllers/augmented_bundle_adjustment.py",
+      "sha256": "c1cb689eaaa3a4df5497fe58927c06ad7ea3b4e5f757a8d3cb3429f0ea663aa3",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 10138,
+      "path": "gluemap/controllers/base_inference.py",
+      "sha256": "9c7bcedb8f759d8ae32d4b02e63152a7addb238deb913f7b30378cea19df647f",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 23198,
+      "path": "gluemap/controllers/global_merger.py",
+      "sha256": "57bb33d9d3012827e466eade3571148f6ec74754d1f8e32d4bb38046fa25023a",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 19623,
+      "path": "gluemap/controllers/global_refinement.py",
+      "sha256": "4de0d1f88e499c9521b25e0a5f193d19b6e663b09fde1fb195262b005b5dbb9f",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 14537,
+      "path": "gluemap/controllers/gluemap_impl.py",
+      "sha256": "ceda3d1f3561ad33aecfa154bd989e918195d64f3ec7d10f01f9ee4503740ebe",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 8888,
+      "path": "gluemap/controllers/image_retrieval.py",
+      "sha256": "fd78d8395ec66619cde252985126a2d95cc18f6ae5dc389f0219da5dfdd9bc80",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 10415,
+      "path": "gluemap/controllers/star_collection.py",
+      "sha256": "5f832a04d4418e5b3f4db45043aac188a3a29170180c985b7443c8ac3d77c284",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 9249,
+      "path": "gluemap/controllers/star_inference.py",
+      "sha256": "1738f8fdc101e0be237f40a37fda7d95c0ff37977c4ca88ceb682e2ea64bdd1c",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 6261,
+      "path": "gluemap/controllers/twoview_inference.py",
+      "sha256": "c08f5373791a4c42c42f5c0eaf4ab41157175c94c5b1075a2cc121971d477bb7",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 0,
+      "path": "gluemap/datasets/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 9203,
+      "path": "gluemap/datasets/base.py",
+      "sha256": "2a7127a8b7ce4380665334bb309c6567dda7ba7996bafe494a1cbe7524772291",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 8058,
+      "path": "gluemap/datasets/multi_sequence_twoview.py",
+      "sha256": "298fa91763f13745a133a075c05d120afb98a42bbe114f05639f84eee5094fd1",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 3878,
+      "path": "gluemap/datasets/sequential_twoview.py",
+      "sha256": "b7d9618d0f91b5b716e80d304903ce6e51ea1d0bcb0c906dafd7d43128e9444c",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 14417,
+      "path": "gluemap/datasets/star.py",
+      "sha256": "3ffba952ec805b31279f67f367bf06592a6d80ef71715300795768f9e908823a",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 7492,
+      "path": "gluemap/datasets/twoview.py",
+      "sha256": "40e05814ed6d83af5c23e87a070bb0414578380b3e4eee2c249bc42fb61bb81a",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 7077,
+      "path": "gluemap/datasets/utils.py",
+      "sha256": "20c4732140112353e1afc4aab6557cb969385d01a4b2473c8a68de71039dd36d",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 157,
+      "path": "gluemap/estimators/__init__.py",
+      "sha256": "65e8b19dcc7814181b80fa89e1d53b3dccbd35d8cd9b8677f4cabd2bb07e72a5",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 12157,
+      "path": "gluemap/estimators/augmented_bundle_adjustment.py",
+      "sha256": "d75cc117cec448a67ccb0c542e99f1edfb574763df05e3ca7be54d1a36a8fd9f",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 25794,
+      "path": "gluemap/estimators/covisibility_extraction.py",
+      "sha256": "7b91407bd39aad496dc1be2db606fd5b048945aac10942f1ced6b26e6b59cc22",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 2224,
+      "path": "gluemap/estimators/feature_extraction.py",
+      "sha256": "b4cc977734fdc510495cdc9b157c082a23286fb948129f038e2c4f286a235bb3",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 1989,
+      "path": "gluemap/estimators/intrinsics_averaging.py",
+      "sha256": "30c0387d2147ed018a0bc1fddd70519bd07d5eb4c1fabfd7cdbd6c84cfb3ce2c",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 11661,
+      "path": "gluemap/estimators/rotation_averaging.py",
+      "sha256": "81a0d57cc60a49b655f583fb9ff273ccfcd35266ac93d77da2293b410fd3435d",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 11022,
+      "path": "gluemap/estimators/similarity_averaging.py",
+      "sha256": "506ad66cedcfae7522a73bfdb509f285d128de2b2189454b402f4906e2eb130e",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 20982,
+      "path": "gluemap/estimators/track_establishment.py",
+      "sha256": "7b1fa3aa0dd93f39d7f995fca9168a3e0219fad4c588c79bc0cc98a5c8f4aac5",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 2503,
+      "path": "gluemap/estimators/track_inference.py",
+      "sha256": "b5d1f36b7dd58790b53707b4bbd25b2a23d4093e59c9b647eac67da390d27138",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 6379,
+      "path": "gluemap/estimators/track_snapping.py",
+      "sha256": "5c414dfadd843f6f2f46484ffe2c8279866c8b40243bac694032132250e11329",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 14390,
+      "path": "gluemap/estimators/virtual_tracks.py",
+      "sha256": "4e7345a9130eeeaf900b1d34661176f1ae6830d7eb27525a874784402b725b80",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 1,
+      "path": "gluemap/eval/__init__.py",
+      "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 4957,
+      "path": "gluemap/eval/ablations_backbone.py",
+      "sha256": "063adca5d80f4d0c721cd97643ef22d00c27125e074d6f7c3c1db7fa9ae3a975",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 6392,
+      "path": "gluemap/eval/ablations_filtering.py",
+      "sha256": "53e56f3aee1887a01106ef93f4c161792b890b3c8d0be4c766ca792fd62e22e9",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 8304,
+      "path": "gluemap/eval/ablations_pure_feedforward.py",
+      "sha256": "8b9908b3df567eb10f7ce224147461b93965d26bacd5a10444e084a394beb61f",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 5358,
+      "path": "gluemap/eval/ablations_tracks.py",
+      "sha256": "ab799b2b630440cb739cd5f4251f32387d6a066372ae7bf3b2d5b4727da4584d",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 198,
+      "path": "gluemap/ff_inference/__init__.py",
+      "sha256": "79ad585b8e1cda911352c0d3a1faee35608268f5c0824f501b6a6f9fcbd08e47",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 2371,
+      "path": "gluemap/ff_inference/local_inference.py",
+      "sha256": "025d95507f0d42e465fdf19c44368cf7853dee236cbfeb4a5bc05e92e069f8fe",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 5289,
+      "path": "gluemap/ff_inference/mapanything_inference.py",
+      "sha256": "07aa7ab76fa0d5de4e783260df3ea11eeebba17a71286b7b8cce325d6734d347",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 12024,
+      "path": "gluemap/ff_inference/pi3_inference.py",
+      "sha256": "58e815a2ade3baebebd0f8496a62675f6c863f27b29d3d81718ef0c035bbb176",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 1297,
+      "path": "gluemap/ff_inference/vggt_inference.py",
+      "sha256": "2d25fc85e03e0ba5d783b110438f41a4bad5c2cc7c2817b359778b75d5a24a0d",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 0,
+      "path": "gluemap/math/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 8150,
+      "path": "gluemap/math/geometry.py",
+      "sha256": "b974a135b0797043cc225d8411e3c4d2e806e54af12d78e5993f5da05b7f68e3",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 7293,
+      "path": "gluemap/math/mst_initialization.py",
+      "sha256": "7a4e5055d0e140e8bd2bf8f87678314328d54f241eec163e17ef4703eeef0170",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 16235,
+      "path": "gluemap/math/reprojection_error.py",
+      "sha256": "658b3ce9a48edb43dbb18457f6f79b4a64f9b01d354915230b35e15126d28d88",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 7333,
+      "path": "gluemap/math/scaling.py",
+      "sha256": "a1ad06ceb24d876408873e405eaea97506e8bb92682801276cb4ca00f4bd08bc",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 1374,
+      "path": "gluemap/math/union_find.py",
+      "sha256": "cb7311eea61575c2e6e7cc217dc80958d5b076cb3c08e10a9bb327a7227d98e7",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 1686,
+      "path": "gluemap/pybind/CMakeLists.txt",
+      "sha256": "5bcc24007ee71527a5885bc5b5f1ba68c87a929623ce7546bc6c940cc81381f0",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 6101,
+      "path": "gluemap/pybind/bindings.cc",
+      "sha256": "7f16d1abc91fdfc4c059d02937d1d9009dfeff213563f025807f90fe62fd6f2d",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 3678,
+      "path": "gluemap/pybind/cost_functions.h",
+      "sha256": "52150b2b7f280c8f3f1136722812333eece301400bc59e1d986a161b81a2fabd",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 546,
+      "path": "gluemap/pybind/pybind_utils.h",
+      "sha256": "97e362b65389ea49b55ea8179ebf2cf745c62625d2630c3eb9c7d3faad4cfeaa",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 9327,
+      "path": "gluemap/pybind/track_selection.cc",
+      "sha256": "672f4a5e31ecee7117cdb36e4dc2d95d016a3664ea5366e4397a0934d0a46458",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 15174,
+      "path": "gluemap/pybind/vendor/colmap/estimators/cost_functions/reprojection_error.h",
+      "sha256": "b64862950d70d2959707bb85e443cd7042e165b0a552b1b42885bacb29d95459",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 6353,
+      "path": "gluemap/pybind/vendor/colmap/estimators/cost_functions/utils.h",
+      "sha256": "2993cfb2112d3a7afb4d3e6ea327d395b75a51b903d4454fd8496415d93f6cd8",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 8115,
+      "path": "gluemap/pybind/vendor/colmap/geometry/rigid3.h",
+      "sha256": "2df3d1c19b027dc7a7324568a8afa63e24118616d7ce3e9f73af502a604a4b10",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 75257,
+      "path": "gluemap/pybind/vendor/colmap/sensor/models.h",
+      "sha256": "4717edcd4f7e71f1bc4978bf7dd7b8cf0f5739bb3ffb2748ce0d748c17c654fe",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 5675,
+      "path": "gluemap/pybind/vendor/colmap/util/eigen_alignment.h",
+      "sha256": "7780550aa62958be394c69ef5b1b45db12eed361b1fb489cd1c13525eb04ae35",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 4954,
+      "path": "gluemap/pybind/vendor/colmap/util/enum_utils.h",
+      "sha256": "6d402d4a4a8e35a57965517892755d692be4364d8b11ef9e028ef0e1d3eae323",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 12945,
+      "path": "gluemap/pybind/vendor/colmap/util/types.h",
+      "sha256": "f09c4cdeac3498b8eabf13467d3b226edbd3117917af214b49c7df46dc503f0d",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 0,
+      "path": "gluemap/utils/__init__.py",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 8618,
+      "path": "gluemap/utils/cli.py",
+      "sha256": "8ef84f53f55cf5081b07c305757b847f3a6260a804be83ee50e47e769ff00326",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 29906,
+      "path": "gluemap/utils/colmap.py",
+      "sha256": "7a9e3a58edd6fc4dbca4d3c32605414949d309b2a282b4d16b9ba20397eaf1a9",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 5721,
+      "path": "gluemap/utils/gpu.py",
+      "sha256": "81933a91785024db5cd31f912407c3bb5f96610344d7ae1a07e6a6c67b112d02",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 13028,
+      "path": "gluemap/utils/load_fn.py",
+      "sha256": "0f737c06a17bf7e4d6d585a945ec7a066da2911ed0f48f1e2d8e19b3dad5976e",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 7314,
+      "path": "gluemap/utils/model_loader.py",
+      "sha256": "5538a5a4c07b3bdc83cc5cadc26bab4db2a51de96af7cd7796b75c5339240698",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 1732,
+      "path": "pyproject.toml",
+      "sha256": "dde61ffee259d4b48cfaa5f9f6f8ca274f2cf3d9f4a0d17b63adbb21be982f4d",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 1578,
+      "path": "thirdparty/path_to_thirdparty.py",
+      "sha256": "a66b4100e9e1a33d8a43439c9d2819535427507a7fa6f1bb092f9bd69f1fb0f8",
+      "source": "gluemap"
+    },
+    {
+      "byte_length": 10722,
+      "path": "thirdparty/vggt/LICENSE.txt",
+      "sha256": "b94e46746792d1adfa0ebdbccada5d4576d244ae230be9de8a46b5868fff001b",
+      "source": "vggt"
+    },
+    {
+      "byte_length": 1040,
+      "path": "thirdparty/vggt/pyproject.toml",
+      "sha256": "e12fc8148c698f5134f3783f0f59f620377600af371eb05f2de43487bc782634",
+      "source": "vggt"
+    },
+    {
+      "byte_length": 5817,
+      "path": "thirdparty/vggt/vggt/heads/camera_head.py",
+      "sha256": "d177f3d64d53210209b7bbb8496faaaec91f3fc51d04a4ee8d9d6b70f053e132",
+      "source": "vggt"
+    },
+    {
+      "byte_length": 17327,
+      "path": "thirdparty/vggt/vggt/heads/dpt_head.py",
+      "sha256": "b83ff030043f2ba808afb0c0ebc2f40f1d2ddc9d0b4b847bdfd53670f2d03e17",
+      "source": "vggt"
+    },
+    {
+      "byte_length": 3741,
+      "path": "thirdparty/vggt/vggt/heads/head_act.py",
+      "sha256": "428bdb087f457b809a66e22d7d01147c1cb4dab43bb0d98bc61c7f05d8383a1e",
+      "source": "vggt"
+    },
+    {
+      "byte_length": 4207,
+      "path": "thirdparty/vggt/vggt/heads/track_head.py",
+      "sha256": "5838f10401ad4c614e5608314f7b27b9195af8839e8bbb3321bfb6aad41a3e59",
+      "source": "vggt"
+    },
+    {
+      "byte_length": 198,
+      "path": "thirdparty/vggt/vggt/heads/track_modules/__init__.py",
+      "sha256": "3cb62676c3fad403516673b2e99cdb6cbc0b71f814c3bb7f551bfa1e8495e062",
+      "source": "vggt"
+    },
+    {
+      "byte_length": 8027,
+      "path": "thirdparty/vggt/vggt/heads/track_modules/base_track_predictor.py",
+      "sha256": "8afb4311f71b74a85a2faf12386e72a782678e8d5e223a95645b951e6fbae185",
+      "source": "vggt"
+    },
+    {
+      "byte_length": 9812,
+      "path": "thirdparty/vggt/vggt/heads/track_modules/blocks.py",
+      "sha256": "7c00a9edec0c4ce0ba773063ba72e578004731dc3f9a6386478f2c1d2f06e948",
+      "source": "vggt"
+    },
+    {
+      "byte_length": 6132,
+      "path": "thirdparty/vggt/vggt/heads/track_modules/modules.py",
+      "sha256": "3b86a7580cee368ddb97a37a879b82943a8f82ca539979ecdd3218c27a4aa811",
+      "source": "vggt"
+    },
+    {
+      "byte_length": 8136,
+      "path": "thirdparty/vggt/vggt/heads/track_modules/utils.py",
+      "sha256": "0480f9c7a452310affc4cf4566c6ba37fde80675c476123ee61a4eab121f4917",
+      "source": "vggt"
+    },
+    {
+      "byte_length": 3941,
+      "path": "thirdparty/vggt/vggt/heads/utils.py",
+      "sha256": "2dce4c0dca1974a5250cc5d5d95bd3417e3ba9494978437a12d5ab6bbff4d4df",
+      "source": "vggt"
+    },
+    {
+      "byte_length": 382,
+      "path": "thirdparty/vggt/vggt/layers/__init__.py",
+      "sha256": "e3c28c7b775165b6844000eb69f44d104d6c3803ac7da5d59f6ac3ecfb46d9d8",
+      "source": "vggt"
+    },
+    {
+      "byte_length": 3067,
+      "path": "thirdparty/vggt/vggt/layers/attention.py",
+      "sha256": "883b82b8fd1d833e4b7060a97cff44aa677288e2f91415763d0deac48d111469",
+      "source": "vggt"
+    },
+    {
+      "byte_length": 9379,
+      "path": "thirdparty/vggt/vggt/layers/block.py",
+      "sha256": "4f2303fb83b63655d17aac7d4937772093dcc5b27c73b6ea2f727a4068131b51",
+      "source": "vggt"
+    },
+    {
+      "byte_length": 1157,
+      "path": "thirdparty/vggt/vggt/layers/drop_path.py",
+      "sha256": "b9f8236e86054b9d9a71275efcad2a9ecaa1f86b529d4b8d6109ddb5e806f67a",
+      "source": "vggt"
+    },
+    {
+      "byte_length": 781,
+      "path": "thirdparty/vggt/vggt/layers/layer_scale.py",
+      "sha256": "83586eaa81ef11828b1001f3dd85747ba362df23ddb57c8454b2eba279f5a558",
+      "source": "vggt"
+    },
+    {
+      "byte_length": 1269,
+      "path": "thirdparty/vggt/vggt/layers/mlp.py",
+      "sha256": "255825c73b60a916dd00eb1e38aacbcdbf316e40d6a005efb46e245b7edb43aa",
+      "source": "vggt"
+    },
+    {
+      "byte_length": 2794,
+      "path": "thirdparty/vggt/vggt/layers/patch_embed.py",
+      "sha256": "c2543ec293951d081db662b2125027625f6e632971630facaa7f911c2377d335",
+      "source": "vggt"
+    },
+    {
+      "byte_length": 7676,
+      "path": "thirdparty/vggt/vggt/layers/rope.py",
+      "sha256": "c56b073724f4d56cc531e381835a2c3dc348f192aefd9e855e3e59ab3c7d6641",
+      "source": "vggt"
+    },
+    {
+      "byte_length": 2131,
+      "path": "thirdparty/vggt/vggt/layers/swiglu_ffn.py",
+      "sha256": "af287ee5b7e6a2a5608ed78cf8d392a00191718825a3889c224ccaa0fd914089",
+      "source": "vggt"
+    },
+    {
+      "byte_length": 15075,
+      "path": "thirdparty/vggt/vggt/layers/vision_transformer.py",
+      "sha256": "857932a5a7cf8fa062535464b4831493544715cdfb729648a83a10098a5eae87",
+      "source": "vggt"
+    },
+    {
+      "byte_length": 12944,
+      "path": "thirdparty/vggt/vggt/models/aggregator.py",
+      "sha256": "6fc4dcfb0b388cb26b6264ec5e28f0526a24b3b1139e0ade8eacf5453dc8a21c",
+      "source": "vggt"
+    },
+    {
+      "byte_length": 4862,
+      "path": "thirdparty/vggt/vggt/models/vggt.py",
+      "sha256": "dbc92d6214882161d9042b1bc60cc932a9fd6bb609fc913d14906328f7833607",
+      "source": "vggt"
+    },
+    {
+      "byte_length": 5517,
+      "path": "thirdparty/vggt/vggt/utils/pose_enc.py",
+      "sha256": "845fc3a46cb851bebf0720b8fc2b9f34334ae8e11f1982376ba59f90ff18f22b",
+      "source": "vggt"
+    },
+    {
+      "byte_length": 4584,
+      "path": "thirdparty/vggt/vggt/utils/rotation.py",
+      "sha256": "ad3a904e243c6654f0aa5f1d0206ace5f2d61011bc1bf8f492b40e0b76cb2070",
+      "source": "vggt"
+    }
+  ],
+  "gpu_execution_evidence": false,
+  "materialization": {
+    "byte_length": 744299,
+    "file_count": 93,
+    "sha256": "19efc825c7627dc2d7fdf3fed3aa410823e90e81d2f126c57148549aac5fced1"
+  },
+  "policy": {
+    "forbidden_source_prefixes": [
+      "thirdparty/doppelgangers-plusplus/",
+      "thirdparty/mapanything/",
+      "thirdparty/pi3/",
+      "thirdparty/salad/",
+      "thirdparty/vggsfm/"
+    ],
+    "forbidden_vggt_prefixes": [
+      "thirdparty/vggt/training/",
+      "thirdparty/vggt/vggt/dependency/"
+    ],
+    "gluemap_includes": [
+      "LICENSE",
+      "pyproject.toml",
+      "gluemap/**",
+      "thirdparty/path_to_thirdparty.py"
+    ],
+    "retained_vggt_code_noncommercial_notice_scan": "passed",
+    "sentinel_directories": [
+      "thirdparty/pi3/pi3/models",
+      "thirdparty/doppelgangers-plusplus/mast3r",
+      "thirdparty/doppelgangers-plusplus/dust3r/dust3r",
+      "thirdparty/doppelgangers-plusplus/dust3r/croco/models",
+      "thirdparty/mapanything/mapanything/models",
+      "thirdparty/vggsfm/track_modules"
+    ],
+    "sentinels_are_empty": true,
+    "vggt_includes": [
+      "LICENSE.txt",
+      "pyproject.toml",
+      "vggt/models/**",
+      "vggt/heads/**",
+      "vggt/layers/**",
+      "vggt/utils/pose_enc.py",
+      "vggt/utils/rotation.py"
+    ]
+  },
+  "runtime_execution_evidence": false,
+  "schema_version": 1,
+  "sources": {
+    "gluemap": {
+      "repository": "colmap/gluemap",
+      "revision": "adc9e4bb5f41014d3f7c157a879edc278588c829",
+      "tree": "9f4b6090baca9ad6da78a138372afb17a7f70626"
+    },
+    "vggt": {
+      "license_git_blob_sha1": "079cb728fea5b11bb46c0c9f6ad4b3d2e4d216c7",
+      "license_name": "VGGT License v1",
+      "repository": "facebookresearch/vggt",
+      "revision": "44b3afbd1869d8bde4894dd8ea1e293112dd5eba",
+      "tree": "5ebbc58776783ad1acd6d4901e01161717e5d385"
+    }
+  }
+}
