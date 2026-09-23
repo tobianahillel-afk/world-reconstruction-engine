@@ -242,6 +242,7 @@ components:
       - src/wre/reconstruction/da3_preview.py
       - src/wre/reconstruction/da3_runtime.py
       - src/wre/reconstruction/feed_forward_camera_quality.py
+      - src/wre/reconstruction/da3_execution_benchmark.py
       - src/wre/reconstruction/__init__.py
     tests:
       - tests/test_feed_forward_geometry_adapter.py
@@ -249,7 +250,8 @@ components:
       - tests/test_da3_runtime.py
       - tests/test_feed_forward_camera_quality.py
       - tests/test_feed_forward_classical_comparison.py
-    status: implementing
+      - tests/test_da3_execution_benchmark.py
+    status: implemented
   precision_global_refinement: {owner_lot: V2L14, implementation: [], tests: [], status: planned}
   dense_depth_mvs: {owner_lot: V2L15, implementation: [], tests: [], status: planned}
   physical_surface: {owner_lot: V2L16, implementation: [], tests: [], status: planned}

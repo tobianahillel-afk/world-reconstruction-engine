@@ -1355,7 +1355,7 @@ work_items:
   - id: V2L13.6
     lot: V2L13
     title: Learned execution profile and stage profiling benchmark
-    status: ready
+    status: done
     objective: Benchmark the exact validated DA3-BASE PREVIEW execution end to end and by material execution stage, compare the V2L13.3 reference path only against one or more genuinely applicable bounded execution profiles on the same declared hardware, retain solver-independent BenchmarkRecord and performance evidence together with camera-quality evidence needed to detect semantic regression, and close the V2L13 lot without turning an execution-profile result into a global backend mandate or starting competing-geometry work.
     allowed_scope:
       - src/wre/reconstruction/da3_execution_benchmark.py
@@ -1457,7 +1457,88 @@ work_items:
       - BenchmarkRecord regression proving no score rank winner default threshold QualityDecision route shipping mutation or profile promotion field is introduced
       - V2L13 lot-review evidence regression covering V2L13.1 through V2L13.6 and explicit handoff boundary to V2L14.1
       - full fast CI CodeQL exact DA3 reference lane and any dedicated execution-profile lane activated by the implementation
-  - {id: V2L14.1, lot: V2L14, title: Competing GeometrySolution comparison contract, status: planned, depends_on: [V2L13.6]}
+  - id: V2L14.1
+    lot: V2L14
+    title: Competing GeometrySolution comparison contract
+    status: ready
+    objective: Define one pure solver-independent immutable contract for retaining two or more complete canonical GeometrySolution hypotheses as explicit alternatives with their exact canonical camera depth point children producer identity and source evidence, plus deterministic unordered comparison-pair topology, without aligning refining rescaling scoring ranking selecting fusing or mutating any candidate.
+    allowed_scope:
+      - src/wre/reconstruction/geometry_solution_comparison.py
+      - focused exports in src/wre/reconstruction/__init__.py
+      - tests/test_geometry_solution_comparison.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L14.2 can be activated without implementing it
+    out_of_scope:
+      - changing CameraSolution DepthField PointMap GeometrySolution LocalFrameId GeometryScaleStatus MetricVector FeedForwardGeometryResult CanonicalColmapSparseModel or ColmapGeometryOutcome semantics
+      - running COLMAP DA3 another solver bundle adjustment pose graph global mapping refinement optimization or external process
+      - computing or estimating SE3 Sim3 scale alignment frame registration world Earth ECEF ENU GPS GCP or another coordinate transform between candidates
+      - converting rescaling reprojecting unprojecting merging fusing deduplicating or rewriting camera depth point or geometry values
+      - requiring different candidates to share one LocalFrameId one scale status one projection family one observation set or one geometry responsibility
+      - computing geometry quality consensus disagreement reprojection depth point cloud surface or appearance metrics owned by V2L14.5 or later
+      - selecting ranking scoring accepting rejecting thresholding or attaching QualityDecision to a candidate
+      - defining route fallback retry default promotion shipping-status change cleanup or deletion of losing hypotheses
+      - defining the geometry-initialization/refinement adapter boundary owned by V2L14.2
+      - integrating classical refinement or the first hybrid/global candidate owned by V2L14.3 and V2L14.4
+      - dense MVS physical surface appearance dynamic chronology MasterScene RuntimeScene or any V2L14.2 implementation
+    depends_on: [V2L13.6]
+    read_before:
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/06_TESTING.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md
+      - docs/27_RESEARCH_CANDIDATE_COVERAGE.md
+      - docs/reviews/V2L12-classical-precision-geometry-review.md
+      - docs/reviews/V2L13-feed-forward-geometry-review.md
+      - src/wre/domain/artifacts.py
+      - src/wre/domain/producer_identity.py
+      - src/wre/domain/camera_solutions.py
+      - src/wre/domain/depth_fields.py
+      - src/wre/domain/point_maps.py
+      - src/wre/domain/geometry_solutions.py
+      - src/wre/reconstruction/feed_forward_geometry.py
+      - src/wre/reconstruction/colmap_canonical_geometry.py
+      - src/wre/reconstruction/colmap_geometry_outcomes.py
+      - tests/test_feed_forward_geometry_adapter.py
+      - tests/test_colmap_canonical_geometry.py
+      - tests/test_colmap_geometry_outcomes.py
+    reuse:
+      - GeometrySolution plus its exact CameraSolution DepthField and PointMap child identities as the authoritative canonical geometry payload; no competing geometry representation is introduced
+      - LocalFrameId and GeometryScaleStatus as explicit per-candidate semantics that remain unchanged even when alternatives are grouped for comparison
+      - ArtifactProducerIdentity and canonical ordered ArtifactRef source evidence as candidate provenance rather than solver-specific metadata dictionaries
+      - FeedForwardGeometryResult and CanonicalColmapSparseModel only as existing examples/fixtures that can be wrapped into the generic candidate contract without making the comparison layer depend on DA3 or COLMAP private types
+      - the system invariant that comparison must preserve competing hypotheses and that one local frame does not imply compatibility with another local frame
+      - deterministic pair topology from canonical GeometrySolutionId order so later alignment/refinement/consensus items can attach evidence to an exact pair without hidden ordering or winner semantics
+    acceptance:
+      - Add one pure module whose import and fast tests require no Torch DA3 PyCOLMAP NumPy filesystem network GPU native solver or external environment.
+      - Define one immutable GeometrySolutionCandidate value containing exactly one canonical GeometrySolution its complete canonical CameraSolution DepthField and PointMap child tuples one ArtifactProducerIdentity and one immutable canonical source ArtifactRef tuple; no generic metadata kwargs solver object path timestamp score rank decision or mutable collection is admitted.
+      - Candidate camera depth and point tuples must be unique and canonically ordered by their canonical identities, and every child must use the exact candidate GeometrySolution LocalFrameId without coordinate conversion.
+      - Candidate construction must prove that GeometrySolution camera_solution_ids depth_field_ids and point_map_ids reference exactly all supplied canonical children with no missing extra duplicate reordered or foreign child.
+      - Camera and depth observation linkage and dimensions must remain those already validated by their canonical contracts; the comparison wrapper performs no repair inference or projection conversion.
+      - Candidate GeometryScaleStatus is preserved exactly. UNRESOLVED and METRIC candidates may coexist as alternatives without automatic conversion comparison or rejection solely because their scale statuses differ.
+      - Candidate producer and source_artifact evidence is retained exactly. Source artifacts must be immutable unique and canonically ordered by ArtifactId and ArtifactKind; an empty source tuple is valid when an in-memory fixture has no persisted source artifact, but producer identity remains required.
+      - Define one immutable CompetingGeometrySolutions aggregate containing at least two GeometrySolutionCandidate values with unique GeometrySolutionId values in canonical GeometrySolutionId order. The aggregate does not sort repair or coerce caller input.
+      - Distinct candidates may use different LocalFrameId values projection models observation coverage depth/point responsibilities and opaque IDs. Grouping them as alternatives creates no claim that raw coordinates are directly comparable or alignable.
+      - Define one immutable GeometrySolutionPair identity over exactly two distinct GeometrySolutionId values in lexical canonical order and one pure function that derives the complete unordered pair set from CompetingGeometrySolutions in deterministic pair order.
+      - Pair derivation carries only candidate identity/topology. It contains no transform metric score winner direction preferred candidate quality decision alignment or refinement state.
+      - Two candidates using the same LocalFrameId remain distinct hypotheses and are not merged. Two candidates using different LocalFrameId values remain valid alternatives and are not aligned.
+      - Construction and pair derivation must not mutate copy-with-changed-semantics delete filter rank or otherwise alter any supplied GeometrySolution candidate or child value.
+      - The module surface contains no BA global refinement hybrid model consensus metric quality policy route scheduler persistence surface appearance dynamic or V2L14.2 dependency.
+    tests:
+      - exact frozen GeometrySolutionCandidate field-shape typed-member canonical-order uniqueness and source-provenance validation tests
+      - exact child referential-integrity tests for missing extra duplicate reordered camera depth and point children and foreign LocalFrameId values
+      - feed-forward-style candidate fixture preserving cameras depths unresolved scale and no PointMap without importing DA3 runtime
+      - classical-style candidate fixture preserving cameras PointMap unresolved scale and no DepthField without importing PyCOLMAP
+      - mixed candidate aggregate accepting different LocalFrameId scale status projection family observation support and child responsibility without compatibility inference
+      - single-candidate mutable duplicate non-canonical GeometrySolutionId aggregate rejection without sorting or coercion
+      - deterministic complete unordered pair derivation for two three and more candidates with exact lexical left/right GeometrySolutionId order
+      - same-frame alternatives regression proving no merge/dedup and different-frame alternatives regression proving no alignment transform is invented
+      - source immutability regression proving candidate and child Python values remain exactly equal before and after aggregate/pair construction
+      - module-surface regression proving no Torch DA3 PyCOLMAP optimization alignment metrics quality decision routing persistence surface appearance dynamic or V2L14.2 dependency enters the pure comparison layer
+      - full fast CI CodeQL and native/compatibility lanes only where repository path triggers require them
   - {id: V2L14.2, lot: V2L14, title: Geometry initialization refinement adapter boundary, status: planned, depends_on: [V2L14.1]}
   - {id: V2L14.3, lot: V2L14, title: Classical BA global refinement path, status: planned, depends_on: [V2L14.2]}
   - {id: V2L14.4, lot: V2L14, title: First approved hybrid global candidate, status: planned, depends_on: [V2L14.3]}
