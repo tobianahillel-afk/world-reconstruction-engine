@@ -34,7 +34,6 @@ jobs:
     env:
       CONDA_OVERRIDE_CUDA: "12.4"
       LOCK_PATH: registry/external-environments/gluemap-linux-64-cuda12.4.conda-lock.json
-      GENERATED_LOCK: ${{ runner.temp }}/gluemap-linux-64-cuda12.4.conda-lock.json
 
     steps:
       - name: Checkout WRE
@@ -67,7 +66,7 @@ jobs:
           from pathlib import Path
 
           raw_path = Path(os.environ["RUNNER_TEMP"]) / "gluemap-micromamba-raw.json"
-          output_path = Path(os.environ["GENERATED_LOCK"])
+          output_path = Path(os.environ["RUNNER_TEMP"]) / "gluemap-linux-64-cuda12.4.conda-lock.json"
           raw = json.loads(raw_path.read_text(encoding="utf-8"))
 
           assert raw.get("success") is True, raw
@@ -165,13 +164,14 @@ jobs:
 
       - name: Verify committed lock or expose first qualification solve
         run: |
+          generated_lock="$RUNNER_TEMP/gluemap-linux-64-cuda12.4.conda-lock.json"
           if test -f "$LOCK_PATH"; then
-            diff --unified "$LOCK_PATH" "$GENERATED_LOCK"
+            diff --unified "$LOCK_PATH" "$generated_lock"
           else
             echo "No committed GLUEMAP conda lock exists yet; this run is first-solve qualification evidence."
           fi
           echo "----- BEGIN GENERATED GLUEMAP CONDA LOCK -----"
-          cat "$GENERATED_LOCK"
+          cat "$generated_lock"
           echo "----- END GENERATED GLUEMAP CONDA LOCK -----"
 
       - name: Retain machine-readable dependency-resolution evidence
