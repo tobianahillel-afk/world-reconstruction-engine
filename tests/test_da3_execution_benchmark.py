@@ -407,9 +407,7 @@ def test_performance_metric_medians_and_provenance_are_deterministic() -> None:
     first_record = first.reference.benchmark_record
     second_record = second.reference.benchmark_record
     assert first_record == second_record
-    metrics = {
-        item.descriptor.name.value: item for item in first_record.metrics.observations
-    }
+    metrics = {item.descriptor.name.value: item for item in first_record.metrics.observations}
     observed = metrics["runtime.da3.end_to_end.steady_median_seconds"]
     assert observed.value == pytest.approx((0.511 + 0.512) / 2.0)
     assert observed.descriptor.aggregation == MetricAggregation("median")
