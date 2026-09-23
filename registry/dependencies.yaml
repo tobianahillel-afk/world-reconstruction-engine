@@ -167,17 +167,18 @@ dependencies:
       route can bypass SALAD by constructing BaseTwoViewDataset directly with no descriptor cache,
       skip Doppelgangers++ with skip_doppelgangers=true, avoid VGGSfM model loading with
       use_dummy_tracks=true, and stop after the global coarse COLMAP model with coarse_only=true.
-      However gluemap.utils.model_loader imports thirdparty.path_to_thirdparty at module load, and
-      that helper requires directory sentinels for unused Pi3, Doppelgangers++, VGGT and VGGSfM
-      paths even when those modules are never imported. The exact upstream tree also vendors
-      VGGSfM-derived tracker source with Meta copyright headers while facebookresearch/vggsfm
-      publishes its root under CC-BY-NC-4.0. Therefore the future executable profile must use a
-      verified allowlisted materialization derived from the pinned GLUEMAP revision: retain only
-      reviewed GLUEMAP core bytes plus the separately pinned Apache MapAnything source, create
-      empty temporary path sentinels for unused third-party checks, invoke BaseTwoViewDataset and
-      GluemapPipeline directly rather than gluemap.cli demo preprocessing, and prove at runtime
-      that SALAD, mast3r/dust3r and vggsfm modules never enter sys.modules. This qualification
-      strategy must be validated before adapter code is added. Upstream currently pins
+      Earlier qualification used MapAnything and produced PR #129's bounded source
+      manifest, but deeper exact-source review found that MapAnything's UniCeption import path
+      reaches CroCo/DUSt3R-derived CC-BY-NC-SA-4.0 code. That route is therefore retained only
+      as superseded audit evidence. The new provisional shipping-oriented backbone is the exact
+      GLUEMAP-pinned VGGT source revision 44b3afbd1869d8bde4894dd8ea1e293112dd5eba.
+      The future executable profile must use a new verified allowlisted GLUEMAP+VGGT
+      materialization, construct the model outside GLUEMAP from the exact source plus a locally
+      supplied and verified official VGGT-1B-Commercial model.safetensors, and inject it through
+      GluemapPipeline models={"vggt": model}. This bypasses gluemap.utils.model_loader and must
+      prove at runtime that SALAD, mast3r/dust3r, CroCo, UniCeption, MapAnything, Pi3 and vggsfm
+      modules never enter sys.modules and that no Git/Hugging Face/torch.hub network fetch occurs.
+      This qualification strategy must be validated before adapter code is added. Upstream currently pins
       pycolmap-cuda12==4.0.4 in its external GPU environment, which remains isolated from WRE's
       PyCOLMAP 4.2.0 canonicalization environment. Static native review now identifies the
       source-level Ceres 2.2.0 Eigen 3.4.0 METIS 5.1.0 Boost 1.85.0 and GNU 15.2.0
@@ -193,14 +194,13 @@ dependencies:
       package closure recorded in that lock. A GNU-only OpenMP solve was rejected because
       conda-forge PyTorch GPU 2.4.1 requires the LLVM/KMP OpenMP family. This lock is still
       dependency-resolution evidence only, not GPU execution. PR #129 separately froze and
-      exactly regenerated registry/external-sources/gluemap-bounded-materialization.json:
-      91 regular files, 1,058,652 bytes and canonical materialization SHA-256
+      exactly regenerated registry/external-sources/gluemap-bounded-materialization.json
+      with 91 regular files, 1,058,652 bytes and canonical materialization SHA-256
       6503a2ea5d4c46c6273a3bd56ef5150b59c3e249c350bdc14dbed20b95664ca8.
-      That manifest retains 72 reviewed GLUEMAP core/build files plus 19 MapAnything
-      core/inference files, contains no forbidden third-party source-file prefix, and
-      records runtime_execution_evidence=false and gpu_execution_evidence=false.
-      Exact locked-package/model redistribution review, supported real GPU evidence and
-      cross-version native-model evidence remain unresolved.
+      It remains immutable evidence for the rejected MapAnything candidate, not the active
+      executable source identity. The active VGGT source materialization, official gated
+      checkpoint identity, exact Python closure, custom-license review, supported real GPU
+      evidence and cross-version native-model evidence remain unresolved.
   mapanything_apache:
     status: candidate_optional
     role: [hybrid_global_geometry_backbone]
