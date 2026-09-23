@@ -1,0 +1,317 @@
+name: gluemap-source-materialization
+
+on:
+  # Bootstrap only: remove this branch-limited push trigger after the first reviewed manifest is captured.
+  push:
+    branches:
+      - "feature/v2l14-4-freeze-source-materialization"
+    paths:
+      - ".github/workflows/gluemap-source-materialization.yml"
+      - "registry/external-sources/gluemap-bounded-materialization.json"
+  pull_request:
+    paths:
+      - ".github/workflows/gluemap-source-materialization.yml"
+      - "registry/external-sources/gluemap-bounded-materialization.json"
+      - "registry/dependencies.yaml"
+      - "registry/work-items/v2m2.yaml"
+      - "PROJECT_STATE.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  materialize:
+    name: exact-allowlisted-source-manifest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GLUEMAP_REPOSITORY: https://github.com/colmap/gluemap.git
+      GLUEMAP_REVISION: adc9e4bb5f41014d3f7c157a879edc278588c829
+      GLUEMAP_TREE: 9f4b6090baca9ad6da78a138372afb17a7f70626
+      MAPANYTHING_REPOSITORY: https://github.com/facebookresearch/map-anything.git
+      MAPANYTHING_REVISION: f7ebafb4d8349776705aaa686cf928988d1bd7f4
+      MAPANYTHING_TREE: 66da65433a121c236135affae52c4d36a2625ee1
+      MANIFEST_PATH: registry/external-sources/gluemap-bounded-materialization.json
+
+    steps:
+      - name: Checkout WRE
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Fetch exact reviewed source revisions
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_root="${RUNNER_TEMP}/wre-gluemap-source-gate"
+          rm -rf "$source_root"
+          mkdir -p "$source_root"
+
+          git init -q "$source_root/gluemap"
+          git -C "$source_root/gluemap" remote add origin "$GLUEMAP_REPOSITORY"
+          git -C "$source_root/gluemap" fetch --quiet --depth=1 origin "$GLUEMAP_REVISION"
+          git -C "$source_root/gluemap" checkout --quiet --detach FETCH_HEAD
+          test "$(git -C "$source_root/gluemap" rev-parse HEAD)" = "$GLUEMAP_REVISION"
+          test "$(git -C "$source_root/gluemap" rev-parse HEAD^{tree})" = "$GLUEMAP_TREE"
+
+          git init -q "$source_root/mapanything"
+          git -C "$source_root/mapanything" remote add origin "$MAPANYTHING_REPOSITORY"
+          git -C "$source_root/mapanything" fetch --quiet --depth=1 origin "$MAPANYTHING_REVISION"
+          git -C "$source_root/mapanything" checkout --quiet --detach FETCH_HEAD
+          test "$(git -C "$source_root/mapanything" rev-parse HEAD)" = "$MAPANYTHING_REVISION"
+          test "$(git -C "$source_root/mapanything" rev-parse HEAD^{tree})" = "$MAPANYTHING_TREE"
+
+      - name: Derive exact allowlisted materialization manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          source_root = Path(os.environ["RUNNER_TEMP"]) / "wre-gluemap-source-gate"
+          gluemap_repo = source_root / "gluemap"
+          mapanything_repo = source_root / "mapanything"
+          materialized = source_root / "materialized"
+          generated = Path(os.environ["RUNNER_TEMP"]) / "gluemap-bounded-materialization.json"
+
+          gluemap_revision = os.environ["GLUEMAP_REVISION"]
+          gluemap_tree = os.environ["GLUEMAP_TREE"]
+          mapanything_revision = os.environ["MAPANYTHING_REVISION"]
+          mapanything_tree = os.environ["MAPANYTHING_TREE"]
+
+          forbidden_prefixes = (
+              "thirdparty/doppelgangers-plusplus/",
+              "thirdparty/pi3/",
+              "thirdparty/salad/",
+              "thirdparty/vggsfm/",
+              "thirdparty/vggt/",
+              "thirdparty/mapanything/mapanything/models/external/",
+          )
+          sentinel_directories = (
+              "thirdparty/pi3/pi3/models",
+              "thirdparty/doppelgangers-plusplus/mast3r",
+              "thirdparty/doppelgangers-plusplus/dust3r/dust3r",
+              "thirdparty/doppelgangers-plusplus/dust3r/croco/models",
+              "thirdparty/vggt/vggt/models",
+              "thirdparty/vggsfm/track_modules",
+          )
+          mapanything_exact_utils = {
+              "mapanything/utils/__init__.py",
+              "mapanything/utils/cropping.py",
+              "mapanything/utils/device.py",
+              "mapanything/utils/geometry.py",
+              "mapanything/utils/image.py",
+              "mapanything/utils/inference.py",
+              "mapanything/utils/misc.py",
+              "mapanything/utils/multiview_confidence.py",
+              "mapanything/utils/warnings.py",
+              "mapanything/utils/wai/__init__.py",
+              "mapanything/utils/wai/intersection_check.py",
+          }
+
+          def ls_tree(repo: Path) -> list[tuple[str, str, str, str]]:
+              raw = subprocess.check_output(
+                  ["git", "-C", str(repo), "ls-tree", "-r", "-z", "--full-tree", "HEAD"]
+              )
+              entries: list[tuple[str, str, str, str]] = []
+              for record in raw.split(b"\0"):
+                  if not record:
+                      continue
+                  meta, path_raw = record.split(b"\t", 1)
+                  mode, object_type, object_sha = meta.decode("ascii").split(" ")
+                  entries.append((mode, object_type, object_sha, path_raw.decode("utf-8")))
+              return entries
+
+          def blob(repo: Path, path: str) -> bytes:
+              return subprocess.check_output(["git", "-C", str(repo), "show", f"HEAD:{path}"])
+
+          def include_gluemap(path: str) -> bool:
+              return (
+                  path in {"LICENSE", "pyproject.toml"}
+                  or path.startswith("gluemap/")
+                  or path.startswith("benchmark/")
+                  or path == "thirdparty/path_to_thirdparty.py"
+              )
+
+          def include_mapanything(path: str) -> bool:
+              return (
+                  path in {"LICENSE", "pyproject.toml"}
+                  or path == "mapanything/__init__.py"
+                  or path == "mapanything/models/__init__.py"
+                  or path.startswith("mapanything/models/mapanything/")
+                  or path in mapanything_exact_utils
+              )
+
+          selected: list[tuple[Path, str, str, bytes]] = []
+
+          for mode, object_type, _sha, path in ls_tree(gluemap_repo):
+              if not include_gluemap(path):
+                  continue
+              if object_type != "blob" or mode not in {"100644", "100755"}:
+                  raise SystemExit(f"selected GLUEMAP path is not a regular tracked file: {path} {mode} {object_type}")
+              selected.append((materialized, path, "gluemap", blob(gluemap_repo, path)))
+
+          for mode, object_type, _sha, path in ls_tree(mapanything_repo):
+              if not include_mapanything(path):
+                  continue
+              if object_type != "blob" or mode not in {"100644", "100755"}:
+                  raise SystemExit(f"selected MapAnything path is not a regular tracked file: {path} {mode} {object_type}")
+              selected.append(
+                  (
+                      materialized,
+                      f"thirdparty/mapanything/{path}",
+                      "mapanything",
+                      blob(mapanything_repo, path),
+                  )
+              )
+
+          if materialized.exists():
+              raise SystemExit("fresh materialization destination unexpectedly exists")
+
+          for root, relative, _source, data in sorted(selected, key=lambda item: item[1]):
+              destination = root / relative
+              destination.parent.mkdir(parents=True, exist_ok=True)
+              destination.write_bytes(data)
+
+          for sentinel in sentinel_directories:
+              directory = materialized / sentinel
+              directory.mkdir(parents=True, exist_ok=True)
+
+          if not (materialized / "thirdparty/mapanything/mapanything/models/mapanything/model.py").is_file():
+              raise SystemExit("MapAnything core model was not materialized")
+          if not (materialized / "thirdparty/mapanything/mapanything/utils/inference.py").is_file():
+              raise SystemExit("MapAnything inference utilities were not materialized")
+          if not (materialized / "thirdparty/path_to_thirdparty.py").is_file():
+              raise SystemExit("GLUEMAP third-party path bridge was not materialized")
+
+          for path in materialized.rglob("*"):
+              relative = path.relative_to(materialized).as_posix()
+              if path.is_symlink():
+                  raise SystemExit(f"symlink forbidden in materialization: {relative}")
+              if path.is_file() and any(relative.startswith(prefix) for prefix in forbidden_prefixes):
+                  raise SystemExit(f"forbidden source file entered materialization: {relative}")
+
+          for sentinel in sentinel_directories:
+              directory = materialized / sentinel
+              if any(child.is_file() or child.is_symlink() for child in directory.rglob("*")):
+                  raise SystemExit(f"sentinel directory is not empty: {sentinel}")
+
+          files = []
+          total_bytes = 0
+          identity = hashlib.sha256()
+          for path in sorted(
+              (candidate for candidate in materialized.rglob("*") if candidate.is_file()),
+              key=lambda candidate: candidate.relative_to(materialized).as_posix(),
+          ):
+              relative = path.relative_to(materialized).as_posix()
+              data = path.read_bytes()
+              digest = hashlib.sha256(data).hexdigest()
+              size = len(data)
+              total_bytes += size
+              identity.update(relative.encode("utf-8"))
+              identity.update(b"\0")
+              identity.update(str(size).encode("ascii"))
+              identity.update(b"\0")
+              identity.update(digest.encode("ascii"))
+              identity.update(b"\n")
+              source = "mapanything" if relative.startswith("thirdparty/mapanything/") else "gluemap"
+              files.append(
+                  {
+                      "byte_length": size,
+                      "path": relative,
+                      "sha256": digest,
+                      "source": source,
+                  }
+              )
+
+          paths = [entry["path"] for entry in files]
+          if paths != sorted(paths) or len(paths) != len(set(paths)):
+              raise SystemExit("manifest paths are not canonical and unique")
+          if any(any(path.startswith(prefix) for prefix in forbidden_prefixes) for path in paths):
+              raise SystemExit("forbidden source prefix present in manifest")
+
+          manifest = {
+              "schema_version": 1,
+              "evidence_kind": "source_materialization_only",
+              "runtime_execution_evidence": False,
+              "gpu_execution_evidence": False,
+              "sources": {
+                  "gluemap": {
+                      "repository": "colmap/gluemap",
+                      "revision": gluemap_revision,
+                      "tree": gluemap_tree,
+                  },
+                  "mapanything": {
+                      "repository": "facebookresearch/map-anything",
+                      "revision": mapanything_revision,
+                      "tree": mapanything_tree,
+                  },
+              },
+              "policy": {
+                  "gluemap_includes": [
+                      "LICENSE",
+                      "pyproject.toml",
+                      "benchmark/**",
+                      "gluemap/**",
+                      "thirdparty/path_to_thirdparty.py",
+                  ],
+                  "mapanything_includes": [
+                      "LICENSE",
+                      "pyproject.toml",
+                      "mapanything/__init__.py",
+                      "mapanything/models/__init__.py",
+                      "mapanything/models/mapanything/**",
+                      *sorted(mapanything_exact_utils),
+                  ],
+                  "forbidden_source_prefixes": list(forbidden_prefixes),
+                  "sentinel_directories": list(sentinel_directories),
+                  "sentinels_are_empty": True,
+              },
+              "materialization": {
+                  "byte_length": total_bytes,
+                  "file_count": len(files),
+                  "sha256": identity.hexdigest(),
+              },
+              "files": files,
+          }
+
+          generated.write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print(f"generated {len(files)} files / {total_bytes} bytes / {identity.hexdigest()}")
+          PY
+
+      - name: Verify committed manifest or expose first qualification materialization
+        shell: bash
+        run: |
+          set -euo pipefail
+          generated="${RUNNER_TEMP}/gluemap-bounded-materialization.json"
+          if test -f "$MANIFEST_PATH"; then
+            diff -u "$MANIFEST_PATH" "$generated"
+            echo "Committed GLUEMAP source materialization manifest matches exact regeneration."
+          else
+            echo "No committed GLUEMAP source materialization manifest exists yet; this run is first-materialization qualification evidence."
+            echo "----- BEGIN GENERATED GLUEMAP SOURCE MANIFEST -----"
+            cat "$generated"
+            echo "----- END GENERATED GLUEMAP SOURCE MANIFEST -----"
+          fi
+
+      - name: Retain machine-readable source qualification evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v2l14-4-gluemap-source-materialization
+          path: ${{ runner.temp }}/gluemap-bounded-materialization.json
+          if-no-files-found: error
+          retention-days: 30
