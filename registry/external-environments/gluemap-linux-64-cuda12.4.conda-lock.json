@@ -1451,15 +1451,15 @@
     },
     {
       "build_number": 0,
-      "build_string": "py312he827f4e_0",
+      "build_string": "py312h33ff503_0",
       "channel": "conda-forge",
       "license": "BSD-3-Clause",
-      "md5": "5abf073f2cf066f2f3d28229b3cbe94d",
+      "md5": "5930ee8a175a242b4f001b1e9e72024f",
       "name": "numpy",
-      "sha256": "5b0e4c7757a2df883c5615a8f64bc4c113c4cd303ae6caa3ada5d397d114ce2a",
+      "sha256": "1aab7ba963affa572956b1bd8d239df52a9c7bc799c560f98bc658ab70224e10",
       "subdir": "linux-64",
-      "url": "https://conda.anaconda.org/conda-forge/linux-64/numpy-2.5.3-py312he827f4e_0.conda",
-      "version": "2.5.3"
+      "url": "https://conda.anaconda.org/conda-forge/linux-64/numpy-2.4.3-py312h33ff503_0.conda",
+      "version": "2.4.3"
     },
     {
       "build_number": 2,
@@ -1896,6 +1896,7 @@
   ],
   "requested_specs": [
     "python=3.12.12",
+    "numpy=2.4.3",
     "pip",
     "cmake>=3.18",
     "ninja",
