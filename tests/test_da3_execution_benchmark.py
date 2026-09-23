@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib
 import json
 import os
 import resource
@@ -524,7 +525,7 @@ def test_real_da3_reference_execution_profile_benchmark(tmp_path: Path) -> None:
                     profile=profile,
                     status=Da3ExecutionProfileStatus.AVAILABLE,
                 )
-            import torch
+            torch = importlib.import_module("torch")
 
             assert torch.__version__ == "2.4.1+cpu"
             assert torch.cuda.is_available() is False
