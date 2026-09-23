@@ -177,6 +177,103 @@ dependencies:
       License review remains pending until the exact composed GLUEMAP runtime dependency
       closure and redistribution posture are reviewed; this record does not authorize
       shipping or default promotion.
+  aliked_n16:
+    status: candidate_optional
+    role: [hybrid_global_query_points]
+    integration: optional_exact_external_checkpoint
+    version_policy: pin_exact_external_environment
+    pinned_version: 683d7c65197395c0b3f01ebe76e1084a27e73a65
+    upstream_repository: Shiaoming/ALIKED
+    checkpoint_identifier: models/aliked-n16.pth
+    checkpoint_git_blob_sha1: 9449ca16f784aff7fa4c88ea0925b41f6411eef0
+    checkpoint_sha256: 5be8704840ed662d9d8c561bf7279c222092674e7eb05fd0feab94899e9d82f2
+    checkpoint_byte_length: 2738091
+    license: BSD-3-Clause
+    license_review: pending
+    notes: >-
+      V2L14.4 static review proves GLUEMAP BaseStarDataset constructs
+      lightglue.ALIKED with the aliked-n16 model. The pinned LightGlue source would
+      otherwise call torch.hub.load_state_dict_from_url against a floating ALIKED
+      main URL. WRE must instead require this exact caller-supplied local checkpoint,
+      verify byte length and SHA-256 before importing or constructing the extractor,
+      and perform no runtime network fetch. The exact ALIKED repository revision above
+      exposes the checkpoint as Git blob 9449ca16f784aff7fa4c88ea0925b41f6411eef0
+      and the repository license is BSD-3-Clause. The SHA-256 and byte length are
+      independently corroborated by multiple public reproducibility manifests and must
+      be re-hashed from the supplied local file in the real integration lane before
+      this dependency can move beyond qualification.
+  faiss_cpu:
+    status: candidate_optional
+    role: [hybrid_global_pair_dataset]
+    integration: optional_exact_external_environment
+    version_policy: pin_exact_external_environment
+    pinned_version: 1.13.2
+    source_revision: 070fbcdd93ee086ddacb1bbd0aa078e31864cdd9
+    upstream_repository: facebookresearch/faiss
+    license: MIT
+    license_review: pending
+    notes: >-
+      GLUEMAP BaseTwoViewDataset imports faiss at module import even when the bounded
+      WRE profile deliberately supplies no SALAD descriptor cache and therefore uses
+      exhaustive pair generation. The exact v1.13.2 source revision and MIT root
+      license are verified, but the concrete faiss-cpu wheel/native dependency and
+      redistribution closure remains part of the V2L14.4 external-environment review.
+  pyceres:
+    status: candidate_optional
+    role: [hybrid_global_optimization]
+    integration: optional_exact_external_environment
+    version_policy: pin_exact_external_environment
+    pinned_version: 2.6
+    source_revision: 3cb95962b3d5f5fa8a5894c277feabe37c82bd8a
+    upstream_repository: cvg/pyceres
+    license: Apache-2.0
+    license_review: pending
+    notes: >-
+      GLUEMAP pins pyceres==2.6. The exact cvg/pyceres v2.6 tag resolves to
+      3cb95962b3d5f5fa8a5894c277feabe37c82bd8a and carries Apache-2.0;
+      the conda-forge 2.6 recipe independently identifies the same upstream and
+      package license. Native Ceres, Eigen, Boost, METIS, OpenMP and ABI/redistribution
+      closure for the concrete GLUEMAP environment is not yet approved.
+  pycolmap_cuda12:
+    status: candidate_optional
+    role: [hybrid_global_colmap_runtime]
+    integration: official_pycolmap_cuda_external_environment
+    version_policy: pin_exact_external_environment
+    pinned_version: 4.0.4
+    python_package: pycolmap-cuda12==4.0.4
+    source_revision: 9c23f6942fe69962e06030905e77067c8673382f
+    upstream_repository: colmap/colmap
+    license: BSD-3-Clause
+    license_review: pending
+    notes: >-
+      The COLMAP 4.0.4 tag resolves exactly to
+      9c23f6942fe69962e06030905e77067c8673382f and its pyproject declares
+      BSD-3-Clause. COLMAP's own build-pycolmap GitHub Actions workflow builds the
+      CUDA Linux variant and rewrites the official package name to pycolmap-cuda12,
+      adding cuda-toolkit[cudart,curand]>=12,<13 before PyPI publication. This proves
+      source provenance but does not approve the concrete CUDA/native redistribution
+      closure. The runtime remains isolated from WRE's approved PyCOLMAP 4.2.0
+      canonicalization environment and its native output still requires a real 4.2.0
+      cross-read fixture.
+  uniception:
+    status: candidate_optional
+    role: [hybrid_global_mapanything_modules]
+    integration: optional_exact_external_environment
+    version_policy: pin_exact_external_environment
+    pinned_version: 0.1.7
+    source_revision: 802ebc1783d71bbaa9d139c88d87d062ad18ce62
+    upstream_repository: castacks/UniCeption
+    license: BSD-3-Clause
+    license_review: pending
+    notes: >-
+      MapAnything imports UniCeption model blocks directly in the reviewed inference
+      path. The exact v0.1.7 tag resolves to
+      802ebc1783d71bbaa9d139c88d87d062ad18ce62 and declares BSD-3-Clause.
+      UniCeption's base package pulls a wider Python dependency set and exposes
+      optional checkpoint/download helpers; WRE must use only the modules exercised
+      by the pinned MapAnything source and must not invoke UniCeption checkpoint
+      download helpers. Full transitive package and redistribution review remains
+      pending.
   limap:
     status: candidate_core
     role: [lines, structural_sfm, planes, vanishing_points, wireframe]
@@ -308,13 +405,23 @@ dependencies:
     notes: Framework license verified on 2026-09-15; it does not automatically cover every selected feature extractor/model/checkpoint.
   lightglue:
     status: candidate_optional
-    role: [adaptive_learned_matching, difficult_pair_proposals]
-    integration: optional_adapter
-    version_policy: pin_when_integrated
+    role: [adaptive_learned_matching, difficult_pair_proposals, hybrid_global_query_points]
+    integration: optional_exact_external_environment
+    version_policy: pin_exact_external_environment
+    pinned_version: eb42fee2d71449efb0aa5c10549752b5d75384d8
     upstream_repository: cvg/LightGlue
     license: Apache-2.0
     license_review: pending
-    notes: LightGlue code and pretrained LightGlue weights are Apache-2.0; upstream feature extractors/checkpoints can differ (notably SuperPoint) and require separate review.
+    notes: >-
+      V2L14.4 pins the exact GLUEMAP dependency revision
+      eb42fee2d71449efb0aa5c10549752b5d75384d8. The bounded hybrid-global
+      profile uses only LightGlue's ALIKED extractor wrapper for query-point
+      generation; it does not load a LightGlue matcher checkpoint. The repository
+      root is Apache-2.0 and the vendored ALIKED inference file carries its original
+      BSD-3-Clause notice. The ALIKED model asset is reviewed separately under
+      aliked_n16 and must be supplied locally with exact hash verification, so
+      torch.hub network fallback is forbidden. Other LightGlue feature
+      extractors/checkpoints such as SuperPoint are outside this profile.
   py4dgeo:
     status: candidate_core
     role: [multi_epoch_point_cloud_change, m3c2, temporal_change_measurement]
