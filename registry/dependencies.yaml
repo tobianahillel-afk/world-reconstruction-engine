@@ -102,6 +102,70 @@ dependencies:
       CPU float32 reference path through the reviewed DA3-BASE config/model/input/output modules,
       not the top-level export facade, and performs no implicit Git/Hugging Face/network fetch.
       Faster CUDA, autocast, compilation and alternate execution profiles are deferred to V2L13.6.
+  gluemap:
+    status: candidate_optional
+    role: [hybrid_global_geometry]
+    integration: optional_exact_external_environment
+    version_policy: pin_exact_external_environment
+    pinned_version: adc9e4bb5f41014d3f7c157a879edc278588c829
+    source_tree_sha: 9f4b6090baca9ad6da78a138372afb17a7f70626
+    upstream_repository: colmap/gluemap
+    license: BSD-3-Clause
+    license_review: pending
+    reference_profile:
+      python: '>=3.11'
+      device: cuda
+      torch: 2.4.1
+      torchvision: 0.19.1
+      numpy: 2.4.3
+      pycolmap_cuda12: 4.0.4
+      pyceres: 2.6
+      cuda: '12.4'
+      chosen_model: map_anything
+      skip_doppelgangers: true
+      use_dummy_tracks: true
+      coarse_only: true
+      pair_generation: exhaustive_without_salad_descriptor_cache
+    notes: >-
+      V2L14.4 qualification currently targets exact GLUEMAP source revision
+      adc9e4bb5f41014d3f7c157a879edc278588c829 with Git tree
+      9f4b6090baca9ad6da78a138372afb17a7f70626. GLUEMAP's top-level source
+      is BSD-3-Clause-style, but upstream explicitly warns that third-party dependencies are
+      separately licensed. The first bounded WRE profile therefore excludes SALAD,
+      Doppelgangers++ and VGGSfM execution, uses the upstream exhaustive-pair fallback,
+      skip_doppelgangers=true, use_dummy_tracks=true and coarse_only=true, and selects only
+      the separately reviewed Apache MapAnything dependency below. Upstream currently pins
+      pycolmap-cuda12==4.0.4 in its external GPU environment, which remains isolated from
+      WRE's PyCOLMAP 4.2.0 canonicalization environment. Full transitive import/license
+      closure and a supported real GPU execution lane remain unresolved, so no adapter may
+      be implemented or enabled from this record alone.
+  mapanything_apache:
+    status: candidate_optional
+    role: [hybrid_global_geometry_backbone]
+    integration: optional_exact_external_checkpoint
+    version_policy: pin_exact_external_environment
+    pinned_version: f7ebafb4d8349776705aaa686cf928988d1bd7f4
+    source_tree_sha: 66da65433a121c236135affae52c4d36a2625ee1
+    upstream_repository: facebookresearch/map-anything
+    model_repository: facebook/map-anything-apache
+    checkpoint_identifier: facebook/map-anything-apache/model.safetensors
+    checkpoint_revision: 00f9c245bbcb60522d1ed7f9e9d88462c6e3f38a
+    checkpoint_sha256: fa06c0fdccefc5048e072c85935d5789b1e36b307f3859033c17f9dcb9fd5201
+    checkpoint_byte_length: 4914062480
+    license: Apache-2.0
+    license_review: pending
+    notes: >-
+      V2L14.4 qualification pins the MapAnything source revision used by the current
+      GLUEMAP submodule, f7ebafb4d8349776705aaa686cf928988d1bd7f4, with Git tree
+      66da65433a121c236135affae52c4d36a2625ee1. The selected model repository is the
+      current Apache-2.0 facebook/map-anything-apache variant rather than the
+      CC-BY-NC facebook/map-anything checkpoint. The reviewed repository snapshot is
+      00f9c245bbcb60522d1ed7f9e9d88462c6e3f38a and its model.safetensors is exactly
+      4914062480 bytes with SHA-256
+      fa06c0fdccefc5048e072c85935d5789b1e36b307f3859033c17f9dcb9fd5201.
+      License review remains pending until the exact composed GLUEMAP runtime dependency
+      closure and redistribution posture are reviewed; this record does not authorize
+      shipping or default promotion.
   limap:
     status: candidate_core
     role: [lines, structural_sfm, planes, vanishing_points, wireframe]
