@@ -55,9 +55,7 @@ def _validate_depths(
     if len(identifiers) != len(set(identifiers)):
         raise ValueError("geometry candidate depth_fields must have unique IDs")
     if identifiers != tuple(sorted(identifiers)):
-        raise ValueError(
-            "geometry candidate depth_fields must be in canonical DepthFieldId order"
-        )
+        raise ValueError("geometry candidate depth_fields must be in canonical DepthFieldId order")
 
     expected = tuple(item.depth_field_id for item in depths)
     if geometry_solution.depth_field_ids != expected:
@@ -97,9 +95,7 @@ def _validate_point_maps(
     if len(identifiers) != len(set(identifiers)):
         raise ValueError("geometry candidate point_maps must have unique IDs")
     if identifiers != tuple(sorted(identifiers)):
-        raise ValueError(
-            "geometry candidate point_maps must be in canonical PointMapId order"
-        )
+        raise ValueError("geometry candidate point_maps must be in canonical PointMapId order")
 
     local_frame = geometry_solution.local_frame_id
     if any(item.local_frame_id != local_frame for item in point_maps):
@@ -128,10 +124,7 @@ def _validate_source_artifacts(value: object) -> tuple[ArtifactRef, ...]:
     if any(not isinstance(item, ArtifactRef) for item in value):
         raise TypeError("geometry candidate source_artifacts members must be ArtifactRef")
 
-    identities = tuple(
-        (item.artifact_id.value, item.artifact_kind.value)
-        for item in value
-    )
+    identities = tuple((item.artifact_id.value, item.artifact_kind.value) for item in value)
     if len(identities) != len(set(identities)):
         raise ValueError("geometry candidate source_artifacts must be unique")
     if identities != tuple(sorted(identities)):
@@ -205,19 +198,13 @@ class GeometrySolutionPair:
 
     def __post_init__(self) -> None:
         if not isinstance(self.left_geometry_solution_id, GeometrySolutionId):
-            raise TypeError(
-                "geometry pair left_geometry_solution_id must be GeometrySolutionId"
-            )
+            raise TypeError("geometry pair left_geometry_solution_id must be GeometrySolutionId")
         if not isinstance(self.right_geometry_solution_id, GeometrySolutionId):
-            raise TypeError(
-                "geometry pair right_geometry_solution_id must be GeometrySolutionId"
-            )
+            raise TypeError("geometry pair right_geometry_solution_id must be GeometrySolutionId")
         if self.left_geometry_solution_id == self.right_geometry_solution_id:
             raise ValueError("geometry pair must contain two distinct GeometrySolutionIds")
         if self.left_geometry_solution_id.value > self.right_geometry_solution_id.value:
-            raise ValueError(
-                "geometry pair IDs must be in canonical lexical left/right order"
-            )
+            raise ValueError("geometry pair IDs must be in canonical lexical left/right order")
 
 
 def derive_geometry_solution_pairs(
