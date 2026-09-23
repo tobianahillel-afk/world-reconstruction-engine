@@ -1,13 +1,6 @@
 name: gluemap-source-materialization
 
 on:
-  # Bootstrap only: remove this branch-limited push trigger after the first reviewed manifest is captured.
-  push:
-    branches:
-      - "feature/v2l14-4-freeze-source-materialization"
-    paths:
-      - ".github/workflows/gluemap-source-materialization.yml"
-      - "registry/external-sources/gluemap-bounded-materialization.json"
   pull_request:
     paths:
       - ".github/workflows/gluemap-source-materialization.yml"
