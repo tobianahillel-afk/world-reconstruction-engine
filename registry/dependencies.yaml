@@ -143,7 +143,13 @@ dependencies:
       previous_mapanything_source_materialization_byte_length: 1058652
       previous_mapanything_source_materialization_sha256: 6503a2ea5d4c46c6273a3bd56ef5150b59c3e249c350bdc14dbed20b95664ca8
       previous_mapanything_source_materialization_runtime_execution_evidence: false
-      source_materialization_manifest: unresolved_pending_vggt_qualification
+      source_materialization_manifest: registry/external-sources/gluemap-vggt-bounded-materialization.json
+      source_materialization_files: 93
+      source_materialization_byte_length: 744299
+      source_materialization_sha256: 19efc825c7627dc2d7fdf3fed3aa410823e90e81d2f126c57148549aac5fced1
+      source_materialization_runtime_execution_evidence: false
+      source_materialization_gpu_execution_evidence: false
+      source_materialization_vggt_license_blob_sha1: 079cb728fea5b11bb46c0c9f6ad4b3d2e4d216c7
       cuda: '12.4'
       cuda_package_set: locked_in_environment_lock
       gpu_execution_evidence: false
@@ -200,9 +206,16 @@ dependencies:
       with 91 regular files, 1,058,652 bytes and canonical materialization SHA-256
       6503a2ea5d4c46c6273a3bd56ef5150b59c3e249c350bdc14dbed20b95664ca8.
       It remains immutable evidence for the rejected MapAnything candidate, not the active
-      executable source identity. The active VGGT source materialization, official gated
-      checkpoint identity, exact Python closure, custom-license review, supported real GPU
-      evidence and cross-version native-model evidence remain unresolved.
+      executable source identity. PR #133 now freezes and exactly regenerates the active
+      registry/external-sources/gluemap-vggt-bounded-materialization.json at 93 regular files,
+      744,299 bytes and materialization SHA-256
+      19efc825c7627dc2d7fdf3fed3aa410823e90e81d2f126c57148549aac5fced1.
+      That active source manifest contains 67 reviewed GLUEMAP files plus 26 VGGT files,
+      retains VGGT LICENSE.txt as Git blob 079cb728fea5b11bb46c0c9f6ad4b3d2e4d216c7,
+      excludes MapAnything UniCeption Pi3 SALAD Doppelgangers++ VGGSfM training and
+      vggt/dependency source bytes, and records no runtime or GPU execution evidence.
+      The official gated checkpoint identity, exact Python closure, custom-license review,
+      supported real GPU evidence and cross-version native-model evidence remain unresolved.
   mapanything_apache:
     status: candidate_optional
     role: [hybrid_global_geometry_backbone]
@@ -268,7 +281,12 @@ dependencies:
       exact reviewed source, loads only that verified local model.safetensors, and
       injects it into GluemapPipeline through models={"vggt": model}, bypassing
       gluemap.utils.model_loader and all runtime Hugging Face or torch.hub fetches.
-      No execution or adapter implementation is authorized by this record.
+      PR #133 separately freezes the exact reviewed source materialization for this
+      backbone at 93 total GLUEMAP+VGGT files / 744,299 bytes with identity
+      19efc825c7627dc2d7fdf3fed3aa410823e90e81d2f126c57148549aac5fced1.
+      Source qualification is complete but does not resolve the gated checkpoint or the
+      custom-license shipping review. No execution or adapter implementation is authorized
+      by this record.
   aliked_n16:
     status: candidate_optional
     role: [hybrid_global_query_points]
