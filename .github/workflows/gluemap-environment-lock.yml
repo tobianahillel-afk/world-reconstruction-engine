@@ -59,8 +59,8 @@ jobs:
           raw="$RUNNER_TEMP/gluemap-micromamba-raw.json"
           set +e
           env -u CONDARC micromamba create --name wre-gluemap-lock --platform linux-64 --override-channels --channel conda-forge --strict-channel-priority --no-rc --dry-run --json \
-            "python=3.12.12" "pip" "cmake>=3.18" "ninja" "pkg-config" "pybind11>=3.0" "scikit-build-core>=0.10" "cxx-compiler" \
-            "eigen=3.4.0" "ceres-solver=2.2.0=cpulgpl*" "metis=5.1.0" "boost=1.85.0" "libstdcxx-ng=15.2.0" "libgomp=15.2.0" "_openmp_mutex=*=*_gnu" \
+            "python=3.12.12" "pip" "cmake>=3.18" "ninja" "pkg-config" "pybind11>=3.0" "scikit-build-core>=0.10" "clangxx" \
+            "eigen=3.4.0" "ceres-solver=2.2.0=cpulgpl*" "metis=5.1.0" "boost=1.85.0" "libstdcxx-ng=15.2.0" "llvm-openmp" "_openmp_mutex=*=*_llvm" \
             "pytorch-gpu=2.4.1" "torchvision=0.19.1" "cuda-version=12.4" > "$raw"
           status=$?
           set -e
@@ -89,14 +89,14 @@ jobs:
               "pkg-config",
               "pybind11>=3.0",
               "scikit-build-core>=0.10",
-              "cxx-compiler",
+              "clangxx",
               "eigen=3.4.0",
               "ceres-solver=2.2.0=cpulgpl*",
               "metis=5.1.0",
               "boost=1.85.0",
               "libstdcxx-ng=15.2.0",
-              "libgomp=15.2.0",
-              "_openmp_mutex=*=*_gnu",
+              "llvm-openmp",
+              "_openmp_mutex=*=*_llvm",
               "pytorch-gpu=2.4.1",
               "torchvision=0.19.1",
               "cuda-version=12.4",
@@ -141,9 +141,10 @@ jobs:
           assert by_name["metis"]["version"] == "5.1.0"
           assert by_name["boost"]["version"] == "1.85.0"
           assert by_name["libstdcxx-ng"]["version"] == "15.2.0"
-          assert by_name["libgomp"]["version"] == "15.2.0"
-          assert by_name["_openmp_mutex"]["build_string"].endswith("_gnu"), by_name["_openmp_mutex"]
-          assert "llvm-openmp" not in by_name, "dual OpenMP runtime closure is forbidden"
+          assert "clangxx" in by_name, "explicit Clang++ compiler is required"
+          assert "llvm-openmp" in by_name, "explicit LLVM OpenMP runtime is required"
+          assert by_name["_openmp_mutex"]["build_string"].endswith("_llvm"), by_name["_openmp_mutex"]
+          assert "libgomp" not in by_name, "dual OpenMP runtime closure is forbidden"
           assert by_name["pytorch-gpu"]["version"] == "2.4.1"
           assert by_name["torchvision"]["version"] == "0.19.1"
           assert by_name["cuda-version"]["version"].startswith("12.4")
