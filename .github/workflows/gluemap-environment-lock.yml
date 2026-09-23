@@ -3,13 +3,6 @@ name: gluemap-environment-lock
 # Dependency resolution only: this workflow never claims or exercises GPU runtime support.
 
 on:
-  # Bootstrap only: remove this branch-limited push trigger after the first reviewed solve is captured.
-  push:
-    branches:
-      - "feature/v2l14-4-resolve-gluemap-conda-lock"
-    paths:
-      - ".github/workflows/gluemap-environment-lock.yml"
-      - "registry/external-environments/gluemap-linux-64-cuda12.4.conda-lock.json"
   pull_request:
     paths:
       - ".github/workflows/gluemap-environment-lock.yml"
