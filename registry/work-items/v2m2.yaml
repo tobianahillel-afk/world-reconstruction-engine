@@ -1466,6 +1466,7 @@ work_items:
       - src/wre/reconstruction/geometry_solution_comparison.py
       - focused exports in src/wre/reconstruction/__init__.py
       - tests/test_geometry_solution_comparison.py
+      - focused update to tests/test_da3_execution_benchmark.py only to keep the accepted V2L13-to-V2L14 handoff regression monotone when V2L14.1 legitimately advances from active/ready to completed, without changing any V2L13 benchmark or review semantics
       - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L14.2 can be activated without implementing it
     out_of_scope:
       - changing CameraSolution DepthField PointMap GeometrySolution LocalFrameId GeometryScaleStatus MetricVector FeedForwardGeometryResult CanonicalColmapSparseModel or ColmapGeometryOutcome semantics
