@@ -1,5 +1,7 @@
 name: gluemap-environment-lock
 
+# Dependency resolution only: this workflow never claims or exercises GPU runtime support.
+
 on:
   pull_request:
     paths:
