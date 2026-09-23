@@ -13,10 +13,7 @@ def _validate_supporting_artifacts(value: object) -> None:
     if any(not isinstance(item, ArtifactRef) for item in value):
         raise TypeError("geometry_refinement.supporting_artifacts members must be ArtifactRef")
 
-    identities = tuple(
-        (item.artifact_id.value, item.artifact_kind.value)
-        for item in value
-    )
+    identities = tuple((item.artifact_id.value, item.artifact_kind.value) for item in value)
     if len(identities) != len(set(identities)):
         raise ValueError("geometry_refinement.supporting_artifacts must be unique")
     if identities != tuple(sorted(identities)):
@@ -39,9 +36,7 @@ class GeometryRefinementRequest:
 
     def __post_init__(self) -> None:
         if not isinstance(self.initialization, GeometrySolutionCandidate):
-            raise TypeError(
-                "geometry_refinement.initialization must be GeometrySolutionCandidate"
-            )
+            raise TypeError("geometry_refinement.initialization must be GeometrySolutionCandidate")
         _validate_supporting_artifacts(self.supporting_artifacts)
 
 
@@ -61,16 +56,13 @@ class GeometryRefinementResult:
             raise TypeError("geometry_refinement_result.request must be GeometryRefinementRequest")
         if not isinstance(self.refined_candidate, GeometrySolutionCandidate):
             raise TypeError(
-                "geometry_refinement_result.refined_candidate must be "
-                "GeometrySolutionCandidate"
+                "geometry_refinement_result.refined_candidate must be GeometrySolutionCandidate"
             )
 
         initialization_id = self.request.initialization.geometry_solution_id
         refined_id = self.refined_candidate.geometry_solution_id
         if refined_id == initialization_id:
-            raise ValueError(
-                "geometry refinement output must use a distinct GeometrySolutionId"
-            )
+            raise ValueError("geometry refinement output must use a distinct GeometrySolutionId")
 
 
 class GeometryRefinementAdapter(Protocol):
