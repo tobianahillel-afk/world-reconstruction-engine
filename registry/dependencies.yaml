@@ -138,15 +138,21 @@ dependencies:
       conda_environment_lock_sha256: 88112dbfd8149e58e28b1e7309ea6933001058bb058ac6bff8338ea41a6aee52
       conda_environment_lock_packages: 157
       conda_build_strings: locked
-      source_materialization_manifest: registry/external-sources/gluemap-bounded-materialization.json
-      source_materialization_files: 91
-      source_materialization_byte_length: 1058652
-      source_materialization_sha256: 6503a2ea5d4c46c6273a3bd56ef5150b59c3e249c350bdc14dbed20b95664ca8
-      source_materialization_runtime_execution_evidence: false
+      previous_mapanything_source_materialization_manifest: registry/external-sources/gluemap-bounded-materialization.json
+      previous_mapanything_source_materialization_files: 91
+      previous_mapanything_source_materialization_byte_length: 1058652
+      previous_mapanything_source_materialization_sha256: 6503a2ea5d4c46c6273a3bd56ef5150b59c3e249c350bdc14dbed20b95664ca8
+      previous_mapanything_source_materialization_runtime_execution_evidence: false
+      source_materialization_manifest: unresolved_pending_vggt_qualification
       cuda: '12.4'
       cuda_package_set: locked_in_environment_lock
       gpu_execution_evidence: false
-      chosen_model: map_anything
+      chosen_model: vggt
+      chosen_model_source_revision: 44b3afbd1869d8bde4894dd8ea1e293112dd5eba
+      chosen_model_source_tree: 5ebbc58776783ad1acd6d4901e01161717e5d385
+      chosen_model_checkpoint_repository: facebook/VGGT-1B-Commercial
+      chosen_model_checkpoint_file: model.safetensors
+      chosen_model_checkpoint_identity: unresolved_pending_official_gated_asset
       skip_doppelgangers: true
       use_dummy_tracks: true
       coarse_only: true
@@ -220,11 +226,47 @@ dependencies:
       4914062480 bytes with SHA-256
       fa06c0fdccefc5048e072c85935d5789b1e36b307f3859033c17f9dcb9fd5201.
       PR #129's bounded source materialization retains only the MapAnything root
-      license/pyproject, core MapAnything model package, and the transitively required
-      inference utilities; mapanything/models/external is excluded from the executable
-      source manifest. License review remains pending until the exact composed GLUEMAP
-      runtime dependency/model redistribution posture is reviewed; this record does not
-      authorize shipping or default promotion.
+      license/pyproject, core MapAnything model package, and selected inference utilities;
+      mapanything/models/external is excluded. Subsequent exact-source review found that
+      this apparently Apache-only route still imports UniCeption modules whose embedded
+      CroCo/DUSt3R-derived files explicitly carry CC-BY-NC-SA-4.0 non-commercial terms.
+      The first shipping-oriented GLUEMAP qualification therefore no longer uses
+      MapAnything as its backbone. This record is retained as audit evidence only and
+      does not authorize execution, shipping or default promotion.
+  vggt_commercial:
+    status: candidate_optional
+    role: [hybrid_global_geometry_backbone]
+    integration: optional_exact_external_checkpoint
+    version_policy: pin_exact_external_environment
+    pinned_version: 44b3afbd1869d8bde4894dd8ea1e293112dd5eba
+    source_tree_sha: 5ebbc58776783ad1acd6d4901e01161717e5d385
+    upstream_repository: facebookresearch/vggt
+    model_repository: facebook/VGGT-1B-Commercial
+    checkpoint_identifier: facebook/VGGT-1B-Commercial/model.safetensors
+    checkpoint_revision: unresolved_pending_official_gated_access
+    checkpoint_sha256: unresolved_pending_official_gated_access
+    checkpoint_byte_length: unresolved_pending_official_gated_access
+    license: LicenseRef-VGGT-License-v1
+    license_review: pending
+    notes: >-
+      GLUEMAP's exact pinned submodule revision for VGGT is
+      44b3afbd1869d8bde4894dd8ea1e293112dd5eba with Git tree
+      5ebbc58776783ad1acd6d4901e01161717e5d385. That commit dates from
+      2025-10-11 and contains the VGGT License v1 last updated 2025-07-29.
+      Upstream documents that the code is commercially usable under this custom
+      license subject to its Acceptable Use Policy, while only the separately
+      released facebook/VGGT-1B-Commercial checkpoint is the commercial model
+      asset; the original VGGT-1B checkpoint remains non-commercial. The license
+      is not treated as OSI-permissive and includes use restrictions, including
+      military-use restrictions, so shipping approval remains pending.
+      The official commercial checkpoint repository is gated. WRE must not use a
+      checksum copied from an unofficial mirror: checkpoint revision, SHA-256 and
+      byte length remain unresolved until the exact official gated file is supplied
+      locally and re-hashed. The preferred future path constructs VGGT from the
+      exact reviewed source, loads only that verified local model.safetensors, and
+      injects it into GluemapPipeline through models={"vggt": model}, bypassing
+      gluemap.utils.model_loader and all runtime Hugging Face or torch.hub fetches.
+      No execution or adapter implementation is authorized by this record.
   aliked_n16:
     status: candidate_optional
     role: [hybrid_global_query_points]
@@ -316,12 +358,17 @@ dependencies:
     notes: >-
       MapAnything imports UniCeption model blocks directly in the reviewed inference
       path. The exact v0.1.7 tag resolves to
-      802ebc1783d71bbaa9d139c88d87d062ad18ce62 and declares BSD-3-Clause.
-      UniCeption's base package pulls a wider Python dependency set and exposes
-      optional checkpoint/download helpers; WRE must use only the modules exercised
-      by the pinned MapAnything source and must not invoke UniCeption checkpoint
-      download helpers. Full transitive package and redistribution review remains
-      pending.
+      802ebc1783d71bbaa9d139c88d87d062ad18ce62 and has a BSD-3-Clause root
+      LICENSE, but that root license is not the complete executable-source closure.
+      Exact-source inspection proves that uniception/models/libs/croco/blocks.py,
+      pos_embed.py and dpt_block.py, plus croco/patch_embed.py, carry explicit
+      CC-BY-NC-SA-4.0 non-commercial notices inherited from CroCo/DUSt3R. These
+      files are not merely dormant: MapAnything directly imports CroCo RoPE/DPT
+      helpers and uniception.models.encoders eagerly imports CroCoEncoder.
+      Consequently the current MapAnything+UniCeption route is blocked for the
+      first shipping-oriented V2L14.4 profile unless a separately reviewed clean
+      replacement removes that closure. Do not infer approval from the BSD root
+      license and do not install or execute this route in the bounded profile.
   ceres_solver:
     status: candidate_optional
     role: [hybrid_global_native_optimization]
