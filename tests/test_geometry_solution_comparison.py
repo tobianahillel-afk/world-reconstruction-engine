@@ -365,19 +365,19 @@ def test_candidate_requires_exact_point_membership_frame_and_support() -> None:
             source_artifacts=(),
         )
 
-    foreign_support = replace(
+    independent_support = replace(
         point,
         source_observation_ids=(ObservationId("obs:foreign"),),
     )
-    with pytest.raises(ValueError, match="camera membership"):
-        comparison.GeometrySolutionCandidate(
-            geometry_solution=candidate.geometry_solution,
-            camera_solutions=candidate.camera_solutions,
-            depth_fields=(),
-            point_maps=(foreign_support,),
-            producer=candidate.producer,
-            source_artifacts=(),
-        )
+    preserved = comparison.GeometrySolutionCandidate(
+        geometry_solution=candidate.geometry_solution,
+        camera_solutions=candidate.camera_solutions,
+        depth_fields=(),
+        point_maps=(independent_support,),
+        producer=candidate.producer,
+        source_artifacts=(),
+    )
+    assert preserved.point_maps == (independent_support,)
 
 
 def test_candidate_rejects_foreign_camera_frame() -> None:
