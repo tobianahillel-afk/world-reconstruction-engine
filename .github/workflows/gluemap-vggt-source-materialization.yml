@@ -1,0 +1,337 @@
+name: gluemap-vggt-source-materialization
+
+on:
+  # Bootstrap only: remove this branch-limited trigger after the first reviewed manifest is captured.
+  push:
+    branches:
+      - "feature/v2l14-4-freeze-vggt-source-materialization"
+    paths:
+      - ".github/workflows/gluemap-vggt-source-materialization.yml"
+      - "registry/external-sources/gluemap-vggt-bounded-materialization.json"
+  pull_request:
+    paths:
+      - ".github/workflows/gluemap-vggt-source-materialization.yml"
+      - "registry/external-sources/gluemap-vggt-bounded-materialization.json"
+      - "registry/dependencies.yaml"
+      - "registry/work-items/v2m2.yaml"
+      - "PROJECT_STATE.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  materialize:
+    name: exact-allowlisted-gluemap-vggt-source-manifest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GLUEMAP_REPOSITORY: https://github.com/colmap/gluemap.git
+      GLUEMAP_REVISION: adc9e4bb5f41014d3f7c157a879edc278588c829
+      GLUEMAP_TREE: 9f4b6090baca9ad6da78a138372afb17a7f70626
+      VGGT_REPOSITORY: https://github.com/facebookresearch/vggt.git
+      VGGT_REVISION: 44b3afbd1869d8bde4894dd8ea1e293112dd5eba
+      VGGT_TREE: 5ebbc58776783ad1acd6d4901e01161717e5d385
+      VGGT_LICENSE_BLOB: 079cb728fea5b11bb46c0c9f6ad4b3d2e4d216c7
+      MANIFEST_PATH: registry/external-sources/gluemap-vggt-bounded-materialization.json
+
+    steps:
+      - name: Checkout WRE
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Fetch exact reviewed source revisions
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_root="${RUNNER_TEMP}/wre-gluemap-vggt-source-gate"
+          rm -rf "$source_root"
+          mkdir -p "$source_root"
+
+          git init -q "$source_root/gluemap"
+          git -C "$source_root/gluemap" remote add origin "$GLUEMAP_REPOSITORY"
+          git -C "$source_root/gluemap" fetch --quiet --depth=1 origin "$GLUEMAP_REVISION"
+          git -C "$source_root/gluemap" checkout --quiet --detach FETCH_HEAD
+          test "$(git -C "$source_root/gluemap" rev-parse HEAD)" = "$GLUEMAP_REVISION"
+          test "$(git -C "$source_root/gluemap" rev-parse HEAD^{tree})" = "$GLUEMAP_TREE"
+
+          git init -q "$source_root/vggt"
+          git -C "$source_root/vggt" remote add origin "$VGGT_REPOSITORY"
+          git -C "$source_root/vggt" fetch --quiet --depth=1 origin "$VGGT_REVISION"
+          git -C "$source_root/vggt" checkout --quiet --detach FETCH_HEAD
+          test "$(git -C "$source_root/vggt" rev-parse HEAD)" = "$VGGT_REVISION"
+          test "$(git -C "$source_root/vggt" rev-parse HEAD^{tree})" = "$VGGT_TREE"
+          test "$(git -C "$source_root/vggt" rev-parse HEAD:LICENSE.txt)" = "$VGGT_LICENSE_BLOB"
+
+      - name: Derive exact allowlisted GLUEMAP plus VGGT manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          source_root = Path(os.environ["RUNNER_TEMP"]) / "wre-gluemap-vggt-source-gate"
+          gluemap_repo = source_root / "gluemap"
+          vggt_repo = source_root / "vggt"
+          materialized = source_root / "materialized"
+          generated = Path(os.environ["RUNNER_TEMP"]) / "gluemap-vggt-bounded-materialization.json"
+
+          gluemap_revision = os.environ["GLUEMAP_REVISION"]
+          gluemap_tree = os.environ["GLUEMAP_TREE"]
+          vggt_revision = os.environ["VGGT_REVISION"]
+          vggt_tree = os.environ["VGGT_TREE"]
+          vggt_license_blob = os.environ["VGGT_LICENSE_BLOB"]
+
+          forbidden_prefixes = (
+              "thirdparty/doppelgangers-plusplus/",
+              "thirdparty/mapanything/",
+              "thirdparty/pi3/",
+              "thirdparty/salad/",
+              "thirdparty/vggsfm/",
+          )
+          forbidden_vggt_prefixes = (
+              "thirdparty/vggt/training/",
+              "thirdparty/vggt/vggt/dependency/",
+          )
+          sentinel_directories = (
+              "thirdparty/pi3/pi3/models",
+              "thirdparty/doppelgangers-plusplus/mast3r",
+              "thirdparty/doppelgangers-plusplus/dust3r/dust3r",
+              "thirdparty/doppelgangers-plusplus/dust3r/croco/models",
+              "thirdparty/mapanything/mapanything/models",
+              "thirdparty/vggsfm/track_modules",
+          )
+          vggt_exact_utils = {
+              "vggt/utils/pose_enc.py",
+              "vggt/utils/rotation.py",
+          }
+
+          def ls_tree(repo: Path) -> list[tuple[str, str, str, str]]:
+              raw = subprocess.check_output(
+                  ["git", "-C", str(repo), "ls-tree", "-r", "-z", "--full-tree", "HEAD"]
+              )
+              entries: list[tuple[str, str, str, str]] = []
+              for record in raw.split(b"\0"):
+                  if not record:
+                      continue
+                  meta, path_raw = record.split(b"\t", 1)
+                  mode, object_type, object_sha = meta.decode("ascii").split(" ")
+                  entries.append((mode, object_type, object_sha, path_raw.decode("utf-8")))
+              return entries
+
+          def blob(repo: Path, path: str) -> bytes:
+              return subprocess.check_output(["git", "-C", str(repo), "show", f"HEAD:{path}"])
+
+          def include_gluemap(path: str) -> bool:
+              return (
+                  path in {"LICENSE", "pyproject.toml"}
+                  or path.startswith("gluemap/")
+                  or path == "thirdparty/path_to_thirdparty.py"
+              )
+
+          def include_vggt(path: str) -> bool:
+              return (
+                  path in {"LICENSE.txt", "pyproject.toml"}
+                  or path.startswith("vggt/models/")
+                  or path.startswith("vggt/heads/")
+                  or path.startswith("vggt/layers/")
+                  or path in vggt_exact_utils
+              )
+
+          selected: list[tuple[str, str, bytes]] = []
+
+          for mode, object_type, _sha, path in ls_tree(gluemap_repo):
+              if not include_gluemap(path):
+                  continue
+              if object_type != "blob" or mode not in {"100644", "100755"}:
+                  raise SystemExit(
+                      f"selected GLUEMAP path is not a regular tracked file: {path} {mode} {object_type}"
+                  )
+              selected.append((path, "gluemap", blob(gluemap_repo, path)))
+
+          for mode, object_type, _sha, path in ls_tree(vggt_repo):
+              if not include_vggt(path):
+                  continue
+              if object_type != "blob" or mode not in {"100644", "100755"}:
+                  raise SystemExit(
+                      f"selected VGGT path is not a regular tracked file: {path} {mode} {object_type}"
+                  )
+              selected.append((f"thirdparty/vggt/{path}", "vggt", blob(vggt_repo, path)))
+
+          if materialized.exists():
+              raise SystemExit("fresh materialization destination unexpectedly exists")
+
+          for relative, _source, data in sorted(selected, key=lambda item: item[0]):
+              destination = materialized / relative
+              destination.parent.mkdir(parents=True, exist_ok=True)
+              destination.write_bytes(data)
+
+          for sentinel in sentinel_directories:
+              (materialized / sentinel).mkdir(parents=True, exist_ok=True)
+
+          required = (
+              "thirdparty/path_to_thirdparty.py",
+              "thirdparty/vggt/LICENSE.txt",
+              "thirdparty/vggt/pyproject.toml",
+              "thirdparty/vggt/vggt/models/vggt.py",
+              "thirdparty/vggt/vggt/models/aggregator.py",
+              "thirdparty/vggt/vggt/utils/pose_enc.py",
+          )
+          for relative in required:
+              if not (materialized / relative).is_file():
+                  raise SystemExit(f"required source file missing: {relative}")
+
+          for path in materialized.rglob("*"):
+              relative = path.relative_to(materialized).as_posix()
+              if path.is_symlink():
+                  raise SystemExit(f"symlink forbidden in materialization: {relative}")
+              if path.is_file() and any(relative.startswith(prefix) for prefix in forbidden_prefixes):
+                  raise SystemExit(f"forbidden source file entered materialization: {relative}")
+              if path.is_file() and any(relative.startswith(prefix) for prefix in forbidden_vggt_prefixes):
+                  raise SystemExit(f"forbidden VGGT source file entered materialization: {relative}")
+
+          for sentinel in sentinel_directories:
+              directory = materialized / sentinel
+              if any(child.is_file() or child.is_symlink() for child in directory.rglob("*")):
+                  raise SystemExit(f"sentinel directory is not empty: {sentinel}")
+
+          for path in (materialized / "thirdparty/vggt/vggt").rglob("*.py"):
+              text = path.read_text(encoding="utf-8")
+              lowered = text.lower()
+              if "cc by-nc" in lowered or "cc-by-nc" in lowered or "non-commercial" in lowered:
+                  raise SystemExit(
+                      "non-commercial source notice found in retained VGGT code: "
+                      + path.relative_to(materialized).as_posix()
+                  )
+
+          license_bytes = (materialized / "thirdparty/vggt/LICENSE.txt").read_bytes()
+          if not license_bytes.startswith(b"VGGT License\n\nv1 Last Updated: July 29, 2025"):
+              raise SystemExit("VGGT license identity/header changed")
+
+          files = []
+          total_bytes = 0
+          identity = hashlib.sha256()
+          for path in sorted(
+              (candidate for candidate in materialized.rglob("*") if candidate.is_file()),
+              key=lambda candidate: candidate.relative_to(materialized).as_posix(),
+          ):
+              relative = path.relative_to(materialized).as_posix()
+              data = path.read_bytes()
+              digest = hashlib.sha256(data).hexdigest()
+              size = len(data)
+              total_bytes += size
+              identity.update(relative.encode("utf-8"))
+              identity.update(b"\0")
+              identity.update(str(size).encode("ascii"))
+              identity.update(b"\0")
+              identity.update(digest.encode("ascii"))
+              identity.update(b"\n")
+              source = "vggt" if relative.startswith("thirdparty/vggt/") else "gluemap"
+              files.append(
+                  {
+                      "byte_length": size,
+                      "path": relative,
+                      "sha256": digest,
+                      "source": source,
+                  }
+              )
+
+          paths = [entry["path"] for entry in files]
+          if paths != sorted(paths) or len(paths) != len(set(paths)):
+              raise SystemExit("manifest paths are not canonical and unique")
+          if any(any(path.startswith(prefix) for prefix in forbidden_prefixes) for path in paths):
+              raise SystemExit("forbidden source prefix present in manifest")
+          if any(any(path.startswith(prefix) for prefix in forbidden_vggt_prefixes) for path in paths):
+              raise SystemExit("forbidden VGGT prefix present in manifest")
+
+          manifest = {
+              "schema_version": 1,
+              "evidence_kind": "source_materialization_only",
+              "runtime_execution_evidence": False,
+              "gpu_execution_evidence": False,
+              "sources": {
+                  "gluemap": {
+                      "repository": "colmap/gluemap",
+                      "revision": gluemap_revision,
+                      "tree": gluemap_tree,
+                  },
+                  "vggt": {
+                      "repository": "facebookresearch/vggt",
+                      "revision": vggt_revision,
+                      "tree": vggt_tree,
+                      "license_git_blob_sha1": vggt_license_blob,
+                      "license_name": "VGGT License v1",
+                  },
+              },
+              "policy": {
+                  "gluemap_includes": [
+                      "LICENSE",
+                      "pyproject.toml",
+                      "gluemap/**",
+                      "thirdparty/path_to_thirdparty.py",
+                  ],
+                  "vggt_includes": [
+                      "LICENSE.txt",
+                      "pyproject.toml",
+                      "vggt/models/**",
+                      "vggt/heads/**",
+                      "vggt/layers/**",
+                      *sorted(vggt_exact_utils),
+                  ],
+                  "forbidden_source_prefixes": list(forbidden_prefixes),
+                  "forbidden_vggt_prefixes": list(forbidden_vggt_prefixes),
+                  "sentinel_directories": list(sentinel_directories),
+                  "sentinels_are_empty": True,
+                  "retained_vggt_code_noncommercial_notice_scan": "passed",
+              },
+              "materialization": {
+                  "byte_length": total_bytes,
+                  "file_count": len(files),
+                  "sha256": identity.hexdigest(),
+              },
+              "files": files,
+          }
+
+          generated.write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print(
+              f"generated {len(files)} files / {total_bytes} bytes / "
+              f"{identity.hexdigest()}"
+          )
+          PY
+
+      - name: Verify committed manifest or expose first VGGT qualification materialization
+        shell: bash
+        run: |
+          set -euo pipefail
+          generated="${RUNNER_TEMP}/gluemap-vggt-bounded-materialization.json"
+          if test -f "$MANIFEST_PATH"; then
+            diff -u "$MANIFEST_PATH" "$generated"
+            echo "Committed GLUEMAP+VGGT source manifest matches exact regeneration."
+          else
+            echo "No committed GLUEMAP+VGGT source manifest exists yet; this run is first-materialization qualification evidence."
+            echo "----- BEGIN GENERATED GLUEMAP VGGT SOURCE MANIFEST -----"
+            cat "$generated"
+            echo "----- END GENERATED GLUEMAP VGGT SOURCE MANIFEST -----"
+          fi
+
+      - name: Retain machine-readable source qualification evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v2l14-4-gluemap-vggt-source-materialization
+          path: ${{ runner.temp }}/gluemap-vggt-bounded-materialization.json
+          if-no-files-found: error
+          retention-days: 30
