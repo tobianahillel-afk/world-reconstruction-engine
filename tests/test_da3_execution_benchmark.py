@@ -675,3 +675,52 @@ def _result_document(result: Any) -> dict[str, Any]:
             "shipping_promotion": False,
         },
     }
+
+
+def test_v2l13_lot_review_evidence_and_v2l14_handoff_are_complete() -> None:
+    root = Path(__file__).resolve().parents[1]
+    review = (root / "docs" / "reviews" / "V2L13-feed-forward-geometry-review.md").read_text(
+        encoding="utf-8"
+    )
+    for item in (
+        "V2L13.1",
+        "V2L13.2",
+        "V2L13.3",
+        "V2L13.4",
+        "V2L13.5",
+        "V2L13.6",
+        "da3.cpu.float32.eager",
+        "cuda_not_available_in_exact_cpu_reference_environment",
+        "V2L14.1",
+    ):
+        assert item in review
+    assert "**Review status:** PASS" in review
+    assert "**V2L13 lot review: PASS.**" in review
+    assert "accelerated_profile_validated = false" in review
+    assert "speedup_claimed = false" in review
+
+    reviews = (root / "registry" / "reviews.yaml").read_text(encoding="utf-8")
+    assert "  V2L13:\n    status: passed\n    reviewed_at: '2026-09-23'" in reviews
+    assert "docs/reviews/V2L13-feed-forward-geometry-review.md" in reviews
+
+    components = (root / "registry" / "components.yaml").read_text(encoding="utf-8")
+    feed_forward_block = components.split("  feed_forward_geometry:", 1)[1].split(
+        "  precision_global_refinement:",
+        1,
+    )[0]
+    assert "src/wre/reconstruction/da3_execution_benchmark.py" in feed_forward_block
+    assert "tests/test_da3_execution_benchmark.py" in feed_forward_block
+    assert "status: implemented" in feed_forward_block
+
+    state = (root / "PROJECT_STATE.yaml").read_text(encoding="utf-8")
+    assert "lot: V2L14" in state
+    assert "active_work_item: V2L14.1" in state
+    assert "V2L13.6]" in state
+
+    work_items = (root / "registry" / "work-items" / "v2m2.yaml").read_text(
+        encoding="utf-8"
+    )
+    assert "id: V2L13.6" in work_items
+    assert "title: Learned execution profile and stage profiling benchmark\n    status: done" in work_items
+    assert "id: V2L14.1" in work_items
+    assert "title: Competing GeometrySolution comparison contract\n    status: ready" in work_items
