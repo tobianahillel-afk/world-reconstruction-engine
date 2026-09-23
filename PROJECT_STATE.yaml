@@ -20,7 +20,7 @@ next_action: >-
   PyCOLMAP 4.2.0 cross-read fixture. Do not add the adapter while any technology-gate blocker remains.
 blockers:
   - V2L14.4 has no executable supported GPU runner in repository CI; the reviewed GLUEMAP reference environment is CUDA/GPU while current WRE workflows are CPU-hosted.
-  - V2L14.4 reduced-profile transitive import license and redistribution closure is incomplete; excluded SALAD Doppelgangers++ and VGGSfM components must be proven absent from the executed path before adapter code is added.
+  - V2L14.4 executable-source and license closure is incomplete: exact upstream GLUEMAP vendors VGGSfM-derived CC-BY-NC source and its model_loader hard-requires third-party path sentinels. Before adapter code, prove an allowlisted execution materialization can omit non-approved source bytes, use empty sentinels for unused paths, and keep SALAD mast3r/dust3r and vggsfm modules out of the runtime import set.
   - V2L14.4 has not yet produced a real GLUEMAP native sparse model for WRE PyCOLMAP 4.2.0 cross-read compatibility evidence against GLUEMAP's isolated pycolmap-cuda12 4.0.4 environment.
 architecture:
   product_blueprint: docs/01_PRODUCT.md
