@@ -220,6 +220,12 @@ from wre.reconstruction.feed_forward_geometry import (
     FeedForwardGeometryResult,
     normalize_feed_forward_geometry_inputs,
 )
+from wre.reconstruction.geometry_solution_comparison import (
+    CompetingGeometrySolutions,
+    GeometrySolutionCandidate,
+    GeometrySolutionPair,
+    derive_geometry_solution_pairs,
+)
 from wre.reconstruction.legacy_geometry_conversion import (
     LegacySparseGeometryConversionResult,
     convert_sparse_reconstruction_estimate,
@@ -366,6 +372,7 @@ __all__ = [
     "ColmapReconstructionImportResult",
     "ColmapReconstructionInput",
     "ColmapSparseModelArtifact",
+    "CompetingGeometrySolutions",
     "Da3BaseObservationPrediction",
     "Da3CandidateExecutionOutcome",
     "Da3EnvironmentIdentity",
@@ -388,6 +395,8 @@ __all__ = [
     "Da3StageTiming",
     "FeedForwardCameraQualityRequest",
     "FeedForwardGeometryResult",
+    "GeometrySolutionCandidate",
+    "GeometrySolutionPair",
     "ImportedColmapSparseModel",
     "LegacySparseGeometryConversionResult",
     "LocalDa3ReferenceRuntime",
@@ -395,6 +404,7 @@ __all__ = [
     "canonicalize_colmap_sparse_model",
     "colmap_sparse_model_content_identity",
     "convert_sparse_reconstruction_estimate",
+    "derive_geometry_solution_pairs",
     "evaluate_camera_pose_quality",
     "evaluate_feed_forward_camera_quality",
     "execute_da3_base_preview",
