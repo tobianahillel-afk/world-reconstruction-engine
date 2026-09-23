@@ -1620,7 +1620,7 @@ work_items:
   - id: V2L14.3
     lot: V2L14
     title: Classical BA global refinement path
-    status: ready
+    status: done
     objective: Implement one concrete classical GeometryRefinementAdapter using the already-approved exact PyCOLMAP/COLMAP 4.2.0 environment and Ceres CPU bundle adjustment on one audited solver-native COLMAP sparse model that exactly corresponds to the request initialization, producing one freshly audited and canonicalized GeometrySolutionCandidate with explicit refinement lineage without synthesizing missing solver state, mutating the source model, aligning arbitrary local frames, scoring alternatives, or introducing hybrid/global learned methods.
     allowed_scope:
       - src/wre/reconstruction/colmap_geometry_refinement.py
@@ -1717,7 +1717,109 @@ work_items:
       - exact real PyCOLMAP 4.2.0 native integration fixture in the existing colmap-integration lane exercising a deliberately refinable audited sparse model and the complete initialization-to-refined canonical path
       - full fast CI CodeQL colmap-integration and any other repository path-triggered compatibility lanes
 
-  - {id: V2L14.4, lot: V2L14, title: First approved hybrid global candidate, status: planned, depends_on: [V2L14.3]}
+  - id: V2L14.4
+    lot: V2L14
+    title: First approved hybrid global candidate
+    status: ready
+    objective: Qualify the strongest currently viable hybrid or learned-global geometry route under the mandatory technology gate and, only after exact source checkpoint license hardware and reproducibility evidence passes, integrate one bounded experimental adapter that produces a complete canonical GeometrySolutionCandidate without changing WRE geometry semantics, promoting a default, or importing solver-private state into the core.
+    allowed_scope:
+      - src/wre/reconstruction/gluemap_global_geometry.py
+      - focused exports in src/wre/reconstruction/__init__.py
+      - tests/test_gluemap_global_geometry.py
+      - registry/dependencies.yaml
+      - registry/adapter-models.yaml
+      - focused PROJECT_STATE.yaml and this work-item registry updates solely to record or clear an unresolved technology-gate blocker before adapter implementation
+      - one dedicated .github/workflows/gluemap-integration.yml exact external integration lane when an executable supported GPU runner is available
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L14.5 can be activated without implementing it
+    out_of_scope:
+      - changing canonical CameraSolution DepthField PointMap GeometrySolution GeometrySolutionCandidate GeometryRefinementRequest GeometryRefinementResult GeometryRefinementAdapter LocalFrameId or GeometryScaleStatus semantics
+      - implementing SALAD retrieval Doppelgangers++ disambiguation or the VGGSfM tracker in the first bounded GLUEMAP profile
+      - importing or executing noncommercial checkpoints merely because the upstream default configuration references them
+      - treating the upstream GLUEMAP default stack as approved without separate code checkpoint dependency and redistribution evidence
+      - sharing one Python process or dependency environment between the isolated GLUEMAP runtime and WRE's pinned PyCOLMAP 4.2.0 reference environment
+      - assuming COLMAP model compatibility between GLUEMAP's pinned pycolmap-cuda12 4.0.4 environment and WRE 4.2.0 without an exact cross-read integration fixture
+      - promoting MapAnything or GLUEMAP metric claims into GeometryScaleStatus.METRIC unless the exact composed global output semantics are independently verified under the WRE contract
+      - integrating GGPT AMB3R UniSim-SLAM another feed-forward model or another global solver in this work item
+      - computing consensus disagreement winner rank threshold QualityDecision or candidate selection owned by V2L14.5 and V2L14.6
+      - routing fallback retry default promotion shipping promotion or loser cleanup
+      - dense MVS physical surface appearance dynamic chronology MasterScene RuntimeScene or later-lot behavior
+    depends_on: [V2L14.3]
+    read_before:
+      - docs/00_START_HERE.md
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/06_TESTING.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md
+      - docs/27_RESEARCH_CANDIDATE_COVERAGE.md
+      - docs/30_RESEARCH_HANDOFF_2026-09-23.md
+      - docs/28_PERFORMANCE_OPTIMIZATION_PLAYBOOK.md
+      - docs/29_PERFORMANCE_INTEGRATION_MAP.md
+      - docs/reviews/V2L12-classical-precision-geometry-review.md
+      - docs/reviews/V2L13-feed-forward-geometry-review.md
+      - registry/dependencies.yaml
+      - registry/adapter-models.yaml
+      - src/wre/domain/artifacts.py
+      - src/wre/domain/hardware_identity.py
+      - src/wre/domain/producer_identity.py
+      - src/wre/domain/geometry_solutions.py
+      - src/wre/reconstruction/feed_forward_geometry.py
+      - src/wre/reconstruction/geometry_solution_comparison.py
+      - src/wre/reconstruction/geometry_refinement.py
+      - src/wre/reconstruction/colmap_canonical_geometry.py
+      - src/wre/reconstruction/colmap_reconstruction.py
+      - src/wre/reconstruction/colmap_geometry_refinement.py
+      - src/wre/reconstruction/da3_runtime.py
+      - tests/test_geometry_solution_comparison.py
+      - tests/test_colmap_canonical_geometry.py
+      - tests/test_colmap_geometry_refinement.py
+      - tests/test_da3_runtime.py
+    reuse:
+      - the candidate freshness and external-adapter gate in docs/23_ENGINEERING_EXECUTION.md and the 2026-09-23 research handoff as mandatory pre-implementation qualification rather than trusting the older shortlist
+      - the current refresh evidence with GLUEMAP as the provisional primary hybrid-global route, GGPT retained as a strong alternate, AMB3R retained as research watch until an explicit project license is verified, and UniSim-SLAM retained as research watch while its public implementation remains unavailable
+      - GLUEMAP source revision adc9e4bb5f41014d3f7c157a879edc278588c829 only as the currently observed qualification target; re-verify it is still the correct maintained revision immediately before pinning the dependency
+      - the GLUEMAP MapAnything submodule revision f7ebafb4d8349776705aaa686cf928988d1bd7f4 only as current source evidence; use the latest viable Apache-2.0 facebook/map-anything-apache checkpoint rather than the noncommercial facebook/map-anything checkpoint
+      - GLUEMAP's supported reduced profile with no SALAD descriptor cache so the small bounded fixture uses upstream exhaustive pairs, skip_doppelgangers true, use_dummy_tracks true, and coarse_only true so the first integration exercises the learned local geometry plus global mapping core without pulling noncommercial default specialists into WRE
+      - canonical decoded-image materialization verification and explicit HardwareRuntimeIdentity patterns from the DA3 external runtime rather than implicit local files or hardware
+      - ColmapSparseModelArtifact manifest auditing and canonicalize_colmap_sparse_model after the isolated upstream run so the emitted native sparse model must cross the existing WRE PyCOLMAP 4.2.0 truth boundary before it becomes a GeometrySolutionCandidate
+      - ArtifactProducerIdentity ConfigurationIdentity model checkpoint and source ArtifactRef provenance so the exact upstream stack remains replaceable and auditable
+    acceptance:
+      - The first change performed for V2L14.4 must be technology-gate evidence. Re-check the current hybrid-global shortlist and upstream state immediately before implementation; if the provisional GLUEMAP profile is no longer the strongest viable candidate for this responsibility, update the active contract through an explicit reviewed handoff rather than silently coding the stale choice.
+      - Before any adapter implementation is added, pin one exact clean GLUEMAP source revision, exact executable source-tree identity, exact required submodule revisions, and an isolated external environment. The currently observed GLUEMAP revision adc9e4bb5f41014d3f7c157a879edc278588c829 and its MapAnything submodule f7ebafb4d8349776705aaa686cf928988d1bd7f4 are qualification evidence, not floating latest aliases.
+      - Before any adapter implementation is added, pin the exact latest viable Apache-2.0 facebook/map-anything-apache model snapshot used by the profile, including immutable repository revision, model.safetensors SHA-256 and byte length. Do not substitute the CC-BY-NC facebook/map-anything model or an unreviewed checkpoint.
+      - Before any adapter implementation is added, record direct and transitive license and redistribution review for every executable dependency and checkpoint in the bounded profile. The direct BSD GLUEMAP license does not automatically approve its optional submodules or model assets.
+      - Before any real adapter execution is claimed, establish an exact supported GPU runtime identity and a reproducible GPU integration lane. The existing CPU-only GitHub Actions lanes do not count as evidence that the upstream GLUEMAP runtime has executed successfully. If a supported GPU lane cannot be provisioned, record an explicit unresolved technology-gate entry in PROJECT_STATE.blockers and leave the adapter unimplemented rather than adding an unexecuted production path.
+      - The first bounded profile must not execute SALAD Doppelgangers++ or VGGSfM. It must use the upstream no-descriptor exhaustive-pair fallback on a deliberately small fixture, skip_doppelgangers true, use_dummy_tracks true, coarse_only true, and the reviewed Apache MapAnything backbone. Any later richer GLUEMAP profile requires its own dependency license and benchmark evidence.
+      - The GLUEMAP runtime must remain an optional exact external environment and must not enter WRE's mandatory uv environment. No runtime Git Hugging Face or other network fetch is allowed; source and checkpoint material are explicit caller-supplied local verified inputs.
+      - Preserve GLUEMAP's exact supported external dependency identity rather than coercing it to WRE's PyCOLMAP version. At the current observed revision upstream pins pycolmap-cuda12 4.0.4; WRE continues to own an independent PyCOLMAP 4.2.0 canonicalization environment.
+      - After isolated GLUEMAP execution, audit the complete native COLMAP sparse-model file set by hash byte length regular-file status and symlink policy, then prove WRE PyCOLMAP 4.2.0 can read that exact emitted model in a dedicated compatibility fixture before canonical normalization.
+      - Consume only verified canonical decoded-image artifacts and preserve exact observation membership and source provenance. Original decoded inputs remain immutable.
+      - Normalize the accepted native output only through the existing canonical COLMAP path into canonical CameraSolution and PointMap children plus one complete GeometrySolutionCandidate with an exact producer model checkpoint configuration hardware and source-artifact identity.
+      - Keep GeometryScaleStatus.UNRESOLVED for the first profile unless the exact composed GLUEMAP global-output scale semantics are independently demonstrated and reviewed. A metric claim by the MapAnything backbone alone is not sufficient to promote the composed global reconstruction.
+      - GLUEMAP temporary files native solver structures hidden tensors and private graph state remain adapter-private and never become stable WRE domain semantics.
+      - The adapter is experimental and non-default. It does not select itself over COLMAP DA3 or another GeometrySolutionCandidate and it emits no score winner rank threshold consensus QualityDecision route or shipping promotion.
+      - The adapter must fail closed on source revision drift checkpoint mismatch unsupported hardware environment mismatch unexpected optional-model import output-manifest tamper cross-version COLMAP read failure or incomplete canonical membership.
+      - Register only dependencies actually executed by the bounded profile. Do not add SALAD Doppelgangers++ VGGSfM GGPT AMB3R or UniSim-SLAM as runtime dependencies merely because they appear in upstream or research shortlists.
+    tests:
+      - technology-gate regression proving the exact approved source checkpoint dependency hardware and license identities must be recorded before execution is enabled
+      - exact source-tree submodule and checkpoint hash byte-length tamper regressions with no implicit network fallback
+      - reduced-profile configuration regression proving exhaustive upstream pairing skip_doppelgangers true use_dummy_tracks true coarse_only true and the Apache MapAnything model identity
+      - forbidden-dependency regression proving SALAD Doppelgangers++ VGGSfM GGPT AMB3R UniSim-SLAM and their checkpoints are not loaded by the first bounded profile
+      - decoded-image materialization provenance and immutability regressions
+      - isolated-environment regression proving GLUEMAP's PyCOLMAP runtime does not replace or import into WRE's pinned PyCOLMAP 4.2.0 environment
+      - fake execution contract tests for deterministic configuration producer source and HardwareRuntimeIdentity plus failure taxonomy
+      - real supported-GPU integration fixture that executes the exact reviewed GLUEMAP profile on a bounded scene and retains hardware runtime and resource evidence
+      - native-output audit plus real WRE PyCOLMAP 4.2.0 cross-read regression before canonicalization
+      - canonical GeometrySolutionCandidate regression proving exact camera PointMap observation membership provenance unresolved scale and no fabricated DepthField
+      - failure regressions for unsupported environment unexpected optional-model import incomplete output unchanged or tampered source material and cross-version read failure
+      - adapter registry regression proving experimental non-default shipping posture and only the actually executed dependency closure
+      - module-surface regression proving no quality decision routing consensus metrics MVS surface appearance dynamics chronology or V2L14.5 behavior enters this item
+      - full fast CI CodeQL dependency review exact GLUEMAP GPU integration and every other path-triggered compatibility lane
+
   - {id: V2L14.5, lot: V2L14, title: Geometry consensus disagreement metrics, status: planned, depends_on: [V2L14.4]}
   - {id: V2L14.6, lot: V2L14, title: Controlled geometry comparison benchmark, status: planned, depends_on: [V2L14.5]}
   - {id: V2L15.1, lot: V2L15, title: Dense depth artifact contract, status: planned, depends_on: [V2L14.6]}

@@ -257,10 +257,12 @@ components:
     implementation:
       - src/wre/reconstruction/geometry_solution_comparison.py
       - src/wre/reconstruction/geometry_refinement.py
+      - src/wre/reconstruction/colmap_geometry_refinement.py
       - src/wre/reconstruction/__init__.py
     tests:
       - tests/test_geometry_solution_comparison.py
       - tests/test_geometry_refinement.py
+      - tests/test_colmap_geometry_refinement.py
     status: implementing
   dense_depth_mvs: {owner_lot: V2L15, implementation: [], tests: [], status: planned}
   physical_surface: {owner_lot: V2L16, implementation: [], tests: [], status: planned}
