@@ -169,9 +169,7 @@ def _candidate(
         point_maps=point_maps,
         producer=_producer(token),
         source_artifacts=(
-            source_artifacts
-            if source_artifacts is not None
-            else (_artifact(f"artifact:{token}"),)
+            source_artifacts if source_artifacts is not None else (_artifact(f"artifact:{token}"),)
         ),
     )
 
@@ -215,8 +213,7 @@ def test_candidate_rejects_wrong_member_types(
 ) -> None:
     candidate = _candidate("a")
     kwargs: dict[str, Any] = {
-        field.name: getattr(candidate, field.name)
-        for field in fields(GeometrySolutionCandidate)
+        field.name: getattr(candidate, field.name) for field in fields(GeometrySolutionCandidate)
     }
     kwargs[field_name] = replacement
 
@@ -244,9 +241,7 @@ def test_classical_style_point_candidate_requires_no_depth_or_pycolmap() -> None
     assert candidate.depth_fields == ()
     assert len(candidate.point_maps) == 1
     assert candidate.geometry_solution.depth_field_ids == ()
-    assert candidate.geometry_solution.point_map_ids == (
-        candidate.point_maps[0].point_map_id,
-    )
+    assert candidate.geometry_solution.point_map_ids == (candidate.point_maps[0].point_map_id,)
     assert "pycolmap" not in comparison_module.__dict__
 
 
