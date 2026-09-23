@@ -117,9 +117,7 @@ class ColmapBundleAdjustmentRefinementConfig:
         }
         for name, expected in exact_flags.items():
             if getattr(self, name) is not expected:
-                raise ValueError(
-                    f"V2L14.3 classical baseline requires {name}={expected!r}"
-                )
+                raise ValueError(f"V2L14.3 classical baseline requires {name}={expected!r}")
 
     def canonical_document(self) -> dict[str, object]:
         return {
@@ -184,8 +182,7 @@ class ColmapGeometryRefinementSource:
             )
         if not isinstance(self.expected_environment, ColmapEnvironmentIdentity):
             raise TypeError(
-                "colmap_refinement_source.expected_environment must be "
-                "ColmapEnvironmentIdentity"
+                "colmap_refinement_source.expected_environment must be ColmapEnvironmentIdentity"
             )
         if not isinstance(self.artifact_ref, ArtifactRef):
             raise TypeError("colmap_refinement_source.artifact_ref must be ArtifactRef")
@@ -274,9 +271,7 @@ def _canonical_source_artifacts(
     request: GeometryRefinementRequest,
 ) -> tuple[ArtifactRef, ...]:
     references = (*initialization.source_artifacts, *request.supporting_artifacts)
-    by_identity = {
-        (item.artifact_id.value, item.artifact_kind.value): item for item in references
-    }
+    by_identity = {(item.artifact_id.value, item.artifact_kind.value): item for item in references}
     return tuple(by_identity[key] for key in sorted(by_identity))
 
 
@@ -392,9 +387,7 @@ class ColmapBundleAdjustmentRefinementAdapter(GeometryRefinementAdapter):
                 options = _configure_bundle_adjustment(pycolmap, self.config)
                 pycolmap.bundle_adjustment(reconstruction, options=options)
 
-                published_model_path = (
-                    output_root / self.source.model_artifact.relative_path
-                )
+                published_model_path = output_root / self.source.model_artifact.relative_path
                 published_model_path.mkdir()
                 reconstruction.write(published_model_path)
                 refined_artifact = _audit_refined_model(
