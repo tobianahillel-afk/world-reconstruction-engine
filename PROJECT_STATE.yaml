@@ -14,14 +14,14 @@ current_goal: >-
   experimental candidate after source checkpoint license hardware reproducibility and cross-version COLMAP evidence is complete, while keeping
   WRE geometry contracts solver-independent and preserving the classical V2L14.3 baseline.
 next_action: >-
-  Continue V2L14.4 qualification only. The current GLUEMAP, Apache MapAnything, official PyCOLMAP-CUDA, PyCeres, UniCeption, FAISS and
-  LightGlue/ALIKED source/checkpoint identities are now pinned in registry/dependencies.yaml. Next prove the allowlisted executable
-  materialization and exact runtime import set, close the remaining native/CUDA redistribution review, establish a supported reproducible GPU
-  execution lane, and exercise a real GLUEMAP-output to WRE PyCOLMAP 4.2.0 cross-read fixture. Do not add the adapter while any technology-gate
-  blocker remains.
+  Continue V2L14.4 qualification only. Source-level identities and direct licenses are now recorded for the bounded GLUEMAP stack including
+  Ceres 2.2.0 Eigen 3.4.0 METIS 5.1.0 Boost 1.85.0 GNU runtime 15.2.0 and CUDA 12.4 metadata. Next produce one exact executable environment lock
+  with package versions build strings channels compiler/libstdcxx/OpenMP provider and concrete CUDA package set, prove the allowlisted runtime
+  import/materialization boundary, establish a supported real GPU lane, and exercise a real GLUEMAP-output to WRE PyCOLMAP 4.2.0 cross-read
+  fixture. Do not add the adapter while any technology-gate blocker remains.
 blockers:
   - V2L14.4 has no executable supported GPU runner in repository CI; the reviewed GLUEMAP reference environment is CUDA/GPU while current WRE workflows are CPU-hosted.
-  - V2L14.4 executable-source and transitive license closure is incomplete. Major executed source/model identities are pinned, including local ALIKED n16, but exact upstream GLUEMAP still vendors VGGSfM-derived CC-BY-NC source and model_loader hard-requires third-party path sentinels. Before adapter code, prove the allowlisted materialization omits non-approved source bytes, keeps SALAD mast3r/dust3r and vggsfm out of the runtime import set, and close the concrete Ceres/Eigen/Boost/METIS/OpenMP/CUDA plus wheel-native redistribution chain.
+  - V2L14.4 executable-source and transitive license closure is incomplete. Direct source identities/licenses are now recorded for the major learned and native dependencies, but the executable environment is still not reproducible because GLUEMAP's version-only conda recipe does not pin build strings, compiler/libstdc++/OpenMP provider, the non-SuiteSparse Ceres variant, or the concrete CUDA 12.4 package set. Before adapter code, produce one exact environment lock, prove the allowlisted materialization omits non-approved VGGSfM/Doppelgangers++/SALAD/Pi3/VGGT source bytes, keep salad mast3r/dust3r and vggsfm out of the runtime import set, and complete redistribution review for the exact locked native/CUDA packages.
   - V2L14.4 has not yet produced a real GLUEMAP native sparse model for WRE PyCOLMAP 4.2.0 cross-read compatibility evidence against GLUEMAP's isolated pycolmap-cuda12 4.0.4 environment.
 architecture:
   product_blueprint: docs/01_PRODUCT.md
