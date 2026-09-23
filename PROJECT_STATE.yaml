@@ -17,7 +17,7 @@ next_action: >-
   Start V2L14.4 with qualification only: re-verify the current hybrid/global shortlist, then pin and review the bounded GLUEMAP plus
   Apache-licensed MapAnything profile including exact source/checkpoint identities, transitive licenses, supported GPU runtime and a real GPU
   integration path. Do not add the adapter until every gate passes; if supported GPU or license evidence cannot be established, mark V2L14.4
-  blocked rather than implementing an unverified route.
+  record the unresolved gate in PROJECT_STATE.blockers and leave the adapter unimplemented rather than creating an unverified route.
 blockers: []
 architecture:
   product_blueprint: docs/01_PRODUCT.md
