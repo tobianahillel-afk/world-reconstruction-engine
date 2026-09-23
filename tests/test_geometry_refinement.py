@@ -315,7 +315,6 @@ def test_same_frame_refinement_retains_both_ids_without_delta_or_quality_claim()
     )
     result = refinement.build_geometry_refinement_result(request, refined)
 
-    assert result.request.initialization.local_frame_id if False else True
     assert (
         result.request.initialization.geometry_solution.local_frame_id
         == result.refined_candidate.geometry_solution.local_frame_id
