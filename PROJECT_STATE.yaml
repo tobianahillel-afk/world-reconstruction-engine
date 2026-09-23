@@ -14,15 +14,15 @@ current_goal: >-
   experimental candidate after source checkpoint license hardware reproducibility and cross-version COLMAP evidence is complete, while keeping
   WRE geometry contracts solver-independent and preserving the classical V2L14.3 baseline.
 next_action: >-
-  Continue V2L14.4 qualification only. PR #127 froze and exactly regenerated the linux-64/CUDA-12.4 dependency lock with 157 packages,
-  non-SuiteSparse Ceres build cpulgplh45c08c3_10, Clang++ 22.1.8, LLVM OpenMP 23.1.1, no libgomp, and no GPU-execution claim. Next use the
-  newly authorized CPU-only GLUEMAP source-materialization lane to derive and freeze one exact allowlisted source manifest from the pinned
-  GLUEMAP and Apache MapAnything revisions while excluding non-approved third-party source bytes. Then complete redistribution review for the
-  exact locked packages, establish a supported real GPU lane, and exercise a real GLUEMAP-output to WRE PyCOLMAP 4.2.0 cross-read fixture.
-  Do not add the adapter while any technology-gate blocker remains.
+  Continue V2L14.4 qualification only. PR #127 froze the exact 157-package linux-64/CUDA-12.4 dependency lock and PR #129 froze the exact
+  91-file bounded GLUEMAP plus MapAnything source materialization with no forbidden third-party source bytes and no runtime/GPU claim. Next
+  enrich the existing exact micromamba solve evidence with the direct license expression reported for every resolved package, regenerate that
+  enriched lock deterministically, and use the resulting exact-build inventory to narrow the remaining redistribution review. Then establish a
+  supported real GPU lane and exercise a real GLUEMAP-output to WRE PyCOLMAP 4.2.0 cross-read fixture. Do not add the adapter while any
+  technology-gate blocker remains.
 blockers:
   - V2L14.4 has no executable supported GPU runner in repository CI; the reviewed GLUEMAP reference environment is CUDA/GPU while current WRE workflows are CPU-hosted.
-  - V2L14.4 executable-source and transitive license closure is incomplete. PR #127 closed the dependency-lock portion with an exact reproducible 157-package conda lock, explicit Clang++/LLVM OpenMP provider, non-SuiteSparse Ceres build and concrete CUDA 12.4 package set. The gate remains blocked until a CPU-only source-materialization qualification freezes an exact allowlisted manifest that omits non-approved VGGSfM/Doppelgangers++/SALAD/Pi3/VGGT source bytes beyond empty path sentinels, and until redistribution review is completed for every exact locked native/CUDA/Python package and model asset.
+  - V2L14.4 transitive license/redistribution closure is incomplete. PR #127 closed the exact package/build lock and PR #129 closed the allowlisted executable-source byte manifest: no forbidden VGGSfM/Doppelgangers++/SALAD/Pi3/VGGT or MapAnything external-model source bytes enter the reviewed materialization. The gate remains blocked until every exact resolved package and model asset has direct-license metadata recorded and the redistribution posture of reciprocal/restricted/EULA packages is explicitly reviewed; no shipping/default promotion is authorized by the source gate alone.
   - V2L14.4 has not yet produced a real GLUEMAP native sparse model for WRE PyCOLMAP 4.2.0 cross-read compatibility evidence against GLUEMAP's isolated pycolmap-cuda12 4.0.4 environment.
 architecture:
   product_blueprint: docs/01_PRODUCT.md
