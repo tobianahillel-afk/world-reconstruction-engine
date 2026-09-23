@@ -170,8 +170,7 @@ def test_candidate_has_exact_frozen_field_shape_and_retains_identity() -> None:
     )
     assert candidate.geometry_solution.scale_status is GeometryScaleStatus.UNRESOLVED
     assert (
-        candidate.camera_solutions[0].local_frame_id
-        == candidate.geometry_solution.local_frame_id
+        candidate.camera_solutions[0].local_frame_id == candidate.geometry_solution.local_frame_id
     )
     assert candidate.point_maps[0].local_frame_id == candidate.geometry_solution.local_frame_id
     with pytest.raises(FrozenInstanceError):
@@ -197,9 +196,7 @@ def test_classical_style_candidate_preserves_point_map_without_depth() -> None:
     assert candidate.depth_fields == ()
     assert len(candidate.point_maps) == 1
     assert candidate.geometry_solution.depth_field_ids == ()
-    assert candidate.geometry_solution.point_map_ids == (
-        candidate.point_maps[0].point_map_id,
-    )
+    assert candidate.geometry_solution.point_map_ids == (candidate.point_maps[0].point_map_id,)
 
 
 @pytest.mark.parametrize("field_name", ["camera_solutions", "depth_fields", "point_maps"])
