@@ -1,0 +1,189 @@
+name: gluemap-environment-lock
+
+# Dependency resolution only: this workflow never claims or exercises GPU runtime support.
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/gluemap-environment-lock.yml"
+      - "registry/external-environments/gluemap-linux-64-cuda12.4.conda-lock.json"
+      - "registry/dependencies.yaml"
+      - "registry/work-items/v2m2.yaml"
+      - "PROJECT_STATE.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  resolve:
+    name: linux-64-cuda12.4-dependency-resolution-only
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      CONDA_OVERRIDE_CUDA: "12.4"
+      LOCK_PATH: registry/external-environments/gluemap-linux-64-cuda12.4.conda-lock.json
+
+    steps:
+      - name: Checkout WRE
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install exact micromamba resolver
+        uses: mamba-org/setup-micromamba@f457c30a868e4760d3a6fcea5f25dc655b8edf39 # v3.2.1
+        with:
+          micromamba-version: "2.9.0-0"
+          init-shell: none
+          generate-run-shell: false
+          post-cleanup: none
+
+      - name: Verify resolver identity
+        run: |
+          test "$(micromamba --version)" = "2.9.0"
+          test "$CONDA_OVERRIDE_CUDA" = "12.4"
+
+      - name: Resolve exact reviewed native environment
+        run: |
+          raw="$RUNNER_TEMP/gluemap-micromamba-raw.json"
+          set +e
+          env -u CONDARC micromamba create --name wre-gluemap-lock --platform linux-64 --override-channels --channel conda-forge --strict-channel-priority --no-rc --dry-run --json \
+            "python=3.12.12" "pip" "cmake>=3.18" "ninja" "pkg-config" "pybind11>=3.0" "scikit-build-core>=0.10" "clangxx" \
+            "eigen=3.4.0" "ceres-solver=2.2.0=cpulgpl*" "metis=5.1.0" "boost=1.85.0" "libstdcxx-ng=15.2.0" "llvm-openmp" "_openmp_mutex=*=*_llvm" \
+            "pytorch-gpu=2.4.1" "torchvision=0.19.1" "cuda-version=12.4" > "$raw"
+          status=$?
+          set -e
+          cat "$raw"
+          exit "$status"
+
+      - name: Canonicalize and validate dependency lock
+        run: |
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          raw_path = Path(os.environ["RUNNER_TEMP"]) / "gluemap-micromamba-raw.json"
+          output_path = Path(os.environ["RUNNER_TEMP"]) / "gluemap-linux-64-cuda12.4.conda-lock.json"
+          raw = json.loads(raw_path.read_text(encoding="utf-8"))
+
+          assert raw.get("success") is True, raw
+          assert raw.get("dry_run") is True, raw
+
+          requested_specs = [
+              "python=3.12.12",
+              "pip",
+              "cmake>=3.18",
+              "ninja",
+              "pkg-config",
+              "pybind11>=3.0",
+              "scikit-build-core>=0.10",
+              "clangxx",
+              "eigen=3.4.0",
+              "ceres-solver=2.2.0=cpulgpl*",
+              "metis=5.1.0",
+              "boost=1.85.0",
+              "libstdcxx-ng=15.2.0",
+              "llvm-openmp",
+              "_openmp_mutex=*=*_llvm",
+              "pytorch-gpu=2.4.1",
+              "torchvision=0.19.1",
+              "cuda-version=12.4",
+          ]
+
+          packages = []
+          for package in raw["actions"]["LINK"]:
+              for field in ("name", "version", "build_string", "channel", "subdir", "url"):
+                  assert package.get(field), (field, package)
+              assert package.get("sha256"), ("missing sha256", package["name"])
+              packages.append(
+                  {
+                      "name": package["name"],
+                      "version": package["version"],
+                      "build_string": package["build_string"],
+                      "build_number": package.get("build_number"),
+                      "channel": package["channel"],
+                      "subdir": package["subdir"],
+                      "url": package["url"],
+                      "sha256": package["sha256"],
+                      "md5": package.get("md5"),
+                  }
+              )
+
+          packages.sort(
+              key=lambda item: (
+                  item["name"],
+                  item["version"],
+                  item["build_string"],
+                  item["url"],
+              )
+          )
+          by_name = {item["name"]: item for item in packages}
+          assert len(by_name) == len(packages), "duplicate package names in one solved environment"
+
+          ceres = by_name["ceres-solver"]
+          assert ceres["version"] == "2.2.0"
+          assert ceres["build_string"].startswith("cpulgpl"), ceres
+          assert "suitesparse" not in by_name, "SuiteSparse/GPL Ceres closure is forbidden"
+
+          assert by_name["eigen"]["version"] == "3.4.0"
+          assert by_name["metis"]["version"] == "5.1.0"
+          assert by_name["boost"]["version"] == "1.85.0"
+          assert by_name["libstdcxx-ng"]["version"] == "15.2.0"
+          assert "clangxx" in by_name, "explicit Clang++ compiler is required"
+          assert "llvm-openmp" in by_name, "explicit LLVM OpenMP runtime is required"
+          assert by_name["_openmp_mutex"]["build_string"].endswith("_llvm"), by_name["_openmp_mutex"]
+          assert "libgomp" not in by_name, "dual OpenMP runtime closure is forbidden"
+          assert by_name["pytorch-gpu"]["version"] == "2.4.1"
+          assert by_name["torchvision"]["version"] == "0.19.1"
+          assert by_name["cuda-version"]["version"].startswith("12.4")
+
+          lock = {
+              "schema_version": 1,
+              "evidence_kind": "dependency_resolution_only",
+              "gpu_execution_evidence": False,
+              "target_platform": "linux-64",
+              "virtual_packages": {"__cuda": "12.4"},
+              "channel_policy": {
+                  "channels": ["conda-forge"],
+                  "strict_priority": True,
+                  "override_channels": True,
+              },
+              "resolver": {
+                  "setup_micromamba_action_commit": "f457c30a868e4760d3a6fcea5f25dc655b8edf39",
+                  "setup_micromamba_release": "v3.2.1",
+                  "micromamba_release": "2.9.0-0",
+                  "micromamba_reported_version": "2.9.0",
+              },
+              "requested_specs": requested_specs,
+              "packages": packages,
+          }
+          output_path.write_text(
+              json.dumps(lock, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Verify committed lock or expose first qualification solve
+        run: |
+          generated_lock="$RUNNER_TEMP/gluemap-linux-64-cuda12.4.conda-lock.json"
+          if test -f "$LOCK_PATH"; then
+            diff --unified "$LOCK_PATH" "$generated_lock"
+          else
+            echo "No committed GLUEMAP conda lock exists yet; this run is first-solve qualification evidence."
+          fi
+          echo "----- BEGIN GENERATED GLUEMAP CONDA LOCK -----"
+          cat "$generated_lock"
+          echo "----- END GENERATED GLUEMAP CONDA LOCK -----"
+
+      - name: Retain machine-readable dependency-resolution evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v2l14-4-gluemap-conda-lock
+          path: ${{ runner.temp }}/gluemap-linux-64-cuda12.4.conda-lock.json
+          if-no-files-found: error
+          retention-days: 30
