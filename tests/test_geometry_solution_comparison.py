@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 from dataclasses import FrozenInstanceError, fields
 from typing import Any, cast
 
@@ -44,7 +45,9 @@ def _producer(token: str) -> ArtifactProducerIdentity:
             version="1",
             revision=f"revision:{token}",
         ),
-        configuration=ConfigurationIdentity(sha256=Sha256Digest(token * 64)),
+        configuration=ConfigurationIdentity(
+            sha256=Sha256Digest(hashlib.sha256(token.encode("utf-8")).hexdigest())
+        ),
     )
 
 
@@ -164,7 +167,7 @@ def _candidate(
         camera_solutions=(camera,),
         depth_fields=depths,
         point_maps=point_maps,
-        producer=_producer(token[0]),
+        producer=_producer(token),
         source_artifacts=(
             source_artifacts
             if source_artifacts is not None
