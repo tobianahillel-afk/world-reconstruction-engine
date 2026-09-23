@@ -252,7 +252,14 @@ components:
       - tests/test_feed_forward_classical_comparison.py
       - tests/test_da3_execution_benchmark.py
     status: implemented
-  precision_global_refinement: {owner_lot: V2L14, implementation: [], tests: [], status: planned}
+  precision_global_refinement:
+    owner_lot: V2L14
+    implementation:
+      - src/wre/reconstruction/geometry_solution_comparison.py
+      - src/wre/reconstruction/__init__.py
+    tests:
+      - tests/test_geometry_solution_comparison.py
+    status: implementing
   dense_depth_mvs: {owner_lot: V2L15, implementation: [], tests: [], status: planned}
   physical_surface: {owner_lot: V2L16, implementation: [], tests: [], status: planned}
   photometric_pipeline: {owner_lot: V2L17, implementation: [], tests: [], status: planned}
