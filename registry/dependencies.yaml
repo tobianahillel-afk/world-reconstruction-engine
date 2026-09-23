@@ -121,14 +121,26 @@ dependencies:
       pycolmap_cuda12: 4.0.4
       pyceres: 2.6
       ceres_solver: 2.2.0
+      ceres_build: cpulgplh45c08c3_10
       eigen: 3.4.0
       metis: 5.1.0
       boost: 1.85.0
       libstdcxx_ng: 15.2.0
-      openmp_provider: unresolved_until_exact_environment_lock
-      conda_build_strings: unresolved_until_exact_environment_lock
+      libstdcxx_ng_build: hdf11a46_20
+      compiler: clangxx
+      compiler_version: 22.1.8
+      compiler_build: default_cfg_h6c242b4_7
+      openmp_provider: llvm-openmp
+      openmp_version: 23.1.1
+      openmp_build: h7148c6a_0
+      openmp_mutex_build: 8_kmp_llvm
+      conda_environment_lock: registry/external-environments/gluemap-linux-64-cuda12.4.conda-lock.json
+      conda_environment_lock_sha256: 88112dbfd8149e58e28b1e7309ea6933001058bb058ac6bff8338ea41a6aee52
+      conda_environment_lock_packages: 157
+      conda_build_strings: locked
       cuda: '12.4'
-      cuda_package_set: unresolved_until_exact_environment_lock
+      cuda_package_set: locked_in_environment_lock
+      gpu_execution_evidence: false
       chosen_model: map_anything
       skip_doppelgangers: true
       use_dummy_tracks: true
@@ -160,11 +172,18 @@ dependencies:
       source-level Ceres 2.2.0 Eigen 3.4.0 METIS 5.1.0 Boost 1.85.0 and GNU 15.2.0
       runtime terms, and confirms Ceres CUDA is optional for pygluemap. Exact-tree inspection
       found no upstream conda-lock pixi lock environment export or equivalent build-string manifest.
-      WRE therefore permits a separate CPU-only linux-64 micromamba resolution lane with an explicit
-      CUDA 12.4 virtual-package override to generate dependency-lock evidence; this solve does not
-      count as GPU execution. Exact conda build strings, the chosen non-SuiteSparse Ceres variant,
-      the OpenMP provider, the concrete CUDA 12.4 package set, supported real GPU evidence and
-      cross-version native-model evidence remain unresolved until that lock is generated and reviewed.
+      WRE therefore uses the separate CPU-only linux-64 micromamba resolution lane with an explicit
+      CUDA 12.4 virtual-package override as dependency-lock evidence only. PR #127 froze and
+      exactly regenerated registry/external-environments/gluemap-linux-64-cuda12.4.conda-lock.json
+      with 157 packages and SHA-256
+      88112dbfd8149e58e28b1e7309ea6933001058bb058ac6bff8338ea41a6aee52.
+      The accepted solve uses Ceres build cpulgplh45c08c3_10 with no SuiteSparse,
+      Clang++ 22.1.8 plus LLVM OpenMP 23.1.1 and no libgomp, and the exact CUDA 12.4
+      package closure recorded in that lock. A GNU-only OpenMP solve was rejected because
+      conda-forge PyTorch GPU 2.4.1 requires the LLVM/KMP OpenMP family. This lock is still
+      dependency-resolution evidence only, not GPU execution. Allowlisted source materialization,
+      exact locked-package redistribution review, supported real GPU evidence and cross-version
+      native-model evidence remain unresolved.
   mapanything_apache:
     status: candidate_optional
     role: [hybrid_global_geometry_backbone]
@@ -295,6 +314,7 @@ dependencies:
     integration: optional_exact_external_environment
     version_policy: pin_exact_external_environment
     pinned_version: 2.2.0
+    conda_build: cpulgplh45c08c3_10
     source_revision: 85331393dc0dff09f6fb9903ab0c4bfa3e134b01
     source_archive_sha256: 48b2302a7986ece172898477c3bcd6deb8fb5cf19b3327bc49969aad4cede82d
     upstream_repository: ceres-solver/ceres-solver
@@ -307,9 +327,10 @@ dependencies:
       85331393dc0dff09f6fb9903ab0c4bfa3e134b01 and the conda source archive SHA-256
       is 48b2302a7986ece172898477c3bcd6deb8fb5cf19b3327bc49969aad4cede82d.
       The conda-forge recipe exposes separate dependency-license-family variants;
-      its gpl variant adds SuiteSparse. The first WRE profile must pin a concrete
-      non-GPL build with SuiteSparse absent, or build the same source with SuiteSparse
-      explicitly disabled. A version-only ceres-solver=2.2.0 solve is insufficient.
+      its gpl variant adds SuiteSparse. The accepted dependency lock pins exact build
+      cpulgplh45c08c3_10, and the qualification lane fails if SuiteSparse appears.
+      This is package-resolution evidence only; license review remains pending until
+      the complete locked redistribution closure is reviewed.
   eigen:
     status: candidate_optional
     role: [hybrid_global_native_linear_algebra_headers]
@@ -358,25 +379,46 @@ dependencies:
       and build string must still be recorded from the executable environment.
   gnu_cpp_runtime:
     status: candidate_optional
-    role: [hybrid_global_cpp_runtime, hybrid_global_openmp_runtime]
+    role: [hybrid_global_cpp_runtime]
     integration: optional_exact_external_environment
     version_policy: pin_exact_external_environment
     pinned_version: 15.2.0
+    conda_libstdcxx_ng_build: hdf11a46_20
+    conda_libstdcxx_build: h934c35e_20
+    conda_libgcc_build: he0feb66_20
     source_archive_sha256: 7294d65cc1a0558cb815af0ca8c7763d86f7a31199794ede3f630c0d1b0a5723
     conda_feedstock_revision: bb3586bd358ca9d8d49433518f2098fa71d84bd5
     license: GPL-3.0-only WITH GCC-exception-3.1
     license_review: pending
     notes: >-
-      GLUEMAP's known-good recipe pins libstdcxx-ng=15.2.0 and pygluemap requires
-      OpenMP, but it does not pin the C++ compiler or OpenMP provider. The conda-forge
-      GCC 15.2.0 feedstock at bb3586bd358ca9d8d49433518f2098fa71d84bd5
-      builds libstdcxx and libgomp from source archive SHA-256
-      7294d65cc1a0558cb815af0ca8c7763d86f7a31199794ede3f630c0d1b0a5723
-      under GPL-3.0-only WITH GCC-exception-3.1 and declares OpenMP 4.5/libgomp
-      ABI 1.0.0. Multiple 15.2.0 conda build revisions exist, and a system compiler
-      could otherwise satisfy FindOpenMP. The first executable WRE profile must
-      record one exact compiler/libstdcxx/libgomp provider and build string; no
-      provider may be inferred from the version alone.
+      GLUEMAP's known-good recipe pins libstdcxx-ng=15.2.0. The accepted WRE lock
+      freezes libstdcxx-ng build hdf11a46_20, libstdcxx build h934c35e_20 and
+      libgcc build he0feb66_20 for the C++ ABI/runtime closure. It deliberately does
+      not contain libgomp: conda-forge PyTorch GPU 2.4.1 requires the LLVM/KMP OpenMP
+      family, so the bounded profile uses the separately recorded LLVM OpenMP runtime.
+      The GCC 15.2.0 source family remains governed by GPL-3.0-only WITH
+      GCC-exception-3.1. Exact redistribution review remains pending.
+  llvm_openmp:
+    status: candidate_optional
+    role: [hybrid_global_openmp_runtime]
+    integration: optional_exact_external_environment
+    version_policy: pin_exact_external_environment
+    pinned_version: 23.1.1
+    conda_build: h7148c6a_0
+    openmp_mutex_build: 8_kmp_llvm
+    source_archive_sha256: 851b3d701a4fbdd9f69536d4acda578469e810ca7056687d6556443f5fd39557
+    conda_feedstock_revision: 0b06d05d16309c97186fdb8c5b52399bfea0be6a
+    upstream_repository: llvm/llvm-project
+    license: Apache-2.0 WITH LLVM-exception
+    license_review: pending
+    notes: >-
+      The exact WRE GLUEMAP dependency lock resolves llvm-openmp 23.1.1 build
+      h7148c6a_0 with _openmp_mutex build 8_kmp_llvm and no libgomp. The matching
+      conda-forge 23.1.1 recipe pins llvm-project source archive SHA-256
+      851b3d701a4fbdd9f69536d4acda578469e810ca7056687d6556443f5fd39557
+      and declares Apache-2.0 WITH LLVM-exception. This provider is selected because
+      PyTorch GPU 2.4.1's conda-forge builds require the LLVM/KMP OpenMP family.
+      Full locked-package redistribution review remains pending.
   cuda_12_4_runtime:
     status: candidate_optional
     role: [hybrid_global_gpu_runtime]
@@ -392,10 +434,11 @@ dependencies:
       pycolmap-cuda12 4.0.4 adds cuda-toolkit[cudart,curand]>=12,<13 and the
       PyTorch GPU solve adds its own CUDA-native packages. The conda cuda-version
       recipe is only a version constraint metapackage and is governed by the NVIDIA
-      EULA; it does not identify the complete runtime package set. The first WRE
-      executable lane must export and pin the exact CUDA packages, versions, build
-      strings, channels and redistribution terms actually present. cuda-version=12.4
-      alone is not reproducible or redistribution evidence.
+      EULA. PR #127 now freezes the complete resolved CUDA package/build/channel/digest
+      set inside registry/external-environments/gluemap-linux-64-cuda12.4.conda-lock.json;
+      cuda-version=12.4 alone remains insufficient. Exact NVIDIA redistribution review
+      for the locked package set is still pending, and the CPU-only solve is not GPU
+      execution evidence.
   limap:
     status: candidate_core
     role: [lines, structural_sfm, planes, vanishing_points, wireframe]
