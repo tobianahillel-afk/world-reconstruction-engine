@@ -84,7 +84,6 @@ def _validate_depths(
 def _validate_point_maps(
     point_maps: object,
     geometry_solution: GeometrySolution,
-    cameras: tuple[CameraSolution, ...],
 ) -> tuple[PointMap, ...]:
     if not isinstance(point_maps, tuple):
         raise TypeError("geometry candidate point_maps must be an immutable tuple")
@@ -109,12 +108,6 @@ def _validate_point_maps(
             "geometry candidate GeometrySolution must reference exactly all supplied point maps"
         )
 
-    camera_observations = {item.observation_id for item in cameras}
-    for point_map in point_maps:
-        if not set(point_map.source_observation_ids).issubset(camera_observations):
-            raise ValueError(
-                "geometry candidate PointMap support must stay inside supplied camera membership"
-            )
     return point_maps
 
 
@@ -158,7 +151,7 @@ class GeometrySolutionCandidate:
 
         cameras = _validate_cameras(self.camera_solutions, self.geometry_solution)
         _validate_depths(self.depth_fields, self.geometry_solution, cameras)
-        _validate_point_maps(self.point_maps, self.geometry_solution, cameras)
+        _validate_point_maps(self.point_maps, self.geometry_solution)
         _validate_source_artifacts(self.source_artifacts)
 
 
