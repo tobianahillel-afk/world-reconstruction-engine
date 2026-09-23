@@ -174,7 +174,7 @@ def test_candidate_has_exact_frozen_field_shape_and_retains_identity() -> None:
     )
     assert candidate.point_maps[0].local_frame_id == candidate.geometry_solution.local_frame_id
     with pytest.raises(FrozenInstanceError):
-        candidate.producer = _producer("z")  # type: ignore[misc]
+        candidate.producer = _producer("f")  # type: ignore[misc]
 
 
 def test_feed_forward_style_candidate_preserves_depth_without_point_map() -> None:
