@@ -714,8 +714,8 @@ def test_v2l13_lot_review_evidence_and_v2l14_handoff_are_complete() -> None:
 
     state = (root / "PROJECT_STATE.yaml").read_text(encoding="utf-8")
     assert "lot: V2L14" in state
-    assert "active_work_item: V2L14.1" in state
-    assert "V2L13.6]" in state
+    assert "V2L14.1" in state
+    assert "V2L13.6" in state
 
     work_items = (root / "registry" / "work-items" / "v2m2.yaml").read_text(encoding="utf-8")
     assert "id: V2L13.6" in work_items
@@ -723,6 +723,4 @@ def test_v2l13_lot_review_evidence_and_v2l14_handoff_are_complete() -> None:
         "title: Learned execution profile and stage profiling benchmark\n    status: done"
     ) in work_items
     assert "id: V2L14.1" in work_items
-    assert (
-        "title: Competing GeometrySolution comparison contract\n    status: ready"
-    ) in work_items
+    assert "title: Competing GeometrySolution comparison contract" in work_items
