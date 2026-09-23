@@ -169,7 +169,10 @@ def test_candidate_has_exact_frozen_field_shape_and_retains_identity() -> None:
         "source_artifacts",
     )
     assert candidate.geometry_solution.scale_status is GeometryScaleStatus.UNRESOLVED
-    assert candidate.camera_solutions[0].local_frame_id == candidate.geometry_solution.local_frame_id
+    assert (
+        candidate.camera_solutions[0].local_frame_id
+        == candidate.geometry_solution.local_frame_id
+    )
     assert candidate.point_maps[0].local_frame_id == candidate.geometry_solution.local_frame_id
     with pytest.raises(FrozenInstanceError):
         candidate.producer = _producer("z")  # type: ignore[misc]
