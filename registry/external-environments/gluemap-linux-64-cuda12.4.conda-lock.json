@@ -1908,7 +1908,7 @@
     "metis=5.1.0",
     "boost=1.85.0",
     "libstdcxx-ng=15.2.0",
-    "llvm-openmp",
+    "llvm-openmp=23.1.1=h7148c6a_0",
     "_openmp_mutex=*=*_llvm",
     "pytorch-gpu=2.4.1",
     "torchvision=0.19.1",
