@@ -53,7 +53,7 @@ jobs:
           set +e
           env -u CONDARC micromamba create --name wre-gluemap-lock --platform linux-64 --override-channels --channel conda-forge --strict-channel-priority --no-rc --dry-run --json \
             "python=3.12.12" "pip" "cmake>=3.18" "ninja" "pkg-config" "pybind11>=3.0" "scikit-build-core>=0.10" "clangxx" \
-            "eigen=3.4.0" "ceres-solver=2.2.0=cpulgpl*" "metis=5.1.0" "boost=1.85.0" "libstdcxx-ng=15.2.0" "llvm-openmp" "_openmp_mutex=*=*_llvm" \
+            "eigen=3.4.0" "ceres-solver=2.2.0=cpulgpl*" "metis=5.1.0" "boost=1.85.0" "libstdcxx-ng=15.2.0" "llvm-openmp=23.1.1=h7148c6a_0" "_openmp_mutex=*=*_llvm" \
             "pytorch-gpu=2.4.1" "torchvision=0.19.1" "cuda-version=12.4" > "$raw"
           status=$?
           set -e
@@ -88,7 +88,7 @@ jobs:
               "metis=5.1.0",
               "boost=1.85.0",
               "libstdcxx-ng=15.2.0",
-              "llvm-openmp",
+              "llvm-openmp=23.1.1=h7148c6a_0",
               "_openmp_mutex=*=*_llvm",
               "pytorch-gpu=2.4.1",
               "torchvision=0.19.1",
@@ -139,6 +139,8 @@ jobs:
           assert by_name["libstdcxx-ng"]["version"] == "15.2.0"
           assert "clangxx" in by_name, "explicit Clang++ compiler is required"
           assert "llvm-openmp" in by_name, "explicit LLVM OpenMP runtime is required"
+          assert by_name["llvm-openmp"]["version"] == "23.1.1", by_name["llvm-openmp"]
+          assert by_name["llvm-openmp"]["build_string"] == "h7148c6a_0", by_name["llvm-openmp"]
           assert by_name["_openmp_mutex"]["build_string"].endswith("_llvm"), by_name["_openmp_mutex"]
           assert "libgomp" not in by_name, "dual OpenMP runtime closure is forbidden"
           assert by_name["pytorch-gpu"]["version"] == "2.4.1"
