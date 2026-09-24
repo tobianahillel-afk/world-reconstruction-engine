@@ -460,10 +460,16 @@ def _pose_metrics(
     candidate: GeometrySolutionCandidate,
     references: tuple[CameraSolution, ...],
 ) -> MetricVector:
+    candidate_cameras = tuple(
+        sorted(candidate.camera_solutions, key=lambda item: item.observation_id.value)
+    )
+    reference_cameras = tuple(
+        sorted(references, key=lambda item: item.observation_id.value)
+    )
     return evaluate_camera_pose_quality(
         CameraPoseQualityRequest(
-            candidate_cameras=candidate.camera_solutions,
-            reference_cameras=references,
+            candidate_cameras=candidate_cameras,
+            reference_cameras=reference_cameras,
             input_artifacts=(_REFERENCE_ARTIFACT,),
         )
     )
