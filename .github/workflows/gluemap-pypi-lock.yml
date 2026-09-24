@@ -1,0 +1,310 @@
+name: gluemap-pypi-lock
+
+on:
+  # Bootstrap only: remove after the first reviewed artifact lock is captured.
+  push:
+    branches:
+      - "feature/v2l14-4-pypi-artifact-lock"
+    paths:
+      - ".github/workflows/gluemap-pypi-lock.yml"
+      - "registry/external-environments/gluemap-linux-64-pypi-lock.json"
+  pull_request:
+    paths:
+      - ".github/workflows/gluemap-pypi-lock.yml"
+      - "registry/external-environments/gluemap-linux-64-pypi-lock.json"
+      - "registry/dependencies.yaml"
+      - "registry/work-items/v2m2.yaml"
+      - "PROJECT_STATE.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  resolve:
+    name: linux-x86_64-cp312-pypi-artifact-resolution-only
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      LOCK_PATH: registry/external-environments/gluemap-linux-64-pypi-lock.json
+      TARGET_PYTHON: "3.12.12"
+      TARGET_IMPLEMENTATION: cp
+      TARGET_ABI: cp312
+      TARGET_PLATFORM: linux_x86_64
+
+    steps:
+      - name: Checkout WRE
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install exact Python
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: "3.12.12"
+          enable-cache: false
+
+      - name: Resolve and hash exact PyPI wheel artifacts without installing
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run --no-project --python 3.12.12 python - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import os
+          import re
+          import urllib.request
+          import zipfile
+          from email.parser import BytesParser
+          from email.policy import compat32
+          from pathlib import Path
+
+          target_python = os.environ["TARGET_PYTHON"]
+          target_impl = os.environ["TARGET_IMPLEMENTATION"]
+          target_abi = os.environ["TARGET_ABI"]
+          target_platform = os.environ["TARGET_PLATFORM"]
+          generated = Path(os.environ["RUNNER_TEMP"]) / "gluemap-linux-64-pypi-lock.json"
+          downloads = Path(os.environ["RUNNER_TEMP"]) / "gluemap-pypi-artifacts"
+          downloads.mkdir(parents=True, exist_ok=True)
+
+          requested = [
+              ("faiss-cpu", "1.13.2"),
+              ("kornia", "0.8.2"),
+              ("opencv-python", "4.13.0.92"),
+              ("pycolmap-cuda12", "4.0.4"),
+              ("pyceres", "2.6"),
+          ]
+
+          def get_json(url: str) -> dict:
+              req = urllib.request.Request(
+                  url,
+                  headers={"User-Agent": "WRE-V2L14.4-PyPI-qualification/1"},
+              )
+              with urllib.request.urlopen(req, timeout=60) as response:
+                  return json.load(response)
+
+          def get_bytes(url: str) -> bytes:
+              req = urllib.request.Request(
+                  url,
+                  headers={"User-Agent": "WRE-V2L14.4-PyPI-qualification/1"},
+              )
+              with urllib.request.urlopen(req, timeout=120) as response:
+                  return response.read()
+
+          def wheel_tags(filename: str) -> tuple[str, str, str]:
+              if not filename.endswith(".whl"):
+                  raise ValueError(filename)
+              stem = filename[:-4]
+              _prefix, python_tag, abi_tag, platform_tag = stem.rsplit("-", 3)
+              return python_tag, abi_tag, platform_tag
+
+          def python_compatible(python_tag: str, abi_tag: str) -> bool:
+              py_tags = python_tag.split(".")
+              abi_tags = abi_tag.split(".")
+              if "py3" in py_tags and "none" in abi_tags:
+                  return True
+              if "cp312" in py_tags and ("cp312" in abi_tags or "abi3" in abi_tags):
+                  return True
+              if "abi3" in abi_tags:
+                  for tag in py_tags:
+                      match = re.fullmatch(r"cp3(\d+)", tag)
+                      if match and int(match.group(1)) <= 12:
+                          return True
+              return False
+
+          def platform_compatible(platform_tag: str) -> bool:
+              tags = platform_tag.split(".")
+              if "any" in tags:
+                  return True
+              for tag in tags:
+                  if tag == "linux_x86_64":
+                      return True
+                  match = re.fullmatch(r"manylinux_(\d+)_(\d+)_x86_64", tag)
+                  if match:
+                      major, minor = map(int, match.groups())
+                      if major == 2 and minor <= 39:
+                          return True
+                  if re.fullmatch(r"manylinux(1|2010|2014)_x86_64", tag):
+                      return True
+              return False
+
+          def select_wheel(files: list[dict], package: str, version: str) -> dict:
+              candidates = []
+              for item in files:
+                  if item.get("packagetype") != "bdist_wheel":
+                      continue
+                  filename = item["filename"]
+                  try:
+                      py_tag, abi_tag, platform_tag = wheel_tags(filename)
+                  except ValueError:
+                      continue
+                  if python_compatible(py_tag, abi_tag) and platform_compatible(platform_tag):
+                      candidates.append((filename, py_tag, abi_tag, platform_tag, item))
+
+              if len(candidates) != 1:
+                  summary = [
+                      {
+                          "filename": item.get("filename"),
+                          "packagetype": item.get("packagetype"),
+                          "python_version": item.get("python_version"),
+                          "requires_python": item.get("requires_python"),
+                      }
+                      for item in files
+                  ]
+                  raise SystemExit(
+                      f"{package}=={version}: expected exactly one compatible Linux x86_64 "
+                      f"CPython 3.12 wheel, found {len(candidates)}. Published files: "
+                      + json.dumps(summary, sort_keys=True)
+                  )
+              filename, py_tag, abi_tag, platform_tag, item = candidates[0]
+              return {
+                  "item": item,
+                  "python_tag": py_tag,
+                  "abi_tag": abi_tag,
+                  "platform_tag": platform_tag,
+                  "filename": filename,
+              }
+
+          artifacts = []
+          for package, version in requested:
+              project_json = get_json(f"https://pypi.org/pypi/{package}/{version}/json")
+              info = project_json["info"]
+              selected = select_wheel(project_json["urls"], package, version)
+              item = selected["item"]
+              payload = get_bytes(item["url"])
+              sha256 = hashlib.sha256(payload).hexdigest()
+              expected_sha = item["digests"]["sha256"]
+              if sha256 != expected_sha:
+                  raise SystemExit(
+                      f"{package}=={version}: downloaded SHA-256 {sha256} "
+                      f"does not match PyPI metadata {expected_sha}"
+                  )
+              if len(payload) != item["size"]:
+                  raise SystemExit(
+                      f"{package}=={version}: byte length {len(payload)} "
+                      f"does not match PyPI metadata {item['size']}"
+                  )
+
+              wheel_path = downloads / selected["filename"]
+              wheel_path.write_bytes(payload)
+              with zipfile.ZipFile(wheel_path) as archive:
+                  metadata_names = [
+                      name for name in archive.namelist()
+                      if name.endswith(".dist-info/METADATA")
+                  ]
+                  if len(metadata_names) != 1:
+                      raise SystemExit(
+                          f"{package}=={version}: expected one dist-info/METADATA, "
+                          f"found {metadata_names}"
+                      )
+                  metadata_bytes = archive.read(metadata_names[0])
+              metadata = BytesParser(policy=compat32).parsebytes(metadata_bytes)
+              metadata_name = str(metadata.get("Name") or "").strip()
+              metadata_version = str(metadata.get("Version") or "").strip()
+              if metadata_name.lower().replace("_", "-") != package.lower().replace("_", "-"):
+                  raise SystemExit(
+                      f"{package}=={version}: METADATA name mismatch {metadata_name!r}"
+                  )
+              if metadata_version != version:
+                  raise SystemExit(
+                      f"{package}=={version}: METADATA version mismatch {metadata_version!r}"
+                  )
+
+              requires_dist = sorted(
+                  str(value).strip()
+                  for value in (metadata.get_all("Requires-Dist") or [])
+                  if str(value).strip()
+              )
+              license_expression = str(
+                  metadata.get("License-Expression")
+                  or info.get("license_expression")
+                  or ""
+              ).strip()
+              legacy_license = str(metadata.get("License") or info.get("license") or "").strip()
+              classifiers = sorted(
+                  str(value).strip()
+                  for value in (metadata.get_all("Classifier") or [])
+                  if str(value).startswith("License ::")
+              )
+
+              artifacts.append(
+                  {
+                      "name": package,
+                      "version": version,
+                      "filename": selected["filename"],
+                      "packagetype": item["packagetype"],
+                      "python_tag": selected["python_tag"],
+                      "abi_tag": selected["abi_tag"],
+                      "platform_tag": selected["platform_tag"],
+                      "requires_python": item.get("requires_python") or info.get("requires_python"),
+                      "url": item["url"],
+                      "sha256": sha256,
+                      "byte_length": len(payload),
+                      "metadata_name": metadata_name,
+                      "metadata_version": metadata_version,
+                      "license_expression": license_expression or None,
+                      "legacy_license": legacy_license or None,
+                      "license_classifiers": classifiers,
+                      "requires_dist": requires_dist,
+                  }
+              )
+
+          artifacts.sort(key=lambda item: (item["name"], item["version"], item["filename"]))
+          lock = {
+              "schema_version": 1,
+              "evidence_kind": "pypi_artifact_resolution_only",
+              "runtime_execution_evidence": False,
+              "gpu_execution_evidence": False,
+              "installer_execution_evidence": False,
+              "index": "https://pypi.org/",
+              "target": {
+                  "python": target_python,
+                  "implementation": target_impl,
+                  "abi": target_abi,
+                  "platform": target_platform,
+                  "glibc_ceiling_for_qualification_host": "2.39",
+              },
+              "requested": [
+                  {"name": package, "version": version}
+                  for package, version in requested
+              ],
+              "artifacts": artifacts,
+          }
+          generated.write_text(
+              json.dumps(lock, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print(
+              f"resolved {len(artifacts)} exact PyPI wheels / "
+              f"{sum(item['byte_length'] for item in artifacts)} bytes"
+          )
+          PY
+
+      - name: Verify committed artifact lock or expose first qualification result
+        shell: bash
+        run: |
+          set -euo pipefail
+          generated="$RUNNER_TEMP/gluemap-linux-64-pypi-lock.json"
+          if test -f "$LOCK_PATH"; then
+            diff -u "$LOCK_PATH" "$generated"
+            echo "Committed GLUEMAP PyPI artifact lock matches exact regeneration."
+          else
+            echo "No committed GLUEMAP PyPI artifact lock exists yet; this run is first-artifact qualification evidence."
+            echo "----- BEGIN GENERATED GLUEMAP PYPI LOCK -----"
+            cat "$generated"
+            echo "----- END GENERATED GLUEMAP PYPI LOCK -----"
+          fi
+
+      - name: Retain machine-readable PyPI artifact evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v2l14-4-gluemap-pypi-lock
+          path: ${{ runner.temp }}/gluemap-linux-64-pypi-lock.json
+          if-no-files-found: error
+          retention-days: 30
