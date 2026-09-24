@@ -427,6 +427,7 @@ jobs:
         run: |
           set -euo pipefail
           generated="$RUNNER_TEMP/gluemap-linux-64-pypi-lock.json"
+          sha256sum "$generated"
           if test -f "$LOCK_PATH"; then
             diff -u "$LOCK_PATH" "$generated"
             echo "Committed GLUEMAP PyPI artifact lock matches exact regeneration."
