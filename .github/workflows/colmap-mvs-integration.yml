@@ -1,13 +1,6 @@
 name: colmap-mvs-integration
 
 on:
-  # Bootstrap only: remove this branch-limited push trigger after the first reviewed lock is captured.
-  push:
-    branches:
-      - "feature/v2l15-2-colmap-mvs-environment"
-    paths:
-      - ".github/workflows/colmap-mvs-integration.yml"
-      - "registry/external-environments/colmap-mvs-cuda12-4.2.0.json"
   pull_request:
     paths:
       - ".github/workflows/colmap-mvs-integration.yml"
