@@ -76,6 +76,7 @@ jobs:
           requested = [
               ("faiss-cpu", "1.13.2"),
               ("kornia", "0.8.2"),
+              ("kornia-rs", "0.1.10"),
               ("opencv-python", "4.13.0.92"),
               ("pycolmap-cuda12", "4.0.4"),
               ("pyceres", "2.6"),
