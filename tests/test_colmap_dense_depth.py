@@ -581,9 +581,7 @@ def test_source_binding_is_exact_and_canonical(tmp_path: Path) -> None:
         "expected_environment",
         "artifact_ref",
     )
-    assert source.artifact_ref == colmap_native_sparse_model_artifact_ref(
-        source.model_artifact
-    )
+    assert source.artifact_ref == colmap_native_sparse_model_artifact_ref(source.model_artifact)
     assert tuple(item.observation.observation_id.value for item in source.images) == (
         "obs:a",
         "obs:b",
@@ -903,9 +901,7 @@ def test_source_local_frame_and_scale_are_not_upgraded(tmp_path: Path) -> None:
 
 
 def test_module_surface_contains_no_fusion_or_surface_execution_api() -> None:
-    public_names = {
-        name for name in vars(dense_module) if not name.startswith("_")
-    }
+    public_names = {name for name in vars(dense_module) if not name.startswith("_")}
     assert COLMAP_PATCH_MATCH_DENSE_DEPTH_ADAPTER_ID == "colmap.patch_match_dense_depth"
     assert "stereo_fusion" not in public_names
     assert not any("surface" in name.lower() for name in public_names)
