@@ -11,7 +11,6 @@ from pathlib import Path, PurePosixPath
 from typing import Any, cast
 
 from wre.domain.artifacts import ArtifactId, ArtifactKind, ArtifactRef
-from wre.domain.camera_solutions import CameraSolution
 from wre.domain.depth_fields import DepthField, DepthFieldId, DepthValueConventionName
 from wre.domain.hardware_identity import HardwareRuntimeIdentity
 from wre.domain.metrics import MetricVector
@@ -34,7 +33,6 @@ from wre.reconstruction.colmap_environment import (
 )
 from wre.reconstruction.colmap_features import ColmapFeatureExtractionResult
 from wre.reconstruction.colmap_geometry_refinement import (
-    COLMAP_NATIVE_SPARSE_MODEL_KIND,
     colmap_native_sparse_model_artifact_ref,
 )
 from wre.reconstruction.colmap_reconstruction import (
@@ -884,7 +882,7 @@ def _read_depth_fields(
     source: ColmapDenseDepthSource,
     normalization_identity: Sha256Digest,
 ) -> tuple[tuple[DepthField, ...], tuple[dict[str, object], ...]]:
-    suffix = "geometric" if True else "photometric"
+    suffix = "geometric"
     depth_root = workspace_root / "stereo" / "depth_maps"
     if not depth_root.is_dir() or depth_root.is_symlink():
         raise ColmapDenseDepthError("COLMAP PatchMatch depth-map directory is missing")
