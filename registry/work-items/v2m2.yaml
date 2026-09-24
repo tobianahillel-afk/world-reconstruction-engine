@@ -2047,7 +2047,7 @@ work_items:
   - id: V2L15.1
     lot: V2L15
     title: Dense depth artifact contract
-    status: ready
+    status: done
     objective: Define the pure solver-independent V2 dense-depth evidence artifact that carries one non-empty canonical set of derived DepthField values over one complete source GeometrySolutionCandidate while preserving exact camera linkage producer identity and immutable source provenance without executing MVS fusing depth or promoting depth to physical surface truth.
     allowed_scope:
       - src/wre/reconstruction/dense_depth.py
@@ -2121,7 +2121,106 @@ work_items:
       - immutability regression proving source geometry depth tuples and source artifacts are not mutated or reordered by construction
       - module surface regression proving MVS PatchMatch fusion learned priors SurfaceModel routing selection and V2L15.2 implementation remain absent
       - full fast CI and CodeQL
-  - {id: V2L15.2, lot: V2L15, title: COLMAP MVS PatchMatch donor baseline adapter, status: planned, depends_on: [V2L15.1]}
+  - id: V2L15.2
+    lot: V2L15
+    title: COLMAP MVS PatchMatch donor baseline adapter
+    status: ready
+    objective: Implement the first classical dense-depth donor adapter using the exact official COLMAP and PyCOLMAP 4.2.0 PatchMatch MVS path to derive one canonical DenseDepthArtifact from one audited COLMAP-origin source GeometrySolutionCandidate while preserving exact camera and observation linkage source local scale producer provenance and immutable source evidence without running stereo fusion or promoting dense depth to point or surface truth.
+    allowed_scope:
+      - src/wre/reconstruction/colmap_dense_depth.py
+      - focused exports in src/wre/reconstruction/__init__.py
+      - tests/test_colmap_dense_depth.py
+      - registry/dependencies.yaml only for the exact official PyCOLMAP CUDA 4.2.0 donor environment identity and reviewed transitive runtime evidence
+      - registry/adapter-models.yaml only for the experimental COLMAP PatchMatch dense-depth adapter descriptor
+      - registry/external-environments/colmap-mvs-cuda12-4.2.0.json only if needed to freeze the exact external CUDA dependency closure before execution
+      - one dedicated .github/workflows/colmap-mvs-integration.yml accelerator lane for retained real donor evidence
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after all implementation and retained accelerator evidence are green so V2L15.3 can be activated without implementing it
+    out_of_scope:
+      - changing DenseDepthArtifact DepthField CameraSolution GeometrySolution GeometrySolutionCandidate ArtifactRef producer identity or COLMAP sparse-model semantics
+      - running pycolmap.stereo_fusion or creating a fused PointMap point cloud SurfaceModel mesh TSDF SDF collision navigation or measurement output
+      - implementing V2L15.3 or later work
+      - accepting a generic non-COLMAP source geometry when exact solver-native sparse state and image evidence are unavailable
+      - silently undistorting resizing cropping or reparameterizing source cameras and then relabeling the resulting depth as support for the original CameraSolution
+      - converting valid COLMAP camera-z depth to ray distance inverse depth disparity metric world depth or another convention
+      - inferring or upgrading metric scale world Earth ECEF ENU GPS GCP or geographic placement
+      - synthesizing learned depth priors checkpoints confidence values hole filling or hallucinated support
+      - comparing ranking scoring selecting routing retry fallback or default promotion
+      - treating the accelerator-only PatchMatch donor as the mandatory CPU dense-depth route
+      - MVS fusion consistency quality coverage hole metrics owned by V2L15.3 V2L15.5 and V2L15.6
+      - appearance materials dynamics chronology MasterScene RuntimeScene or V2L16 implementation
+    depends_on: [V2L15.1]
+    read_before:
+      - docs/00_START_HERE.md
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md
+      - docs/27_RESEARCH_CANDIDATE_COVERAGE.md
+      - docs/reviews/V2L12-classical-precision-geometry-review.md
+      - docs/reviews/V2L14-precision-global-refinement-review.md
+      - registry/dependencies.yaml
+      - registry/adapter-models.yaml
+      - registry/components.yaml
+      - registry/work-items/v2m2.yaml
+      - PROJECT_STATE.yaml
+      - src/wre/reconstruction/dense_depth.py
+      - src/wre/reconstruction/geometry_solution_comparison.py
+      - src/wre/reconstruction/colmap_environment.py
+      - src/wre/reconstruction/colmap_reconstruction.py
+      - src/wre/reconstruction/colmap_canonical_geometry.py
+      - src/wre/reconstruction/colmap_evidence_artifacts.py
+      - src/wre/reconstruction/colmap_geometry_refinement.py
+      - src/wre/reconstruction/__init__.py
+      - tests/test_dense_depth.py
+      - tests/test_colmap_geometry_refinement.py
+    reuse:
+      - DenseDepthArtifact from V2L15.1 as the only dense-depth output boundary and GeometrySolutionCandidate as its exact immutable source-geometry owner
+      - the audited COLMAP native sparse-model binding pattern from V2L14.3 including ColmapSparseModelArtifact exact native file hashes ColmapFeatureExtractionResult image-name to ObservationId mapping and geometry.colmap_native_sparse_model ArtifactRef evidence
+      - the approved core COLMAP source version 4.2.0 and exact tag commit be5e29168d4aff238409d60424812df66aac919f as source truth while keeping the existing CPU pycolmap==4.2.0 environment isolated from the accelerator donor environment
+      - the official COLMAP 4.2.0 wheel build path which publishes Linux CUDA wheels as pycolmap-cuda12 and adds CUDA toolkit cudart and curand runtime dependencies
+      - exact PyCOLMAP 4.2.0 APIs pycolmap.undistort_images pycolmap.patch_match_stereo pycolmap.DepthMap.read and pycolmap.DepthMap.to_array
+      - exact COLMAP 4.2.0 donor semantics where PatchMatch requires CUDA or HIP where pycolmap.has_cuda reports the CUDA build capability and where PatchMatchCuda unprojects each pixel with point z equal to the stored depth value
+      - COLMAP fusion semantics only as evidence that donor depth values less than or equal to zero are invalid pixels; stereo fusion itself remains out of scope
+      - existing ArtifactProducerIdentity ConfigurationIdentity canonical artifact provenance and hardware-sensitive artifact-key policy patterns
+    acceptance:
+      - Add one experimental ColmapPatchMatchDenseDepthAdapter with one immutable exact configuration and one explicit bound ColmapDenseDepthSource. The adapter must expose one focused dense-depth execution operation and must not expose stereo fusion point-cloud meshing or selection operations.
+      - The source binding must identify one audited solver-native COLMAP sparse model one exact source GeometrySolutionCandidate the corresponding ColmapFeatureExtractionResult one immutable image root and one exact expected donor environment. The source candidate must canonicalize back to the same audited native sparse model before any MVS execution; generic geometry must fail closed.
+      - The donor environment must be a separate exact external accelerator environment based on official pycolmap-cuda12==4.2.0 source tag commit be5e29168d4aff238409d60424812df66aac919f. Do not mutate or replace WRE's existing approved CPU pycolmap==4.2.0 environment. Freeze exact Python NumPy CUDA runtime package and wheel identities before retained execution evidence.
+      - Environment inspection must prove PyCOLMAP version 4.2.0 exact COLMAP build identity pycolmap.has_cuda true callable undistort_images callable patch_match_stereo and available DepthMap read/to_array support before any donor execution. CPU-only PyCOLMAP or missing accelerator capability fails with an explicit environment error and must never be reported as a successful dense baseline.
+      - The first baseline supports only source cameras for which the audited COLMAP camera is already undistorted perspective pinhole and the no-resize undistortion path preserves the exact source camera dimensions and identity. Use max_image_size less than zero and fail closed if the generated MVS workspace camera observation image name dimensions or projection no longer matches the canonical source CameraSolution. Do not remap rescale crop or relabel changed cameras.
+      - Execute only on a fresh private workspace that cannot overlap the retained sparse source or caller image root. pycolmap.undistort_images may prepare the COLMAP workspace using copied inputs and pycolmap.patch_match_stereo may derive depth and normal maps; the source sparse model and source images must remain byte-identical after success or failure.
+      - Use a deterministic reviewed PatchMatch configuration with one explicit accelerator index and a canonical configuration digest. Geometric-consistency PatchMatch may internally compute its photometric precursor but V2L15.2 must not invoke pycolmap.stereo_fusion or any later fusion surface or meshing stage.
+      - Ingest only depth maps actually emitted by PatchMatch and allow partial camera coverage. At least one valid source-linked depth map is required for a successful DenseDepthArtifact; missing donor outputs remain missing and must not fabricate fields.
+      - Read each emitted depth map through the exact PyCOLMAP 4.2.0 DepthMap API. Require the depth-map width and height to exactly match the bound source CameraSolution. Flatten values in canonical row-major order.
+      - Canonicalize the verified COLMAP depth semantics as DepthValueConventionName camera-z because the exact 4.2.0 PatchMatch CUDA implementation constructs the camera-space point with z equal to the stored depth. Preserve every finite positive donor value numerically. Treat donor values less than or equal to zero as invalid and map only those invalid sentinels to canonical value 0.0 with validity false. Any non-finite donor value fails closed.
+      - Standard COLMAP PatchMatch depth output exposes no canonical per-pixel confidence field in this baseline. Emit confidence None and do not derive confidence from NCC normals consistency graphs source count or another proxy.
+      - Derived DepthField IDs and the enclosing geometry.dense_depth ArtifactRef must be deterministic over exact source evidence donor environment reviewed configuration emitted camera identity and required hardware identity so accelerator-dependent outputs cannot collide across materially different runs.
+      - Producer provenance must identify pycolmap.patch_match_stereo version 4.2.0 exact COLMAP build and the canonical configuration digest. source_artifacts must retain all source GeometrySolutionCandidate ancestry plus the exact native sparse-model and dense-stage image/environment evidence in canonical order without erasing provenance.
+      - Preserve source_geometry.geometry_solution.local_frame_id and scale_status exactly. PatchMatch depth remains in the source local gauge and must not create a METRIC world or geographic claim.
+      - Register the adapter as experimental and accelerator-only with hardware-sensitive artifact identity. It must never become the default or satisfy the mandatory CPU route merely because retained accelerator evidence passes.
+      - V2L15.2 cannot be marked done until a dedicated supported accelerator lane retains one real exact PyCOLMAP 4.2.0 PatchMatch run over a small deterministic fixture and proves source immutability environment identity output hashes camera linkage camera-z interpretation and successful DenseDepthArtifact normalization. The current repository has no supported GPU runner so this is an explicit completion blocker until such a lane is provisioned.
+    tests:
+      - frozen exact configuration and source-binding structural regressions including wrong environment native-model ArtifactRef image-root and generic-geometry failures
+      - exact environment-gate regression proving pycolmap 4.2.0 version build PatchMatch API DepthMap API and pycolmap.has_cuda true are required before execution
+      - CPU-only environment regression proving the approved core pycolmap==4.2.0 environment fails closed rather than pretending PatchMatch executed
+      - source-native-model and source-image tamper regressions proving failures occur before PatchMatch and retained source bytes remain unchanged
+      - unsupported camera regression covering distorted non-perspective resized cropped or workspace-dimension mismatches with no silent CameraSolution relabeling
+      - private-workspace ownership and cleanup regressions covering success solver failure existing output collision and no overlap with source roots
+      - exact PatchMatch call regression proving undistort plus PatchMatch execute with reviewed no-resize configuration and stereo_fusion is never called
+      - partial-output regression proving only actually emitted source-linked depth maps become DepthField values and zero outputs fail explicitly
+      - camera-z normalization regression proving finite positive depth is preserved non-positive donor sentinels become canonical zero invalid pixels and non-finite values fail closed
+      - confidence regression proving standard COLMAP donor output emits confidence None with no NCC normal consistency or support-count proxy
+      - deterministic DepthField ArtifactRef producer configuration provenance and hardware-sensitive identity regressions
+      - unresolved-scale and local-frame preservation regression proving no metric or world upgrade
+      - source-artifact ancestry and immutability regressions proving canonical source evidence is retained and source geometry images native model and donor arrays are not mutated
+      - adapter-registry regression proving experimental accelerator-only shipping status exact pycolmap-cuda12 4.2.0 dependency identity and no default promotion
+      - module-surface regression proving stereo_fusion PointMap SurfaceModel mesh TSDF SDF learned priors routing selection and V2L15.3 implementation remain absent
+      - dedicated retained accelerator integration test over one deterministic fixture on a supported CUDA runner plus full fast CI and CodeQL
   - {id: V2L15.3, lot: V2L15, title: Depth consistency fusion contract, status: planned, depends_on: [V2L15.2]}
   - {id: V2L15.4, lot: V2L15, title: Learned depth prior adapter boundary, status: planned, depends_on: [V2L15.3]}
   - {id: V2L15.5, lot: V2L15, title: Dense depth coverage holes confidence, status: planned, depends_on: [V2L15.4]}

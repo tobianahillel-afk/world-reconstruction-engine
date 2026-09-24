@@ -267,7 +267,14 @@ components:
       - tests/test_geometry_consensus.py
       - tests/test_geometry_controlled_benchmark.py
     status: implemented
-  dense_depth_mvs: {owner_lot: V2L15, implementation: [], tests: [], status: planned}
+  dense_depth_mvs:
+    owner_lot: V2L15
+    implementation:
+      - src/wre/reconstruction/dense_depth.py
+      - src/wre/reconstruction/__init__.py
+    tests:
+      - tests/test_dense_depth.py
+    status: implementing
   physical_surface: {owner_lot: V2L16, implementation: [], tests: [], status: planned}
   photometric_pipeline: {owner_lot: V2L17, implementation: [], tests: [], status: planned}
   static_appearance: {owner_lot: V2L18, implementation: [], tests: [], status: planned}
