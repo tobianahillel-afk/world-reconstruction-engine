@@ -252,6 +252,9 @@ jobs:
           expected_requires = sorted([
               "cuda-toolkit[cudart,curand]<13,>=12",
               "numpy",
+              'opencv-python-headless; extra == "panorama"',
+              'pillow; extra == "panorama"',
+              'tqdm; extra == "panorama"',
           ])
           if pycolmap["requires_dist"] != expected_requires:
               raise SystemExit(
