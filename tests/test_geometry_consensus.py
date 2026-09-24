@@ -130,6 +130,8 @@ def _camera(
     center: tuple[float, float, float],
     rotation: RotationMatrix3x3 = IDENTITY,
     projection: str = "pinhole",
+    dimensions: ImageDimensions = ImageDimensions(width_px=4, height_px=3),
+    intrinsic_parameters: tuple[float, ...] = (3.0, 3.0, 2.0, 1.5),
 ) -> CameraSolution:
     rotated_center = _matvec(rotation, center)
     translation = (
@@ -142,8 +144,8 @@ def _camera(
         observation_id=ObservationId(f"obs:{observation}"),
         local_frame_id=frame,
         projection_model=CameraProjectionModelName(projection),
-        dimensions=ImageDimensions(width_px=4, height_px=3),
-        intrinsic_parameters=(3.0, 3.0, 2.0, 1.5),
+        dimensions=dimensions,
+        intrinsic_parameters=intrinsic_parameters,
         rotation_matrix=rotation,
         translation_xyz=translation,
         uncertainty_artifacts=(),
@@ -166,6 +168,8 @@ def _candidate(
     scale: GeometryScaleStatus = GeometryScaleStatus.UNRESOLVED,
     representation: str = "point",
     projection: str = "pinhole",
+    dimensions: ImageDimensions = ImageDimensions(width_px=4, height_px=3),
+    intrinsic_parameters: tuple[float, ...] = (3.0, 3.0, 2.0, 1.5),
 ) -> GeometrySolutionCandidate:
     local_frame = LocalFrameId(frame or f"frame:{token}")
     cameras = tuple(
@@ -178,6 +182,8 @@ def _candidate(
                     center=center,
                     rotation=rotation,
                     projection=projection,
+                    dimensions=dimensions,
+                    intrinsic_parameters=intrinsic_parameters,
                 )
                 for observation, center, rotation in specs
             ),
@@ -568,6 +574,38 @@ def test_different_frame_scale_representation_and_projection_preserve_pose_evide
     assert values[
         RELATIVE_TRANSLATION_DIRECTION_DISAGREEMENT_DESCRIPTOR.name.value
     ] == pytest.approx(0.0)
+
+
+def test_incompatible_dimensions_and_intrinsics_do_not_coerce_pose_evidence() -> None:
+    specs: tuple[CameraSpec, ...] = (
+        ("0", (0.0, 0.0, 0.0), IDENTITY),
+        ("1", (1.0, 0.0, 0.0), IDENTITY),
+    )
+    result = evaluate_geometry_consensus(
+        _request(
+            _candidate(
+                "a",
+                specs,
+                dimensions=ImageDimensions(width_px=4, height_px=3),
+                intrinsic_parameters=(3.0, 3.0, 2.0, 1.5),
+            ),
+            _candidate(
+                "b",
+                specs,
+                dimensions=ImageDimensions(width_px=8, height_px=6),
+                intrinsic_parameters=(6.0, 6.0, 4.0, 3.0),
+            ),
+        )
+    )
+    values = _metric_values(result)
+
+    assert values[SHARED_OBSERVATION_COVERAGE_DESCRIPTOR.name.value] == 1.0
+    assert values[RELATIVE_ROTATION_DISAGREEMENT_DESCRIPTOR.name.value] == pytest.approx(0.0)
+    assert values[CONSENSUS_TRANSLATION_PAIR_COVERAGE_DESCRIPTOR.name.value] == 1.0
+    assert values[
+        RELATIVE_TRANSLATION_DIRECTION_DISAGREEMENT_DESCRIPTOR.name.value
+    ] == pytest.approx(0.0)
+    assert all("intrinsic" not in name and "focal" not in name for name in values)
 
 
 def test_metrics_are_informational_and_retain_exact_provenance() -> None:
