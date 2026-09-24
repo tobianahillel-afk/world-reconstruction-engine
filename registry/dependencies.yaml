@@ -331,13 +331,17 @@ dependencies:
       lightglue.ALIKED with the aliked-n16 model. The pinned LightGlue source would
       otherwise call torch.hub.load_state_dict_from_url against a floating ALIKED
       main URL. WRE must instead require this exact caller-supplied local checkpoint,
-      verify byte length and SHA-256 before importing or constructing the extractor,
-      and perform no runtime network fetch. The exact ALIKED repository revision above
-      exposes the checkpoint as Git blob 9449ca16f784aff7fa4c88ea0925b41f6411eef0
-      and the repository license is BSD-3-Clause. The SHA-256 and byte length are
-      independently corroborated by multiple public reproducibility manifests and must
-      be re-hashed from the supplied local file in the real integration lane before
-      this dependency can move beyond qualification.
+      verify byte length and SHA-256 before constructing the extractor, and perform no
+      runtime network fetch. The exact official ALIKED revision
+      683d7c65197395c0b3f01ebe76e1084a27e73a65 has Git tree
+      11a5d42d49baee808611cdab9a6261002dc6e39a, root LICENSE blob
+      4ee705bf59834a4b0195b1b0e499ee950469668e, and exposes models/aliked-n16.pth
+      as Git blob 9449ca16f784aff7fa4c88ea0925b41f6411eef0. The newly authorized
+      source/checkpoint gate must re-hash those official repository bytes and prove
+      2738091 bytes plus SHA-256
+      5be8704840ed662d9d8c561bf7279c222092674e7eb05fd0feab94899e9d82f2.
+      That will close checkpoint provenance only; a separate CPU no-network constructor
+      proof remains required before runtime execution is allowed.
   faiss_cpu:
     status: candidate_optional
     role: [hybrid_global_pair_dataset]
@@ -681,19 +685,29 @@ dependencies:
     integration: optional_exact_external_environment
     version_policy: pin_exact_external_environment
     pinned_version: eb42fee2d71449efb0aa5c10549752b5d75384d8
+    source_tree_sha: dab1d9518379113c23e562e2e743115db4081ab0
     upstream_repository: cvg/LightGlue
     license: Apache-2.0
     license_review: pending
     notes: >-
       V2L14.4 pins the exact GLUEMAP dependency revision
-      eb42fee2d71449efb0aa5c10549752b5d75384d8. The bounded hybrid-global
-      profile uses only LightGlue's ALIKED extractor wrapper for query-point
-      generation; it does not load a LightGlue matcher checkpoint. The repository
-      root is Apache-2.0 and the vendored ALIKED inference file carries its original
-      BSD-3-Clause notice. The ALIKED model asset is reviewed separately under
-      aliked_n16 and must be supplied locally with exact hash verification, so
-      torch.hub network fallback is forbidden. Other LightGlue feature
-      extractors/checkpoints such as SuperPoint are outside this profile.
+      eb42fee2d71449efb0aa5c10549752b5d75384d8 / tree
+      dab1d9518379113c23e562e2e743115db4081ab0. The bounded hybrid-global
+      profile needs only LightGlue's vendored ALIKED extractor for query-point
+      generation and does not load a LightGlue matcher checkpoint. Exact-source
+      review found that the upstream lightglue/__init__.py eagerly imports unrelated
+      extractors; specifically superpoint.py blob d6d380eb5737b92ce417e3ed0e5db1ee9d4a1d04
+      carries an unpublished-copyright/reproduction-restriction header. Therefore the
+      active profile must not import the upstream package root as shipped. Qualification
+      is limited to root LICENSE blob 38a27f882c671ba9f15b35ec13ca7c0c296efe50,
+      lightglue/aliked.py blob d7c5c4141a8ea3cd9827b3145b4315808816a769
+      (which retains the original BSD-3-Clause ALIKED notice) and lightglue/utils.py
+      blob d1c1ab2e94716b1c54191a6ed5d01023036836c1, plus a deterministic
+      WRE-owned package shim exporting only ALIKED. All other LightGlue extractors,
+      matcher code and viz modules are excluded from the bounded source materialization.
+      aliked.py still calls torch.hub.load_state_dict_from_url unconditionally during
+      construction, so source qualification alone does not authorize runtime execution;
+      a separate local-checkpoint/no-network constructor proof remains mandatory.
   py4dgeo:
     status: candidate_core
     role: [multi_epoch_point_cloud_change, m3c2, temporal_change_measurement]
