@@ -1,0 +1,263 @@
+{
+  "artifacts": [
+    {
+      "abi_tag": "abi3",
+      "byte_length": 23845772,
+      "filename": "faiss_cpu-1.13.2-cp310-abi3-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+      "legacy_license": null,
+      "license_classifiers": [],
+      "license_expression": "MIT AND BSD-3-Clause",
+      "metadata_name": "faiss-cpu",
+      "metadata_version": "1.13.2",
+      "name": "faiss-cpu",
+      "packagetype": "bdist_wheel",
+      "platform_tag": "manylinux_2_27_x86_64.manylinux_2_28_x86_64",
+      "python_tag": "cp310",
+      "requires_dist": [
+        "numpy<3.0,>=1.25.0",
+        "packaging"
+      ],
+      "requires_python": "<3.15,>=3.10",
+      "selection_rank": {
+        "platform": 1028,
+        "python": 210
+      },
+      "sha256": "ab88ee287c25a119213153d033f7dd64c3ccec466ace267395872f554b648cd7",
+      "source_license_evidence": null,
+      "url": "https://files.pythonhosted.org/packages/e7/e1/a5acac02aa593809f0123539afe7b4aff61d1db149e7093239888c9053e1/faiss_cpu-1.13.2-cp310-abi3-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+      "version": "1.13.2"
+    },
+    {
+      "abi_tag": "none",
+      "byte_length": 1095012,
+      "filename": "kornia-0.8.2-py2.py3-none-any.whl",
+      "legacy_license": "Apache-2.0",
+      "license_classifiers": [
+        "License :: OSI Approved :: Apache Software License"
+      ],
+      "license_expression": null,
+      "metadata_name": "kornia",
+      "metadata_version": "0.8.2",
+      "name": "kornia",
+      "packagetype": "bdist_wheel",
+      "platform_tag": "any",
+      "python_tag": "py2.py3",
+      "requires_dist": [
+        "PyYAML>=5.1; extra == \"docs\"",
+        "accelerate; extra == \"dev\"",
+        "accelerate; extra == \"x\"",
+        "coverage; extra == \"dev\"",
+        "diffusers; extra == \"dev\"",
+        "furo; extra == \"docs\"",
+        "ivy>=1.0.0.0; extra == \"dev\"",
+        "ivy>=1.0.0.0; extra == \"docs\"",
+        "kornia_moons; extra == \"docs\"",
+        "kornia_rs>=0.1.9",
+        "matplotlib; extra == \"docs\"",
+        "mypy; extra == \"dev\"",
+        "numpy<3; extra == \"dev\"",
+        "onnx; extra == \"dev\"",
+        "onnx; extra == \"docs\"",
+        "onnxruntime-gpu>=1.16; sys_platform != \"darwin\" and extra == \"x\"",
+        "onnxruntime; extra == \"dev\"",
+        "onnxruntime; extra == \"docs\"",
+        "opencv-python; extra == \"docs\"",
+        "packaging",
+        "pillow; extra == \"dev\"",
+        "pre-commit>=2; extra == \"dev\"",
+        "pytest-cov; extra == \"dev\"",
+        "pytest-timeout; extra == \"dev\"",
+        "pytest==8.3.5; extra == \"dev\"",
+        "requests; extra == \"dev\"",
+        "setuptools>=61.2; extra == \"dev\"",
+        "sphinx-autodoc-defaultargs; extra == \"docs\"",
+        "sphinx-autodoc-typehints; extra == \"docs\"",
+        "sphinx-copybutton>=0.3; extra == \"docs\"",
+        "sphinx-design; extra == \"docs\"",
+        "sphinx-notfound-page; extra == \"docs\"",
+        "sphinx; extra == \"docs\"",
+        "sphinxcontrib-bibtex; extra == \"docs\"",
+        "sphinxcontrib-gtagjs; extra == \"docs\"",
+        "sphinxcontrib-youtube; extra == \"docs\"",
+        "torch>=2.0.0",
+        "transformers<4.57; extra == \"dev\"",
+        "types-requests; extra == \"dev\""
+      ],
+      "requires_python": ">=3.9",
+      "selection_rank": {
+        "platform": 1,
+        "python": 100
+      },
+      "sha256": "32dfe77c9c74a87a2de49395aa3c2c376a1b63c27611a298b394d02d13905819",
+      "source_license_evidence": null,
+      "url": "https://files.pythonhosted.org/packages/79/d4/e9bd12b7b4cbd23b4dfb47e744ee1fa54d6d9c3c9bc406ec86c1be8c8307/kornia-0.8.2-py2.py3-none-any.whl",
+      "version": "0.8.2"
+    },
+    {
+      "abi_tag": "cp312",
+      "byte_length": 3042197,
+      "filename": "kornia_rs-0.1.10-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "legacy_license": null,
+      "license_classifiers": [
+        "License :: OSI Approved :: Apache Software License"
+      ],
+      "license_expression": null,
+      "metadata_name": "kornia_rs",
+      "metadata_version": "0.1.10",
+      "name": "kornia-rs",
+      "packagetype": "bdist_wheel",
+      "platform_tag": "manylinux_2_17_x86_64.manylinux2014_x86_64",
+      "python_tag": "cp312",
+      "requires_dist": [],
+      "requires_python": ">=3.8",
+      "selection_rank": {
+        "platform": 1017,
+        "python": 300
+      },
+      "sha256": "f332a2a034cc791006f25c2d85e342a060887145e9236e8e43562badcadededf",
+      "source_license_evidence": {
+        "license": "Apache-2.0",
+        "license_git_blob_sha1": "261eeb9e9f8b2b4b0d119366dda99c6fd7d35c64",
+        "repository": "kornia/kornia-rs",
+        "revision": "2c62e6f11a46404f107cad71202c75f5cb975548",
+        "tag": "v0.1.10"
+      },
+      "url": "https://files.pythonhosted.org/packages/63/d4/315f358b2a2c29d9af3a73f3d1973c2fd8e0cdeb65a57af98643e66fa7c8/kornia_rs-0.1.10-cp312-cp312-manylinux_2_17_x86_64.manylinux2014_x86_64.whl",
+      "version": "0.1.10"
+    },
+    {
+      "abi_tag": "abi3",
+      "byte_length": 72927042,
+      "filename": "opencv_python-4.13.0.92-cp37-abi3-manylinux_2_28_x86_64.whl",
+      "legacy_license": "Apache 2.0",
+      "license_classifiers": [
+        "License :: OSI Approved :: Apache Software License"
+      ],
+      "license_expression": null,
+      "metadata_name": "opencv-python",
+      "metadata_version": "4.13.0.92",
+      "name": "opencv-python",
+      "packagetype": "bdist_wheel",
+      "platform_tag": "manylinux_2_28_x86_64",
+      "python_tag": "cp37",
+      "requires_dist": [
+        "numpy<2.0; python_version < \"3.9\"",
+        "numpy>=2; python_version >= \"3.9\""
+      ],
+      "requires_python": ">=3.6",
+      "selection_rank": {
+        "platform": 1028,
+        "python": 207
+      },
+      "sha256": "620d602b8f7d8b8dab5f4b99c6eb353e78d3fb8b0f53db1bd258bb1aa001c1d5",
+      "source_license_evidence": null,
+      "url": "https://files.pythonhosted.org/packages/fd/55/b3b49a1b97aabcfbbd6c7326df9cb0b6fa0c0aefa8e89d500939e04aa229/opencv_python-4.13.0.92-cp37-abi3-manylinux_2_28_x86_64.whl",
+      "version": "4.13.0.92"
+    },
+    {
+      "abi_tag": "cp312",
+      "byte_length": 4933829,
+      "filename": "pyceres-2.6-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+      "legacy_license": "Apache-2.0",
+      "license_classifiers": [
+        "License :: OSI Approved :: Apache Software License"
+      ],
+      "license_expression": null,
+      "metadata_name": "pyceres",
+      "metadata_version": "2.6",
+      "name": "pyceres",
+      "packagetype": "bdist_wheel",
+      "platform_tag": "manylinux_2_27_x86_64.manylinux_2_28_x86_64",
+      "python_tag": "cp312",
+      "requires_dist": [
+        "numpy"
+      ],
+      "requires_python": ">=3.9",
+      "selection_rank": {
+        "platform": 1028,
+        "python": 300
+      },
+      "sha256": "284204c5303c582dc3918f43288e7b78bfc674a01e5561b252298a2d133ad14d",
+      "source_license_evidence": null,
+      "url": "https://files.pythonhosted.org/packages/dc/6d/bea6219072d8d86a5f11f6f61c588780be0bbd5aca1221fc8ad646bcba73/pyceres-2.6-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+      "version": "2.6"
+    },
+    {
+      "abi_tag": "cp312",
+      "byte_length": 61729737,
+      "filename": "pycolmap_cuda12-4.0.4-cp312-cp312-manylinux_2_28_x86_64.whl",
+      "legacy_license": "BSD-3-Clause",
+      "license_classifiers": [
+        "License :: OSI Approved :: BSD License"
+      ],
+      "license_expression": null,
+      "metadata_name": "pycolmap-cuda12",
+      "metadata_version": "4.0.4",
+      "name": "pycolmap-cuda12",
+      "packagetype": "bdist_wheel",
+      "platform_tag": "manylinux_2_28_x86_64",
+      "python_tag": "cp312",
+      "requires_dist": [
+        "cuda-toolkit[cudart,curand]<13,>=12",
+        "numpy"
+      ],
+      "requires_python": ">=3.10",
+      "selection_rank": {
+        "platform": 1028,
+        "python": 300
+      },
+      "sha256": "b70417d62d1ac2c715b6ca0589a4f75be96488020f7b6c3d7e43ebfca443a731",
+      "source_license_evidence": null,
+      "url": "https://files.pythonhosted.org/packages/ee/38/49ec84019731dcc3fe65ff25329a007ac0519e3e704473fd21139ba3dd21/pycolmap_cuda12-4.0.4-cp312-cp312-manylinux_2_28_x86_64.whl",
+      "version": "4.0.4"
+    }
+  ],
+  "compatibility_assertions": {
+    "faiss-cpu": "numpy 2.4.3 satisfies >=1.25,<3; packaging 26.3 is locked in conda",
+    "kornia": "torch 2.4.1 satisfies >=2.0; packaging 26.3 is locked; kornia-rs 0.1.10 satisfies >=0.1.9",
+    "kornia-rs": "exact CPython 3.12 Linux wheel; no Requires-Dist entries",
+    "opencv-python": "target Python 3.12 activates numpy>=2; locked NumPy is 2.4.3",
+    "pyceres": "NumPy requirement is satisfied by locked NumPy 2.4.3",
+    "pycolmap-cuda12": "NumPy 2.4.3 is locked; CUDA 12.4 with cuda-cudart and libcurand is present in the conda closure; pip dependency resolution remains disabled"
+  },
+  "conda_lock_sha256": "0b9a91630a1e15fd2fe61f0c22bcf6605cd5f5997adc312cf6b549935f311c9f",
+  "evidence_kind": "pypi_artifact_resolution_only",
+  "gpu_execution_evidence": false,
+  "index": "https://pypi.org/",
+  "installer_execution_evidence": false,
+  "requested": [
+    {
+      "name": "faiss-cpu",
+      "version": "1.13.2"
+    },
+    {
+      "name": "kornia",
+      "version": "0.8.2"
+    },
+    {
+      "name": "kornia-rs",
+      "version": "0.1.10"
+    },
+    {
+      "name": "opencv-python",
+      "version": "4.13.0.92"
+    },
+    {
+      "name": "pycolmap-cuda12",
+      "version": "4.0.4"
+    },
+    {
+      "name": "pyceres",
+      "version": "2.6"
+    }
+  ],
+  "runtime_execution_evidence": false,
+  "schema_version": 1,
+  "target": {
+    "abi": "cp312",
+    "glibc_ceiling_for_qualification_host": "2.39",
+    "implementation": "cp",
+    "platform": "linux_x86_64",
+    "python": "3.12.12"
+  }
+}
