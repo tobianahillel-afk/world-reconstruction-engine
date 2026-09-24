@@ -1,0 +1,139 @@
+name: geometry-controlled-benchmark
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/geometry-controlled-benchmark.yml"
+      - "src/wre/reconstruction/geometry_solution_comparison.py"
+      - "src/wre/reconstruction/geometry_refinement.py"
+      - "src/wre/reconstruction/colmap_geometry_refinement.py"
+      - "src/wre/reconstruction/geometry_consensus.py"
+      - "src/wre/reconstruction/feed_forward_camera_quality.py"
+      - "src/wre/reconstruction/da3_preview.py"
+      - "src/wre/reconstruction/da3_runtime.py"
+      - "src/wre/reconstruction/colmap_canonical_geometry.py"
+      - "src/wre/reconstruction/colmap_reconstruction.py"
+      - "src/wre/reconstruction/colmap_global_reconstruction.py"
+      - "tests/test_geometry_controlled_benchmark.py"
+      - "tests/fixtures/synthetic/colmap-l3-end-to-end/**"
+      - "docs/reviews/V2L14-precision-global-refinement-review.md"
+      - "registry/components.yaml"
+      - "registry/reviews.yaml"
+      - "registry/work-items/v2m2.yaml"
+      - "PROJECT_STATE.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    name: cpu-da3-colmap-refinement-consensus
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout WRE
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install uv and exact Python
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.13"
+          python-version: "3.12.12"
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Install pinned FFmpeg CLI
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends ffmpeg=7:6.1.1-3ubuntu5
+          test "$(dpkg-query -W -f='${Version}' ffmpeg)" = "7:6.1.1-3ubuntu5"
+          test "$(ffmpeg -version | head -n 1 | awk '{print $3}')" = "6.1.1-3ubuntu5"
+          test "$(ffprobe -version | head -n 1 | awk '{print $3}')" = "6.1.1-3ubuntu5"
+
+      - name: Create exact shared benchmark environment
+        run: |
+          uv venv --python 3.12.12 .venv-benchmark
+          uv pip install --python .venv-benchmark/bin/python -e . "pytest==8.4.2"
+          uv pip install --python .venv-benchmark/bin/python             "addict==2.4.0"             "antlr4-python3-runtime==4.9.3"             "einops==0.8.0"             "filelock==3.32.3"             "fsspec==2026.7.0"             "imageio==2.35.1"             "Jinja2==3.1.6"             "MarkupSafe==3.0.3"             "mpmath==1.3.0"             "networkx==3.6.1"             "numpy==1.26.4"             "omegaconf==2.3.0"             "opencv-python==4.10.0.84"             "Pillow==10.4.0"             "PyYAML==6.0.3"             "safetensors==0.4.5"             "setuptools==78.1.0"             "sympy==1.14.0"             "tqdm==4.66.5"             "typing-extensions==4.16.0"
+          uv pip install --python .venv-benchmark/bin/python             --extra-index-url https://download.pytorch.org/whl/cpu             "torch==2.4.1+cpu"             "torchvision==0.19.1+cpu"
+          uv pip install --python .venv-benchmark/bin/python --no-deps "pycolmap==4.2.0"
+
+      - name: Verify shared environment identities
+        run: |
+          .venv-benchmark/bin/python - <<'PY'
+          import importlib.metadata
+          import importlib.util
+          import pycolmap
+          import sys
+
+          expected = {
+              "numpy": "1.26.4",
+              "torch": "2.4.1+cpu",
+              "torchvision": "0.19.1+cpu",
+              "pycolmap": "4.2.0",
+          }
+          assert sys.version.split()[0] == "3.12.12"
+          for distribution, version in expected.items():
+              actual = importlib.metadata.version(distribution)
+              assert actual == version, (distribution, actual, version)
+          assert pycolmap.__version__ == "4.2.0"
+          assert importlib.util.find_spec("xformers") is None
+          PY
+
+      - name: Provision exact reviewed DA3 source
+        run: |
+          source_root="$RUNNER_TEMP/da3-source"
+          git init "$source_root"
+          git -C "$source_root" remote add origin https://github.com/ByteDance-Seed/Depth-Anything-3.git
+          git -C "$source_root" fetch --depth 1 origin 3d835ec1a5802d64a8b8b15f817a1ab54809bfe4
+          git -C "$source_root" checkout --detach FETCH_HEAD
+          test "$(git -C "$source_root" rev-parse HEAD)" = "3d835ec1a5802d64a8b8b15f817a1ab54809bfe4"
+          test "$(git -C "$source_root" rev-parse HEAD:src/depth_anything_3)" = "be87985cb286f0747d4fd9bfaec47f1b765457ea"
+          test -z "$(git -C "$source_root" status --porcelain --untracked-files=all)"
+          echo "WRE_DA3_SOURCE_ROOT=$source_root" >> "$GITHUB_ENV"
+
+      - name: Provision exact reviewed DA3-BASE checkpoint
+        run: |
+          checkpoint="$RUNNER_TEMP/model.safetensors"
+          curl --fail --location --retry 3 --retry-delay 2             --output "$checkpoint"             "https://huggingface.co/depth-anything/DA3-BASE/resolve/main/model.safetensors?download=true"
+          test "$(stat --format='%s' "$checkpoint")" = "541518028"
+          echo "e01067dc1659613083d9145a9a2547ccdbe6ccbbf83c4fe7b3e8a4e2bdae78b5  $checkpoint"             | sha256sum --check --strict
+          echo "WRE_DA3_CHECKPOINT_PATH=$checkpoint" >> "$GITHUB_ENV"
+
+      - name: Record material CPU hardware identity
+        run: |
+          {
+            uname -srm
+            lscpu
+          } > "$RUNNER_TEMP/benchmark-hardware.txt"
+          hardware_sha256="$(sha256sum "$RUNNER_TEMP/benchmark-hardware.txt" | awk '{print $1}')"
+          test "${#hardware_sha256}" = "64"
+          echo "WRE_DA3_HARDWARE_RUNTIME_SHA256=$hardware_sha256" >> "$GITHUB_ENV"
+
+      - name: Exercise controlled geometry benchmark
+        env:
+          WRE_GEOMETRY_CONTROLLED_BENCHMARK: "1"
+          WRE_GEOMETRY_CONTROLLED_BENCHMARK_OUTPUT: ${{ runner.temp }}/v2l14-6-controlled-geometry.json
+        run: >-
+          .venv-benchmark/bin/python -m pytest
+          tests/test_geometry_controlled_benchmark.py
+          -k real_controlled_geometry_benchmark
+          -vv
+
+      - name: Retain machine-readable benchmark evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v2l14-6-controlled-geometry-benchmark
+          path: ${{ runner.temp }}/v2l14-6-controlled-geometry.json
+          if-no-files-found: error
+          retention-days: 30
