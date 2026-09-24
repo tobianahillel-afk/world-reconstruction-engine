@@ -340,8 +340,12 @@ dependencies:
       source/checkpoint gate must re-hash those official repository bytes and prove
       2738091 bytes plus SHA-256
       5be8704840ed662d9d8c561bf7279c222092674e7eb05fd0feab94899e9d82f2.
-      That will close checkpoint provenance only; a separate CPU no-network constructor
-      proof remains required before runtime execution is allowed.
+      PR #139 closes checkpoint provenance directly from official repository bytes and
+      records the bounded source materialization identity
+      d6da7b8d6aecd1dcb5fe769035e5e83d70cd860879ad17922fec4cc78f782b48.
+      A separate CPU no-network constructor proof remains required before this extractor
+      path can be considered locally loadable; that proof is constructor compatibility
+      evidence only and must not be reported as GLUEMAP geometry or GPU execution.
   faiss_cpu:
     status: candidate_optional
     role: [hybrid_global_pair_dataset]
@@ -705,9 +709,15 @@ dependencies:
       blob d1c1ab2e94716b1c54191a6ed5d01023036836c1, plus a deterministic
       WRE-owned package shim exporting only ALIKED. All other LightGlue extractors,
       matcher code and viz modules are excluded from the bounded source materialization.
+      PR #139 closes the bounded source surface at 5 retained/generated files / 46006
+      bytes / materialization SHA-256
+      d6da7b8d6aecd1dcb5fe769035e5e83d70cd860879ad17922fec4cc78f782b48.
       aliked.py still calls torch.hub.load_state_dict_from_url unconditionally during
-      construction, so source qualification alone does not authorize runtime execution;
-      a separate local-checkpoint/no-network constructor proof remains mandatory.
+      construction, so source qualification alone does not authorize runtime execution.
+      The next authorized CPU constructor proof must use only the PR #139 shim/source
+      and exact local checkpoint, block all network paths, temporarily intercept only
+      the reviewed torch.hub loader call, restore it immediately, and prove no excluded
+      LightGlue module is imported.
   py4dgeo:
     status: candidate_core
     role: [multi_epoch_point_cloud_change, m3c2, temporal_change_measurement]
