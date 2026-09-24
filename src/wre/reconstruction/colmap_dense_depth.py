@@ -321,7 +321,9 @@ def _load_pycolmap() -> Any:
         ) from exc
 
 
-def inspect_colmap_dense_depth_environment(module: object | None = None) -> ColmapEnvironmentIdentity:
+def inspect_colmap_dense_depth_environment(
+    module: object | None = None,
+) -> ColmapEnvironmentIdentity:
     pycolmap = cast(Any, module) if module is not None else _load_pycolmap()
     try:
         environment = inspect_colmap_environment(pycolmap)
