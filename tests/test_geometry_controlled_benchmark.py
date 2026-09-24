@@ -757,9 +757,24 @@ def test_real_controlled_geometry_benchmark(tmp_path: Path) -> None:
 
     preview_candidate = GeometrySolutionCandidate(
         geometry_solution=preview.geometry.geometry_solution,
-        camera_solutions=preview.geometry.camera_solutions,
-        depth_fields=preview.geometry.depth_fields,
-        point_maps=preview.geometry.point_maps,
+        camera_solutions=tuple(
+            sorted(
+                preview.geometry.camera_solutions,
+                key=lambda item: item.solution_id.value,
+            )
+        ),
+        depth_fields=tuple(
+            sorted(
+                preview.geometry.depth_fields,
+                key=lambda item: item.depth_field_id.value,
+            )
+        ),
+        point_maps=tuple(
+            sorted(
+                preview.geometry.point_maps,
+                key=lambda item: item.point_map_id.value,
+            )
+        ),
         producer=preview.producer,
         source_artifacts=_canonical_artifacts(
             _FIXTURE_ARTIFACT,
