@@ -146,7 +146,11 @@ dependencies:
       conda_environment_lock_sha256: 0b9a91630a1e15fd2fe61f0c22bcf6605cd5f5997adc312cf6b549935f311c9f
       conda_environment_lock_packages: 193
       conda_python_closure: active_path_partial
-      pypi_runtime_closure: unresolved
+      pypi_runtime_lock: registry/external-environments/gluemap-linux-64-pypi-lock.json
+      pypi_runtime_lock_sha256: 1f87940324d6827839400dd404ff58006172df5d4b15c49f4b5bf2d2bb64c66b
+      pypi_runtime_artifacts: 6
+      pypi_runtime_artifact_bytes: 167573589
+      pypi_runtime_closure: artifact_locked_no_install_evidence
       conda_build_strings: locked
       previous_mapanything_source_materialization_manifest: registry/external-sources/gluemap-bounded-materialization.json
       previous_mapanything_source_materialization_files: 91
@@ -210,9 +214,15 @@ dependencies:
       the active GLUEMAP+VGGT path. The current
       registry/external-environments/gluemap-linux-64-cuda12.4.conda-lock.json identity is
       SHA-256 0b9a91630a1e15fd2fe61f0c22bcf6605cd5f5997adc312cf6b549935f311c9f.
-      This remains a partial external-environment closure: exact PyPI/source qualification is
-      still required for faiss-cpu 1.13.2, kornia 0.8.2, opencv-python 4.13.0.92,
-      pycolmap-cuda12 4.0.4, pyceres 2.6 and the pinned LightGlue source.
+      The separate PyPI artifact gate now freezes six exact wheels at
+      registry/external-environments/gluemap-linux-64-pypi-lock.json with file SHA-256
+      1f87940324d6827839400dd404ff58006172df5d4b15c49f4b5bf2d2bb64c66b:
+      faiss-cpu 1.13.2, kornia 0.8.2, kornia-rs 0.1.10, opencv-python 4.13.0.92,
+      pycolmap-cuda12 4.0.4 and pyceres 2.6. The lane verifies 167,573,589 artifact bytes
+      against official PyPI digests and exact wheel metadata without installing or importing
+      them, and binds their runtime requirements to the reviewed 193-package conda lock.
+      Exact source/runtime qualification is still required for the pinned LightGlue source,
+      and PyPI artifact evidence is not runtime/GPU execution evidence.
       The accepted solve uses Ceres build cpulgplh45c08c3_10 with no SuiteSparse,
       Clang++ 22.1.8 plus LLVM OpenMP 23.1.1 and no libgomp, and the exact CUDA 12.4
       package closure recorded in that lock. A GNU-only OpenMP solve was rejected because
