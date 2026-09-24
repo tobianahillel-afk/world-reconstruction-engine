@@ -1,0 +1,413 @@
+name: gluemap-vggt-import-compat
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/gluemap-vggt-import-compat.yml"
+      - ".github/workflows/gluemap-vggt-source-materialization.yml"
+      - "registry/external-sources/gluemap-vggt-bounded-materialization.json"
+      - "registry/external-environments/gluemap-linux-64-cuda12.4.conda-lock.json"
+      - "registry/dependencies.yaml"
+      - "registry/work-items/v2m2.yaml"
+      - "PROJECT_STATE.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  import-proof:
+    name: exact-bounded-vggt-source-import-proof
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      GLUEMAP_REPOSITORY: https://github.com/colmap/gluemap.git
+      GLUEMAP_REVISION: adc9e4bb5f41014d3f7c157a879edc278588c829
+      GLUEMAP_TREE: 9f4b6090baca9ad6da78a138372afb17a7f70626
+      VGGT_REPOSITORY: https://github.com/facebookresearch/vggt.git
+      VGGT_REVISION: 44b3afbd1869d8bde4894dd8ea1e293112dd5eba
+      VGGT_TREE: 5ebbc58776783ad1acd6d4901e01161717e5d385
+      SOURCE_MANIFEST: registry/external-sources/gluemap-vggt-bounded-materialization.json
+      SOURCE_MATERIALIZATION_SHA256: 19efc825c7627dc2d7fdf3fed3aa410823e90e81d2f126c57148549aac5fced1
+      SOURCE_MATERIALIZATION_FILES: "93"
+      SOURCE_MATERIALIZATION_BYTES: "744299"
+
+    steps:
+      - name: Checkout WRE
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install uv and exact Python
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.13"
+          python-version: "3.12.12"
+          enable-cache: true
+
+      - name: Create exact bounded CPU environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv venv --python 3.12.12 .venv-vggt-import
+          uv pip install --python .venv-vggt-import/bin/python \
+            --extra-index-url https://download.pytorch.org/whl/cpu \
+            "torch==2.4.1+cpu"
+          uv pip install --python .venv-vggt-import/bin/python \
+            "numpy==2.4.3" \
+            "einops==0.8.2" \
+            "huggingface_hub==1.12.0"
+
+      - name: Verify exact CPU environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv-vggt-import/bin/python - <<'PY'
+          import importlib.metadata
+          import sys
+
+          import numpy
+          import torch
+
+          expected = {
+              "numpy": "2.4.3",
+              "torch": "2.4.1+cpu",
+              "einops": "0.8.2",
+              "huggingface-hub": "1.12.0",
+          }
+          assert sys.version.split()[0] == "3.12.12"
+          for distribution, version in expected.items():
+              actual = importlib.metadata.version(distribution)
+              assert actual == version, (distribution, actual, version)
+          assert numpy.__version__ == "2.4.3"
+          assert torch.__version__ == "2.4.1+cpu"
+          assert torch.cuda.is_available() is False
+          PY
+
+      - name: Reconstruct exact reviewed VGGT source materialization
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="${RUNNER_TEMP}/wre-vggt-import-proof"
+          rm -rf "$root"
+          mkdir -p "$root"
+
+          git init -q "$root/gluemap-upstream"
+          git -C "$root/gluemap-upstream" remote add origin "$GLUEMAP_REPOSITORY"
+          git -C "$root/gluemap-upstream" fetch --quiet --depth=1 origin "$GLUEMAP_REVISION"
+          git -C "$root/gluemap-upstream" checkout --quiet --detach FETCH_HEAD
+          test "$(git -C "$root/gluemap-upstream" rev-parse HEAD)" = "$GLUEMAP_REVISION"
+          test "$(git -C "$root/gluemap-upstream" rev-parse HEAD^{tree})" = "$GLUEMAP_TREE"
+
+          git init -q "$root/vggt-upstream"
+          git -C "$root/vggt-upstream" remote add origin "$VGGT_REPOSITORY"
+          git -C "$root/vggt-upstream" fetch --quiet --depth=1 origin "$VGGT_REVISION"
+          git -C "$root/vggt-upstream" checkout --quiet --detach FETCH_HEAD
+          test "$(git -C "$root/vggt-upstream" rev-parse HEAD)" = "$VGGT_REVISION"
+          test "$(git -C "$root/vggt-upstream" rev-parse HEAD^{tree})" = "$VGGT_TREE"
+
+          .venv-vggt-import/bin/python - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          root = Path(os.environ["RUNNER_TEMP"]) / "wre-vggt-import-proof"
+          manifest_path = Path(os.environ["SOURCE_MANIFEST"])
+          manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+          materialized = root / "materialized"
+
+          expected_identity = os.environ["SOURCE_MATERIALIZATION_SHA256"]
+          expected_files = int(os.environ["SOURCE_MATERIALIZATION_FILES"])
+          expected_bytes = int(os.environ["SOURCE_MATERIALIZATION_BYTES"])
+
+          assert manifest["evidence_kind"] == "source_materialization_only"
+          assert manifest["runtime_execution_evidence"] is False
+          assert manifest["gpu_execution_evidence"] is False
+          assert manifest["sources"]["gluemap"]["revision"] == os.environ["GLUEMAP_REVISION"]
+          assert manifest["sources"]["gluemap"]["tree"] == os.environ["GLUEMAP_TREE"]
+          assert manifest["sources"]["vggt"]["revision"] == os.environ["VGGT_REVISION"]
+          assert manifest["sources"]["vggt"]["tree"] == os.environ["VGGT_TREE"]
+          assert manifest["materialization"]["file_count"] == expected_files
+          assert manifest["materialization"]["byte_length"] == expected_bytes
+          assert manifest["materialization"]["sha256"] == expected_identity
+
+          def git_blob(repo: Path, path: str) -> bytes:
+              return subprocess.check_output(
+                  ["git", "-C", str(repo), "show", f"HEAD:{path}"]
+              )
+
+          source_roots = {
+              "gluemap": root / "gluemap-upstream",
+              "vggt": root / "vggt-upstream",
+          }
+
+          for item in manifest["files"]:
+              relative = item["path"]
+              source = item["source"]
+              if source == "gluemap":
+                  upstream_path = relative
+              elif source == "vggt":
+                  prefix = "thirdparty/vggt/"
+                  assert relative.startswith(prefix), relative
+                  upstream_path = relative[len(prefix):]
+              else:
+                  raise SystemExit(f"unexpected manifest source: {source!r}")
+
+              data = git_blob(source_roots[source], upstream_path)
+              digest = hashlib.sha256(data).hexdigest()
+              assert len(data) == item["byte_length"], relative
+              assert digest == item["sha256"], relative
+
+              destination = materialized / relative
+              destination.parent.mkdir(parents=True, exist_ok=True)
+              destination.write_bytes(data)
+
+          for sentinel in manifest["policy"]["sentinel_directories"]:
+              (materialized / sentinel).mkdir(parents=True, exist_ok=True)
+
+          identity = hashlib.sha256()
+          total_bytes = 0
+          files = []
+          for path in sorted(
+              (candidate for candidate in materialized.rglob("*") if candidate.is_file()),
+              key=lambda candidate: candidate.relative_to(materialized).as_posix(),
+          ):
+              relative = path.relative_to(materialized).as_posix()
+              data = path.read_bytes()
+              digest = hashlib.sha256(data).hexdigest()
+              size = len(data)
+              identity.update(relative.encode("utf-8"))
+              identity.update(b"\0")
+              identity.update(str(size).encode("ascii"))
+              identity.update(b"\0")
+              identity.update(digest.encode("ascii"))
+              identity.update(b"\n")
+              total_bytes += size
+              files.append(relative)
+
+          assert len(files) == expected_files
+          assert total_bytes == expected_bytes
+          assert identity.hexdigest() == expected_identity
+          assert not any(path.is_symlink() for path in materialized.rglob("*"))
+
+          for sentinel in manifest["policy"]["sentinel_directories"]:
+              directory = materialized / sentinel
+              assert not any(
+                  child.is_file() or child.is_symlink()
+                  for child in directory.rglob("*")
+              ), sentinel
+
+          print(
+              f"reconstructed exact VGGT materialization: "
+              f"{len(files)} files / {total_bytes} bytes / {identity.hexdigest()}"
+          )
+          PY
+
+      - name: Prove bounded VGGT import compatibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv-vggt-import/bin/python - <<'PY'
+          from __future__ import annotations
+
+          import http.client
+          import importlib.metadata
+          import json
+          import os
+          import socket
+          import subprocess
+          import sys
+          import urllib.request
+          from pathlib import Path
+
+          import huggingface_hub
+          import numpy as np
+          import torch
+
+          root = Path(os.environ["RUNNER_TEMP"]) / "wre-vggt-import-proof"
+          materialized = root / "materialized"
+          vggt_root = materialized / "thirdparty" / "vggt"
+          evidence_path = Path(os.environ["RUNNER_TEMP"]) / "vggt-import-compat-evidence.json"
+
+          sys.path.insert(0, str(vggt_root))
+
+          attempts: list[dict[str, str]] = []
+
+          def blocked(kind: str):
+              def _blocked(*args, **kwargs):
+                  attempts.append(
+                      {
+                          "kind": kind,
+                          "args": repr(args[:2]),
+                      }
+                  )
+                  raise RuntimeError(f"blocked during VGGT import proof: {kind}")
+              return _blocked
+
+          socket.socket.connect = blocked("socket.socket.connect")
+          socket.create_connection = blocked("socket.create_connection")
+          http.client.HTTPConnection.connect = blocked("http.client.HTTPConnection.connect")
+          http.client.HTTPSConnection.connect = blocked("http.client.HTTPSConnection.connect")
+          urllib.request.urlopen = blocked("urllib.request.urlopen")
+          subprocess.Popen = blocked("subprocess.Popen")
+          subprocess.run = blocked("subprocess.run")
+          subprocess.call = blocked("subprocess.call")
+          subprocess.check_call = blocked("subprocess.check_call")
+          subprocess.check_output = blocked("subprocess.check_output")
+
+          if hasattr(huggingface_hub, "hf_hub_download"):
+              huggingface_hub.hf_hub_download = blocked("huggingface_hub.hf_hub_download")
+          if hasattr(huggingface_hub, "snapshot_download"):
+              huggingface_hub.snapshot_download = blocked("huggingface_hub.snapshot_download")
+
+          try:
+              import httpx
+
+              httpx.Client.request = blocked("httpx.Client.request")
+              httpx.AsyncClient.request = blocked("httpx.AsyncClient.request")
+          except ImportError:
+              pass
+
+          try:
+              import requests
+
+              requests.sessions.Session.request = blocked("requests.Session.request")
+          except ImportError:
+              pass
+
+          from vggt.models.vggt import VGGT
+          from vggt.utils.pose_enc import (
+              extri_intri_to_pose_encoding,
+              pose_encoding_to_extri_intri,
+          )
+          from vggt.utils.rotation import mat_to_quat, quat_to_mat
+
+          assert VGGT.__module__ == "vggt.models.vggt"
+          assert issubclass(VGGT, torch.nn.Module)
+
+          quat = torch.tensor([[0.0, 0.0, 0.0, 1.0]], dtype=torch.float32)
+          rotation = quat_to_mat(quat)
+          identity = torch.eye(3, dtype=torch.float32).unsqueeze(0)
+          assert torch.allclose(rotation, identity, atol=1e-6, rtol=0.0)
+          roundtrip_quat = mat_to_quat(rotation)
+          assert torch.allclose(roundtrip_quat, quat, atol=1e-6, rtol=0.0)
+
+          extrinsics = torch.zeros((1, 1, 3, 4), dtype=torch.float32)
+          extrinsics[..., :3, :3] = torch.eye(3, dtype=torch.float32)
+          extrinsics[..., 0, 3] = 1.25
+          extrinsics[..., 1, 3] = -0.5
+          extrinsics[..., 2, 3] = 2.0
+
+          intrinsics = torch.tensor(
+              [[[[200.0, 0.0, 100.0], [0.0, 120.0, 50.0], [0.0, 0.0, 1.0]]]],
+              dtype=torch.float32,
+          )
+          pose_encoding = extri_intri_to_pose_encoding(
+              extrinsics,
+              intrinsics,
+              image_size_hw=(100, 200),
+          )
+          rebuilt_extrinsics, rebuilt_intrinsics = pose_encoding_to_extri_intri(
+              pose_encoding,
+              image_size_hw=(100, 200),
+          )
+          assert torch.allclose(rebuilt_extrinsics, extrinsics, atol=1e-5, rtol=0.0)
+          assert torch.allclose(rebuilt_intrinsics, intrinsics, atol=1e-4, rtol=0.0)
+
+          banned_roots = (
+              "mapanything",
+              "uniception",
+              "croco",
+              "dust3r",
+              "mast3r",
+              "pi3",
+              "salad",
+              "vggsfm",
+              "doppelgangers",
+          )
+          banned_prefixes = (
+              "vggt.training",
+              "vggt.dependency",
+          )
+          unexpected = []
+          for module_name in sorted(sys.modules):
+              if any(
+                  module_name == root or module_name.startswith(root + ".")
+                  for root in banned_roots
+              ):
+                  unexpected.append(module_name)
+              if any(
+                  module_name == prefix or module_name.startswith(prefix + ".")
+                  for prefix in banned_prefixes
+              ):
+                  unexpected.append(module_name)
+          assert not unexpected, unexpected
+          assert not attempts, attempts
+
+          loaded_vggt = sorted(
+              name for name in sys.modules if name == "vggt" or name.startswith("vggt.")
+          )
+          loaded_vggt_files = {}
+          for name in loaded_vggt:
+              module = sys.modules[name]
+              path = getattr(module, "__file__", None)
+              if path is None:
+                  continue
+              resolved = Path(path).resolve()
+              assert resolved.is_relative_to(vggt_root.resolve()), (name, resolved)
+              loaded_vggt_files[name] = resolved.relative_to(vggt_root.resolve()).as_posix()
+
+          evidence = {
+              "schema_version": 1,
+              "evidence_kind": "source_import_compatibility_only",
+              "source_materialization_sha256": os.environ["SOURCE_MATERIALIZATION_SHA256"],
+              "source_materialization_files": int(os.environ["SOURCE_MATERIALIZATION_FILES"]),
+              "source_materialization_bytes": int(os.environ["SOURCE_MATERIALIZATION_BYTES"]),
+              "python": sys.version.split()[0],
+              "numpy": np.__version__,
+              "torch": torch.__version__,
+              "einops": importlib.metadata.version("einops"),
+              "huggingface_hub": importlib.metadata.version("huggingface-hub"),
+              "vggt_class_imported": True,
+              "vggt_model_instantiated": False,
+              "checkpoint_loaded": False,
+              "forward_executed": False,
+              "gluemap_geometry_executed": False,
+              "runtime_profile_approved": False,
+              "gpu_execution_evidence": False,
+              "network_or_process_attempts": attempts,
+              "unexpected_rejected_modules": unexpected,
+              "loaded_vggt_modules": loaded_vggt,
+              "loaded_vggt_files": loaded_vggt_files,
+              "rotation_roundtrip_max_abs_error": float(
+                  torch.max(torch.abs(roundtrip_quat - quat)).item()
+              ),
+              "pose_extrinsics_roundtrip_max_abs_error": float(
+                  torch.max(torch.abs(rebuilt_extrinsics - extrinsics)).item()
+              ),
+              "pose_intrinsics_roundtrip_max_abs_error": float(
+                  torch.max(torch.abs(rebuilt_intrinsics - intrinsics)).item()
+              ),
+          }
+          evidence_path.write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print(json.dumps(evidence, indent=2, sort_keys=True))
+          PY
+
+      - name: Retain machine-readable VGGT import evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v2l14-4-vggt-import-compat
+          path: ${{ runner.temp }}/vggt-import-compat-evidence.json
+          if-no-files-found: error
+          retention-days: 30
