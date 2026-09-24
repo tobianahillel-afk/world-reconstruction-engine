@@ -1,13 +1,6 @@
 name: lightglue-aliked-source-materialization
 
 on:
-  # Bootstrap only: remove this branch-limited trigger after first reviewed manifest capture.
-  push:
-    branches:
-      - "feature/v2l14-4-freeze-lightglue-aliked-source"
-    paths:
-      - ".github/workflows/lightglue-aliked-source-materialization.yml"
-      - "registry/external-sources/lightglue-aliked-bounded-materialization.json"
   pull_request:
     paths:
       - ".github/workflows/lightglue-aliked-source-materialization.yml"
