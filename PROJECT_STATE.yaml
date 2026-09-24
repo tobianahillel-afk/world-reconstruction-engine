@@ -14,19 +14,21 @@ current_goal: >-
   experimental candidate after source checkpoint license hardware reproducibility and cross-version COLMAP evidence is complete, while keeping
   WRE geometry contracts solver-independent and preserving the classical V2L14.3 baseline.
 next_action: >-
-  Continue V2L14.4 qualification only. The active GLUEMAP+VGGT source gate, 193-package conda closure and six-wheel PyPI artifact gate are now
-  frozen. The PyPI lock is registry/external-environments/gluemap-linux-64-pypi-lock.json with SHA-256
-  1f87940324d6827839400dd404ff58006172df5d4b15c49f4b5bf2d2bb64c66b and covers faiss-cpu 1.13.2, kornia 0.8.2, kornia-rs 0.1.10,
-  opencv-python 4.13.0.92, pycolmap-cuda12 4.0.4 and pyceres 2.6 without installing or importing them. Next qualify the exact pinned LightGlue
-  source/materialization and the local ALIKED no-network path, while keeping the official gated facebook/VGGT-1B-Commercial model.safetensors as
-  a mandatory unresolved external asset. After package/checkpoint redistribution review is complete, prove the reviewed VGGT source path is
-  compatible with NumPy 2.4.3, establish a supported real GPU lane, and exercise a real GLUEMAP-output to WRE PyCOLMAP 4.2.0 cross-read fixture.
-  Do not add the adapter while any technology-gate blocker remains.
+  Continue V2L14.4 qualification only. The active GLUEMAP+VGGT source gate, 193-package conda closure and six-wheel PyPI artifact gate are frozen.
+  Next execute only the newly authorized CPU-only LightGlue/ALIKED source-checkpoint qualification: retain the exact LightGlue LICENSE,
+  aliked.py and utils.py blobs plus a deterministic WRE-owned ALIKED-only package shim; exclude the upstream eager __init__.py, SuperPoint and
+  every unrelated LightGlue extractor/matcher; and re-hash the official ALIKED revision's models/aliked-n16.pth to prove Git blob
+  9449ca16f784aff7fa4c88ea0925b41f6411eef0, 2738091 bytes and SHA-256
+  5be8704840ed662d9d8c561bf7279c222092674e7eb05fd0feab94899e9d82f2. This source/checkpoint gate must not import or instantiate ALIKED.
+  After it is frozen, prove a separate bounded CPU local-checkpoint constructor path with all Git/HTTP/HuggingFace/torch.hub network access
+  fail-closed. The official gated facebook/VGGT-1B-Commercial model.safetensors remains independently unresolved. Do not add the adapter while
+  any technology-gate blocker remains.
 blockers:
   - V2L14.4 has no executable supported GPU runner in repository CI; the reviewed GLUEMAP reference environment is CUDA/GPU while current WRE workflows are CPU-hosted.
   - V2L14.4 MapAnything plus UniCeption is blocked for the first shipping-oriented profile. Exact source inspection found CC-BY-NC-SA-4.0 non-commercial CroCo/DUSt3R files on the actual MapAnything import path despite UniCeption's BSD root LICENSE; PR #129 is retained only as superseded qualification evidence and that route must not execute.
   - V2L14.4 VGGT-1B-Commercial checkpoint qualification is incomplete. PR #133 closes the source-byte gate at 93 files / 744299 bytes / SHA-256 19efc825c7627dc2d7fdf3fed3aa410823e90e81d2f126c57148549aac5fced1 for the exact GLUEMAP+VGGT source pair, but the official commercial checkpoint repository is gated and its immutable repository revision, model.safetensors SHA-256 and byte length have not yet been obtained from official bytes. No unofficial mirror identity is acceptable.
-  - V2L14.4 transitive redistribution review remains incomplete. The current conda lock records non-blank direct license metadata for all 193 exact builds and the PyPI gate records exact wheel/license metadata for six additional artifacts, including exact-source Apache-2.0 evidence for kornia-rs 0.1.10. NVIDIA/cuDNN/Intel LicenseRef terms, reciprocal/copyleft components, the custom VGGT license, LightGlue/ALIKED execution posture and model redistribution terms still require use-mode review; inventory is not shipping approval.
+  - V2L14.4 LightGlue/ALIKED source and local-loading qualification is incomplete. Exact-source review proves the upstream LightGlue package root eagerly imports unrelated extractors and superpoint.py carries an unpublished-copyright/reproduction-restriction header, so the active profile must use an ALIKED-only bounded materialization rather than the upstream package root. The official ALIKED checkpoint identity is pinned but still must be re-hashed directly from the exact official repository revision, and LightGlue's unconditional torch.hub download constructor still requires a separate no-network local-loading proof.
+  - V2L14.4 transitive redistribution review remains incomplete. The current conda lock records non-blank direct license metadata for all 193 exact builds and the PyPI gate records exact wheel/license metadata for six additional artifacts, including exact-source Apache-2.0 evidence for kornia-rs 0.1.10. NVIDIA/cuDNN/Intel LicenseRef terms, reciprocal/copyleft components, the custom VGGT license, the bounded LightGlue/ALIKED source/checkpoint surface and model redistribution terms still require use-mode review; inventory is not shipping approval.
   - V2L14.4 Python packaging compatibility is unresolved at execution time. The exact GLUEMAP pyproject pins numpy==2.4.3 while the exact VGGT pyproject declares numpy<2, so VGGT still must be consumed from the reviewed source materialization without dependency resolution. The conda and PyPI artifact closures are now pinned, but the selected VGGT source path and LightGlue/ALIKED import path still require real runtime compatibility evidence against NumPy 2.4.3 before the gate can close.
   - V2L14.4 has not yet produced a real GLUEMAP native sparse model for WRE PyCOLMAP 4.2.0 cross-read compatibility evidence against GLUEMAP's isolated pycolmap-cuda12 4.0.4 environment.
 architecture:
