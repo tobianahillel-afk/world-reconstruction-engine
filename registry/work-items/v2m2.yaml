@@ -1886,7 +1886,7 @@ work_items:
   - id: V2L14.5
     lot: V2L14
     title: Geometry consensus disagreement metrics
-    status: ready
+    status: done
     objective: Define deterministic solver-independent pairwise geometry disagreement evidence over complete GeometrySolutionCandidate values using only canonical camera and solution semantics that are comparable without estimating an alignment, so CPU-available DA3 and COLMAP candidates can be cross-checked without requiring the deferred V2L14.4 GPU specialist or selecting a winner.
     allowed_scope:
       - src/wre/reconstruction/geometry_consensus.py
@@ -1955,7 +1955,95 @@ work_items:
       - provenance regression proving exact evaluator/configuration identity and canonical input ArtifactRefs
       - module-surface regression proving numpy torch pycolmap CUDA GLUEMAP VGGT alignment quality-decision routing MVS surface appearance and V2L14.6 behavior are absent
       - full fast CI and every repository path-triggered compatibility lane
-  - {id: V2L14.6, lot: V2L14, title: Controlled geometry comparison benchmark, status: planned, depends_on: [V2L14.5]}
+  - id: V2L14.6
+    lot: V2L14
+    title: Controlled geometry comparison benchmark
+    status: ready
+    objective: Run one retained CPU-only controlled geometry benchmark over the approved canonical alternatives from V2L13 and V2L14, combine trusted-reference pose evidence with V2L14.5 pairwise consensus disagreement evidence, and close the V2L14 lot review without selecting a universal winner or making the deferred accelerator specialist mandatory.
+    allowed_scope:
+      - tests/test_geometry_controlled_benchmark.py
+      - .github/workflows/geometry-controlled-benchmark.yml
+      - docs/reviews/V2L14-precision-global-refinement-review.md
+      - focused lifecycle updates to registry/components.yaml registry/reviews.yaml PROJECT_STATE.yaml and this work-item registry only after retained benchmark evidence is green so V2L15.1 can be activated without implementing it
+    out_of_scope:
+      - adding or changing a production solver model refinement algorithm or canonical geometry contract
+      - integrating or executing the deferred GLUEMAP VGGT accelerator specialist
+      - requiring CUDA GPU NPU or another accelerator for the mandatory benchmark
+      - estimating cross-candidate SE3 Sim3 scale alignment ICP registration pose graph or coordinate transforms
+      - comparing raw PointMap positions DepthField values surfaces or absolute translations across unrelated LocalFrameId values
+      - selecting the largest global component when COLMAP global reconstruction returns disconnected models
+      - overall score winner rank preferred route threshold QualityDecision routing retry fallback default or shipping promotion
+      - representative performance profiling already owned by V2L13.6
+      - dense MVS depth fusion physical surface appearance dynamics chronology MasterScene RuntimeScene or V2L15.1 implementation
+    depends_on: [V2L14.5]
+    read_before:
+      - docs/00_START_HERE.md
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md
+      - docs/reviews/V2L12-classical-precision-geometry-review.md
+      - docs/reviews/V2L13-feed-forward-geometry-review.md
+      - docs/reviews/V2L13-preview-classical-comparison.md
+      - registry/components.yaml
+      - registry/reviews.yaml
+      - registry/work-items/v2m2.yaml
+      - PROJECT_STATE.yaml
+      - src/wre/reconstruction/geometry_solution_comparison.py
+      - src/wre/reconstruction/geometry_refinement.py
+      - src/wre/reconstruction/colmap_geometry_refinement.py
+      - src/wre/reconstruction/geometry_consensus.py
+      - src/wre/reconstruction/feed_forward_camera_quality.py
+      - src/wre/reconstruction/da3_preview.py
+      - src/wre/reconstruction/colmap_canonical_geometry.py
+      - src/wre/reconstruction/colmap_reconstruction.py
+      - src/wre/reconstruction/colmap_global_reconstruction.py
+      - tests/test_feed_forward_classical_comparison.py
+      - tests/test_colmap_geometry_refinement.py
+      - tests/fixtures/synthetic/colmap-l3-end-to-end/fixture.json
+      - .github/workflows/feed-forward-classical-comparison.yml
+    reuse:
+      - the existing colmap-l3-end-to-end deterministic rendered fixture source ObservationId membership source-byte hashes and trusted reference cameras from V2L13.5 rather than inventing a new truth fixture
+      - the exact reviewed DA3-BASE source checkpoint Python 3.12.12 Torch CPU reference environment and execute_da3_base_preview path retained by V2L13
+      - the exact approved PyCOLMAP 4.2.0 CPU feature extraction exhaustive matching geometric verification incremental mapping and global mapping configurations from V2L12
+      - ColmapGeometryOutcome semantics so zero-model and disconnected-model outcomes remain explicit and no largest component is silently selected
+      - the exact one-thread CPU Ceres ColmapBundleAdjustmentRefinementAdapter from V2L14.3 applied only to the audited incremental native model that exactly matches its canonical initialization
+      - GeometrySolutionCandidate CompetingGeometrySolutions and canonical pair derivation from V2L14.1
+      - evaluate_geometry_consensus and its exact evaluator provenance from V2L14.5 for symmetric cross-candidate disagreement
+      - evaluate_camera_pose_quality from V2L13.4 for projection-independent pose evidence against the one shared trusted reference tuple
+      - existing immutable source database checkpoint source-tree and artifact hashing checks from the reviewed DA3 and COLMAP integration lanes
+    acceptance:
+      - Add one dedicated geometry-controlled-benchmark CPU workflow on ubuntu-24.04 using exact Python 3.12.12 the reviewed DA3 CPU dependency closure and PyCOLMAP 4.2.0. The workflow must not require or probe an accelerator as a success condition and must not install GLUEMAP or VGGT.
+      - Reuse exactly one deterministic source-observation set from colmap-l3-end-to-end for every benchmark route and retain source ObservationIds source asset SHA-256 values and the exact trusted reference-camera membership in the machine-readable record.
+      - Execute the exact DA3-BASE CPU preview route and retain one complete canonical GeometrySolutionCandidate with exact model checkpoint producer configuration hardware normalization and source evidence.
+      - Run COLMAP feature extraction matching and geometric verification exactly once for the shared classical input. The retained verification database must remain byte-identical while incremental global and refinement work use private copies or fresh output roots.
+      - Execute the exact PyCOLMAP 4.2.0 incremental CPU route. It must yield exactly one canonical model for the baseline candidate; zero or disconnected incremental outcomes make the controlled benchmark unresolved rather than triggering component selection merging or alignment.
+      - Execute V2L14.3 bundle adjustment only on the audited native incremental model and its exactly matching canonical initialization. Retain the initialization and refined GeometrySolutionCandidate as distinct immutable hypotheses with distinct GeometrySolutionId values and unresolved local scale.
+      - Attempt the exact V2L12 global CPU route from the same verified evidence and inputs. If it yields exactly one canonical model include it as another GeometrySolutionCandidate. If it yields zero or disconnected models record that exact route outcome and exclude no individual component by rank size or convenience.
+      - Construct one canonical CompetingGeometrySolutions aggregate from every complete benchmark candidate. The benchmark must contain at least DA3 preview incremental COLMAP and BA-refined COLMAP candidates and therefore at least three hypotheses even when the global route remains unresolved.
+      - Evaluate V2L14.5 GeometryConsensusResult over the complete aggregate and retain exactly one metric vector for every canonical unordered pair. Pair count must equal N choose 2 and every metric must preserve the exact consensus evaluator and input ArtifactRef provenance.
+      - Evaluate the projection-independent V2L13.4 camera pose metric vector for each complete candidate against the same trusted reference cameras. Reference evidence and pairwise consensus are retained as separate descriptive dimensions and must never be collapsed into one overall score.
+      - Do not coerce projection models intrinsics image dimensions scale or LocalFrameId values to manufacture comparability. Pose and consensus dimensions that are valid remain available while non-comparable intrinsic raw point depth and coordinate dimensions remain absent or explicitly unresolved.
+      - Retain one deterministic JSON benchmark artifact containing fixture identity route outcomes candidate identities producer and configuration identities exact reference metric vectors complete pairwise consensus vectors and explicit unavailable dimensions. The schema must have no winner preferred route rank score threshold default route retry fallback QualityDecision or shipping-promotion field.
+      - Preserve source observations DA3 checkpoint reviewed DA3 source checkout verification database and audited native COLMAP source bytes across benchmark execution; mutation or identity drift fails closed.
+      - Add docs/reviews/V2L14-precision-global-refinement-review.md covering V2L14.1 through V2L14.6 including the V2L14.4 NO-GO deferred accelerator decision. The lot review may PASS only when the controlled CPU benchmark and all existing V2L14 invariants are green; PASS does not promote one geometry backend as universal truth or default.
+      - On green retained evidence mark V2L14.6 done precision_global_refinement implemented and V2L14 passed in registry/reviews.yaml then activate V2L15.1 with a full executable dense-depth artifact contract. Do not include any V2L15 implementation in the same PR.
+    tests:
+      - benchmark-record schema regression proving exact fixture source route candidate producer configuration reference-metric and consensus-metric identities with no selection or default fields
+      - exact three-candidate minimum regression covering DA3 preview COLMAP incremental and COLMAP BA-refined hypotheses plus complete three-pair consensus topology
+      - global-route single-model regression including the global candidate when available and zero-or-disconnected regression proving no component selection merge alignment or fabricated candidate
+      - trusted-reference regression proving every included candidate is evaluated against the same reference-camera ObservationId tuple with only projection-independent pose metrics
+      - consensus regression proving every benchmark candidate pair uses the V2L14.5 evaluator and canonical ArtifactRef provenance without recomputing an alignment
+      - refinement-lineage regression proving the BA output derives from the exact incremental native model while source native bytes remain unchanged and the output uses a distinct GeometrySolutionId
+      - source and checkpoint immutability regressions for rendered inputs DA3 source checkout DA3 checkpoint verification database and retained COLMAP native model
+      - projection scale frame and representation regression proving incompatible dimensions are not coerced into symmetric intrinsic or raw-coordinate metrics
+      - lot-review regression proving the retained review names the controlled fixture CPU-only mandatory path deferred V2L14.4 specialist explicit limitations no universal winner and no default promotion
+      - module and workflow surface regression proving GLUEMAP VGGT CUDA-only requirements routing selection MVS surface appearance dynamics chronology and V2L15.1 implementation remain absent
+      - full fast CI CodeQL COLMAP integration DA3 reference DA3 execution profile feed-forward classical comparison dependency review and dedicated geometry-controlled benchmark lane
   - {id: V2L15.1, lot: V2L15, title: Dense depth artifact contract, status: planned, depends_on: [V2L14.6]}
   - {id: V2L15.2, lot: V2L15, title: COLMAP MVS PatchMatch donor baseline adapter, status: planned, depends_on: [V2L15.1]}
   - {id: V2L15.3, lot: V2L15, title: Depth consistency fusion contract, status: planned, depends_on: [V2L15.2]}
