@@ -138,6 +138,29 @@ entries:
     failure_signals: []
     metric_names: []
     resume_mode: unsupported
+  - adapter_id: colmap.patch_match_dense_depth
+    capability:
+      name: geometry.dense_depth.classical_mvs
+      input_kinds: [geometry.colmap_native_sparse_model, geometry.solution, image.observation]
+      output_kinds: [geometry.dense_depth]
+    producer:
+      implementation: pycolmap.patch_match_stereo
+      version: 4.2.0
+      revision: be5e29168d4aff238409d60424812df66aac919f
+    dependency_refs: [colmap_mvs_cuda12_4_2_0]
+    model: null
+    checkpoint: null
+    artifact_key_hardware_policy: required
+    license:
+      direct: BSD-3-Clause
+      review: pending
+      transitive_notes: "COLMAP 4.2.0 source is BSD-3-Clause, but this accelerator-only donor uses the official pycolmap-cuda12 distribution and its CUDA runtime closure; exact wheel, Python, NumPy, CUDA package and redistribution evidence remains pending until the retained accelerator lane is available."
+      redistribution_notes: "WRE keeps the CUDA MVS donor in a separate optional external environment, verifies exact retained source/image/model identities, and does not bundle, redistribute, silently download, or promote this donor to a default route through this experimental registry entry."
+    shipping_status: experimental
+    reproducibility_notes: "V2L15.2 binds one exact audited COLMAP-native sparse model and immutable source-image manifest, re-canonicalizes that source through the exact COLMAP 4.2.0 CUDA donor, prepares a fresh private no-resize PINHOLE COLMAP workspace with undistort_images, executes geometric-consistency patch_match_stereo on explicit accelerator index 0, and normalizes only actually emitted geometric DepthMap outputs into canonical camera-z DenseDepthArtifact evidence. It never calls stereo_fusion, never upgrades local scale, and keeps hardware identity in derived artifact keys. Real accelerator evidence remains mandatory before lifecycle completion."
+    failure_signals: [dependency_unavailable, environment_incompatible, source_identity_mismatch]
+    metric_names: []
+    resume_mode: unsupported
   - adapter_id: colmap.precision_geometry
     capability:
       name: geometry.precision_sfm
