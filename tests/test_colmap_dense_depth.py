@@ -605,9 +605,12 @@ def test_patchmatch_derives_camera_z_depth_without_fusion(tmp_path: Path) -> Non
     assert result.artifact_ref.artifact_kind == DENSE_DEPTH_ARTIFACT_KIND
     assert result.source_geometry is source.source_geometry
     assert len(result.depth_fields) == 2
-    assert tuple(item.observation_id.value for item in result.depth_fields) == (
+    assert {item.observation_id.value for item in result.depth_fields} == {
         "obs:a",
         "obs:b",
+    }
+    assert tuple(item.depth_field_id.value for item in result.depth_fields) == tuple(
+        sorted(item.depth_field_id.value for item in result.depth_fields)
     )
     for depth in result.depth_fields:
         assert depth.depth_value_convention is COLMAP_CAMERA_Z_CONVENTION
