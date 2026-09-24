@@ -54,6 +54,7 @@ ROTATE_Z_90: RotationMatrix3x3 = (
     (1.0, 0.0, 0.0),
     (0.0, 0.0, 1.0),
 )
+DEFAULT_TEST_DIMENSIONS = ImageDimensions(width_px=4, height_px=3)
 
 
 def _metrics() -> MetricVector:
@@ -130,7 +131,7 @@ def _camera(
     center: tuple[float, float, float],
     rotation: RotationMatrix3x3 = IDENTITY,
     projection: str = "pinhole",
-    dimensions: ImageDimensions = ImageDimensions(width_px=4, height_px=3),
+    dimensions: ImageDimensions = DEFAULT_TEST_DIMENSIONS,
     intrinsic_parameters: tuple[float, ...] = (3.0, 3.0, 2.0, 1.5),
 ) -> CameraSolution:
     rotated_center = _matvec(rotation, center)
@@ -168,7 +169,7 @@ def _candidate(
     scale: GeometryScaleStatus = GeometryScaleStatus.UNRESOLVED,
     representation: str = "point",
     projection: str = "pinhole",
-    dimensions: ImageDimensions = ImageDimensions(width_px=4, height_px=3),
+    dimensions: ImageDimensions = DEFAULT_TEST_DIMENSIONS,
     intrinsic_parameters: tuple[float, ...] = (3.0, 3.0, 2.0, 1.5),
 ) -> GeometrySolutionCandidate:
     local_frame = LocalFrameId(frame or f"frame:{token}")
