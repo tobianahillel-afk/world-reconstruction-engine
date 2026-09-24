@@ -50,6 +50,32 @@ dependencies:
       BSD-3-Clause but separately licensed dependencies can affect a concrete build/distribution.
       Any alternate COLMAP build, bundled redistribution, mandatory-runtime packaging, or other
       integration mode requires a fresh dependency and license review.
+  colmap_mvs_cuda12_4_2_0:
+    status: candidate_optional
+    role: [dense_depth_mvs]
+    integration: official_pycolmap_cuda_external_environment
+    version_policy: pin_exact_external_environment
+    pinned_version: 4.2.0
+    python_package: pycolmap-cuda12==4.2.0
+    source_revision: be5e29168d4aff238409d60424812df66aac919f
+    upstream_repository: colmap/colmap
+    license: BSD-3-Clause
+    license_review: pending
+    notes: >-
+      V2L15.2 uses a separate accelerator-only donor environment for official
+      PyCOLMAP/COLMAP 4.2.0 PatchMatch MVS. The exact source is the COLMAP 4.2.0
+      tag commit be5e29168d4aff238409d60424812df66aac919f. COLMAP's official
+      build-pycolmap workflow publishes the Linux CUDA wheel under the package name
+      pycolmap-cuda12 and adds cuda-toolkit[cudart,curand]>=12,<13. This environment
+      must remain isolated from WRE's approved CPU pycolmap==4.2.0 environment.
+      The adapter fails closed unless runtime inspection reports PyCOLMAP 4.2.0,
+      COLMAP 4.2.0, the exact source revision in COLMAP_build, has_cuda=true, and
+      the required undistort_images, patch_match_stereo and DepthMap APIs.
+      Direct COLMAP source is BSD-3-Clause, but the concrete wheel digest, Python,
+      NumPy, CUDA runtime package identities and redistribution posture remain
+      unresolved until the dedicated retained accelerator lane freezes and executes
+      the exact environment. This record therefore does not approve shipping,
+      default promotion, CPU fallback, or bundled redistribution.
   da3_base:
     status: candidate_optional
     role: [feed_forward_geometry_preview]
