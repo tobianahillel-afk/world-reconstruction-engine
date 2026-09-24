@@ -118,21 +118,43 @@ jobs:
                           return True
               return False
 
-          def platform_compatible(platform_tag: str) -> bool:
-              tags = platform_tag.split(".")
-              if "any" in tags:
-                  return True
-              for tag in tags:
+          def platform_rank(platform_tag: str) -> int | None:
+              ranks = []
+              for tag in platform_tag.split("."):
+                  if tag == "any":
+                      ranks.append(1)
+                      continue
                   if tag == "linux_x86_64":
-                      return True
+                      ranks.append(2)
+                      continue
                   match = re.fullmatch(r"manylinux_(\d+)_(\d+)_x86_64", tag)
                   if match:
                       major, minor = map(int, match.groups())
                       if major == 2 and minor <= 39:
-                          return True
-                  if re.fullmatch(r"manylinux(1|2010|2014)_x86_64", tag):
-                      return True
-              return False
+                          ranks.append(1000 + minor)
+                      continue
+                  legacy = {"1": 5, "2010": 12, "2014": 17}
+                  match = re.fullmatch(r"manylinux(1|2010|2014)_x86_64", tag)
+                  if match:
+                      ranks.append(1000 + legacy[match.group(1)])
+              return max(ranks) if ranks else None
+
+          def python_rank(python_tag: str, abi_tag: str) -> int | None:
+              py_tags = python_tag.split(".")
+              abi_tags = abi_tag.split(".")
+              if "cp312" in py_tags and "cp312" in abi_tags:
+                  return 300
+              if "abi3" in abi_tags:
+                  compatible = []
+                  for tag in py_tags:
+                      match = re.fullmatch(r"cp3(\d+)", tag)
+                      if match and int(match.group(1)) <= 12:
+                          compatible.append(int(match.group(1)))
+                  if compatible:
+                      return 200 + max(compatible)
+              if "py3" in py_tags and "none" in abi_tags:
+                  return 100
+              return None
 
           def select_wheel(files: list[dict], package: str, version: str) -> dict:
               candidates = []
@@ -144,10 +166,14 @@ jobs:
                       py_tag, abi_tag, platform_tag = wheel_tags(filename)
                   except ValueError:
                       continue
-                  if python_compatible(py_tag, abi_tag) and platform_compatible(platform_tag):
-                      candidates.append((filename, py_tag, abi_tag, platform_tag, item))
+                  py_rank = python_rank(py_tag, abi_tag)
+                  plat_rank = platform_rank(platform_tag)
+                  if py_rank is not None and plat_rank is not None:
+                      candidates.append(
+                          (py_rank, plat_rank, filename, py_tag, abi_tag, platform_tag, item)
+                      )
 
-              if len(candidates) != 1:
+              if not candidates:
                   summary = [
                       {
                           "filename": item.get("filename"),
@@ -158,17 +184,29 @@ jobs:
                       for item in files
                   ]
                   raise SystemExit(
-                      f"{package}=={version}: expected exactly one compatible Linux x86_64 "
-                      f"CPython 3.12 wheel, found {len(candidates)}. Published files: "
-                      + json.dumps(summary, sort_keys=True)
+                      f"{package}=={version}: no compatible Linux x86_64 CPython 3.12 "
+                      "wheel. Published files: " + json.dumps(summary, sort_keys=True)
                   )
-              filename, py_tag, abi_tag, platform_tag, item = candidates[0]
+
+              candidates.sort(key=lambda candidate: (candidate[0], candidate[1], candidate[2]))
+              best_rank = candidates[-1][:2]
+              best = [candidate for candidate in candidates if candidate[:2] == best_rank]
+              if len(best) != 1:
+                  raise SystemExit(
+                      f"{package}=={version}: ambiguous best compatible wheels at rank "
+                      f"{best_rank}: {[candidate[2] for candidate in best]}"
+                  )
+              _py_rank, _plat_rank, filename, py_tag, abi_tag, platform_tag, item = best[0]
               return {
                   "item": item,
                   "python_tag": py_tag,
                   "abi_tag": abi_tag,
                   "platform_tag": platform_tag,
                   "filename": filename,
+                  "selection_rank": {
+                      "python": best_rank[0],
+                      "platform": best_rank[1],
+                  },
               }
 
           artifacts = []
@@ -242,6 +280,7 @@ jobs:
                       "python_tag": selected["python_tag"],
                       "abi_tag": selected["abi_tag"],
                       "platform_tag": selected["platform_tag"],
+                      "selection_rank": selected["selection_rank"],
                       "requires_python": item.get("requires_python") or info.get("requires_python"),
                       "url": item["url"],
                       "sha256": sha256,
