@@ -52,6 +52,11 @@ jobs:
             pyproject.toml
             uv.lock
 
+      - name: Diagnose Ruff formatter delta
+        run: |
+          uvx --from ruff==0.16.7 ruff format --diff tests/test_geometry_controlled_benchmark.py
+          exit 1
+
       - name: Install pinned FFmpeg CLI
         run: |
           sudo apt-get update
