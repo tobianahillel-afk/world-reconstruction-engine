@@ -13,6 +13,12 @@ on:
       - "src/wre/reconstruction/__init__.py"
       - "tests/test_colmap_dense_depth.py"
   workflow_dispatch:
+    inputs:
+      run_real_cuda:
+        description: "Run the retained real COLMAP PatchMatch CUDA fixture on trusted main"
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -337,3 +343,213 @@ jobs:
           path: ${{ runner.temp }}/colmap-mvs-cuda12-4.2.0.json
           if-no-files-found: error
           retention-days: 30
+
+  real-cuda-patchmatch:
+    name: pycolmap-cuda12-4.2.0-real-patchmatch
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_real_cuda && github.ref == 'refs/heads/main' && github.repository == 'tobianahillel-afk/world-reconstruction-engine' }}
+    needs: qualify-environment
+    runs-on: [self-hosted, linux, x64, wre-cuda12]
+    timeout-minutes: 45
+    env:
+      LOCK_PATH: registry/external-environments/colmap-mvs-cuda12-4.2.0.json
+      WRE_COLMAP_MVS_REAL_CUDA: "1"
+      WRE_COLMAP_MVS_REAL_ROOT: ${{ runner.temp }}/wre-colmap-mvs-real
+      WRE_COLMAP_MVS_HARDWARE_EVIDENCE: ${{ runner.temp }}/wre-colmap-mvs-hardware.json
+      WRE_COLMAP_MVS_EVIDENCE_PATH: ${{ runner.temp }}/wre-colmap-mvs-real-evidence.json
+
+    steps:
+      - name: Checkout trusted main
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install exact uv Python and frozen WRE test harness
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.13"
+          python-version: "3.12.12"
+          enable-cache: false
+
+      - name: Sync frozen WRE test harness without PyCOLMAP
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv sync --frozen --group dev
+          .venv/bin/python - <<'PY'
+          import importlib.util
+          import sys
+
+          assert sys.version.split()[0] == "3.12.12", sys.version
+          assert importlib.util.find_spec("pycolmap") is None, (
+              "frozen WRE test harness must not preinstall a CPU PyCOLMAP"
+          )
+          PY
+
+      - name: Download verify and install exact accelerator wheel closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          wheel_dir="$RUNNER_TEMP/colmap-mvs-real-wheels"
+          rm -rf "$wheel_dir"
+          mkdir -p "$wheel_dir"
+
+          WHEEL_DIR="$wheel_dir" .venv/bin/python - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import os
+          import urllib.request
+          from pathlib import Path
+
+          lock = json.loads(Path(os.environ["LOCK_PATH"]).read_text(encoding="utf-8"))
+          wheel_dir = Path(os.environ["WHEEL_DIR"])
+          artifacts = lock["artifacts"]
+          if len(artifacts) != 5:
+              raise SystemExit(f"expected exactly five reviewed accelerator wheels, got {len(artifacts)}")
+
+          for item in artifacts:
+              filename = str(item["filename"])
+              if Path(filename).name != filename or not filename.endswith(".whl"):
+                  raise SystemExit(f"unsafe reviewed wheel filename: {filename}")
+              request = urllib.request.Request(
+                  str(item["url"]),
+                  headers={"User-Agent": "WRE-V2L15.2-real-CUDA-evidence/1"},
+              )
+              with urllib.request.urlopen(request, timeout=120) as response:
+                  payload = response.read()
+              digest = hashlib.sha256(payload).hexdigest()
+              if digest != item["sha256"]:
+                  raise SystemExit(
+                      f"{filename}: SHA-256 mismatch {digest} != {item['sha256']}"
+                  )
+              if len(payload) != item["byte_length"]:
+                  raise SystemExit(
+                      f"{filename}: byte length mismatch {len(payload)} != {item['byte_length']}"
+                  )
+              (wheel_dir / filename).write_bytes(payload)
+
+          actual = sorted(path.name for path in wheel_dir.glob("*.whl"))
+          expected = sorted(str(item["filename"]) for item in artifacts)
+          if actual != expected:
+              raise SystemExit(f"downloaded wheel membership drift: {actual} != {expected}")
+          PY
+
+          uv pip install --python .venv/bin/python --no-deps "$wheel_dir"/*.whl
+
+      - name: Verify exact real CUDA PyCOLMAP environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v nvidia-smi >/dev/null
+          nvidia-smi -L
+
+          .venv/bin/python - <<'PY'
+          import numpy
+          import pycolmap
+
+          from wre.reconstruction.colmap_dense_depth import (
+              COLMAP_PATCH_MATCH_DENSE_DEPTH_SOURCE_REVISION,
+              inspect_colmap_dense_depth_environment,
+          )
+
+          assert numpy.__version__ == "2.5.3", numpy.__version__
+          environment = inspect_colmap_dense_depth_environment(pycolmap)
+          assert environment.pycolmap_version == "4.2.0"
+          assert environment.upstream_has_cuda is True
+          assert COLMAP_PATCH_MATCH_DENSE_DEPTH_SOURCE_REVISION in environment.colmap_build
+          print(environment)
+          PY
+
+      - name: Record material GPU hardware identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf "$WRE_COLMAP_MVS_REAL_ROOT"
+          rm -f "$WRE_COLMAP_MVS_HARDWARE_EVIDENCE" "$WRE_COLMAP_MVS_EVIDENCE_PATH"
+
+          .venv/bin/python - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import os
+          import platform
+          import subprocess
+          from pathlib import Path
+
+          query = subprocess.check_output(
+              [
+                  "nvidia-smi",
+                  "--query-gpu=index,uuid,name,driver_version,pci.bus_id",
+                  "--format=csv,noheader,nounits",
+              ],
+              text=True,
+          ).strip()
+          if not query:
+              raise SystemExit("nvidia-smi returned no GPU rows")
+
+          document = {
+              "schema_version": 1,
+              "evidence_kind": "wre_hardware_runtime_identity",
+              "gpu_execution_evidence": True,
+              "machine": platform.machine(),
+              "kernel_release": platform.release(),
+              "system": platform.system(),
+              "nvidia_gpus": [line.strip() for line in query.splitlines() if line.strip()],
+          }
+          payload = (
+              json.dumps(document, indent=2, sort_keys=True) + "\n"
+          ).encode("utf-8")
+          path = Path(os.environ["WRE_COLMAP_MVS_HARDWARE_EVIDENCE"])
+          path.write_bytes(payload)
+          digest = hashlib.sha256(payload).hexdigest()
+          with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as stream:
+              stream.write(f"WRE_COLMAP_MVS_HARDWARE_SHA256={digest}\n")
+          print(f"hardware_sha256={digest}")
+          PY
+
+      - name: Execute real WRE COLMAP PatchMatch dense-depth fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv/bin/python -m pytest -q             tests/test_colmap_dense_depth.py::test_real_cuda_patchmatch_retained_fixture
+
+      - name: Validate retained real accelerator evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv/bin/python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          evidence_path = Path(os.environ["WRE_COLMAP_MVS_EVIDENCE_PATH"])
+          evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+          assert evidence["evidence_kind"] == "real_colmap_patchmatch_dense_depth_cuda"
+          assert evidence["runtime_execution_evidence"] is True
+          assert evidence["gpu_execution_evidence"] is True
+          assert evidence["dependency_ref"] == "colmap_mvs_cuda12"
+          assert evidence["execution_calls"] == ["undistort_images", "patch_match_stereo"]
+          assert evidence["environment"]["pycolmap_version"] == "4.2.0"
+          assert evidence["environment"]["upstream_has_cuda"] is True
+          fields = evidence["result"]["depth_fields"]
+          assert fields
+          assert sum(item["valid_pixel_count"] for item in fields) > 0
+          maps = evidence["result"]["depth_maps"]
+          assert maps
+          digest = hashlib.sha256(evidence_path.read_bytes()).hexdigest()
+          print(f"real_cuda_evidence_sha256={digest}")
+          PY
+
+      - name: Retain real CUDA donor fixture and output evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v2l15-2-colmap-mvs-real-cuda-${{ github.run_id }}
+          path: |
+            ${{ env.WRE_COLMAP_MVS_HARDWARE_EVIDENCE }}
+            ${{ env.WRE_COLMAP_MVS_EVIDENCE_PATH }}
+            ${{ env.WRE_COLMAP_MVS_REAL_ROOT }}
+          if-no-files-found: error
+          retention-days: 90
