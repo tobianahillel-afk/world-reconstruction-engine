@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import math
 from dataclasses import FrozenInstanceError, fields
 from typing import Any, cast
 
