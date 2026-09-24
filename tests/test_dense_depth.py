@@ -252,7 +252,7 @@ def test_dense_depth_rejects_wrong_field_types(
 
 
 def test_dense_depth_rejects_wrong_artifact_kind() -> None:
-    with pytest.raises(ValueError, match="geometry.dense_depth"):
+    with pytest.raises(ValueError, match=r"geometry\.dense_depth"):
         _dense_artifact(artifact_ref=_artifact("artifact:dense", "geometry.solution"))
 
 
