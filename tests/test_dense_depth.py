@@ -130,9 +130,7 @@ def _candidate(
         point_maps=(point_map,),
         producer=_producer(f"geometry:{token}"),
         source_artifacts=(
-            source_artifacts
-            if source_artifacts is not None
-            else (_artifact(f"source:{token}"),)
+            source_artifacts if source_artifacts is not None else (_artifact(f"source:{token}"),)
         ),
     )
 
@@ -181,9 +179,7 @@ def _dense(
         depth_fields=depth_fields,
         producer=_producer(token),
         source_artifacts=(
-            source_artifacts
-            if source_artifacts is not None
-            else source_geometry.source_artifacts
+            source_artifacts if source_artifacts is not None else source_geometry.source_artifacts
         ),
     )
 
@@ -368,12 +364,8 @@ def test_partial_camera_coverage_is_valid_and_fabricates_nothing() -> None:
 
     assert len(source.camera_solutions) == 2
     assert artifact.depth_fields == (depth_a,)
-    assert {item.camera_solution_id for item in artifact.depth_fields} == {
-        camera_a.solution_id
-    }
-    assert camera_b.solution_id not in {
-        item.camera_solution_id for item in artifact.depth_fields
-    }
+    assert {item.camera_solution_id for item in artifact.depth_fields} == {camera_a.solution_id}
+    assert camera_b.solution_id not in {item.camera_solution_id for item in artifact.depth_fields}
 
 
 def test_new_dense_depth_ids_need_not_exist_on_source_geometry() -> None:
@@ -429,13 +421,8 @@ def test_unresolved_scale_and_local_frame_remain_source_context_only() -> None:
     depth = _depth(source.camera_solutions[0], "dense-depth:scale")
     artifact = _dense("scale", source_geometry=source, depth_fields=(depth,))
 
-    assert (
-        artifact.source_geometry.geometry_solution.scale_status
-        is GeometryScaleStatus.UNRESOLVED
-    )
-    assert artifact.source_geometry.geometry_solution.local_frame_id == LocalFrameId(
-        "frame:scale"
-    )
+    assert artifact.source_geometry.geometry_solution.scale_status is GeometryScaleStatus.UNRESOLVED
+    assert artifact.source_geometry.geometry_solution.local_frame_id == LocalFrameId("frame:scale")
     for attribute in (
         "scale_status",
         "scale_factor",
