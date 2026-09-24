@@ -713,7 +713,9 @@ def test_v2l13_lot_review_evidence_and_v2l14_handoff_are_complete() -> None:
     assert "status: implemented" in feed_forward_block
 
     state = (root / "PROJECT_STATE.yaml").read_text(encoding="utf-8")
-    assert "lot: V2L14" in state
+    # This regression proves the V2L13 -> V2L14 handoff evidence remains
+    # recorded after later roadmap progression; it must not freeze the
+    # repository's current lot at V2L14 forever.
     assert "V2L14.1" in state
     assert "V2L13.6" in state
 
