@@ -14,24 +14,21 @@ current_goal: >-
   experimental candidate after source checkpoint license hardware reproducibility and cross-version COLMAP evidence is complete, while keeping
   WRE geometry contracts solver-independent and preserving the classical V2L14.3 baseline.
 next_action: >-
-  Continue V2L14.4 qualification only. PR #133 closed the active source-byte gate with exact GLUEMAP revision
-  adc9e4bb5f41014d3f7c157a879edc278588c829 plus VGGT revision 44b3afbd1869d8bde4894dd8ea1e293112dd5eba in
-  registry/external-sources/gluemap-vggt-bounded-materialization.json: 93 regular files, 744299 bytes and materialization SHA-256
-  19efc825c7627dc2d7fdf3fed3aa410823e90e81d2f126c57148549aac5fced1. Do not reopen or replace that source gate without a reviewed
-  qualification change. The next mandatory external asset gate is the official gated facebook/VGGT-1B-Commercial model.safetensors: obtain the
-  official bytes locally and record its immutable repository revision, SHA-256 and byte length; no mirror checksum may satisfy the gate. In
-  parallel only independent non-execution qualification work may continue, including the exact Python runtime closure and redistribution
-  inventory. The native resolver now pins NumPy 2.4.3 exactly to match GLUEMAP upstream; however VGGT's own pyproject declares numpy<2, so do
-  not perform a dependency-resolving VGGT installation into the GLUEMAP runtime. Qualify an exact allowlisted source/no-deps loading strategy
-  and prove its runtime compatibility before any real execution. After checkpoint and redistribution review are complete, establish a supported
-  real GPU lane and exercise a real GLUEMAP-output to WRE PyCOLMAP 4.2.0 cross-read fixture. Do not add the adapter while any technology-gate
-  blocker remains.
+  Continue V2L14.4 qualification only. The active GLUEMAP+VGGT source-byte gate is closed and the reviewed conda resolver now freezes a
+  193-package partial runtime closure at SHA-256 0b9a91630a1e15fd2fe61f0c22bcf6605cd5f5997adc312cf6b549935f311c9f, including exact
+  NetworkX 3.6.1 Pillow 12.2.0 SciPy 1.17.1 tqdm 4.67.3 einops 0.8.2 imagesize 2.0.0 safetensors 0.7.0 and huggingface_hub 1.12.0.
+  Do not treat this as the complete Python/runtime gate: separately qualify the exact PyPI/source closure for faiss-cpu 1.13.2 kornia 0.8.2
+  opencv-python 4.13.0.92 pycolmap-cuda12 4.0.4 pyceres 2.6 and the pinned LightGlue source, with no dependency-resolving VGGT install and no
+  runtime network fetch. The mandatory external asset gate remains the official gated facebook/VGGT-1B-Commercial model.safetensors; obtain
+  official bytes locally and record immutable repository revision SHA-256 and byte length, never a mirror checksum. After package/checkpoint
+  redistribution review is complete, prove the reviewed VGGT source path is compatible with NumPy 2.4.3, establish a supported real GPU lane,
+  and exercise a real GLUEMAP-output to WRE PyCOLMAP 4.2.0 cross-read fixture. Do not add the adapter while any technology-gate blocker remains.
 blockers:
   - V2L14.4 has no executable supported GPU runner in repository CI; the reviewed GLUEMAP reference environment is CUDA/GPU while current WRE workflows are CPU-hosted.
   - V2L14.4 MapAnything plus UniCeption is blocked for the first shipping-oriented profile. Exact source inspection found CC-BY-NC-SA-4.0 non-commercial CroCo/DUSt3R files on the actual MapAnything import path despite UniCeption's BSD root LICENSE; PR #129 is retained only as superseded qualification evidence and that route must not execute.
   - V2L14.4 VGGT-1B-Commercial checkpoint qualification is incomplete. PR #133 closes the source-byte gate at 93 files / 744299 bytes / SHA-256 19efc825c7627dc2d7fdf3fed3aa410823e90e81d2f126c57148549aac5fced1 for the exact GLUEMAP+VGGT source pair, but the official commercial checkpoint repository is gated and its immutable repository revision, model.safetensors SHA-256 and byte length have not yet been obtained from official bytes. No unofficial mirror identity is acceptable.
-  - V2L14.4 transitive redistribution review remains incomplete. PR #131 records non-blank direct license metadata for all 157 exact conda builds, but NVIDIA/cuDNN/Intel LicenseRef terms, reciprocal/copyleft components, the custom VGGT license and every later exact Python/model dependency still require use-mode and redistribution review; inventory is not shipping approval.
-  - V2L14.4 Python packaging compatibility is unresolved. The exact GLUEMAP pyproject pins numpy==2.4.3 and the reviewed native resolver now enforces that version, while the exact VGGT pyproject at 44b3afbd1869d8bde4894dd8ea1e293112dd5eba declares numpy<2. A normal dependency-resolving VGGT install cannot satisfy both metadata constraints. The bounded profile must use only the reviewed VGGT source materialization without dependency resolution and must prove that the selected source path executes correctly against NumPy 2.4.3 before the gate can close.
+  - V2L14.4 transitive redistribution review remains incomplete. The current conda lock records non-blank direct license metadata for all 193 exact builds, including the newly qualified active Python conda closure, but NVIDIA/cuDNN/Intel LicenseRef terms, reciprocal/copyleft components, the custom VGGT license and every remaining exact PyPI/source/model dependency still require use-mode and redistribution review; inventory is not shipping approval.
+  - V2L14.4 Python packaging compatibility is unresolved. The exact GLUEMAP pyproject pins numpy==2.4.3 and the reviewed conda resolver enforces that version, while the exact VGGT pyproject at 44b3afbd1869d8bde4894dd8ea1e293112dd5eba declares numpy<2. A normal dependency-resolving VGGT install cannot satisfy both metadata constraints. The bounded profile must use only the reviewed VGGT source materialization without dependency resolution, complete the separate PyPI/source closure, and prove that the selected source path executes correctly against NumPy 2.4.3 before the gate can close.
   - V2L14.4 has not yet produced a real GLUEMAP native sparse model for WRE PyCOLMAP 4.2.0 cross-read compatibility evidence against GLUEMAP's isolated pycolmap-cuda12 4.0.4 environment.
 architecture:
   product_blueprint: docs/01_PRODUCT.md

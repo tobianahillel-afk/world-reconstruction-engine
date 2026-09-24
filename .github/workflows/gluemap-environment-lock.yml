@@ -54,7 +54,9 @@ jobs:
           env -u CONDARC micromamba create --name wre-gluemap-lock --platform linux-64 --override-channels --channel conda-forge --strict-channel-priority --no-rc --dry-run --json \
             "python=3.12.12" "numpy=2.4.3" "pip" "cmake>=3.18" "ninja" "pkg-config" "pybind11>=3.0" "scikit-build-core>=0.10" "clangxx" \
             "eigen=3.4.0" "ceres-solver=2.2.0=cpulgpl*" "metis=5.1.0" "boost=1.85.0" "libstdcxx-ng=15.2.0" "llvm-openmp=23.1.1=h7148c6a_0" "_openmp_mutex=*=*_llvm" \
-            "pytorch-gpu=2.4.1" "torchvision=0.19.1" "cuda-version=12.4" > "$raw"
+            "pytorch-gpu=2.4.1" "torchvision=0.19.1" "cuda-version=12.4" \
+            "networkx=3.6.1" "pillow=12.2.0" "scipy=1.17.1" "tqdm=4.67.3" "einops=0.8.2" \
+            "imagesize=2.0.0" "safetensors=0.7.0" "huggingface_hub=1.12.0" > "$raw"
           status=$?
           set -e
           cat "$raw"
@@ -94,6 +96,14 @@ jobs:
               "pytorch-gpu=2.4.1",
               "torchvision=0.19.1",
               "cuda-version=12.4",
+              "networkx=3.6.1",
+              "pillow=12.2.0",
+              "scipy=1.17.1",
+              "tqdm=4.67.3",
+              "einops=0.8.2",
+              "imagesize=2.0.0",
+              "safetensors=0.7.0",
+              "huggingface_hub=1.12.0",
           ]
 
           packages = []
@@ -149,6 +159,14 @@ jobs:
           assert by_name["pytorch-gpu"]["version"] == "2.4.1"
           assert by_name["torchvision"]["version"] == "0.19.1"
           assert by_name["cuda-version"]["version"].startswith("12.4")
+          assert by_name["networkx"]["version"] == "3.6.1", by_name["networkx"]
+          assert by_name["pillow"]["version"] == "12.2.0", by_name["pillow"]
+          assert by_name["scipy"]["version"] == "1.17.1", by_name["scipy"]
+          assert by_name["tqdm"]["version"] == "4.67.3", by_name["tqdm"]
+          assert by_name["einops"]["version"] == "0.8.2", by_name["einops"]
+          assert by_name["imagesize"]["version"] == "2.0.0", by_name["imagesize"]
+          assert by_name["safetensors"]["version"] == "0.7.0", by_name["safetensors"]
+          assert by_name["huggingface_hub"]["version"] == "1.12.0", by_name["huggingface_hub"]
 
           lock = {
               "schema_version": 1,
