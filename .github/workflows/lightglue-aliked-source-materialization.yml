@@ -1,0 +1,294 @@
+name: lightglue-aliked-source-materialization
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/lightglue-aliked-source-materialization.yml"
+      - "registry/external-sources/lightglue-aliked-bounded-materialization.json"
+      - "registry/dependencies.yaml"
+      - "registry/work-items/v2m2.yaml"
+      - "PROJECT_STATE.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  materialize:
+    name: exact-bounded-lightglue-aliked-source-checkpoint-manifest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      LIGHTGLUE_REPOSITORY: https://github.com/cvg/LightGlue.git
+      LIGHTGLUE_REVISION: eb42fee2d71449efb0aa5c10549752b5d75384d8
+      LIGHTGLUE_TREE: dab1d9518379113c23e562e2e743115db4081ab0
+      LIGHTGLUE_LICENSE_BLOB: 38a27f882c671ba9f15b35ec13ca7c0c296efe50
+      LIGHTGLUE_UPSTREAM_INIT_BLOB: b84d285cf2a29e3b17c8c2c052a45f856dcf89c0
+      LIGHTGLUE_ALIKED_BLOB: d7c5c4141a8ea3cd9827b3145b4315808816a769
+      LIGHTGLUE_UTILS_BLOB: d1c1ab2e94716b1c54191a6ed5d01023036836c1
+      LIGHTGLUE_SUPERPOINT_BLOB: d6d380eb5737b92ce417e3ed0e5db1ee9d4a1d04
+      ALIKED_REPOSITORY: https://github.com/Shiaoming/ALIKED.git
+      ALIKED_REVISION: 683d7c65197395c0b3f01ebe76e1084a27e73a65
+      ALIKED_TREE: 11a5d42d49baee808611cdab9a6261002dc6e39a
+      ALIKED_LICENSE_BLOB: 4ee705bf59834a4b0195b1b0e499ee950469668e
+      ALIKED_CHECKPOINT_BLOB: 9449ca16f784aff7fa4c88ea0925b41f6411eef0
+      ALIKED_CHECKPOINT_SHA256: 5be8704840ed662d9d8c561bf7279c222092674e7eb05fd0feab94899e9d82f2
+      ALIKED_CHECKPOINT_BYTES: "2738091"
+      MANIFEST_PATH: registry/external-sources/lightglue-aliked-bounded-materialization.json
+
+    steps:
+      - name: Checkout WRE
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Fetch exact reviewed LightGlue and ALIKED revisions
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_root="${RUNNER_TEMP}/wre-lightglue-aliked-source-gate"
+          rm -rf "$source_root"
+          mkdir -p "$source_root"
+
+          git init -q "$source_root/lightglue-upstream"
+          git -C "$source_root/lightglue-upstream" remote add origin "$LIGHTGLUE_REPOSITORY"
+          git -C "$source_root/lightglue-upstream" fetch --quiet --depth=1 origin "$LIGHTGLUE_REVISION"
+          git -C "$source_root/lightglue-upstream" checkout --quiet --detach FETCH_HEAD
+          test "$(git -C "$source_root/lightglue-upstream" rev-parse HEAD)" = "$LIGHTGLUE_REVISION"
+          test "$(git -C "$source_root/lightglue-upstream" rev-parse HEAD^{tree})" = "$LIGHTGLUE_TREE"
+          test "$(git -C "$source_root/lightglue-upstream" rev-parse HEAD:LICENSE)" = "$LIGHTGLUE_LICENSE_BLOB"
+          test "$(git -C "$source_root/lightglue-upstream" rev-parse HEAD:lightglue/__init__.py)" = "$LIGHTGLUE_UPSTREAM_INIT_BLOB"
+          test "$(git -C "$source_root/lightglue-upstream" rev-parse HEAD:lightglue/aliked.py)" = "$LIGHTGLUE_ALIKED_BLOB"
+          test "$(git -C "$source_root/lightglue-upstream" rev-parse HEAD:lightglue/utils.py)" = "$LIGHTGLUE_UTILS_BLOB"
+          test "$(git -C "$source_root/lightglue-upstream" rev-parse HEAD:lightglue/superpoint.py)" = "$LIGHTGLUE_SUPERPOINT_BLOB"
+
+          git init -q "$source_root/aliked-upstream"
+          git -C "$source_root/aliked-upstream" remote add origin "$ALIKED_REPOSITORY"
+          git -C "$source_root/aliked-upstream" fetch --quiet --depth=1 origin "$ALIKED_REVISION"
+          git -C "$source_root/aliked-upstream" checkout --quiet --detach FETCH_HEAD
+          test "$(git -C "$source_root/aliked-upstream" rev-parse HEAD)" = "$ALIKED_REVISION"
+          test "$(git -C "$source_root/aliked-upstream" rev-parse HEAD^{tree})" = "$ALIKED_TREE"
+          test "$(git -C "$source_root/aliked-upstream" rev-parse HEAD:LICENSE)" = "$ALIKED_LICENSE_BLOB"
+          test "$(git -C "$source_root/aliked-upstream" rev-parse HEAD:models/aliked-n16.pth)" = "$ALIKED_CHECKPOINT_BLOB"
+
+      - name: Derive bounded source and checkpoint manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          root = Path(os.environ["RUNNER_TEMP"]) / "wre-lightglue-aliked-source-gate"
+          lightglue = root / "lightglue-upstream"
+          aliked = root / "aliked-upstream"
+          materialized = root / "materialized"
+          generated = Path(os.environ["RUNNER_TEMP"]) / "lightglue-aliked-bounded-materialization.json"
+
+          materialized.mkdir(parents=True, exist_ok=False)
+          (materialized / "lightglue").mkdir(parents=True)
+          (materialized / "thirdparty" / "aliked").mkdir(parents=True)
+
+          def git_blob(repo: Path, path: str) -> bytes:
+              return subprocess.check_output(["git", "-C", str(repo), "show", f"HEAD:{path}"])
+
+          retained = {
+              "LICENSE": ("lightglue", git_blob(lightglue, "LICENSE")),
+              "lightglue/aliked.py": ("lightglue", git_blob(lightglue, "lightglue/aliked.py")),
+              "lightglue/utils.py": ("lightglue", git_blob(lightglue, "lightglue/utils.py")),
+              "thirdparty/aliked/LICENSE": ("aliked", git_blob(aliked, "LICENSE")),
+          }
+
+          shim = (
+              '"""WRE bounded LightGlue package surface: ALIKED only."""\n'
+              "\n"
+              "from .aliked import ALIKED\n"
+              "\n"
+              '__all__ = ["ALIKED"]\n'
+          ).encode("utf-8")
+          retained["lightglue/__init__.py"] = ("wre_shim", shim)
+
+          for relative, (_source, data) in retained.items():
+              destination = materialized / relative
+              destination.parent.mkdir(parents=True, exist_ok=True)
+              destination.write_bytes(data)
+
+          restricted_needles = (
+              "unpublished copyright",
+              "strictly forbidden",
+              "non-commercial",
+              "noncommercial",
+              "cc by-nc",
+              "cc-by-nc",
+          )
+          for path in materialized.rglob("*"):
+              if path.is_symlink():
+                  raise SystemExit(
+                      "symlink forbidden in materialization: "
+                      + path.relative_to(materialized).as_posix()
+                  )
+              if not path.is_file() or path.suffix != ".py":
+                  continue
+              lowered = path.read_text(encoding="utf-8").lower()
+              for needle in restricted_needles:
+                  if needle in lowered:
+                      raise SystemExit(
+                          f"restricted source notice {needle!r} found in retained file "
+                          + path.relative_to(materialized).as_posix()
+                      )
+
+          aliked_source = (materialized / "lightglue/aliked.py").read_text(encoding="utf-8")
+          if "torch.hub.load_state_dict_from_url" not in aliked_source:
+              raise SystemExit("reviewed upstream ALIKED network loader call changed or disappeared")
+          expected_url = "https://github.com/Shiaoming/ALIKED/raw/main/models/{}.pth"
+          if expected_url not in aliked_source:
+              raise SystemExit("reviewed upstream ALIKED floating-main checkpoint URL changed")
+          if "# BSD 3-Clause License" not in aliked_source:
+              raise SystemExit("vendored ALIKED BSD notice missing")
+
+          upstream_init = git_blob(lightglue, "lightglue/__init__.py").decode("utf-8")
+          if "from .superpoint import SuperPoint" not in upstream_init:
+              raise SystemExit("upstream eager SuperPoint import identity changed")
+          superpoint = git_blob(lightglue, "lightglue/superpoint.py").decode("utf-8")
+          if "Unpublished Copyright" not in superpoint or "strictly forbidden" not in superpoint:
+              raise SystemExit("reviewed restrictive SuperPoint header changed")
+
+          checkpoint = aliked / "models" / "aliked-n16.pth"
+          checkpoint_bytes = checkpoint.read_bytes()
+          checkpoint_size = len(checkpoint_bytes)
+          checkpoint_sha256 = hashlib.sha256(checkpoint_bytes).hexdigest()
+          expected_size = int(os.environ["ALIKED_CHECKPOINT_BYTES"])
+          expected_sha256 = os.environ["ALIKED_CHECKPOINT_SHA256"]
+          if checkpoint_size != expected_size:
+              raise SystemExit(
+                  f"official ALIKED checkpoint byte length drift: {checkpoint_size} != {expected_size}"
+              )
+          if checkpoint_sha256 != expected_sha256:
+              raise SystemExit(
+                  f"official ALIKED checkpoint SHA-256 drift: {checkpoint_sha256} != {expected_sha256}"
+              )
+
+          files = []
+          total_bytes = 0
+          identity = hashlib.sha256()
+          for path in sorted(
+              (candidate for candidate in materialized.rglob("*") if candidate.is_file()),
+              key=lambda candidate: candidate.relative_to(materialized).as_posix(),
+          ):
+              relative = path.relative_to(materialized).as_posix()
+              data = path.read_bytes()
+              digest = hashlib.sha256(data).hexdigest()
+              size = len(data)
+              total_bytes += size
+              identity.update(relative.encode("utf-8"))
+              identity.update(b"\0")
+              identity.update(str(size).encode("ascii"))
+              identity.update(b"\0")
+              identity.update(digest.encode("ascii"))
+              identity.update(b"\n")
+              files.append(
+                  {
+                      "byte_length": size,
+                      "path": relative,
+                      "sha256": digest,
+                      "source": retained[relative][0],
+                  }
+              )
+
+          manifest = {
+              "schema_version": 1,
+              "evidence_kind": "source_checkpoint_materialization_only",
+              "runtime_execution_evidence": False,
+              "gpu_execution_evidence": False,
+              "sources": {
+                  "lightglue": {
+                      "repository": "cvg/LightGlue",
+                      "revision": os.environ["LIGHTGLUE_REVISION"],
+                      "tree": os.environ["LIGHTGLUE_TREE"],
+                      "license_git_blob_sha1": os.environ["LIGHTGLUE_LICENSE_BLOB"],
+                  },
+                  "aliked": {
+                      "repository": "Shiaoming/ALIKED",
+                      "revision": os.environ["ALIKED_REVISION"],
+                      "tree": os.environ["ALIKED_TREE"],
+                      "license_git_blob_sha1": os.environ["ALIKED_LICENSE_BLOB"],
+                  },
+              },
+              "excluded_upstream_lightglue": {
+                  "package_init_git_blob_sha1": os.environ["LIGHTGLUE_UPSTREAM_INIT_BLOB"],
+                  "superpoint_git_blob_sha1": os.environ["LIGHTGLUE_SUPERPOINT_BLOB"],
+                  "reason": (
+                      "upstream package root eagerly imports unrelated extractors; "
+                      "superpoint.py carries an unpublished-copyright/reproduction-restriction header"
+                  ),
+              },
+              "policy": {
+                  "retained_lightglue_files": [
+                      "LICENSE",
+                      "lightglue/aliked.py",
+                      "lightglue/utils.py",
+                  ],
+                  "generated_files": ["lightglue/__init__.py"],
+                  "generated_package_surface": "ALIKED only",
+                  "retained_aliked_files": ["thirdparty/aliked/LICENSE"],
+                  "all_other_lightglue_files_excluded": True,
+                  "upstream_network_loader_present": True,
+                  "network_loader_runtime_approval": False,
+              },
+              "checkpoint": {
+                  "repository_path": "models/aliked-n16.pth",
+                  "git_blob_sha1": os.environ["ALIKED_CHECKPOINT_BLOB"],
+                  "sha256": checkpoint_sha256,
+                  "byte_length": checkpoint_size,
+                  "materialized_into_source_tree": False,
+                  "runtime_load_evidence": False,
+              },
+              "materialization": {
+                  "file_count": len(files),
+                  "byte_length": total_bytes,
+                  "sha256": identity.hexdigest(),
+              },
+              "files": files,
+          }
+
+          generated.write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print(
+              f"generated {len(files)} files / {total_bytes} bytes / "
+              f"{identity.hexdigest()} / checkpoint {checkpoint_sha256}"
+          )
+          PY
+
+      - name: Verify committed manifest or expose first qualification evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          generated="${RUNNER_TEMP}/lightglue-aliked-bounded-materialization.json"
+          if test -f "$MANIFEST_PATH"; then
+            diff -u "$MANIFEST_PATH" "$generated"
+            echo "Committed LightGlue/ALIKED manifest matches exact regeneration."
+          else
+            echo "No committed LightGlue/ALIKED manifest exists yet; this run is first qualification evidence."
+            echo "----- BEGIN GENERATED LIGHTGLUE ALIKED MANIFEST -----"
+            cat "$generated"
+            echo "----- END GENERATED LIGHTGLUE ALIKED MANIFEST -----"
+          fi
+
+      - name: Retain machine-readable source/checkpoint qualification evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v2l14-4-lightglue-aliked-source-materialization
+          path: ${{ runner.temp }}/lightglue-aliked-bounded-materialization.json
+          if-no-files-found: error
+          retention-days: 30

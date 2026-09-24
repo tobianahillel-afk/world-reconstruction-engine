@@ -1,0 +1,87 @@
+{
+  "checkpoint": {
+    "byte_length": 2738091,
+    "git_blob_sha1": "9449ca16f784aff7fa4c88ea0925b41f6411eef0",
+    "materialized_into_source_tree": false,
+    "repository_path": "models/aliked-n16.pth",
+    "runtime_load_evidence": false,
+    "sha256": "5be8704840ed662d9d8c561bf7279c222092674e7eb05fd0feab94899e9d82f2"
+  },
+  "evidence_kind": "source_checkpoint_materialization_only",
+  "excluded_upstream_lightglue": {
+    "package_init_git_blob_sha1": "b84d285cf2a29e3b17c8c2c052a45f856dcf89c0",
+    "reason": "upstream package root eagerly imports unrelated extractors; superpoint.py carries an unpublished-copyright/reproduction-restriction header",
+    "superpoint_git_blob_sha1": "d6d380eb5737b92ce417e3ed0e5db1ee9d4a1d04"
+  },
+  "files": [
+    {
+      "byte_length": 11340,
+      "path": "LICENSE",
+      "sha256": "0e6031ed3e62dc91dc8b1c8f240abd200b1083f60773362e64e339fe01d1bf18",
+      "source": "lightglue"
+    },
+    {
+      "byte_length": 108,
+      "path": "lightglue/__init__.py",
+      "sha256": "fd9e0121cded401c2b40c2e815fabf21fdc6ae2013f18e4459eba8f1584fde86",
+      "source": "wre_shim"
+    },
+    {
+      "byte_length": 27527,
+      "path": "lightglue/aliked.py",
+      "sha256": "60b24397c52e8a08d838828967cd03f5d6066c1f7c3c433805bf11dcb0d5228e",
+      "source": "lightglue"
+    },
+    {
+      "byte_length": 5510,
+      "path": "lightglue/utils.py",
+      "sha256": "c6d9260656a24d826128b68c95d0b7798106d04f4244a77f3b1856573f58e690",
+      "source": "lightglue"
+    },
+    {
+      "byte_length": 1521,
+      "path": "thirdparty/aliked/LICENSE",
+      "sha256": "c48ae933e262f77087a1956ae95f4675bfe20895b52fb328eed5b4e11d477bfb",
+      "source": "aliked"
+    }
+  ],
+  "gpu_execution_evidence": false,
+  "materialization": {
+    "byte_length": 46006,
+    "file_count": 5,
+    "sha256": "d6da7b8d6aecd1dcb5fe769035e5e83d70cd860879ad17922fec4cc78f782b48"
+  },
+  "policy": {
+    "all_other_lightglue_files_excluded": true,
+    "generated_files": [
+      "lightglue/__init__.py"
+    ],
+    "generated_package_surface": "ALIKED only",
+    "network_loader_runtime_approval": false,
+    "retained_aliked_files": [
+      "thirdparty/aliked/LICENSE"
+    ],
+    "retained_lightglue_files": [
+      "LICENSE",
+      "lightglue/aliked.py",
+      "lightglue/utils.py"
+    ],
+    "upstream_network_loader_present": true
+  },
+  "runtime_execution_evidence": false,
+  "schema_version": 1,
+  "sources": {
+    "aliked": {
+      "license_git_blob_sha1": "4ee705bf59834a4b0195b1b0e499ee950469668e",
+      "repository": "Shiaoming/ALIKED",
+      "revision": "683d7c65197395c0b3f01ebe76e1084a27e73a65",
+      "tree": "11a5d42d49baee808611cdab9a6261002dc6e39a"
+    },
+    "lightglue": {
+      "license_git_blob_sha1": "38a27f882c671ba9f15b35ec13ca7c0c296efe50",
+      "repository": "cvg/LightGlue",
+      "revision": "eb42fee2d71449efb0aa5c10549752b5d75384d8",
+      "tree": "dab1d9518379113c23e562e2e743115db4081ab0"
+    }
+  }
+}
