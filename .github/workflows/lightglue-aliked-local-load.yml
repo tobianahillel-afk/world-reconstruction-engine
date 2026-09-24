@@ -1,0 +1,471 @@
+name: lightglue-aliked-local-load
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/lightglue-aliked-local-load.yml"
+      - ".github/workflows/lightglue-aliked-source-materialization.yml"
+      - "registry/external-sources/lightglue-aliked-bounded-materialization.json"
+      - "registry/external-environments/gluemap-linux-64-cuda12.4.conda-lock.json"
+      - "registry/external-environments/gluemap-linux-64-pypi-lock.json"
+      - "registry/dependencies.yaml"
+      - "registry/work-items/v2m2.yaml"
+      - "PROJECT_STATE.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  constructor-proof:
+    name: exact-local-checkpoint-constructor-proof
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      LIGHTGLUE_REPOSITORY: https://github.com/cvg/LightGlue.git
+      LIGHTGLUE_REVISION: eb42fee2d71449efb0aa5c10549752b5d75384d8
+      LIGHTGLUE_TREE: dab1d9518379113c23e562e2e743115db4081ab0
+      LIGHTGLUE_LICENSE_BLOB: 38a27f882c671ba9f15b35ec13ca7c0c296efe50
+      LIGHTGLUE_ALIKED_BLOB: d7c5c4141a8ea3cd9827b3145b4315808816a769
+      LIGHTGLUE_UTILS_BLOB: d1c1ab2e94716b1c54191a6ed5d01023036836c1
+      ALIKED_REPOSITORY: https://github.com/Shiaoming/ALIKED.git
+      ALIKED_REVISION: 683d7c65197395c0b3f01ebe76e1084a27e73a65
+      ALIKED_TREE: 11a5d42d49baee808611cdab9a6261002dc6e39a
+      ALIKED_LICENSE_BLOB: 4ee705bf59834a4b0195b1b0e499ee950469668e
+      ALIKED_CHECKPOINT_BLOB: 9449ca16f784aff7fa4c88ea0925b41f6411eef0
+      ALIKED_CHECKPOINT_SHA256: 5be8704840ed662d9d8c561bf7279c222092674e7eb05fd0feab94899e9d82f2
+      ALIKED_CHECKPOINT_BYTES: "2738091"
+      ALIKED_CHECKPOINT_URL: https://github.com/Shiaoming/ALIKED/raw/main/models/aliked-n16.pth
+      SOURCE_MANIFEST: registry/external-sources/lightglue-aliked-bounded-materialization.json
+      SOURCE_MATERIALIZATION_SHA256: d6da7b8d6aecd1dcb5fe769035e5e83d70cd860879ad17922fec4cc78f782b48
+      EVIDENCE_PATH: ${{ runner.temp }}/v2l14-4-lightglue-aliked-local-load.json
+
+    steps:
+      - name: Checkout WRE
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install uv and exact Python
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.13"
+          python-version: "3.12.12"
+          enable-cache: true
+
+      - name: Create exact bounded CPU environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv venv --python 3.12.12 .venv-aliked
+          uv pip install --python .venv-aliked/bin/python \
+            --extra-index-url https://download.pytorch.org/whl/cpu \
+            "torch==2.4.1+cpu" \
+            "torchvision==0.19.1+cpu"
+          uv pip install --python .venv-aliked/bin/python \
+            "numpy==2.4.3" \
+            "kornia==0.8.2" \
+            "kornia-rs==0.1.10" \
+            "opencv-python==4.13.0.92" \
+            "huggingface_hub==1.12.0"
+
+      - name: Verify exact CPU environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv-aliked/bin/python - <<'PY'
+          import importlib.metadata
+          import sys
+
+          import numpy
+          import torch
+
+          expected = {
+              "numpy": "2.4.3",
+              "torch": "2.4.1+cpu",
+              "torchvision": "0.19.1+cpu",
+              "kornia": "0.8.2",
+              "kornia-rs": "0.1.10",
+              "opencv-python": "4.13.0.92",
+              "huggingface_hub": "1.12.0",
+          }
+          assert sys.version.split()[0] == "3.12.12"
+          for distribution, version in expected.items():
+              actual = importlib.metadata.version(distribution)
+              assert actual == version, (distribution, actual, version)
+          assert numpy.__version__ == "2.4.3"
+          assert torch.cuda.is_available() is False
+          PY
+
+      - name: Fetch exact reviewed source and checkpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="${RUNNER_TEMP}/wre-lightglue-aliked-local-load"
+          rm -rf "$root"
+          mkdir -p "$root"
+
+          git init -q "$root/lightglue-upstream"
+          git -C "$root/lightglue-upstream" remote add origin "$LIGHTGLUE_REPOSITORY"
+          git -C "$root/lightglue-upstream" fetch --quiet --depth=1 origin "$LIGHTGLUE_REVISION"
+          git -C "$root/lightglue-upstream" checkout --quiet --detach FETCH_HEAD
+          test "$(git -C "$root/lightglue-upstream" rev-parse HEAD)" = "$LIGHTGLUE_REVISION"
+          test "$(git -C "$root/lightglue-upstream" rev-parse HEAD^{tree})" = "$LIGHTGLUE_TREE"
+          test "$(git -C "$root/lightglue-upstream" rev-parse HEAD:LICENSE)" = "$LIGHTGLUE_LICENSE_BLOB"
+          test "$(git -C "$root/lightglue-upstream" rev-parse HEAD:lightglue/aliked.py)" = "$LIGHTGLUE_ALIKED_BLOB"
+          test "$(git -C "$root/lightglue-upstream" rev-parse HEAD:lightglue/utils.py)" = "$LIGHTGLUE_UTILS_BLOB"
+
+          git init -q "$root/aliked-upstream"
+          git -C "$root/aliked-upstream" remote add origin "$ALIKED_REPOSITORY"
+          git -C "$root/aliked-upstream" fetch --quiet --depth=1 origin "$ALIKED_REVISION"
+          git -C "$root/aliked-upstream" checkout --quiet --detach FETCH_HEAD
+          test "$(git -C "$root/aliked-upstream" rev-parse HEAD)" = "$ALIKED_REVISION"
+          test "$(git -C "$root/aliked-upstream" rev-parse HEAD^{tree})" = "$ALIKED_TREE"
+          test "$(git -C "$root/aliked-upstream" rev-parse HEAD:LICENSE)" = "$ALIKED_LICENSE_BLOB"
+          test "$(git -C "$root/aliked-upstream" rev-parse HEAD:models/aliked-n16.pth)" = "$ALIKED_CHECKPOINT_BLOB"
+
+          checkpoint="$root/aliked-upstream/models/aliked-n16.pth"
+          test "$(stat --format='%s' "$checkpoint")" = "$ALIKED_CHECKPOINT_BYTES"
+          echo "$ALIKED_CHECKPOINT_SHA256  $checkpoint" | sha256sum --check --strict
+          echo "WRE_ALIKED_CHECKPOINT_PATH=$checkpoint" >> "$GITHUB_ENV"
+
+      - name: Reconstruct exact bounded LightGlue package
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv-aliked/bin/python - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import os
+          import subprocess
+          from pathlib import Path
+
+          root = Path(os.environ["RUNNER_TEMP"]) / "wre-lightglue-aliked-local-load"
+          lightglue = root / "lightglue-upstream"
+          aliked = root / "aliked-upstream"
+          materialized = root / "materialized"
+          manifest = json.loads(Path(os.environ["SOURCE_MANIFEST"]).read_text(encoding="utf-8"))
+
+          materialized.mkdir(parents=True, exist_ok=False)
+          (materialized / "lightglue").mkdir(parents=True)
+          (materialized / "thirdparty" / "aliked").mkdir(parents=True)
+
+          def git_blob(repo: Path, path: str) -> bytes:
+              return subprocess.check_output(["git", "-C", str(repo), "show", f"HEAD:{path}"])
+
+          retained = {
+              "LICENSE": git_blob(lightglue, "LICENSE"),
+              "lightglue/aliked.py": git_blob(lightglue, "lightglue/aliked.py"),
+              "lightglue/utils.py": git_blob(lightglue, "lightglue/utils.py"),
+              "thirdparty/aliked/LICENSE": git_blob(aliked, "LICENSE"),
+              "lightglue/__init__.py": (
+                  '"""WRE bounded LightGlue package surface: ALIKED only."""\n'
+                  "\n"
+                  "from .aliked import ALIKED\n"
+                  "\n"
+                  '__all__ = ["ALIKED"]\n'
+              ).encode("utf-8"),
+          }
+
+          for relative, data in retained.items():
+              destination = materialized / relative
+              destination.parent.mkdir(parents=True, exist_ok=True)
+              destination.write_bytes(data)
+
+          expected_files = {entry["path"]: entry for entry in manifest["files"]}
+          if set(expected_files) != set(retained):
+              raise SystemExit(
+                  f"bounded source path drift: {sorted(retained)} != {sorted(expected_files)}"
+              )
+
+          identity = hashlib.sha256()
+          total_bytes = 0
+          for relative in sorted(retained):
+              data = (materialized / relative).read_bytes()
+              digest = hashlib.sha256(data).hexdigest()
+              size = len(data)
+              expected = expected_files[relative]
+              if digest != expected["sha256"] or size != expected["byte_length"]:
+                  raise SystemExit(f"bounded source drift: {relative}")
+              total_bytes += size
+              identity.update(relative.encode("utf-8"))
+              identity.update(b"\0")
+              identity.update(str(size).encode("ascii"))
+              identity.update(b"\0")
+              identity.update(digest.encode("ascii"))
+              identity.update(b"\n")
+
+          if total_bytes != manifest["materialization"]["byte_length"]:
+              raise SystemExit("bounded materialization byte-length drift")
+          actual_identity = identity.hexdigest()
+          if actual_identity != manifest["materialization"]["sha256"]:
+              raise SystemExit("bounded materialization identity drift")
+          if actual_identity != os.environ["SOURCE_MATERIALIZATION_SHA256"]:
+              raise SystemExit("registered bounded materialization identity drift")
+
+          source = (materialized / "lightglue" / "aliked.py").read_text(encoding="utf-8")
+          if "self.load_state_dict(state_dict, strict=True)" not in source:
+              raise SystemExit("reviewed strict ALIKED state-dict load changed")
+          if os.environ["ALIKED_CHECKPOINT_URL"] not in source.replace(
+              "{}", "aliked-n16"
+          ):
+              expected_template = (
+                  "https://github.com/Shiaoming/ALIKED/raw/main/models/{}.pth"
+              )
+              if expected_template not in source:
+                  raise SystemExit("reviewed ALIKED checkpoint URL changed")
+
+          with Path(os.environ["GITHUB_ENV"]).open("a", encoding="utf-8") as env_file:
+              env_file.write(f"WRE_ALIKED_SOURCE_ROOT={materialized}\n")
+          PY
+
+      - name: Prove exact local-checkpoint constructor with network fail-closed
+        shell: bash
+        env:
+          HF_HUB_OFFLINE: "1"
+          TRANSFORMERS_OFFLINE: "1"
+          GIT_TERMINAL_PROMPT: "0"
+        run: |
+          set -euo pipefail
+          .venv-aliked/bin/python - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import importlib.metadata
+          import json
+          import os
+          import socket
+          import subprocess
+          import sys
+          import urllib.request
+          from pathlib import Path
+          from unittest import mock
+
+          import httpx
+          import huggingface_hub
+          import torch
+
+          source_root = Path(os.environ["WRE_ALIKED_SOURCE_ROOT"]).resolve()
+          checkpoint = Path(os.environ["WRE_ALIKED_CHECKPOINT_PATH"]).resolve()
+          evidence_path = Path(os.environ["EVIDENCE_PATH"])
+          expected_url = os.environ["ALIKED_CHECKPOINT_URL"]
+          expected_sha256 = os.environ["ALIKED_CHECKPOINT_SHA256"]
+          expected_bytes = int(os.environ["ALIKED_CHECKPOINT_BYTES"])
+
+          checkpoint_bytes = checkpoint.read_bytes()
+          checkpoint_sha256 = hashlib.sha256(checkpoint_bytes).hexdigest()
+          if len(checkpoint_bytes) != expected_bytes:
+              raise SystemExit("checkpoint byte length changed before import")
+          if checkpoint_sha256 != expected_sha256:
+              raise SystemExit("checkpoint SHA-256 changed before import")
+
+          network_attempts: list[str] = []
+          local_loader_calls: list[dict[str, object]] = []
+
+          def blocked(route: str):
+              def _blocked(*_args, **_kwargs):
+                  network_attempts.append(route)
+                  raise AssertionError(f"network/process route forbidden during ALIKED construction: {route}")
+              return _blocked
+
+          original_loader = torch.hub.load_state_dict_from_url
+          original_download = torch.hub.download_url_to_file
+
+          def local_state_dict_loader(url, *args, **kwargs):
+              local_loader_calls.append(
+                  {
+                      "url": str(url),
+                      "args_count": len(args),
+                      "map_location": kwargs.get("map_location"),
+                  }
+              )
+              if args:
+                  raise AssertionError("unexpected positional arguments to ALIKED checkpoint loader")
+              if url != expected_url:
+                  raise AssertionError(f"unexpected ALIKED checkpoint URL: {url!r}")
+              if kwargs != {"map_location": "cpu"}:
+                  raise AssertionError(f"unexpected ALIKED checkpoint loader kwargs: {kwargs!r}")
+              return torch.load(checkpoint, map_location="cpu", weights_only=True)
+
+          patches = [
+              mock.patch.object(socket.socket, "connect", blocked("socket.socket.connect")),
+              mock.patch.object(socket, "create_connection", blocked("socket.create_connection")),
+              mock.patch.object(urllib.request, "urlopen", blocked("urllib.request.urlopen")),
+              mock.patch.object(httpx.Client, "request", blocked("httpx.Client.request")),
+              mock.patch.object(httpx.AsyncClient, "request", blocked("httpx.AsyncClient.request")),
+              mock.patch.object(
+                  huggingface_hub,
+                  "hf_hub_download",
+                  blocked("huggingface_hub.hf_hub_download"),
+              ),
+              mock.patch.object(
+                  huggingface_hub,
+                  "snapshot_download",
+                  blocked("huggingface_hub.snapshot_download"),
+              ),
+              mock.patch.object(
+                  subprocess,
+                  "Popen",
+                  blocked("subprocess.Popen"),
+              ),
+              mock.patch.object(
+                  torch.hub,
+                  "download_url_to_file",
+                  blocked("torch.hub.download_url_to_file"),
+              ),
+          ]
+
+          for patch in patches:
+              patch.start()
+
+          sys.path.insert(0, str(source_root))
+          constructor_succeeded = False
+          intercept_restored = False
+          model = None
+          try:
+              from lightglue import ALIKED
+
+              module_path = Path(sys.modules["lightglue"].__file__).resolve()
+              expected_module_path = source_root / "lightglue" / "__init__.py"
+              if module_path != expected_module_path:
+                  raise AssertionError(
+                      f"unexpected lightglue import path: {module_path} != {expected_module_path}"
+                  )
+
+              torch.hub.load_state_dict_from_url = local_state_dict_loader
+              try:
+                  model = ALIKED()
+                  constructor_succeeded = True
+              finally:
+                  torch.hub.load_state_dict_from_url = original_loader
+                  intercept_restored = (
+                      torch.hub.load_state_dict_from_url is original_loader
+                  )
+          finally:
+              if torch.hub.load_state_dict_from_url is not original_loader:
+                  torch.hub.load_state_dict_from_url = original_loader
+              for patch in reversed(patches):
+                  patch.stop()
+              if sys.path and sys.path[0] == str(source_root):
+                  sys.path.pop(0)
+
+          if not constructor_succeeded or model is None:
+              raise AssertionError("ALIKED constructor did not complete")
+          if not intercept_restored:
+              raise AssertionError("torch.hub.load_state_dict_from_url was not restored immediately")
+          if torch.hub.download_url_to_file is not original_download:
+              raise AssertionError("torch.hub.download_url_to_file was not restored")
+          if len(local_loader_calls) != 1:
+              raise AssertionError(f"expected exactly one local checkpoint loader call: {local_loader_calls!r}")
+          if network_attempts:
+              raise AssertionError(f"network/process attempt escaped local checkpoint path: {network_attempts!r}")
+
+          loaded_lightglue_modules = sorted(
+              name for name in sys.modules if name == "lightglue" or name.startswith("lightglue.")
+          )
+          allowed_lightglue_modules = {
+              "lightglue",
+              "lightglue.aliked",
+              "lightglue.utils",
+          }
+          unexpected_modules = sorted(
+              set(loaded_lightglue_modules) - allowed_lightglue_modules
+          )
+          if unexpected_modules:
+              raise AssertionError(
+                  f"excluded LightGlue modules were imported: {unexpected_modules!r}"
+              )
+
+          evidence = {
+              "schema_version": 1,
+              "evidence_kind": "constructor_compatibility_only",
+              "constructor_execution_evidence": True,
+              "gluemap_geometry_execution_evidence": False,
+              "runtime_profile_approval": False,
+              "gpu_execution_evidence": False,
+              "python": sys.version.split()[0],
+              "environment": {
+                  "numpy": importlib.metadata.version("numpy"),
+                  "torch": importlib.metadata.version("torch"),
+                  "torchvision": importlib.metadata.version("torchvision"),
+                  "kornia": importlib.metadata.version("kornia"),
+                  "kornia_rs": importlib.metadata.version("kornia-rs"),
+                  "opencv_python": importlib.metadata.version("opencv-python"),
+                  "huggingface_hub": importlib.metadata.version("huggingface_hub"),
+                  "cuda_available": torch.cuda.is_available(),
+              },
+              "source": {
+                  "manifest": os.environ["SOURCE_MANIFEST"],
+                  "materialization_sha256": os.environ["SOURCE_MATERIALIZATION_SHA256"],
+                  "import_form": "from lightglue import ALIKED",
+                  "loaded_lightglue_modules": loaded_lightglue_modules,
+                  "unexpected_lightglue_modules": unexpected_modules,
+              },
+              "checkpoint": {
+                  "repository": "Shiaoming/ALIKED",
+                  "revision": os.environ["ALIKED_REVISION"],
+                  "repository_path": "models/aliked-n16.pth",
+                  "git_blob_sha1": os.environ["ALIKED_CHECKPOINT_BLOB"],
+                  "byte_length": len(checkpoint_bytes),
+                  "sha256": checkpoint_sha256,
+                  "verified_before_import": True,
+                  "local_load_weights_only": True,
+              },
+              "constructor": {
+                  "class": type(model).__name__,
+                  "model_name": model.conf.model_name,
+                  "parameter_count": sum(parameter.numel() for parameter in model.parameters()),
+                  "strict_state_dict_source_assertion": True,
+                  "local_loader_call_count": len(local_loader_calls),
+                  "intercepted_upstream_url": local_loader_calls[0]["url"],
+                  "intercepted_map_location": local_loader_calls[0]["map_location"],
+                  "torch_hub_intercept_restored_immediately": intercept_restored,
+              },
+              "network_policy": {
+                  "hf_hub_offline": os.environ.get("HF_HUB_OFFLINE"),
+                  "transformers_offline": os.environ.get("TRANSFORMERS_OFFLINE"),
+                  "blocked_routes": [
+                      "socket.socket.connect",
+                      "socket.create_connection",
+                      "urllib.request.urlopen",
+                      "httpx.Client.request",
+                      "httpx.AsyncClient.request",
+                      "huggingface_hub.hf_hub_download",
+                      "huggingface_hub.snapshot_download",
+                      "subprocess.Popen",
+                      "torch.hub.download_url_to_file",
+                  ],
+                  "attempts": network_attempts,
+                  "all_attempts_fail_closed": True,
+              },
+          }
+
+          if evidence["environment"]["numpy"] != "2.4.3":
+              raise AssertionError("NumPy runtime identity drift")
+          if evidence["environment"]["torch"] != "2.4.1+cpu":
+              raise AssertionError("torch runtime identity drift")
+          if evidence["environment"]["torchvision"] != "0.19.1+cpu":
+              raise AssertionError("torchvision runtime identity drift")
+          if evidence["constructor"]["model_name"] != "aliked-n16":
+              raise AssertionError("unexpected ALIKED model identity")
+
+          evidence_path.write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print(evidence_path.read_text(encoding="utf-8"))
+          PY
+
+      - name: Retain machine-readable constructor evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v2l14-4-lightglue-aliked-local-load
+          path: ${{ runner.temp }}/v2l14-4-lightglue-aliked-local-load.json
+          if-no-files-found: error
+          retention-days: 30
