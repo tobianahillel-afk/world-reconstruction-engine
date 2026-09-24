@@ -78,7 +78,7 @@ RELATIVE_ROTATION_DISAGREEMENT_DESCRIPTOR = MetricDescriptor(
     direction=MetricDirection.INFORMATIONAL,
     aggregation=_MEDIAN_SHARED_PAIR,
 )
-TRANSLATION_PAIR_COVERAGE_DESCRIPTOR = MetricDescriptor(
+CONSENSUS_TRANSLATION_PAIR_COVERAGE_DESCRIPTOR = MetricDescriptor(
     name=MetricName("geometry.consensus.translation_pair_coverage_ratio"),
     dimension=_GEOMETRY_CONSENSUS_DIMENSION,
     unit=_RATIO_UNIT,
@@ -363,7 +363,7 @@ def _pair_metrics(
                     provenance,
                 ),
                 _observation(
-                    TRANSLATION_PAIR_COVERAGE_DESCRIPTOR,
+                    CONSENSUS_TRANSLATION_PAIR_COVERAGE_DESCRIPTOR,
                     len(translation_disagreements) / pair_count,
                     provenance,
                 ),
