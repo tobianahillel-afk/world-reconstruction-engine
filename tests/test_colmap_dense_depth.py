@@ -806,8 +806,7 @@ def test_real_cuda_patchmatch_retained_fixture() -> None:
     assert sum(sum(field.validity) for field in result.depth_fields) > 0
     assert all(field.confidence is None for field in result.depth_fields)
     assert all(
-        field.depth_value_convention is COLMAP_CAMERA_Z_CONVENTION
-        for field in result.depth_fields
+        field.depth_value_convention is COLMAP_CAMERA_Z_CONVENTION for field in result.depth_fields
     )
 
     output_evidence = _real_cuda_output_evidence(result, output_root=output_root)
