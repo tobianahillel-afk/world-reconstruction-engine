@@ -38,6 +38,16 @@ Every serious candidate is scored separately on relevant dimensions:
 
 A single weighted score can help route selection, but never replaces the dimension vector.
 
+## Hardware portability rule
+
+Technology selection must distinguish **mandatory product routes** from **optional accelerated specialists**.
+
+- Every mandatory capability must retain at least one reviewed CPU route.
+- A GPU/CUDA/NPU-only candidate can be benchmarked and retained as a specialist, but it cannot become the only path required to complete a mandatory roadmap dependency.
+- A technology gate is allowed to conclude **NO-GO / deferred optional** when the strongest candidate fails the current baseline hardware contract. That is a valid gate result; do not force an adapter integration merely to satisfy a roadmap label.
+- Accelerator availability is part of routing/resource evidence. Absence of the accelerator selects or preserves the CPU route rather than making the engine unusable.
+- When both CPU and accelerated routes exist, compare quality, latency, RAM/VRAM, energy/resource cost and failure behavior under the same WRE contract; acceleration alone is not a truth or default-promotion signal.
+
 ## Recommended benchmark modes
 
 The internal benchmark suite should include at least:
