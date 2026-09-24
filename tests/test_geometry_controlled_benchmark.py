@@ -683,7 +683,10 @@ def test_real_controlled_geometry_benchmark(tmp_path: Path) -> None:
     refined_candidate = refinement_result.refined_candidate
     assert refined_candidate.geometry_solution_id != incremental_candidate.geometry_solution_id
     assert refined_candidate.geometry_solution.scale_status is GeometryScaleStatus.UNRESOLVED
-    assert _native_model_bytes(incremental.output_path, incremental_native) == incremental_native_before
+    assert (
+        _native_model_bytes(incremental.output_path, incremental_native)
+        == incremental_native_before
+    )
 
     global_config = ColmapGlobalReconstructionConfig()
     global_run = _run(
