@@ -215,6 +215,10 @@ from wre.reconstruction.da3_runtime import (
     execute_da3_base_preview,
     inspect_da3_reference_environment,
 )
+from wre.reconstruction.dense_depth import (
+    DENSE_DEPTH_ARTIFACT_KIND,
+    DenseDepthArtifact,
+)
 from wre.reconstruction.feed_forward_camera_quality import (
     FEED_FORWARD_CAMERA_QUALITY_EVALUATOR,
     FEED_FORWARD_CAMERA_QUALITY_IMPLEMENTATION,
@@ -238,10 +242,6 @@ from wre.reconstruction.feed_forward_geometry import (
     FEED_FORWARD_GEOMETRY_OUTPUT_KINDS,
     FeedForwardGeometryResult,
     normalize_feed_forward_geometry_inputs,
-)
-from wre.reconstruction.dense_depth import (
-    DENSE_DEPTH_ARTIFACT_KIND,
-    DenseDepthArtifact,
 )
 from wre.reconstruction.geometry_consensus import (
     CONSENSUS_TRANSLATION_PAIR_COVERAGE_DESCRIPTOR,
