@@ -122,10 +122,7 @@ class _ControlledBenchmarkUnresolved(RuntimeError):
 
 
 def _canonical_artifacts(*refs: ArtifactRef) -> tuple[ArtifactRef, ...]:
-    by_identity = {
-        (ref.artifact_id.value, ref.artifact_kind.value): ref
-        for ref in refs
-    }
+    by_identity = {(ref.artifact_id.value, ref.artifact_kind.value): ref for ref in refs}
     return tuple(by_identity[key] for key in sorted(by_identity))
 
 
@@ -206,25 +203,15 @@ def _candidate_record(
         "geometry_solution_id": candidate.geometry_solution_id.value,
         "local_frame_id": candidate.geometry_solution.local_frame_id.value,
         "scale_status": candidate.geometry_solution.scale_status.value,
-        "observation_ids": [
-            camera.observation_id.value for camera in candidate.camera_solutions
-        ],
+        "observation_ids": [camera.observation_id.value for camera in candidate.camera_solutions],
         "projection_models": sorted(
             {camera.projection_model.value for camera in candidate.camera_solutions}
         ),
-        "camera_solution_ids": [
-            camera.solution_id.value for camera in candidate.camera_solutions
-        ],
-        "depth_field_ids": [
-            depth.depth_field_id.value for depth in candidate.depth_fields
-        ],
-        "point_map_ids": [
-            point.point_map_id.value for point in candidate.point_maps
-        ],
+        "camera_solution_ids": [camera.solution_id.value for camera in candidate.camera_solutions],
+        "depth_field_ids": [depth.depth_field_id.value for depth in candidate.depth_fields],
+        "point_map_ids": [point.point_map_id.value for point in candidate.point_maps],
         "producer": _producer_record(candidate.producer),
-        "source_artifacts": [
-            _artifact_record(ref) for ref in candidate.source_artifacts
-        ],
+        "source_artifacts": [_artifact_record(ref) for ref in candidate.source_artifacts],
         "trusted_reference_metrics": _metric_vector_record(reference_metrics),
     }
 
@@ -426,8 +413,7 @@ def _decoded_da3_inputs(
 def _native_model_bytes(root: Path, model: Any) -> dict[str, bytes]:
     model_path = root / model.relative_path
     return {
-        item.relative_path: (model_path / item.relative_path).read_bytes()
-        for item in model.files
+        item.relative_path: (model_path / item.relative_path).read_bytes() for item in model.files
     }
 
 
@@ -463,9 +449,7 @@ def _pose_metrics(
     candidate_cameras = tuple(
         sorted(candidate.camera_solutions, key=lambda item: item.observation_id.value)
     )
-    reference_cameras = tuple(
-        sorted(references, key=lambda item: item.observation_id.value)
-    )
+    reference_cameras = tuple(sorted(references, key=lambda item: item.observation_id.value))
     return evaluate_camera_pose_quality(
         CameraPoseQualityRequest(
             candidate_cameras=candidate_cameras,
@@ -823,15 +807,14 @@ def test_real_controlled_geometry_benchmark(tmp_path: Path) -> None:
             verification_artifact=verification_artifact,
         )
         candidates.append(global_candidate)
-        route_by_geometry_id[
-            global_candidate.geometry_solution_id
-        ] = COLMAP_GLOBAL_CANONICAL_ADAPTER_ID
+        route_by_geometry_id[global_candidate.geometry_solution_id] = (
+            COLMAP_GLOBAL_CANONICAL_ADAPTER_ID
+        )
 
     ordered_candidates = tuple(sorted(candidates, key=lambda item: item.geometry_solution_id.value))
     assert len(ordered_candidates) >= 3
     assert {
-        route_by_geometry_id[candidate.geometry_solution_id]
-        for candidate in ordered_candidates
+        route_by_geometry_id[candidate.geometry_solution_id] for candidate in ordered_candidates
     }.issuperset(
         {
             "da3.base_preview",
@@ -843,11 +826,7 @@ def test_real_controlled_geometry_benchmark(tmp_path: Path) -> None:
     consensus_artifacts = _canonical_artifacts(
         _FIXTURE_ARTIFACT,
         _REFERENCE_ARTIFACT,
-        *(
-            source
-            for candidate in ordered_candidates
-            for source in candidate.source_artifacts
-        ),
+        *(source for candidate in ordered_candidates for source in candidate.source_artifacts),
     )
     consensus = evaluate_geometry_consensus(
         GeometryConsensusRequest(
@@ -863,9 +842,10 @@ def test_real_controlled_geometry_benchmark(tmp_path: Path) -> None:
         for candidate in ordered_candidates
     }
     for metrics in reference_metrics.values():
-        assert tuple(
-            observation.descriptor.name.value for observation in metrics.observations
-        ) == _POSE_METRIC_NAMES
+        assert (
+            tuple(observation.descriptor.name.value for observation in metrics.observations)
+            == _POSE_METRIC_NAMES
+        )
         assert all(
             observation.provenance.input_artifacts == (_REFERENCE_ARTIFACT,)
             for observation in metrics.observations
@@ -902,9 +882,7 @@ def test_real_controlled_geometry_benchmark(tmp_path: Path) -> None:
             state=global_outcome.state.value,
             model_count=global_outcome.model_count,
             candidate_id=(
-                None
-                if global_candidate is None
-                else global_candidate.geometry_solution_id.value
+                None if global_candidate is None else global_candidate.geometry_solution_id.value
             ),
             configuration_sha256=global_config.sha256.value,
         ),
@@ -927,9 +905,7 @@ def test_real_controlled_geometry_benchmark(tmp_path: Path) -> None:
             "source_observation_ids": [
                 observation.observation_id.value for observation in observations
             ],
-            "source_asset_sha256": [
-                observation.asset.sha256.value for observation in observations
-            ],
+            "source_asset_sha256": [observation.asset.sha256.value for observation in observations],
             "trusted_reference_camera_observation_ids": list(reference_ids),
             "trusted_reference_artifact": _artifact_record(_REFERENCE_ARTIFACT),
         },
@@ -953,9 +929,7 @@ def test_real_controlled_geometry_benchmark(tmp_path: Path) -> None:
             "evaluator": _producer_record(
                 consensus.pair_disagreements[0].metrics.observations[0].provenance.evaluator
             ),
-            "input_artifacts": [
-                _artifact_record(ref) for ref in consensus_artifacts
-            ],
+            "input_artifacts": [_artifact_record(ref) for ref in consensus_artifacts],
             "pair_count": len(consensus.pair_disagreements),
             "pairs": [
                 {
@@ -983,9 +957,7 @@ def test_real_controlled_geometry_benchmark(tmp_path: Path) -> None:
     _assert_no_selection_fields(record)
     assert len(record["candidates"]) >= 3
     assert record["consensus"]["pair_count"] == expected_pair_count
-    assert reference_ids == tuple(
-        observation.observation_id.value for observation in observations
-    )
+    assert reference_ids == tuple(observation.observation_id.value for observation in observations)
     assert global_outcome.model_count != 1 or global_candidate is not None
 
     output_path_value = os.environ.get("WRE_GEOMETRY_CONTROLLED_BENCHMARK_OUTPUT")
