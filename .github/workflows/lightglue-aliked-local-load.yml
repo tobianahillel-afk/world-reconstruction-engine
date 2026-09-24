@@ -42,7 +42,6 @@ jobs:
       ALIKED_CHECKPOINT_URL: https://github.com/Shiaoming/ALIKED/raw/main/models/aliked-n16.pth
       SOURCE_MANIFEST: registry/external-sources/lightglue-aliked-bounded-materialization.json
       SOURCE_MATERIALIZATION_SHA256: d6da7b8d6aecd1dcb5fe769035e5e83d70cd860879ad17922fec4cc78f782b48
-      EVIDENCE_PATH: ${{ runner.temp }}/v2l14-4-lightglue-aliked-local-load.json
 
     steps:
       - name: Checkout WRE
@@ -231,6 +230,7 @@ jobs:
           HF_HUB_OFFLINE: "1"
           TRANSFORMERS_OFFLINE: "1"
           GIT_TERMINAL_PROMPT: "0"
+          EVIDENCE_PATH: ${{ runner.temp }}/v2l14-4-lightglue-aliked-local-load.json
         run: |
           set -euo pipefail
           .venv-aliked/bin/python - <<'PY'
