@@ -86,9 +86,7 @@ CONSENSUS_TRANSLATION_PAIR_COVERAGE_DESCRIPTOR = MetricDescriptor(
     aggregation=MetricAggregation("eligible_shared_pair_ratio"),
 )
 RELATIVE_TRANSLATION_DIRECTION_DISAGREEMENT_DESCRIPTOR = MetricDescriptor(
-    name=MetricName(
-        "geometry.consensus.relative_translation_direction_disagreement_deg_median"
-    ),
+    name=MetricName("geometry.consensus.relative_translation_direction_disagreement_deg_median"),
     dimension=_GEOMETRY_CONSENSUS_DIMENSION,
     unit=_DEGREE_UNIT,
     direction=MetricDirection.INFORMATIONAL,
@@ -107,9 +105,7 @@ def _validate_input_artifacts(value: object) -> tuple[ArtifactRef, ...]:
         raise TypeError("geometry_consensus.input_artifacts members must be ArtifactRef")
 
     artifacts = value
-    identities = tuple(
-        (item.artifact_id.value, item.artifact_kind.value) for item in artifacts
-    )
+    identities = tuple((item.artifact_id.value, item.artifact_kind.value) for item in artifacts)
     if len(identities) != len(set(identities)):
         raise ValueError("geometry_consensus.input_artifacts must be unique")
     if identities != tuple(sorted(identities)):
@@ -160,10 +156,7 @@ class GeometryConsensusResult:
             raise TypeError(
                 "geometry_consensus_result.pair_disagreements must be an immutable tuple"
             )
-        if any(
-            not isinstance(item, GeometryPairDisagreement)
-            for item in self.pair_disagreements
-        ):
+        if any(not isinstance(item, GeometryPairDisagreement) for item in self.pair_disagreements):
             raise TypeError(
                 "geometry_consensus_result.pair_disagreements members must be "
                 "GeometryPairDisagreement"
@@ -192,8 +185,7 @@ def _matmul(
 ) -> RotationMatrix3x3:
     return tuple(
         tuple(
-            sum(left[row][axis] * right[axis][column] for axis in range(3))
-            for column in range(3)
+            sum(left[row][axis] * right[axis][column] for axis in range(3)) for column in range(3)
         )
         for row in range(3)
     )  # type: ignore[return-value]
@@ -302,9 +294,7 @@ def _pair_metrics(
 
     left_ids = set(left_by_observation)
     right_ids = set(right_by_observation)
-    shared_ids = tuple(
-        sorted(left_ids.intersection(right_ids), key=lambda item: item.value)
-    )
+    shared_ids = tuple(sorted(left_ids.intersection(right_ids), key=lambda item: item.value))
     union_count = len(left_ids.union(right_ids))
     shared_ratio = len(shared_ids) / union_count if union_count else 0.0
 
