@@ -37,6 +37,7 @@ from wre.reconstruction.geometry_consensus import (
     GeometryConsensusResult,
     GeometryPairDisagreement,
     evaluate_geometry_consensus,
+)
 from wre.reconstruction.geometry_solution_comparison import (
     CompetingGeometrySolutions,
     GeometrySolutionCandidate,
