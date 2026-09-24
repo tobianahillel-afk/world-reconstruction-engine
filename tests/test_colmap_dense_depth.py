@@ -584,7 +584,6 @@ def _real_cuda_source(
     dataset_options.num_points2D_without_point3D = 0
     dataset_options.inlier_match_ratio = 1.0
     dataset_options.match_config = pycolmap.SyntheticDatasetMatchConfig.EXHAUSTIVE
-    dataset_options.image_extension = ".png"
 
     with pycolmap.Database.open(database_path) as database:
         reconstruction = pycolmap.synthesize_dataset(dataset_options, database)
