@@ -2161,7 +2161,7 @@ work_items:
       - docs/25_V2_ROADMAP.md
       - docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md
       - docs/27_RESEARCH_CANDIDATE_COVERAGE.md
-      - docs/reviews/V2L12-classical-precision-baseline-review.md
+      - docs/reviews/V2L12-classical-precision-geometry-review.md
       - docs/reviews/V2L14-precision-global-refinement-review.md
       - registry/dependencies.yaml
       - registry/adapter-models.yaml
