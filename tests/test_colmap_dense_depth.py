@@ -923,12 +923,8 @@ def test_module_surface_contains_no_fusion_or_surface_execution_api() -> None:
 
 
 def test_registry_keeps_dense_depth_donor_experimental_and_cuda_isolated() -> None:
-    adapter_registry = yaml.safe_load(
-        _ADAPTER_REGISTRY_PATH.read_text(encoding="utf-8")
-    )
-    dependency_registry = yaml.safe_load(
-        _DEPENDENCY_REGISTRY_PATH.read_text(encoding="utf-8")
-    )
+    adapter_registry = yaml.safe_load(_ADAPTER_REGISTRY_PATH.read_text(encoding="utf-8"))
+    dependency_registry = yaml.safe_load(_DEPENDENCY_REGISTRY_PATH.read_text(encoding="utf-8"))
 
     entry = next(
         item
@@ -958,9 +954,7 @@ def test_registry_keeps_dense_depth_donor_experimental_and_cuda_isolated() -> No
     assert entry["metric_names"] == []
     assert entry["resume_mode"] == "unsupported"
 
-    dependency = dependency_registry["dependencies"][
-        COLMAP_PATCH_MATCH_DENSE_DEPTH_DEPENDENCY_REF
-    ]
+    dependency = dependency_registry["dependencies"][COLMAP_PATCH_MATCH_DENSE_DEPTH_DEPENDENCY_REF]
     assert dependency["status"] == "candidate_optional"
     assert dependency["role"] == ["dense_depth_mvs"]
     assert dependency["integration"] == "official_pycolmap_cuda_external_environment"
