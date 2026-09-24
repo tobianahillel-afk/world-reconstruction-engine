@@ -55,7 +55,7 @@ jobs:
             "python=3.12.12" "numpy=2.4.3" "pip" "cmake>=3.18" "ninja" "pkg-config" "pybind11>=3.0" "scikit-build-core>=0.10" "clangxx" \
             "eigen=3.4.0" "ceres-solver=2.2.0=cpulgpl*" "metis=5.1.0" "boost=1.85.0" "libstdcxx-ng=15.2.0" "llvm-openmp=23.1.1=h7148c6a_0" "_openmp_mutex=*=*_llvm" \
             "pytorch-gpu=2.4.1" "torchvision=0.19.1" "cuda-version=12.4" \
-            "networkx=3.6.1" "pillow=12.2.0" "scipy=1.17.1" "tqdm=4.67.3" "einops=0.8.2" \
+            "fsspec=2026.7.0=pyhd8ed1ab_0" "networkx=3.6.1" "pillow=12.2.0" "scipy=1.17.1" "tqdm=4.67.3" "einops=0.8.2" \
             "imagesize=2.0.0" "safetensors=0.7.0" "huggingface_hub=1.12.0" > "$raw"
           status=$?
           set -e
@@ -96,6 +96,7 @@ jobs:
               "pytorch-gpu=2.4.1",
               "torchvision=0.19.1",
               "cuda-version=12.4",
+              "fsspec=2026.7.0=pyhd8ed1ab_0",
               "networkx=3.6.1",
               "pillow=12.2.0",
               "scipy=1.17.1",
@@ -159,6 +160,8 @@ jobs:
           assert by_name["pytorch-gpu"]["version"] == "2.4.1"
           assert by_name["torchvision"]["version"] == "0.19.1"
           assert by_name["cuda-version"]["version"].startswith("12.4")
+          assert by_name["fsspec"]["version"] == "2026.7.0", by_name["fsspec"]
+          assert by_name["fsspec"]["build_string"] == "pyhd8ed1ab_0", by_name["fsspec"]
           assert by_name["networkx"]["version"] == "3.6.1", by_name["networkx"]
           assert by_name["pillow"]["version"] == "12.2.0", by_name["pillow"]
           assert by_name["scipy"]["version"] == "1.17.1", by_name["scipy"]
