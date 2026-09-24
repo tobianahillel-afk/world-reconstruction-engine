@@ -5,31 +5,22 @@ roadmap_version: '2.0'
 phase: implementation
 milestone: V2M2
 lot: V2L14
-active_work_item: V2L14.4
+active_work_item: V2L14.5
 status: ready
-last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5, V2L3.6, V2L4.1, V2L4.2, V2L4.3, V2L4.4, V2L4.5, V2L4.6, V2L5.1, V2L5.2, V2L5.3, V2L5.4, V2L5.5, V2L5.6, V2L6.1, V2L6.2, V2L6.3, V2L6.4, V2L6.5, V2L6.6, V2L7.1, V2L7.2, V2L7.3, V2L7.4, V2L7.5, V2L7.6, V2L8.1, V2L8.2, V2L8.3, V2L8.4, V2L8.5, V2L9.1, V2L9.2, V2L9.3, V2L9.4, V2L9.5, V2L10.1, V2L10.2, V2L10.3, V2L10.4, V2L10.5, V2L10.6, V2L11.1, V2L11.2, V2L11.3, V2L11.4, V2L11.5, V2L11.6, V2L12.1, V2L12.2, V2L12.3, V2L12.4, V2L12.5, V2L13.1, V2L13.2, V2L13.3, V2L13.4, V2L13.5, V2L13.6, V2L14.1, V2L14.2, V2L14.3]
+last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5, V2L3.6, V2L4.1, V2L4.2, V2L4.3, V2L4.4, V2L4.5, V2L4.6, V2L5.1, V2L5.2, V2L5.3, V2L5.4, V2L5.5, V2L5.6, V2L6.1, V2L6.2, V2L6.3, V2L6.4, V2L6.5, V2L6.6, V2L7.1, V2L7.2, V2L7.3, V2L7.4, V2L7.5, V2L7.6, V2L8.1, V2L8.2, V2L8.3, V2L8.4, V2L8.5, V2L9.1, V2L9.2, V2L9.3, V2L9.4, V2L9.5, V2L10.1, V2L10.2, V2L10.3, V2L10.4, V2L10.5, V2L10.6, V2L11.1, V2L11.2, V2L11.3, V2L11.4, V2L11.5, V2L11.6, V2L12.1, V2L12.2, V2L12.3, V2L12.4, V2L12.5, V2L13.1, V2L13.2, V2L13.3, V2L13.4, V2L13.5, V2L13.6, V2L14.1, V2L14.2, V2L14.3, V2L14.4]
 last_merged_pr: 121
 current_goal: >-
-  Qualify the strongest currently viable hybrid/global geometry route through the mandatory technology gate and integrate only one exact
-  experimental candidate after source checkpoint license hardware reproducibility and cross-version COLMAP evidence is complete, while keeping
-  WRE geometry contracts solver-independent and preserving the classical V2L14.3 baseline.
+  Continue V2L14 entirely on the mandatory CPU-capable product path. V2L14.4 completed with an explicit NO-GO/deferred-optional decision for
+  the accelerator-dependent GLUEMAP/VGGT candidate; preserve that evidence for future specialist work without making it a prerequisite.
+  V2L14.5 now owns pure solver-independent geometry consensus/disagreement metrics over canonical competing GeometrySolutionCandidate values.
 next_action: >-
-  Continue V2L14.4 qualification only. The exact reviewed redistribution surface is now statically classified without granting approval:
-  the 193-build conda closure partitions into 132 permissive-or-notice builds, 10 public-domain-or-special-notice builds, 26
-  reciprocal-or-dual-review builds, 8 GCC-runtime-exception builds and 17 vendor/custom-EULA builds; all six exact PyPI artifacts expose direct
-  permissive-or-notice license evidence. This closes the local classification task only. No further repository-local qualification can safely
-  authorize adapter execution until external gates are supplied or explicitly reviewed: obtain the official gated facebook/VGGT-1B-Commercial
-  model.safetensors and record its official immutable revision/SHA-256/byte length, complete human/legal use-mode and redistribution review for
-  reciprocal/copyleft/GCC-exception/NVIDIA/cuDNN/Intel/VGGT terms, provision a supported reproducible GPU runner, then produce a real GLUEMAP
-  native sparse model and prove WRE PyCOLMAP 4.2.0 cross-read compatibility. Do not add the adapter, mark shipping/default approval, or use mirror
-  checkpoint identities while any of those blockers remains.
-blockers:
-  - V2L14.4 has no executable supported GPU runner in repository CI; the reviewed GLUEMAP reference environment is CUDA/GPU while current WRE workflows are CPU-hosted.
-  - V2L14.4 MapAnything plus UniCeption is blocked for the first shipping-oriented profile. Exact source inspection found CC-BY-NC-SA-4.0 non-commercial CroCo/DUSt3R files on the actual MapAnything import path despite UniCeption's BSD root LICENSE; PR #129 is retained only as superseded qualification evidence and that route must not execute.
-  - V2L14.4 VGGT-1B-Commercial checkpoint qualification is incomplete. PR #133 closes the source-byte gate at 93 files / 744299 bytes / SHA-256 19efc825c7627dc2d7fdf3fed3aa410823e90e81d2f126c57148549aac5fced1 for the exact GLUEMAP+VGGT source pair, but the official commercial checkpoint repository is gated and its immutable repository revision, model.safetensors SHA-256 and byte length have not yet been obtained from official bytes. No unofficial mirror identity is acceptable.
-  - V2L14.4 transitive redistribution review remains incomplete despite exhaustive static triage. The exact conda closure is classified as 132 permissive-or-notice, 10 public-domain-or-special-notice, 26 reciprocal-or-dual-review, 8 GCC-runtime-exception and 17 vendor/custom-EULA builds; all six exact PyPI artifacts expose direct permissive-or-notice evidence. NVIDIA/cuDNN/Intel vendor terms, reciprocal/copyleft and GCC-exception use modes, VGGT License v1/AUP, bounded LightGlue/ALIKED source/checkpoint obligations and the official VGGT-1B-Commercial model terms still require explicit human/legal review. Classification is not shipping approval and every license_review remains pending.
-  - V2L14.4 Python packaging compatibility must preserve the reviewed source/no-deps strategy. PR #141 closes the LightGlue/ALIKED constructor path and PR #143 proves the exact bounded VGGT source imports under NumPy 2.4.3 despite VGGT's upstream numpy<2 package metadata. Do not pip-install VGGT with dependency resolution or reinterpret this import-only proof as checkpoint/model/GPU runtime approval.
-  - V2L14.4 has not yet produced a real GLUEMAP native sparse model for WRE PyCOLMAP 4.2.0 cross-read compatibility evidence against GLUEMAP's isolated pycolmap-cuda12 4.0.4 environment.
+  Implement only V2L14.5 as a pure CPU-portable geometry-consensus module. Reuse the canonical competing-solution pair contract and metric
+  provenance vocabulary to compute symmetric observation-coverage relative-rotation and relative-translation-direction disagreement evidence
+  without estimating SE3/Sim3 alignment, selecting a winner, running any solver/model, or importing NumPy Torch PyCOLMAP CUDA GLUEMAP or VGGT.
+  Preserve the existing reviewed CPU routes: COLMAP/PyCOLMAP classical/global plus bundle adjustment and the DA3 Torch-CPU reference. V2L14.6
+  will own the controlled benchmark. The deferred GLUEMAP/VGGT accelerator candidate is not a blocker and must not re-enter the mandatory path
+  without a separate reviewed optional-specialist activation.
+blockers: []
 architecture:
   product_blueprint: docs/01_PRODUCT.md
   architecture_blueprint: docs/02_ARCHITECTURE.md
