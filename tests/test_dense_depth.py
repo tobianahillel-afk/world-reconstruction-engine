@@ -197,8 +197,7 @@ def _dense_artifact(
         )
     )
     return DenseDepthArtifact(
-        artifact_ref=artifact_ref
-        or _artifact("artifact:dense", DENSE_DEPTH_ARTIFACT_KIND.value),
+        artifact_ref=artifact_ref or _artifact("artifact:dense", DENSE_DEPTH_ARTIFACT_KIND.value),
         source_geometry=source,
         depth_fields=fields_value,
         producer=_producer("dense"),
@@ -403,9 +402,7 @@ def test_dense_depth_preserves_unresolved_scale_and_local_frame_context() -> Non
 
     assert artifact.source_geometry is source
     assert artifact.source_geometry.geometry_solution.scale_status is GeometryScaleStatus.UNRESOLVED
-    assert artifact.source_geometry.geometry_solution.local_frame_id == LocalFrameId(
-        "frame:source"
-    )
+    assert artifact.source_geometry.geometry_solution.local_frame_id == LocalFrameId("frame:source")
     assert not hasattr(artifact, "scale_status")
     assert not hasattr(artifact, "world_transform")
     assert not hasattr(artifact, "local_frame_id")
