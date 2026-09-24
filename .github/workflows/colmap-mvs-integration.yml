@@ -19,6 +19,11 @@ on:
         required: true
         default: false
         type: boolean
+      runner_label:
+        description: "Trusted self-hosted CUDA runner label"
+        required: true
+        default: "wre-cuda12"
+        type: string
 
 permissions:
   contents: read
@@ -348,20 +353,27 @@ jobs:
     name: pycolmap-cuda12-4.2.0-real-patchmatch
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_real_cuda && github.ref == 'refs/heads/main' && github.repository == 'tobianahillel-afk/world-reconstruction-engine' }}
     needs: qualify-environment
-    runs-on: [self-hosted, linux, x64, wre-cuda12]
+    runs-on: [self-hosted, linux, x64, "${{ inputs.runner_label }}"]
     timeout-minutes: 45
     env:
       LOCK_PATH: registry/external-environments/colmap-mvs-cuda12-4.2.0.json
       WRE_COLMAP_MVS_REAL_CUDA: "1"
-      WRE_COLMAP_MVS_REAL_ROOT: ${{ runner.temp }}/wre-colmap-mvs-real
-      WRE_COLMAP_MVS_HARDWARE_EVIDENCE: ${{ runner.temp }}/wre-colmap-mvs-hardware.json
-      WRE_COLMAP_MVS_EVIDENCE_PATH: ${{ runner.temp }}/wre-colmap-mvs-real-evidence.json
 
     steps:
       - name: Checkout trusted main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Initialize retained evidence paths
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo "WRE_COLMAP_MVS_REAL_ROOT=$RUNNER_TEMP/wre-colmap-mvs-real"
+            echo "WRE_COLMAP_MVS_HARDWARE_EVIDENCE=$RUNNER_TEMP/wre-colmap-mvs-hardware.json"
+            echo "WRE_COLMAP_MVS_EVIDENCE_PATH=$RUNNER_TEMP/wre-colmap-mvs-real-evidence.json"
+          } >> "$GITHUB_ENV"
 
       - name: Install exact uv Python and frozen WRE test harness
         uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
