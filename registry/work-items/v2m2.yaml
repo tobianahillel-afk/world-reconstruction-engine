@@ -2150,7 +2150,6 @@ work_items:
       - registry/adapter-models.yaml
       - registry/components.yaml
       - registry/work-items/v2m2.yaml
-      - reviews/V2L12_REVIEW.md
       - src/wre/reconstruction/dense_depth.py
       - src/wre/reconstruction/geometry_solution_comparison.py
       - src/wre/reconstruction/colmap_geometry_refinement.py
