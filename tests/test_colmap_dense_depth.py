@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import hashlib
 import inspect
+import json
+import os
 from dataclasses import FrozenInstanceError, fields, replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -510,6 +512,351 @@ def _source_bytes(source: ColmapDenseDepthSource) -> tuple[dict[str, bytes], dic
         for item in source.images
     }
     return models, images
+
+
+class _RecordingRealPycolmap:
+    """Proxy the real binding while proving the dense donor call surface."""
+
+    def __init__(self, module: Any) -> None:
+        self._module = module
+        self.calls: list[str] = []
+
+    def __getattr__(self, name: str) -> Any:
+        return getattr(self._module, name)
+
+    def undistort_images(self, *args: Any, **kwargs: Any) -> Any:
+        self.calls.append("undistort_images")
+        return self._module.undistort_images(*args, **kwargs)
+
+    def patch_match_stereo(self, *args: Any, **kwargs: Any) -> Any:
+        self.calls.append("patch_match_stereo")
+        return self._module.patch_match_stereo(*args, **kwargs)
+
+    def stereo_fusion(self, *_args: Any, **_kwargs: Any) -> None:
+        raise AssertionError("V2L15.2 real CUDA evidence must never call stereo_fusion")
+
+
+def _real_cuda_sparse_model_artifact(
+    model_root: Path,
+    reconstruction: Any,
+) -> ColmapSparseModelArtifact:
+    model_path = model_root / "0"
+    files = tuple(
+        ColmapModelFileArtifact(
+            relative_path=path.relative_to(model_path).as_posix(),
+            sha256=hash_file_content(path).sha256,
+            byte_length=hash_file_content(path).byte_length,
+        )
+        for path in sorted(model_path.rglob("*"), key=lambda item: item.as_posix())
+        if path.is_file()
+    )
+    return ColmapSparseModelArtifact(
+        model_index=0,
+        relative_path="0",
+        num_registered_images=len(tuple(reconstruction.reg_image_ids())),
+        num_points3d=len(tuple(reconstruction.point3D_ids())),
+        files=files,
+    )
+
+
+def _real_cuda_source(
+    root: Path,
+    pycolmap: Any,
+    environment: ColmapEnvironmentIdentity,
+) -> tuple[ColmapDenseDepthSource, dict[str, object]]:
+    seed = 20260924
+    pycolmap.set_random_seed(seed)
+
+    database_path = root / "synthetic.db"
+    dataset_options = pycolmap.SyntheticDatasetOptions()
+    dataset_options.num_rigs = 1
+    dataset_options.num_cameras_per_rig = 1
+    dataset_options.num_frames_per_rig = 4
+    dataset_options.num_points3D = 600
+    dataset_options.track_length = -1
+    dataset_options.sensor_from_rig_translation_stddev = 0.0
+    dataset_options.sensor_from_rig_rotation_stddev = 0.0
+    dataset_options.camera_width = 320
+    dataset_options.camera_height = 240
+    dataset_options.camera_model_id = pycolmap.CameraModelId.PINHOLE
+    dataset_options.camera_params = [280.0, 280.0, 160.0, 120.0]
+    dataset_options.camera_has_prior_focal_length = True
+    dataset_options.num_points2D_without_point3D = 0
+    dataset_options.inlier_match_ratio = 1.0
+    dataset_options.match_config = pycolmap.SyntheticDatasetMatchConfig.EXHAUSTIVE
+
+    with pycolmap.Database.open(database_path) as database:
+        reconstruction = pycolmap.synthesize_dataset(dataset_options, database)
+
+    assert bool(reconstruction.is_valid())
+    assert int(reconstruction.num_reg_images()) == 4
+    assert int(reconstruction.num_points3D()) == 600
+
+    image_root = root / "images"
+    image_root.mkdir()
+    image_options = pycolmap.SyntheticImageOptions()
+    image_options.feature_peak_radius = 1
+    image_options.feature_patch_radius = 4
+    image_options.feature_patch_max_brightness = 220
+    pycolmap.synthesize_images(image_options, reconstruction, image_root)
+
+    model_root = root / "source-model"
+    model_path = model_root / "0"
+    model_path.mkdir(parents=True)
+    reconstruction.write(model_path)
+    model_artifact = _real_cuda_sparse_model_artifact(model_root, reconstruction)
+
+    registered = sorted(
+        (
+            str(reconstruction.image(int(image_id)).name),
+            int(image_id),
+        )
+        for image_id in reconstruction.reg_image_ids()
+    )
+    observations: list[ImageObservation] = []
+    inputs: list[ColmapReconstructionInput] = []
+    summaries: list[ColmapImageFeatureSummary] = []
+    for index, (image_name, image_id) in enumerate(registered):
+        image_path = image_root / image_name
+        assert image_path.is_file()
+        observation = _observation(image_path, f"obs:cuda:{index:04d}")
+        observations.append(observation)
+        inputs.append(
+            ColmapReconstructionInput(
+                observation=observation,
+                source_path=image_path,
+                image_name=image_name,
+            )
+        )
+        image = reconstruction.image(image_id)
+        num_points = int(image.num_points2D())
+        summaries.append(
+            ColmapImageFeatureSummary(
+                observation_id=observation.observation_id,
+                image_name=image_name,
+                keypoint_rows=num_points,
+                keypoint_cols=4,
+                descriptor_rows=num_points,
+                descriptor_cols=128,
+            )
+        )
+
+    database_digest = hash_file_content(database_path)
+    canonical_observations = tuple(observations)
+    features = ColmapFeatureExtractionResult(
+        provenance=DerivedArtifactProvenance(
+            producing_run_id=ReconstructionRunId("run:dense-real-cuda-features"),
+            source_observation_ids=tuple(
+                observation.observation_id for observation in canonical_observations
+            ),
+        ),
+        environment=environment,
+        configuration_sha256=Sha256Digest(
+            hashlib.sha256(b"wre-v2l15.2-real-cuda-synthetic-feature-map-v1").hexdigest()
+        ),
+        database_path=database_path,
+        database_sha256=database_digest.sha256,
+        database_byte_length=database_digest.byte_length,
+        images=tuple(summaries),
+    )
+
+    canonical = canonicalize_colmap_sparse_model(
+        output_path=model_root,
+        model_artifact=model_artifact,
+        features=features,
+        expected_environment=environment,
+        module=pycolmap,
+    )
+    candidate = GeometrySolutionCandidate(
+        geometry_solution=canonical.geometry_solution,
+        camera_solutions=canonical.camera_solutions,
+        depth_fields=(),
+        point_maps=(canonical.point_map,),
+        producer=_producer("real-cuda-source"),
+        source_artifacts=(_artifact("artifact:source:real-cuda"),),
+    )
+    source = ColmapDenseDepthSource(
+        model_root=model_root,
+        model_artifact=model_artifact,
+        source_geometry=candidate,
+        features=features,
+        image_root=image_root,
+        images=tuple(inputs),
+        expected_environment=environment,
+        artifact_ref=colmap_native_sparse_model_artifact_ref(model_artifact),
+    )
+    fixture = {
+        "camera_height": dataset_options.camera_height,
+        "camera_model": "PINHOLE",
+        "camera_params": list(dataset_options.camera_params),
+        "camera_width": dataset_options.camera_width,
+        "num_frames": dataset_options.num_frames_per_rig,
+        "num_points3D": dataset_options.num_points3D,
+        "seed": seed,
+    }
+    return source, fixture
+
+
+def _sha256_json_document(value: object) -> str:
+    payload = json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        ensure_ascii=True,
+        allow_nan=False,
+    ).encode("utf-8")
+    return hashlib.sha256(payload).hexdigest()
+
+
+def _real_cuda_output_evidence(
+    result: Any,
+    *,
+    output_root: Path,
+) -> dict[str, object]:
+    depth_maps = []
+    for path in sorted(
+        (output_root / "stereo" / "depth_maps").glob("*.geometric.bin"),
+        key=lambda item: item.name,
+    ):
+        digest = hash_file_content(path)
+        depth_maps.append(
+            {
+                "byte_length": digest.byte_length,
+                "name": path.name,
+                "sha256": digest.sha256.value,
+            }
+        )
+
+    fields = []
+    for field in result.depth_fields:
+        valid_values = [
+            value for value, valid in zip(field.depth_values, field.validity, strict=True) if valid
+        ]
+        fields.append(
+            {
+                "depth_field_id": field.depth_field_id.value,
+                "depth_payload_sha256": _sha256_json_document(
+                    {
+                        "depth_values": list(field.depth_values),
+                        "validity": list(field.validity),
+                    }
+                ),
+                "height_px": field.dimensions.height_px,
+                "max_valid_depth": max(valid_values) if valid_values else None,
+                "min_valid_depth": min(valid_values) if valid_values else None,
+                "observation_id": field.observation_id.value,
+                "valid_pixel_count": len(valid_values),
+                "width_px": field.dimensions.width_px,
+            }
+        )
+
+    return {
+        "artifact_id": result.artifact_ref.artifact_id.value,
+        "depth_fields": fields,
+        "depth_maps": depth_maps,
+    }
+
+
+@pytest.mark.skipif(
+    os.environ.get("WRE_COLMAP_MVS_REAL_CUDA") != "1",
+    reason="real CUDA PatchMatch evidence is manual and requires a trusted GPU runner",
+)
+def test_real_cuda_patchmatch_retained_fixture() -> None:
+    pycolmap = dense_module._load_pycolmap()
+    environment = inspect_colmap_dense_depth_environment(pycolmap)
+    assert environment.upstream_has_cuda is True
+
+    run_root_raw = os.environ.get("WRE_COLMAP_MVS_REAL_ROOT")
+    hardware_path_raw = os.environ.get("WRE_COLMAP_MVS_HARDWARE_EVIDENCE")
+    hardware_sha256 = os.environ.get("WRE_COLMAP_MVS_HARDWARE_SHA256")
+    evidence_path_raw = os.environ.get("WRE_COLMAP_MVS_EVIDENCE_PATH")
+    assert run_root_raw
+    assert hardware_path_raw
+    assert hardware_sha256
+    assert evidence_path_raw
+
+    run_root = Path(run_root_raw).expanduser().resolve()
+    hardware_path = Path(hardware_path_raw).expanduser().resolve(strict=True)
+    evidence_path = Path(evidence_path_raw).expanduser().resolve()
+    assert not run_root.exists()
+    assert not evidence_path.exists()
+    run_root.mkdir(parents=True)
+
+    hardware_digest = hash_file_content(hardware_path)
+    assert hardware_digest.sha256.value == hardware_sha256
+    hardware_document = json.loads(hardware_path.read_text(encoding="utf-8"))
+    assert hardware_document["gpu_execution_evidence"] is True
+
+    source, fixture = _real_cuda_source(run_root, pycolmap, environment)
+    source_before = _source_bytes(source)
+    proxy = _RecordingRealPycolmap(pycolmap)
+    output_root = run_root / "dense-output"
+    result = ColmapPatchMatchDenseDepthAdapter(
+        source=source,
+        output_root=output_root,
+        hardware_runtime=HardwareRuntimeIdentity(
+            sha256=Sha256Digest(hardware_sha256),
+        ),
+        module=proxy,
+    ).derive()
+
+    assert proxy.calls == ["undistort_images", "patch_match_stereo"]
+    assert _source_bytes(source) == source_before
+    assert result.depth_fields
+    assert sum(sum(field.validity) for field in result.depth_fields) > 0
+    assert all(field.confidence is None for field in result.depth_fields)
+    assert all(
+        field.depth_value_convention is COLMAP_CAMERA_Z_CONVENTION for field in result.depth_fields
+    )
+
+    output_evidence = _real_cuda_output_evidence(result, output_root=output_root)
+    assert output_evidence["depth_maps"]
+    source_model_files = [
+        {
+            "byte_length": item.byte_length,
+            "path": item.relative_path,
+            "sha256": item.sha256.value,
+        }
+        for item in source.model_artifact.files
+    ]
+    source_images = [
+        {
+            "byte_length": item.observation.asset.byte_length,
+            "image_name": item.image_name,
+            "observation_id": item.observation.observation_id.value,
+            "sha256": item.observation.asset.sha256.value,
+        }
+        for item in source.images
+    ]
+    evidence = {
+        "schema_version": 1,
+        "evidence_kind": "real_colmap_patchmatch_dense_depth_cuda",
+        "runtime_execution_evidence": True,
+        "gpu_execution_evidence": True,
+        "adapter_id": COLMAP_PATCH_MATCH_DENSE_DEPTH_ADAPTER_ID,
+        "dependency_ref": COLMAP_PATCH_MATCH_DENSE_DEPTH_DEPENDENCY_REF,
+        "environment": {
+            "ceres_version": environment.ceres_version,
+            "colmap_build": environment.colmap_build,
+            "colmap_version": environment.colmap_version,
+            "pycolmap_version": environment.pycolmap_version,
+            "upstream_has_cuda": environment.upstream_has_cuda,
+        },
+        "fixture": fixture,
+        "hardware_evidence_sha256": hardware_sha256,
+        "source": {
+            "images": source_images,
+            "model_files": source_model_files,
+            "source_immutable_after_execution": True,
+        },
+        "execution_calls": proxy.calls,
+        "result": output_evidence,
+    }
+    evidence_path.parent.mkdir(parents=True, exist_ok=True)
+    evidence_path.write_text(
+        json.dumps(evidence, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
 
 
 def test_config_is_frozen_exact_and_deterministic() -> None:
