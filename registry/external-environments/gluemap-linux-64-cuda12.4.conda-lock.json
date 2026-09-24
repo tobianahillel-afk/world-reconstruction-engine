@@ -2336,6 +2336,8 @@
     "pybind11>=3.0",
     "scikit-build-core>=0.10",
     "clangxx",
+    "libgcc-devel_linux-64=16.2.0=he3ce08f_105",
+    "libstdcxx-devel_linux-64=16.2.0=h86e191b_105",
     "eigen=3.4.0",
     "ceres-solver=2.2.0=cpulgpl*",
     "metis=5.1.0",
