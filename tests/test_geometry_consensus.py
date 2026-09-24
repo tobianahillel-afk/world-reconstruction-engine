@@ -32,7 +32,7 @@ from wre.reconstruction.geometry_consensus import (
     RELATIVE_ROTATION_DISAGREEMENT_DESCRIPTOR,
     RELATIVE_TRANSLATION_DIRECTION_DISAGREEMENT_DESCRIPTOR,
     SHARED_OBSERVATION_COVERAGE_DESCRIPTOR,
-    TRANSLATION_PAIR_COVERAGE_DESCRIPTOR,
+    CONSENSUS_TRANSLATION_PAIR_COVERAGE_DESCRIPTOR,
     GeometryConsensusRequest,
     GeometryConsensusResult,
     GeometryPairDisagreement,
@@ -445,7 +445,7 @@ def test_independent_rigid_local_frame_change_leaves_relative_disagreement_zero(
     values = _metric_values(result)
 
     assert values[SHARED_OBSERVATION_COVERAGE_DESCRIPTOR.name.value] == 1.0
-    assert values[TRANSLATION_PAIR_COVERAGE_DESCRIPTOR.name.value] == 1.0
+    assert values[CONSENSUS_TRANSLATION_PAIR_COVERAGE_DESCRIPTOR.name.value] == 1.0
     assert values[RELATIVE_ROTATION_DISAGREEMENT_DESCRIPTOR.name.value] == pytest.approx(
         0.0, abs=1e-10
     )
@@ -542,7 +542,7 @@ def test_degenerate_baselines_keep_rotation_and_zero_translation_coverage() -> N
     assert values[RELATIVE_ROTATION_DISAGREEMENT_DESCRIPTOR.name.value] == pytest.approx(
         0.0
     )
-    assert values[TRANSLATION_PAIR_COVERAGE_DESCRIPTOR.name.value] == 0.0
+    assert values[CONSENSUS_TRANSLATION_PAIR_COVERAGE_DESCRIPTOR.name.value] == 0.0
     assert RELATIVE_TRANSLATION_DIRECTION_DISAGREEMENT_DESCRIPTOR.name.value not in values
 
 
@@ -577,7 +577,7 @@ def test_different_frame_scale_representation_and_projection_preserve_pose_evide
     assert values[RELATIVE_ROTATION_DISAGREEMENT_DESCRIPTOR.name.value] == pytest.approx(
         0.0
     )
-    assert values[TRANSLATION_PAIR_COVERAGE_DESCRIPTOR.name.value] == 1.0
+    assert values[CONSENSUS_TRANSLATION_PAIR_COVERAGE_DESCRIPTOR.name.value] == 1.0
     assert values[
         RELATIVE_TRANSLATION_DIRECTION_DISAGREEMENT_DESCRIPTOR.name.value
     ] == pytest.approx(0.0)
@@ -626,7 +626,7 @@ def test_descriptor_names_and_configuration_do_not_imply_quality_or_winner() -> 
     descriptors = (
         SHARED_OBSERVATION_COVERAGE_DESCRIPTOR,
         RELATIVE_ROTATION_DISAGREEMENT_DESCRIPTOR,
-        TRANSLATION_PAIR_COVERAGE_DESCRIPTOR,
+        CONSENSUS_TRANSLATION_PAIR_COVERAGE_DESCRIPTOR,
         RELATIVE_TRANSLATION_DIRECTION_DISAGREEMENT_DESCRIPTOR,
     )
     forbidden_tokens = ("winner", "preferred", "quality", "score", "threshold", "pass")
