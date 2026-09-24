@@ -9,6 +9,7 @@ from types import SimpleNamespace
 from typing import Any, ClassVar
 
 import pytest
+import yaml
 
 import wre.reconstruction.colmap_dense_depth as dense_module
 from wre.domain.artifacts import ArtifactId, ArtifactKind, ArtifactRef
@@ -31,7 +32,9 @@ from wre.reconstruction.colmap_dense_depth import (
     COLMAP_MVS_ENVIRONMENT_KIND,
     COLMAP_MVS_IMAGE_SET_KIND,
     COLMAP_PATCH_MATCH_DENSE_DEPTH_ADAPTER_ID,
+    COLMAP_PATCH_MATCH_DENSE_DEPTH_DEPENDENCY_REF,
     COLMAP_PATCH_MATCH_DENSE_DEPTH_PRODUCER_IMPLEMENTATION,
+    COLMAP_PATCH_MATCH_DENSE_DEPTH_SHIPPING_STATUS,
     COLMAP_PATCH_MATCH_DENSE_DEPTH_SOURCE_REVISION,
     ColmapDenseDepthEnvironmentError,
     ColmapDenseDepthError,
@@ -55,6 +58,10 @@ from wre.reconstruction.colmap_reconstruction import (
 )
 from wre.reconstruction.dense_depth import DENSE_DEPTH_ARTIFACT_KIND
 from wre.reconstruction.geometry_solution_comparison import GeometrySolutionCandidate
+
+_ROOT = Path(__file__).resolve().parents[1]
+_ADAPTER_REGISTRY_PATH = _ROOT / "registry" / "adapter-models.yaml"
+_DEPENDENCY_REGISTRY_PATH = _ROOT / "registry" / "dependencies.yaml"
 
 _ROTATION = (
     (1.0, 0.0, 0.0),
@@ -913,3 +920,53 @@ def test_module_surface_contains_no_fusion_or_surface_execution_api() -> None:
     source = inspect.getsource(dense_module.ColmapPatchMatchDenseDepthAdapter.derive)
     assert "stereo_fusion" not in source
     assert "patch_match_stereo" in source
+
+
+def test_registry_keeps_dense_depth_donor_experimental_and_cuda_isolated() -> None:
+    adapter_registry = yaml.safe_load(
+        _ADAPTER_REGISTRY_PATH.read_text(encoding="utf-8")
+    )
+    dependency_registry = yaml.safe_load(
+        _DEPENDENCY_REGISTRY_PATH.read_text(encoding="utf-8")
+    )
+
+    entry = next(
+        item
+        for item in adapter_registry["entries"]
+        if item["adapter_id"] == COLMAP_PATCH_MATCH_DENSE_DEPTH_ADAPTER_ID
+    )
+    assert entry["capability"] == {
+        "name": "geometry.dense_depth.classical_mvs",
+        "input_kinds": [
+            "geometry.colmap_native_sparse_model",
+            "geometry.solution",
+            "image.observation",
+        ],
+        "output_kinds": ["geometry.dense_depth"],
+    }
+    assert entry["producer"] == {
+        "implementation": COLMAP_PATCH_MATCH_DENSE_DEPTH_PRODUCER_IMPLEMENTATION,
+        "version": "4.2.0",
+        "revision": COLMAP_PATCH_MATCH_DENSE_DEPTH_SOURCE_REVISION,
+    }
+    assert entry["dependency_refs"] == [COLMAP_PATCH_MATCH_DENSE_DEPTH_DEPENDENCY_REF]
+    assert entry["artifact_key_hardware_policy"] == "required"
+    assert entry["license"]["review"] == "pending"
+    assert entry["shipping_status"] == COLMAP_PATCH_MATCH_DENSE_DEPTH_SHIPPING_STATUS
+    assert entry["model"] is None
+    assert entry["checkpoint"] is None
+    assert entry["metric_names"] == []
+    assert entry["resume_mode"] == "unsupported"
+
+    dependency = dependency_registry["dependencies"][
+        COLMAP_PATCH_MATCH_DENSE_DEPTH_DEPENDENCY_REF
+    ]
+    assert dependency["status"] == "candidate_optional"
+    assert dependency["role"] == ["dense_depth_mvs"]
+    assert dependency["integration"] == "official_pycolmap_cuda_external_environment"
+    assert dependency["pinned_version"] == "4.2.0"
+    assert dependency["python_package"] == "pycolmap-cuda12==4.2.0"
+    assert dependency["source_revision"] == COLMAP_PATCH_MATCH_DENSE_DEPTH_SOURCE_REVISION
+    assert dependency["upstream_repository"] == "colmap/colmap"
+    assert dependency["license"] == "BSD-3-Clause"
+    assert dependency["license_review"] == "pending"
