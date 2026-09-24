@@ -6,7 +6,7 @@ from dataclasses import FrozenInstanceError, fields, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, ClassVar
 
 import pytest
 
@@ -208,7 +208,7 @@ class _FakeArray:
 
 
 class _FakeDepthMap:
-    arrays: dict[Path, _FakeArray] = {}
+    arrays: ClassVar[dict[Path, _FakeArray]] = {}
 
     def __init__(self) -> None:
         self._path: Path | None = None
@@ -382,7 +382,10 @@ def _write_native_model(root: Path) -> ColmapSparseModelArtifact:
     )
 
 
-def _features(observations: tuple[ImageObservation, ...], tmp_path: Path) -> ColmapFeatureExtractionResult:
+def _features(
+    observations: tuple[ImageObservation, ...],
+    tmp_path: Path,
+) -> ColmapFeatureExtractionResult:
     database = tmp_path / "features.db"
     database.write_bytes(b"feature-evidence")
     digest = hash_file_content(database)
@@ -556,7 +559,7 @@ def test_environment_gate_requires_exact_cuda_42_and_public_apis() -> None:
 
     wrong = _FakePycolmap()
     wrong.COLMAP_build = "Commit wrong with CUDA support"
-    with pytest.raises(ColmapDenseDepthEnvironmentError, match="exact 4.2.0 source"):
+    with pytest.raises(ColmapDenseDepthEnvironmentError, match=r"exact 4\.2\.0 source"):
         inspect_colmap_dense_depth_environment(wrong)
 
     missing = _FakePycolmap()
