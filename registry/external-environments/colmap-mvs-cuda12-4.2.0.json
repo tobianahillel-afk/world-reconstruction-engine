@@ -1,0 +1,185 @@
+{
+  "artifacts": [
+    {
+      "byte_length": 2431,
+      "filename": "cuda_toolkit-12.9.2.0-py2.py3-none-any.whl",
+      "legacy_license": null,
+      "license_classifiers": [],
+      "license_expression": null,
+      "name": "cuda-toolkit",
+      "requires_dist": [
+        "nvidia-cublas-cu12==12.9.2.10.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'all'",
+        "nvidia-cublas-cu12==12.9.2.10.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'cublas'",
+        "nvidia-cublas-cu12==12.9.2.10.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'cusolver'",
+        "nvidia-cuda-cccl-cu12==12.9.27.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'all'",
+        "nvidia-cuda-cccl-cu12==12.9.27.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'cccl'",
+        "nvidia-cuda-cupti-cu12==12.9.79.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'all'",
+        "nvidia-cuda-cupti-cu12==12.9.79.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'cupti'",
+        "nvidia-cuda-cuxxfilt-cu12==12.9.82.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'all'",
+        "nvidia-cuda-cuxxfilt-cu12==12.9.82.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'cuxxfilt'",
+        "nvidia-cuda-nvcc-cu12==12.9.86.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'all'",
+        "nvidia-cuda-nvcc-cu12==12.9.86.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'nvcc'",
+        "nvidia-cuda-nvrtc-cu12==12.9.86.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'all'",
+        "nvidia-cuda-nvrtc-cu12==12.9.86.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'nvrtc'",
+        "nvidia-cuda-opencl-cu12==12.9.19.*; (sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'all'",
+        "nvidia-cuda-opencl-cu12==12.9.19.*; (sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'opencl'",
+        "nvidia-cuda-profiler-api-cu12==12.9.79.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'all'",
+        "nvidia-cuda-profiler-api-cu12==12.9.79.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'profiler'",
+        "nvidia-cuda-runtime-cu12==12.9.79.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'all'",
+        "nvidia-cuda-runtime-cu12==12.9.79.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'cudart'",
+        "nvidia-cuda-sanitizer-api-cu12==12.9.79.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'all'",
+        "nvidia-cuda-sanitizer-api-cu12==12.9.79.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'sanitizer'",
+        "nvidia-cufft-cu12==11.4.1.4.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'all'",
+        "nvidia-cufft-cu12==11.4.1.4.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'cufft'",
+        "nvidia-cufile-cu12==1.14.1.1.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64') and extra == 'all'",
+        "nvidia-cufile-cu12==1.14.1.1.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64') and extra == 'cufile'",
+        "nvidia-curand-cu12==10.3.10.19.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'all'",
+        "nvidia-curand-cu12==10.3.10.19.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'curand'",
+        "nvidia-cusolver-cu12==11.7.5.82.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'all'",
+        "nvidia-cusolver-cu12==11.7.5.82.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'cusolver'",
+        "nvidia-cusparse-cu12==12.5.10.65.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'all'",
+        "nvidia-cusparse-cu12==12.5.10.65.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'cusolver'",
+        "nvidia-cusparse-cu12==12.5.10.65.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'cusparse'",
+        "nvidia-npp-cu12==12.4.1.87.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'all'",
+        "nvidia-npp-cu12==12.4.1.87.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'npp'",
+        "nvidia-nvfatbin-cu12==12.9.82.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'all'",
+        "nvidia-nvfatbin-cu12==12.9.82.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'nvfatbin'",
+        "nvidia-nvjitlink-cu12<13,>=12.9.86; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'all'",
+        "nvidia-nvjitlink-cu12<13,>=12.9.86; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'cufft'",
+        "nvidia-nvjitlink-cu12<13,>=12.9.86; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'cusolver'",
+        "nvidia-nvjitlink-cu12<13,>=12.9.86; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'cusparse'",
+        "nvidia-nvjitlink-cu12<13,>=12.9.86; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'nvjitlink'",
+        "nvidia-nvjpeg-cu12==12.4.0.76.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'all'",
+        "nvidia-nvjpeg-cu12==12.4.0.76.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'nvjpeg'",
+        "nvidia-nvml-dev-cu12==12.9.79.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'all'",
+        "nvidia-nvml-dev-cu12==12.9.79.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'nvml'",
+        "nvidia-nvtx-cu12==12.9.79.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'all'",
+        "nvidia-nvtx-cu12==12.9.79.*; (sys_platform == 'linux' and platform_machine == 'aarch64' or sys_platform == 'linux' and platform_machine == 'x86_64' or sys_platform == 'win32' and platform_machine == 'AMD64') and extra == 'nvtx'"
+      ],
+      "requires_python": null,
+      "sha256": "b54b8f2fd4200090b44843d48fc5411198e8b3e47a3db56e2518ab588c0ef1e0",
+      "url": "https://files.pythonhosted.org/packages/51/7e/f61db087382a2114a93abc0b38f7872f86f2c7c36839da7f9403c9044b47/cuda_toolkit-12.9.2.0-py2.py3-none-any.whl",
+      "version": "12.9.2.0",
+      "wheel_tags": [
+        "py2-none-any",
+        "py3-none-any"
+      ]
+    },
+    {
+      "byte_length": 16717410,
+      "filename": "numpy-2.5.3-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+      "legacy_license": null,
+      "license_classifiers": [],
+      "license_expression": "BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0",
+      "name": "numpy",
+      "requires_dist": [],
+      "requires_python": ">=3.12",
+      "sha256": "b7e18c623bb5c95acb3b3328861272816ba199fb531921c5d6d0b675f1fde9e3",
+      "url": "https://files.pythonhosted.org/packages/65/af/aa78d1a88805456e212b65461354cd943197fb9acecc4c90fd12295123a3/numpy-2.5.3-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl",
+      "version": "2.5.3",
+      "wheel_tags": [
+        "cp312-cp312-manylinux_2_27_x86_64",
+        "cp312-cp312-manylinux_2_28_x86_64"
+      ]
+    },
+    {
+      "byte_length": 3493179,
+      "filename": "nvidia_cuda_runtime_cu12-12.9.79-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+      "legacy_license": "LicenseRef-NVIDIA-Proprietary",
+      "license_classifiers": [
+        "License :: Other/Proprietary License"
+      ],
+      "license_expression": null,
+      "name": "nvidia-cuda-runtime-cu12",
+      "requires_dist": [],
+      "requires_python": ">=3",
+      "sha256": "25bba2dfb01d48a9b59ca474a1ac43c6ebf7011f1b0b8cc44f54eb6ac48a96c3",
+      "url": "https://files.pythonhosted.org/packages/bc/46/a92db19b8309581092a3add7e6fceb4c301a3fd233969856a8cbf042cd3c/nvidia_cuda_runtime_cu12-12.9.79-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl",
+      "version": "12.9.79",
+      "wheel_tags": [
+        "py3-none-manylinux2014_x86_64",
+        "py3-none-manylinux_2_17_x86_64"
+      ]
+    },
+    {
+      "byte_length": 68295626,
+      "filename": "nvidia_curand_cu12-10.3.10.19-py3-none-manylinux_2_27_x86_64.whl",
+      "legacy_license": "NVIDIA Proprietary Software",
+      "license_classifiers": [
+        "License :: Other/Proprietary License"
+      ],
+      "license_expression": null,
+      "name": "nvidia-curand-cu12",
+      "requires_dist": [],
+      "requires_python": ">=3",
+      "sha256": "49b274db4780d421bd2ccd362e1415c13887c53c214f0d4b761752b8f9f6aa1e",
+      "url": "https://files.pythonhosted.org/packages/31/44/193a0e171750ca9f8320626e8a1f2381e4077a65e69e2fb9708bd479e34a/nvidia_curand_cu12-10.3.10.19-py3-none-manylinux_2_27_x86_64.whl",
+      "version": "10.3.10.19",
+      "wheel_tags": [
+        "py3-none-manylinux_2_27_x86_64"
+      ]
+    },
+    {
+      "byte_length": 72937359,
+      "filename": "pycolmap_cuda12-4.2.0-cp312-cp312-manylinux_2_28_x86_64.whl",
+      "legacy_license": "BSD-3-Clause",
+      "license_classifiers": [
+        "License :: OSI Approved :: BSD License"
+      ],
+      "license_expression": null,
+      "name": "pycolmap-cuda12",
+      "requires_dist": [
+        "cuda-toolkit[cudart,curand]<13,>=12",
+        "numpy",
+        "opencv-python-headless; extra == \"panorama\"",
+        "pillow; extra == \"panorama\"",
+        "tqdm; extra == \"panorama\""
+      ],
+      "requires_python": ">=3.10",
+      "sha256": "98da20b2c53467d152738a3f5b78104ea78a8e364a9d001acb89058635c9c9fc",
+      "url": "https://files.pythonhosted.org/packages/86/7f/36391e5ece29186f8b85ebb34c72fc8d58de44657cb6e73f649055f3c3f4/pycolmap_cuda12-4.2.0-cp312-cp312-manylinux_2_28_x86_64.whl",
+      "version": "4.2.0",
+      "wheel_tags": [
+        "cp312-cp312-manylinux_2_28_x86_64"
+      ]
+    }
+  ],
+  "evidence_kind": "external_accelerator_artifact_resolution_only",
+  "gpu_execution_evidence": false,
+  "installer_execution_evidence": false,
+  "requested": [
+    {
+      "name": "numpy",
+      "version": "2.5.3"
+    },
+    {
+      "name": "pycolmap-cuda12",
+      "version": "4.2.0"
+    }
+  ],
+  "resolver": {
+    "constraints_from_committed_lock_when_present": true,
+    "no_cache": true,
+    "only_binary": true,
+    "pip": "25.2"
+  },
+  "runtime_execution_evidence": false,
+  "schema_version": 1,
+  "source": {
+    "build_workflow_git_blob_sha1": "ce51c309472062bb8d65cf2c79ad924f48477608",
+    "direct_license": "BSD-3-Clause",
+    "license_git_blob_sha1": "868e5accaf67f8fa58e7728b46634b0be7be16e9",
+    "repository": "colmap/colmap",
+    "revision": "be5e29168d4aff238409d60424812df66aac919f",
+    "tag": "4.2.0",
+    "tree": "26de80748b919eda849f28206bb738778edbb493"
+  },
+  "target": {
+    "architecture": "x86_64",
+    "cuda_major": 12,
+    "implementation": "CPython",
+    "platform": "linux_x86_64",
+    "python": "3.12.12"
+  },
+  "wheel_import_execution_evidence": false
+}
