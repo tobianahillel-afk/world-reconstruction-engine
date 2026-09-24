@@ -265,7 +265,8 @@ components:
       - tests/test_geometry_refinement.py
       - tests/test_colmap_geometry_refinement.py
       - tests/test_geometry_consensus.py
-    status: implementing
+      - tests/test_geometry_controlled_benchmark.py
+    status: implemented
   dense_depth_mvs: {owner_lot: V2L15, implementation: [], tests: [], status: planned}
   physical_surface: {owner_lot: V2L16, implementation: [], tests: [], status: planned}
   photometric_pipeline: {owner_lot: V2L17, implementation: [], tests: [], status: planned}

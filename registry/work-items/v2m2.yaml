@@ -1958,7 +1958,7 @@ work_items:
   - id: V2L14.6
     lot: V2L14
     title: Controlled geometry comparison benchmark
-    status: ready
+    status: done
     objective: Run one retained CPU-only controlled geometry benchmark over the approved canonical alternatives from V2L13 and V2L14, combine trusted-reference pose evidence with V2L14.5 pairwise consensus disagreement evidence, and close the V2L14 lot review without selecting a universal winner or making the deferred accelerator specialist mandatory.
     allowed_scope:
       - tests/test_geometry_controlled_benchmark.py
@@ -2044,7 +2044,83 @@ work_items:
       - lot-review regression proving the retained review names the controlled fixture CPU-only mandatory path deferred V2L14.4 specialist explicit limitations no universal winner and no default promotion
       - module and workflow surface regression proving GLUEMAP VGGT CUDA-only requirements routing selection MVS surface appearance dynamics chronology and V2L15.1 implementation remain absent
       - full fast CI CodeQL COLMAP integration DA3 reference DA3 execution profile feed-forward classical comparison dependency review and dedicated geometry-controlled benchmark lane
-  - {id: V2L15.1, lot: V2L15, title: Dense depth artifact contract, status: planned, depends_on: [V2L14.6]}
+  - id: V2L15.1
+    lot: V2L15
+    title: Dense depth artifact contract
+    status: ready
+    objective: Define the pure solver-independent V2 dense-depth evidence artifact that carries one non-empty canonical set of derived DepthField values over one complete source GeometrySolutionCandidate while preserving exact camera linkage producer identity and immutable source provenance without executing MVS fusing depth or promoting depth to physical surface truth.
+    allowed_scope:
+      - src/wre/reconstruction/dense_depth.py
+      - focused exports in src/wre/reconstruction/__init__.py
+      - tests/test_dense_depth.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L15.2 can be activated without implementing it
+    out_of_scope:
+      - changing DepthField CameraSolution GeometrySolution GeometrySolutionCandidate ArtifactRef or producer identity semantics
+      - executing COLMAP PatchMatch stereo MVS stereo fusion OpenMVS or another dense reconstruction solver
+      - implementing V2L15.2 or later work
+      - fusing depth fields point maps or multiple geometry hypotheses
+      - converting depth conventions inverse depth disparity ray distance or camera-z values
+      - inferring or upgrading metric scale world Earth ECEF ENU GPS GCP or geographic placement
+      - filling unsupported pixels hallucinating holes or synthesizing confidence
+      - integrating a learned depth prior or model checkpoint
+      - creating PointMap SurfaceModel mesh TSDF SDF collision navigation or measurement output
+      - comparing ranking scoring selecting routing retry fallback default promotion or QualityDecision policy
+      - MVS coverage consistency hole quality metrics owned by later V2L15 items
+      - appearance materials dynamics chronology MasterScene RuntimeScene or V2L16 implementation
+    depends_on: [V2L14.6]
+    read_before:
+      - docs/00_START_HERE.md
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md
+      - docs/reviews/V2L14-precision-global-refinement-review.md
+      - registry/components.yaml
+      - registry/work-items/v2m2.yaml
+      - PROJECT_STATE.yaml
+      - src/wre/domain/artifacts.py
+      - src/wre/domain/camera_solutions.py
+      - src/wre/domain/depth_fields.py
+      - src/wre/domain/geometry_solutions.py
+      - src/wre/reconstruction/geometry_solution_comparison.py
+      - src/wre/reconstruction/__init__.py
+      - tests/test_geometry_solution_comparison.py
+    reuse:
+      - canonical DepthField as the only per-pixel depth value contract including exact ObservationId CameraSolutionId ImageDimensions depth-value convention row-major values validity confidence and MetricVector semantics
+      - GeometrySolutionCandidate as the immutable complete source geometry hypothesis and camera ownership boundary rather than inventing a second camera or geometry representation
+      - ArtifactRef ArtifactProducerIdentity ConfigurationIdentity and the existing canonical provenance ordering rules
+      - explicit unresolved local-frame scale semantics from GeometrySolution and the invariant that a local frame does not imply metric world or geographic truth
+      - immutable tuple deterministic lexical-ID conventions used by existing V2 geometry evidence contracts
+    acceptance:
+      - Add one frozen slots DenseDepthArtifact value in src/wre/reconstruction/dense_depth.py plus a DENSE_DEPTH_ARTIFACT_KIND constant using artifact kind geometry.dense_depth. The contract is evidence representation only and exposes no solver execution method.
+      - DenseDepthArtifact must contain one ArtifactRef whose kind is exactly geometry.dense_depth one complete source GeometrySolutionCandidate one non-empty immutable tuple of derived DepthField values one ArtifactProducerIdentity and one immutable canonical tuple of source ArtifactRef values.
+      - Dense depth fields must have unique DepthFieldId CameraSolutionId and ObservationId identities and must be ordered canonically by DepthFieldId. A second competing depth hypothesis for the same camera belongs in a separate DenseDepthArtifact rather than being silently merged.
+      - Every derived DepthField must reference exactly one CameraSolution supplied by the source GeometrySolutionCandidate. Its ObservationId and ImageDimensions must exactly match that camera. Unknown cameras mismatched observations dimensions duplicate support or mutable/non-canonical collections fail closed.
+      - The derived DepthField IDs are new evidence and are not required to already appear in source_geometry.geometry_solution.depth_field_ids. V2L15.1 must not mutate relabel or synthesize a replacement GeometrySolution to attach them.
+      - Partial source-camera coverage is valid. The contract must not fabricate missing fields or require one field for every source camera; retained fields must truthfully identify only their actual camera/observation support.
+      - Preserve each DepthField depth_value_convention validity confidence and numeric values exactly as supplied. The artifact performs no unit convention scale frame or confidence conversion and does not require all fields to share one convention.
+      - The source GeometrySolutionCandidate local frame and scale status remain authoritative context. DenseDepthArtifact must not upgrade UNRESOLVED to METRIC infer world placement or claim compatibility with another local frame.
+      - The artifact source_artifacts tuple must be non-empty unique and in canonical ArtifactId/ArtifactKind order and must retain every source ArtifactRef already present on source_geometry. Additional dense-stage input evidence may be appended only in canonical order without deleting ancestry.
+      - artifact_ref producer source_geometry depth_fields and source_artifacts are immutable caller-supplied evidence. Construction performs validation only and must not sort coerce copy numeric payloads fuse depths generate point maps or execute external code.
+      - Export only the new dense-depth contract surface from wre.reconstruction. Do not expose MVS PatchMatch fusion learned-prior quality-policy surface or routing symbols in V2L15.1.
+    tests:
+      - frozen and slots structural regression for DenseDepthArtifact and the exact geometry.dense_depth ArtifactKind
+      - artifact-ref kind rejection and wrong-type regressions for every field
+      - non-empty immutable canonical unique DepthFieldId regression
+      - duplicate camera and duplicate observation support rejection
+      - exact source-camera linkage regression covering CameraSolutionId ObservationId and ImageDimensions mismatch failures
+      - partial-camera-coverage acceptance proving absent source cameras do not fabricate depth
+      - new-derived-depth acceptance proving output DepthFieldId values need not already exist in the source GeometrySolution
+      - depth convention validity confidence and numeric payload preservation regression with no conversion or normalization
+      - unresolved-scale and local-frame preservation regression proving no metric world or cross-frame claim is created
+      - canonical source-artifact ancestry regression proving all source GeometrySolutionCandidate provenance is retained and additional evidence cannot reorder duplicate or erase ancestry
+      - immutability regression proving source geometry depth tuples and source artifacts are not mutated or reordered by construction
+      - module surface regression proving MVS PatchMatch fusion learned priors SurfaceModel routing selection and V2L15.2 implementation remain absent
+      - full fast CI and CodeQL
   - {id: V2L15.2, lot: V2L15, title: COLMAP MVS PatchMatch donor baseline adapter, status: planned, depends_on: [V2L15.1]}
   - {id: V2L15.3, lot: V2L15, title: Depth consistency fusion contract, status: planned, depends_on: [V2L15.2]}
   - {id: V2L15.4, lot: V2L15, title: Learned depth prior adapter boundary, status: planned, depends_on: [V2L15.3]}

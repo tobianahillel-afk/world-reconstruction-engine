@@ -4,24 +4,21 @@ project_name: World Reconstruction Engine
 roadmap_version: '2.0'
 phase: implementation
 milestone: V2M2
-lot: V2L14
-active_work_item: V2L14.6
+lot: V2L15
+active_work_item: V2L15.1
 status: ready
-last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5, V2L3.6, V2L4.1, V2L4.2, V2L4.3, V2L4.4, V2L4.5, V2L4.6, V2L5.1, V2L5.2, V2L5.3, V2L5.4, V2L5.5, V2L5.6, V2L6.1, V2L6.2, V2L6.3, V2L6.4, V2L6.5, V2L6.6, V2L7.1, V2L7.2, V2L7.3, V2L7.4, V2L7.5, V2L7.6, V2L8.1, V2L8.2, V2L8.3, V2L8.4, V2L8.5, V2L9.1, V2L9.2, V2L9.3, V2L9.4, V2L9.5, V2L10.1, V2L10.2, V2L10.3, V2L10.4, V2L10.5, V2L10.6, V2L11.1, V2L11.2, V2L11.3, V2L11.4, V2L11.5, V2L11.6, V2L12.1, V2L12.2, V2L12.3, V2L12.4, V2L12.5, V2L13.1, V2L13.2, V2L13.3, V2L13.4, V2L13.5, V2L13.6, V2L14.1, V2L14.2, V2L14.3, V2L14.4, V2L14.5]
-last_merged_pr: 121
+last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5, V2L3.6, V2L4.1, V2L4.2, V2L4.3, V2L4.4, V2L4.5, V2L4.6, V2L5.1, V2L5.2, V2L5.3, V2L5.4, V2L5.5, V2L5.6, V2L6.1, V2L6.2, V2L6.3, V2L6.4, V2L6.5, V2L6.6, V2L7.1, V2L7.2, V2L7.3, V2L7.4, V2L7.5, V2L7.6, V2L8.1, V2L8.2, V2L8.3, V2L8.4, V2L8.5, V2L9.1, V2L9.2, V2L9.3, V2L9.4, V2L9.5, V2L10.1, V2L10.2, V2L10.3, V2L10.4, V2L10.5, V2L10.6, V2L11.1, V2L11.2, V2L11.3, V2L11.4, V2L11.5, V2L11.6, V2L12.1, V2L12.2, V2L12.3, V2L12.4, V2L12.5, V2L13.1, V2L13.2, V2L13.3, V2L13.4, V2L13.5, V2L13.6, V2L14.1, V2L14.2, V2L14.3, V2L14.4, V2L14.5, V2L14.6]
+last_merged_pr: 148
 current_goal: >-
-  Close V2L14 on the mandatory CPU-capable product path with one controlled geometry benchmark and lot review. V2L14.5 now provides pure
-  solver-independent consensus/disagreement evidence over canonical competing GeometrySolutionCandidate values. V2L14.6 must exercise the
-  approved CPU alternatives on one shared deterministic fixture, retain trusted-reference pose evidence and complete pairwise consensus
-  evidence, and review the lot without selecting a universal winner or default backend. The deferred GLUEMAP/VGGT accelerator candidate remains
-  optional evidence and is not a prerequisite.
+  With prior reviewed lot: V2L14 complete, start V2L15 on solver-independent dense-depth evidence. V2L15.1 must define one immutable
+  DenseDepthArtifact over one complete canonical
+  GeometrySolutionCandidate, carrying a non-empty canonical set of derived DepthField values with exact source-camera linkage, producer identity
+  and immutable ancestry while preserving unresolved frame/scale semantics and performing validation only.
 next_action: >-
-  Implement only V2L14.6. Reuse the existing colmap-l3-end-to-end source/reference fixture, exact DA3 Torch-CPU preview route, exact PyCOLMAP
-  4.2.0 incremental and global CPU routes, and the V2L14.3 one-thread CPU Ceres bundle-adjustment refinement. Retain at minimum DA3 preview,
-  incremental COLMAP and BA-refined COLMAP as complete competing candidates; include the global candidate only when it yields one canonical
-  model and otherwise record its zero/disconnected outcome without selecting a component. Evaluate every complete candidate against the same
-  trusted reference cameras and evaluate V2L14.5 consensus for every canonical candidate pair. Retain descriptive machine-readable evidence,
-  write the V2L14 lot review, and do not create a score winner route decision default promotion cross-frame alignment or V2L15 implementation.
+  Implement only V2L15.1. Add the pure DenseDepthArtifact contract and geometry.dense_depth ArtifactKind in
+  src/wre/reconstruction/dense_depth.py, export only that contract surface, and add focused tests. Reuse existing DepthField, CameraSolution,
+  GeometrySolutionCandidate, ArtifactRef and ArtifactProducerIdentity semantics. Do not execute MVS/PatchMatch, fuse depth, convert conventions,
+  infer metric scale, create PointMap/SurfaceModel output, add learned priors, quality/routing policy, or any V2L15.2 implementation.
 blockers: []
 architecture:
   product_blueprint: docs/01_PRODUCT.md
