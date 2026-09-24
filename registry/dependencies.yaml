@@ -143,7 +143,7 @@ dependencies:
       openmp_build: h7148c6a_0
       openmp_mutex_build: 8_kmp_llvm
       conda_environment_lock: registry/external-environments/gluemap-linux-64-cuda12.4.conda-lock.json
-      conda_environment_lock_sha256: d702ffc0dc362b6abd34e1f0f533d4c80e9809341a58e358eff7a5d611ae1a7a
+      conda_environment_lock_sha256: f22413d8900aeae5b8fc33740ffa24386611cd4d45ff8a61dd34fc807b0d60a5
       conda_environment_lock_packages: 193
       conda_python_closure: active_path_partial
       pypi_runtime_lock: registry/external-environments/gluemap-linux-64-pypi-lock.json

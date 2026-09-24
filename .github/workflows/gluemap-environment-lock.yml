@@ -53,6 +53,7 @@ jobs:
           set +e
           env -u CONDARC micromamba create --name wre-gluemap-lock --platform linux-64 --override-channels --channel conda-forge --strict-channel-priority --no-rc --dry-run --json \
             "python=3.12.12" "numpy=2.4.3" "pip" "cmake>=3.18" "ninja" "pkg-config" "pybind11>=3.0" "scikit-build-core>=0.10" "clangxx" \
+            "libgcc-devel_linux-64=16.2.0=he3ce08f_105" "libstdcxx-devel_linux-64=16.2.0=h86e191b_105" \
             "eigen=3.4.0" "ceres-solver=2.2.0=cpulgpl*" "metis=5.1.0" "boost=1.85.0" "libstdcxx-ng=15.2.0" "llvm-openmp=23.1.1=h7148c6a_0" "_openmp_mutex=*=*_llvm" \
             "pytorch-gpu=2.4.1" "torchvision=0.19.1" "cuda-version=12.4" \
             "fsspec=2026.7.0=pyhd8ed1ab_0" "networkx=3.6.1" "pillow=12.2.0" "scipy=1.17.1" "tqdm=4.67.3" "einops=0.8.2" \
@@ -86,6 +87,8 @@ jobs:
               "pybind11>=3.0",
               "scikit-build-core>=0.10",
               "clangxx",
+              "libgcc-devel_linux-64=16.2.0=he3ce08f_105",
+              "libstdcxx-devel_linux-64=16.2.0=h86e191b_105",
               "eigen=3.4.0",
               "ceres-solver=2.2.0=cpulgpl*",
               "metis=5.1.0",
@@ -152,6 +155,10 @@ jobs:
           assert by_name["boost"]["version"] == "1.85.0"
           assert by_name["libstdcxx-ng"]["version"] == "15.2.0"
           assert "clangxx" in by_name, "explicit Clang++ compiler is required"
+          assert by_name["libgcc-devel_linux-64"]["version"] == "16.2.0"
+          assert by_name["libgcc-devel_linux-64"]["build_string"] == "he3ce08f_105"
+          assert by_name["libstdcxx-devel_linux-64"]["version"] == "16.2.0"
+          assert by_name["libstdcxx-devel_linux-64"]["build_string"] == "h86e191b_105"
           assert "llvm-openmp" in by_name, "explicit LLVM OpenMP runtime is required"
           assert by_name["llvm-openmp"]["version"] == "23.1.1", by_name["llvm-openmp"]
           assert by_name["llvm-openmp"]["build_string"] == "h7148c6a_0", by_name["llvm-openmp"]
