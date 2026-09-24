@@ -157,7 +157,7 @@ Purpose: create one common language for gates, escalation and comparison.
 - `V2L14.1` — competing `GeometrySolution` comparison contract.
 - `V2L14.2` — geometry-initialization/refinement adapter boundary.
 - `V2L14.3` — classical BA/global refinement baseline path behind the boundary.
-- `V2L14.4` — refresh the current shortlist, then integrate the first approved hybrid/global candidate.
+- `V2L14.4` — refresh the hybrid/global shortlist and run the technology gate; integrate one candidate only if it satisfies mandatory constraints, otherwise record an explicit NO-GO/deferred-optional outcome without blocking the CPU path.
 - `V2L14.5` — consensus/disagreement metrics and unresolved policy.
 - `V2L14.6` — controlled geometry benchmark and lot review.
 

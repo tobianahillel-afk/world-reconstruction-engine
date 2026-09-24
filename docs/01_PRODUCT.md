@@ -34,6 +34,14 @@ A successful project may produce one or more of the following:
 
 The product must support incremental enrichment: a project can begin with a few observations and later gain new views, videos, epochs or higher-quality captures without gratuitously recomputing every prior artifact.
 
+## CPU portability baseline
+
+WRE must remain usable on a supported CPU-only installation. Every mandatory product capability and milestone path must retain at least one supported CPU route, even when that route is slower or lower-throughput than an accelerated specialist.
+
+GPU, CUDA, NPU or other accelerator-specific adapters may improve latency, throughput or quality and may be selected when compatible hardware is available. They are optional execution specialists, not prerequisites for the core product to function or for the mandatory roadmap to advance.
+
+If no reviewed candidate for an optional specialist can run on the available hardware, the technology gate may explicitly defer that candidate without fabricating support or blocking a CPU-capable baseline. Quality/resource differences must remain visible in benchmark and routing evidence.
+
 ## Quality ambition
 
 WRE is designed to be best-in-class at the integrated-system level. It does not assume one internal model can outperform every specialist research system on every benchmark. Instead it combines, routes and evaluates specialist methods so that the complete product can optimize the real trade space:

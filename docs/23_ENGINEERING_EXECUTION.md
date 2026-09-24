@@ -170,6 +170,10 @@ The activation/review must check, as applicable:
 - whether a newer major dependency release materially improves WRE's required capability;
 - a stable baseline plus the strongest currently viable primary/specialist candidates.
 
+A candidate-refresh / technology gate may conclude **NO-GO / deferred optional**. This is the correct outcome when no reviewed external candidate satisfies a mandatory product constraint such as licensing, reproducibility, supported baseline hardware or exact checkpoint availability. Do not force an integration merely because the roadmap item was originally named after an expected candidate.
+
+For mandatory product capabilities, CPU-only portability is part of the baseline hardware contract. Accelerator-only candidates may remain registered benchmark/specialist work, but their absence must not block later mandatory work when an accepted CPU route already satisfies the capability contract. A later explicit work item may revisit the deferred accelerator candidate when hardware and evidence become available.
+
 A dependency is **not** upgraded merely because a larger version number exists. Keeping an older pinned version requires a concrete reproducibility, platform, licensing or integration rationale when a materially newer viable release exists.
 
 An adapter must declare at least:
