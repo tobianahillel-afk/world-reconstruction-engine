@@ -147,7 +147,7 @@ entries:
       implementation: pycolmap.patch_match_stereo
       version: 4.2.0
       revision: be5e29168d4aff238409d60424812df66aac919f
-    dependency_refs: [colmap_mvs_cuda12_4_2_0]
+    dependency_refs: [colmap_mvs_cuda12]
     model: null
     checkpoint: null
     artifact_key_hardware_policy: required
