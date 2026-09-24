@@ -956,7 +956,7 @@ def test_registry_keeps_dense_depth_donor_experimental_and_cuda_isolated() -> No
 
     dependency = dependency_registry["dependencies"][COLMAP_PATCH_MATCH_DENSE_DEPTH_DEPENDENCY_REF]
     assert dependency["status"] == "candidate_optional"
-    assert dependency["role"] == ["dense_depth_mvs"]
+    assert dependency["role"] == ["dense_depth_patchmatch_mvs"]
     assert dependency["integration"] == "official_pycolmap_cuda_external_environment"
     assert dependency["pinned_version"] == "4.2.0"
     assert dependency["python_package"] == "pycolmap-cuda12==4.2.0"
