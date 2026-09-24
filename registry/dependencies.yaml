@@ -343,9 +343,12 @@ dependencies:
       PR #139 closes checkpoint provenance directly from official repository bytes and
       records the bounded source materialization identity
       d6da7b8d6aecd1dcb5fe769035e5e83d70cd860879ad17922fec4cc78f782b48.
-      A separate CPU no-network constructor proof remains required before this extractor
-      path can be considered locally loadable; that proof is constructor compatibility
-      evidence only and must not be reported as GLUEMAP geometry or GPU execution.
+      PR #141 closes the separate CPU no-network local-load gate: the exact checkpoint is
+      re-verified before import, loaded with torch.load weights_only enabled through one
+      exact temporary torch.hub intercept, strict model state loading succeeds for
+      aliked-n16 (677356 parameters), the original loader is restored immediately and
+      zero network/process attempts are observed. This proves local constructor
+      compatibility only and must not be reported as GLUEMAP geometry or GPU execution.
   faiss_cpu:
     status: candidate_optional
     role: [hybrid_global_pair_dataset]
@@ -713,11 +716,17 @@ dependencies:
       bytes / materialization SHA-256
       d6da7b8d6aecd1dcb5fe769035e5e83d70cd860879ad17922fec4cc78f782b48.
       aliked.py still calls torch.hub.load_state_dict_from_url unconditionally during
-      construction, so source qualification alone does not authorize runtime execution.
-      The next authorized CPU constructor proof must use only the PR #139 shim/source
-      and exact local checkpoint, block all network paths, temporarily intercept only
-      the reviewed torch.hub loader call, restore it immediately, and prove no excluded
-      LightGlue module is imported.
+      construction, so source qualification alone was insufficient. PR #141 now closes
+      the bounded local-constructor compatibility gate on exact head
+      0b73345f9e0b4f8e54b10e98a6e43bca8b73c3d9: Python 3.12.12, NumPy 2.4.3,
+      torch 2.4.1+cpu, torchvision 0.19.1+cpu, Kornia 0.8.2, kornia-rs 0.1.10
+      and opencv-python 4.13.0.92 successfully construct aliked-n16 from the exact
+      caller-supplied local checkpoint through one narrowly scoped temporary intercept.
+      The constructor's unchanged strict load_state_dict path succeeds, the intercept is
+      restored immediately, network/process attempts remain empty, and the only loaded
+      LightGlue modules are lightglue, lightglue.aliked and lightglue.utils. This is
+      CPU constructor compatibility evidence only, not GLUEMAP geometry, GPU-runtime or
+      shipping approval.
   py4dgeo:
     status: candidate_core
     role: [multi_epoch_point_cloud_change, m3c2, temporal_change_measurement]
