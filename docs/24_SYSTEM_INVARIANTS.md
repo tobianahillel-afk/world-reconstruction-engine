@@ -58,6 +58,9 @@ This document collects cross-cutting invariants that every WRE subsystem must pr
 5. Escalation terminates at a bounded policy and may return `UNRESOLVED`.
 6. New scientific models enter as candidates behind existing capability contracts unless they introduce a genuinely new responsibility.
 7. Default changes require benchmark evidence appropriate to the affected profile and quality mode.
+8. CPU-only portability is a product invariant: every mandatory roadmap capability must retain at least one supported CPU route.
+9. GPU/CUDA/NPU or other accelerator-only adapters are optional specialists. They may improve quality or performance, but they must not be the sole dependency of later mandatory work or block milestone progression when a reviewed CPU baseline exists.
+10. Hardware-unavailable candidates fail closed or are explicitly deferred; the router must never silently pretend an unavailable accelerator route is supported.
 
 ## Artifact graph and caching
 
