@@ -28,16 +28,15 @@ from wre.domain.point_maps import PointMap, PointMapId
 from wre.domain.producer_identity import ArtifactProducerIdentity, ConfigurationIdentity
 from wre.domain.runs import ProducerRef
 from wre.reconstruction.geometry_consensus import (
+    CONSENSUS_TRANSLATION_PAIR_COVERAGE_DESCRIPTOR,
     GEOMETRY_CONSENSUS_EVALUATOR,
     RELATIVE_ROTATION_DISAGREEMENT_DESCRIPTOR,
     RELATIVE_TRANSLATION_DIRECTION_DISAGREEMENT_DESCRIPTOR,
     SHARED_OBSERVATION_COVERAGE_DESCRIPTOR,
-    CONSENSUS_TRANSLATION_PAIR_COVERAGE_DESCRIPTOR,
     GeometryConsensusRequest,
     GeometryConsensusResult,
     GeometryPairDisagreement,
     evaluate_geometry_consensus,
-)
 from wre.reconstruction.geometry_solution_comparison import (
     CompetingGeometrySolutions,
     GeometrySolutionCandidate,
