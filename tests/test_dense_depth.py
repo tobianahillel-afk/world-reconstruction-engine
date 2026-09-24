@@ -186,11 +186,15 @@ def _dense_artifact(
     artifact_ref: ArtifactRef | None = None,
 ) -> DenseDepthArtifact:
     source = source_geometry or _candidate()
-    fields_value = depth_fields or (
-        _depth(
-            camera=source.camera_solutions[0],
-            depth_id="dense:source:a",
-        ),
+    fields_value = (
+        depth_fields
+        if depth_fields is not None
+        else (
+            _depth(
+                camera=source.camera_solutions[0],
+                depth_id="dense:source:a",
+            ),
+        )
     )
     return DenseDepthArtifact(
         artifact_ref=artifact_ref
@@ -215,7 +219,7 @@ def test_dense_depth_has_exact_frozen_slots_shape_and_artifact_kind() -> None:
         "producer",
         "source_artifacts",
     )
-    assert artifact.artifact_ref.artifact_kind is DENSE_DEPTH_ARTIFACT_KIND
+    assert artifact.artifact_ref.artifact_kind == DENSE_DEPTH_ARTIFACT_KIND
     with pytest.raises(FrozenInstanceError):
         artifact.depth_fields = ()  # type: ignore[misc]
 
