@@ -31,6 +31,7 @@ jobs:
     timeout-minutes: 15
     env:
       LOCK_PATH: registry/external-environments/gluemap-linux-64-pypi-lock.json
+      CONDA_LOCK_PATH: registry/external-environments/gluemap-linux-64-cuda12.4.conda-lock.json
       TARGET_PYTHON: "3.12.12"
       TARGET_IMPLEMENTATION: cp
       TARGET_ABI: cp312
@@ -72,6 +73,8 @@ jobs:
           generated = Path(os.environ["RUNNER_TEMP"]) / "gluemap-linux-64-pypi-lock.json"
           downloads = Path(os.environ["RUNNER_TEMP"]) / "gluemap-pypi-artifacts"
           downloads.mkdir(parents=True, exist_ok=True)
+          conda_lock = json.loads(Path(os.environ["CONDA_LOCK_PATH"]).read_text(encoding="utf-8"))
+          conda_by_name = {item["name"]: item for item in conda_lock["packages"]}
 
           requested = [
               ("faiss-cpu", "1.13.2"),
@@ -81,6 +84,16 @@ jobs:
               ("pycolmap-cuda12", "4.0.4"),
               ("pyceres", "2.6"),
           ]
+
+          source_license_evidence = {
+              "kornia-rs": {
+                  "repository": "kornia/kornia-rs",
+                  "tag": "v0.1.10",
+                  "revision": "2c62e6f11a46404f107cad71202c75f5cb975548",
+                  "license_git_blob_sha1": "261eeb9e9f8b2b4b0d119366dda99c6fd7d35c64",
+                  "license": "Apache-2.0",
+              }
+          }
 
           def get_json(url: str) -> dict:
               req = urllib.request.Request(
@@ -271,6 +284,11 @@ jobs:
                   for value in (metadata.get_all("Classifier") or [])
                   if str(value).startswith("License ::")
               )
+              external_license = source_license_evidence.get(package)
+              if not (license_expression or legacy_license or classifiers or external_license):
+                  raise SystemExit(
+                      f"{package}=={version}: no direct or exact-source license evidence"
+                  )
 
               artifacts.append(
                   {
@@ -291,11 +309,94 @@ jobs:
                       "license_expression": license_expression or None,
                       "legacy_license": legacy_license or None,
                       "license_classifiers": classifiers,
+                      "source_license_evidence": external_license,
                       "requires_dist": requires_dist,
                   }
               )
 
           artifacts.sort(key=lambda item: (item["name"], item["version"], item["filename"]))
+          by_name = {item["name"]: item for item in artifacts}
+          if len(by_name) != len(artifacts):
+              raise SystemExit("duplicate PyPI artifact names")
+
+          expected_requires_dist = {
+              "faiss-cpu": ["numpy<3.0,>=1.25.0", "packaging"],
+              "kornia": sorted([
+                  'PyYAML>=5.1; extra == "docs"',
+                  'accelerate; extra == "dev"',
+                  'accelerate; extra == "x"',
+                  'coverage; extra == "dev"',
+                  'diffusers; extra == "dev"',
+                  'furo; extra == "docs"',
+                  'ivy>=1.0.0.0; extra == "dev"',
+                  'ivy>=1.0.0.0; extra == "docs"',
+                  'kornia_moons; extra == "docs"',
+                  "kornia_rs>=0.1.9",
+                  'matplotlib; extra == "docs"',
+                  'mypy; extra == "dev"',
+                  'numpy<3; extra == "dev"',
+                  'onnx; extra == "dev"',
+                  'onnx; extra == "docs"',
+                  'onnxruntime-gpu>=1.16; sys_platform != "darwin" and extra == "x"',
+                  'onnxruntime; extra == "dev"',
+                  'onnxruntime; extra == "docs"',
+                  'opencv-python; extra == "docs"',
+                  "packaging",
+                  'pillow; extra == "dev"',
+                  'pre-commit>=2; extra == "dev"',
+                  'pytest-cov; extra == "dev"',
+                  'pytest-timeout; extra == "dev"',
+                  'pytest==8.3.5; extra == "dev"',
+                  'requests; extra == "dev"',
+                  'setuptools>=61.2; extra == "dev"',
+                  'sphinx-autodoc-defaultargs; extra == "docs"',
+                  'sphinx-autodoc-typehints; extra == "docs"',
+                  'sphinx-copybutton>=0.3; extra == "docs"',
+                  'sphinx-design; extra == "docs"',
+                  'sphinx-notfound-page; extra == "docs"',
+                  'sphinx; extra == "docs"',
+                  'sphinxcontrib-bibtex; extra == "docs"',
+                  'sphinxcontrib-gtagjs; extra == "docs"',
+                  'sphinxcontrib-youtube; extra == "docs"',
+                  "torch>=2.0.0",
+                  'transformers<4.57; extra == "dev"',
+                  'types-requests; extra == "dev"',
+              ]),
+              "kornia-rs": [],
+              "opencv-python": sorted([
+                  'numpy<2.0; python_version < "3.9"',
+                  'numpy>=2; python_version >= "3.9"',
+              ]),
+              "pyceres": ["numpy"],
+              "pycolmap-cuda12": sorted([
+                  "cuda-toolkit[cudart,curand]<13,>=12",
+                  "numpy",
+              ]),
+          }
+          for package, expected in expected_requires_dist.items():
+              if by_name[package]["requires_dist"] != sorted(expected):
+                  raise SystemExit(
+                      f"{package}: Requires-Dist drift: "
+                      f"{by_name[package]['requires_dist']} != {sorted(expected)}"
+                  )
+
+          assert conda_by_name["numpy"]["version"] == "2.4.3"
+          assert conda_by_name["packaging"]["version"] == "26.3"
+          assert conda_by_name["pytorch"]["version"] == "2.4.1"
+          assert conda_by_name["cuda-version"]["version"].startswith("12.4")
+          assert conda_by_name["cuda-cudart"]["version"].startswith("12.4.")
+          assert "libcurand" in conda_by_name
+          assert by_name["kornia-rs"]["version"] == "0.1.10"
+
+          compatibility = {
+              "faiss-cpu": "numpy 2.4.3 satisfies >=1.25,<3; packaging 26.3 is locked in conda",
+              "kornia": "torch 2.4.1 satisfies >=2.0; packaging 26.3 is locked; kornia-rs 0.1.10 satisfies >=0.1.9",
+              "kornia-rs": "exact CPython 3.12 Linux wheel; no Requires-Dist entries",
+              "opencv-python": "target Python 3.12 activates numpy>=2; locked NumPy is 2.4.3",
+              "pyceres": "NumPy requirement is satisfied by locked NumPy 2.4.3",
+              "pycolmap-cuda12": "NumPy 2.4.3 is locked; CUDA 12.4 with cuda-cudart and libcurand is present in the conda closure; pip dependency resolution remains disabled",
+          }
+
           lock = {
               "schema_version": 1,
               "evidence_kind": "pypi_artifact_resolution_only",
@@ -314,6 +415,8 @@ jobs:
                   {"name": package, "version": version}
                   for package, version in requested
               ],
+              "conda_lock_sha256": "0b9a91630a1e15fd2fe61f0c22bcf6605cd5f5997adc312cf6b549935f311c9f",
+              "compatibility_assertions": compatibility,
               "artifacts": artifacts,
           }
           generated.write_text(
