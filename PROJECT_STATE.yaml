@@ -14,23 +14,22 @@ current_goal: >-
   experimental candidate after source checkpoint license hardware reproducibility and cross-version COLMAP evidence is complete, while keeping
   WRE geometry contracts solver-independent and preserving the classical V2L14.3 baseline.
 next_action: >-
-  Continue V2L14.4 qualification only. PR #139 closes the bounded LightGlue/ALIKED source-checkpoint gate at
-  registry/external-sources/lightglue-aliked-bounded-materialization.json: 5 retained/generated files, 46006 bytes, materialization SHA-256
-  d6da7b8d6aecd1dcb5fe769035e5e83d70cd860879ad17922fec4cc78f782b48, plus the official ALIKED n16 checkpoint re-hashed directly from
-  revision 683d7c65197395c0b3f01ebe76e1084a27e73a65 at 2738091 bytes / SHA-256
-  5be8704840ed662d9d8c561bf7279c222092674e7eb05fd0feab94899e9d82f2. Next execute only the newly authorized CPU local-checkpoint constructor
-  qualification: reconstruct the reviewed shim/source, verify the local checkpoint before import, block socket/HTTP/HuggingFace/torch.hub
-  network paths, instantiate from lightglue import ALIKED through one temporary exact local loader intercept, restore it immediately, and prove
-  excluded LightGlue modules never enter sys.modules. This is constructor compatibility evidence only, not GLUEMAP geometry or GPU evidence.
-  The official gated facebook/VGGT-1B-Commercial model.safetensors remains independently unresolved. Do not add the adapter while any
-  technology-gate blocker remains.
+  Continue V2L14.4 qualification only. PR #141 closes the bounded LightGlue/ALIKED local-constructor gate on exact head
+  0b73345f9e0b4f8e54b10e98a6e43bca8b73c3d9: aliked-n16 constructs from the exact verified local checkpoint under Python 3.12.12,
+  NumPy 2.4.3 and torch 2.4.1+cpu through one temporary reviewed loader intercept, the original torch.hub loader is restored immediately,
+  zero network/process attempts occur, and no excluded LightGlue module is imported. This is constructor compatibility evidence only.
+  Next execute only the newly authorized CPU VGGT source-import compatibility proof: consume the exact PR #133 bounded VGGT source directly
+  from its reviewed materialization without pip-installing VGGT or resolving its numpy<2 metadata, preserve NumPy 2.4.3, import the bounded VGGT
+  model path and small pose/rotation utilities with network/process access fail-closed, prove excluded VGGT training/dependency and rejected
+  MapAnything/UniCeption/CroCo/Pi3 modules never enter sys.modules, and emit import-compatibility evidence only. Do not instantiate the 1B model,
+  load any VGGT checkpoint, execute GLUEMAP geometry or claim GPU/runtime-profile approval. The official gated
+  facebook/VGGT-1B-Commercial model.safetensors remains independently unresolved. Do not add the adapter while any technology-gate blocker remains.
 blockers:
   - V2L14.4 has no executable supported GPU runner in repository CI; the reviewed GLUEMAP reference environment is CUDA/GPU while current WRE workflows are CPU-hosted.
   - V2L14.4 MapAnything plus UniCeption is blocked for the first shipping-oriented profile. Exact source inspection found CC-BY-NC-SA-4.0 non-commercial CroCo/DUSt3R files on the actual MapAnything import path despite UniCeption's BSD root LICENSE; PR #129 is retained only as superseded qualification evidence and that route must not execute.
   - V2L14.4 VGGT-1B-Commercial checkpoint qualification is incomplete. PR #133 closes the source-byte gate at 93 files / 744299 bytes / SHA-256 19efc825c7627dc2d7fdf3fed3aa410823e90e81d2f126c57148549aac5fced1 for the exact GLUEMAP+VGGT source pair, but the official commercial checkpoint repository is gated and its immutable repository revision, model.safetensors SHA-256 and byte length have not yet been obtained from official bytes. No unofficial mirror identity is acceptable.
-  - V2L14.4 LightGlue/ALIKED local-loading qualification is incomplete. PR #139 closes exact bounded source/checkpoint provenance and excludes the upstream eager package root/SuperPoint path, but LightGlue's reviewed ALIKED constructor still calls torch.hub.load_state_dict_from_url unconditionally. A separate CPU proof must demonstrate the exact local checkpoint can satisfy that constructor through a narrowly scoped temporary intercept while all network paths fail closed, the intercept is restored, and no excluded LightGlue module is imported.
   - V2L14.4 transitive redistribution review remains incomplete. The current conda lock records non-blank direct license metadata for all 193 exact builds and the PyPI gate records exact wheel/license metadata for six additional artifacts, including exact-source Apache-2.0 evidence for kornia-rs 0.1.10. NVIDIA/cuDNN/Intel LicenseRef terms, reciprocal/copyleft components, the custom VGGT license, the bounded LightGlue/ALIKED source/checkpoint surface and model redistribution terms still require use-mode review; inventory is not shipping approval.
-  - V2L14.4 Python packaging compatibility is unresolved at execution time. The exact GLUEMAP pyproject pins numpy==2.4.3 while the exact VGGT pyproject declares numpy<2, so VGGT still must be consumed from the reviewed source materialization without dependency resolution. The conda and PyPI artifact closures are now pinned, but the selected VGGT source path and LightGlue/ALIKED import path still require real runtime compatibility evidence against NumPy 2.4.3 before the gate can close.
+  - V2L14.4 Python packaging compatibility remains partially unresolved at execution time. PR #141 proves the bounded LightGlue/ALIKED constructor path works under NumPy 2.4.3 with the exact local checkpoint and no network fallback, closing that sub-path. The exact VGGT pyproject still declares numpy<2 while GLUEMAP pins numpy==2.4.3, so VGGT must continue to be consumed only from the reviewed source materialization without dependency resolution. A separate CPU source-import compatibility proof is still required before any checkpoint/model execution is accepted.
   - V2L14.4 has not yet produced a real GLUEMAP native sparse model for WRE PyCOLMAP 4.2.0 cross-read compatibility evidence against GLUEMAP's isolated pycolmap-cuda12 4.0.4 environment.
 architecture:
   product_blueprint: docs/01_PRODUCT.md
