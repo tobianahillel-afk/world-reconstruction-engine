@@ -1,13 +1,6 @@
 name: gluemap-pypi-lock
 
 on:
-  # Bootstrap only: remove after the first reviewed artifact lock is captured.
-  push:
-    branches:
-      - "feature/v2l14-4-pypi-artifact-lock"
-    paths:
-      - ".github/workflows/gluemap-pypi-lock.yml"
-      - "registry/external-environments/gluemap-linux-64-pypi-lock.json"
   pull_request:
     paths:
       - ".github/workflows/gluemap-pypi-lock.yml"
