@@ -1,0 +1,339 @@
+name: colmap-mvs-integration
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/colmap-mvs-integration.yml"
+      - "registry/external-environments/colmap-mvs-cuda12-4.2.0.json"
+      - "registry/dependencies.yaml"
+      - "registry/adapter-models.yaml"
+      - "registry/work-items/v2m2.yaml"
+      - "PROJECT_STATE.yaml"
+      - "src/wre/reconstruction/colmap_dense_depth.py"
+      - "src/wre/reconstruction/__init__.py"
+      - "tests/test_colmap_dense_depth.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qualify-environment:
+    name: pycolmap-cuda12-4.2.0-artifact-resolution-only
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      LOCK_PATH: registry/external-environments/colmap-mvs-cuda12-4.2.0.json
+      TARGET_PYTHON: "3.12.12"
+      PYCOLMAP_PACKAGE: pycolmap-cuda12
+      PYCOLMAP_VERSION: "4.2.0"
+      NUMPY_VERSION: "2.5.3"
+      COLMAP_REVISION: be5e29168d4aff238409d60424812df66aac919f
+      COLMAP_TREE: 26de80748b919eda849f28206bb738778edbb493
+      COLMAP_LICENSE_BLOB: 868e5accaf67f8fa58e7728b46634b0be7be16e9
+      COLMAP_BUILD_WORKFLOW_BLOB: ce51c309472062bb8d65cf2c79ad924f48477608
+
+    steps:
+      - name: Checkout WRE
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install exact uv and Python
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.13"
+          python-version: "3.12.12"
+          enable-cache: false
+
+      - name: Resolve and hash exact accelerator wheel closure without installing it
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = "x86_64"
+
+          venv="$RUNNER_TEMP/colmap-mvs-lock-venv"
+          downloads="$RUNNER_TEMP/colmap-mvs-wheels"
+          constraints="$RUNNER_TEMP/colmap-mvs-constraints.txt"
+          generated="$RUNNER_TEMP/colmap-mvs-cuda12-4.2.0.json"
+
+          uv venv "$venv" --python "$TARGET_PYTHON" --seed
+          uv pip install --python "$venv/bin/python" "pip==25.2"
+          "$venv/bin/python" - <<'PY'
+          import os
+          import sys
+          assert sys.version.split()[0] == os.environ["TARGET_PYTHON"], sys.version
+          PY
+
+          mkdir -p "$downloads"
+          if test -f "$LOCK_PATH"; then
+            "$venv/bin/python" - <<'PY' > "$constraints"
+          import json
+          import os
+          from pathlib import Path
+
+          lock = json.loads(Path(os.environ["LOCK_PATH"]).read_text(encoding="utf-8"))
+          for item in sorted(lock["artifacts"], key=lambda value: value["name"].lower()):
+              print(f"{item['name']}=={item['version']}")
+          PY
+            constraint_args=(--constraint "$constraints")
+          else
+            constraint_args=()
+          fi
+
+          "$venv/bin/python" -m pip download \
+            --disable-pip-version-check \
+            --no-cache-dir \
+            --only-binary=:all: \
+            --dest "$downloads" \
+            "${constraint_args[@]}" \
+            "numpy==$NUMPY_VERSION" \
+            "$PYCOLMAP_PACKAGE==$PYCOLMAP_VERSION"
+
+          VENV_PYTHON="$venv/bin/python" DOWNLOADS="$downloads" GENERATED="$generated" "$venv/bin/python" - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import os
+          import subprocess
+          import urllib.request
+          import zipfile
+          from email.parser import BytesParser
+          from email.policy import compat32
+          from pathlib import Path
+
+          downloads = Path(os.environ["DOWNLOADS"])
+          generated = Path(os.environ["GENERATED"])
+          python_bin = os.environ["VENV_PYTHON"]
+
+          def get_json(url: str) -> dict:
+              request = urllib.request.Request(
+                  url,
+                  headers={"User-Agent": "WRE-V2L15.2-COLMAP-MVS-qualification/1"},
+              )
+              with urllib.request.urlopen(request, timeout=60) as response:
+                  return json.load(response)
+
+          artifacts: list[dict[str, object]] = []
+          seen_names: set[str] = set()
+
+          wheel_paths = sorted(downloads.glob("*.whl"), key=lambda path: path.name)
+          if not wheel_paths:
+              raise SystemExit("pip download produced no wheels")
+          if list(downloads.glob("*.tar.gz")) or list(downloads.glob("*.zip")):
+              raise SystemExit("source distributions are forbidden in the accelerator lock")
+
+          for wheel_path in wheel_paths:
+              payload = wheel_path.read_bytes()
+              digest = hashlib.sha256(payload).hexdigest()
+
+              with zipfile.ZipFile(wheel_path) as archive:
+                  metadata_names = [
+                      name for name in archive.namelist()
+                      if name.endswith(".dist-info/METADATA")
+                  ]
+                  wheel_names = [
+                      name for name in archive.namelist()
+                      if name.endswith(".dist-info/WHEEL")
+                  ]
+                  if len(metadata_names) != 1 or len(wheel_names) != 1:
+                      raise SystemExit(
+                          f"{wheel_path.name}: expected exactly one METADATA and WHEEL file"
+                      )
+                  metadata = BytesParser(policy=compat32).parsebytes(
+                      archive.read(metadata_names[0])
+                  )
+                  wheel_metadata = archive.read(wheel_names[0]).decode("utf-8")
+
+              name = str(metadata.get("Name") or "").strip()
+              version = str(metadata.get("Version") or "").strip()
+              if not name or not version:
+                  raise SystemExit(f"{wheel_path.name}: missing package name/version metadata")
+              normalized_name = name.lower().replace("_", "-")
+              if normalized_name in seen_names:
+                  raise SystemExit(f"duplicate resolved package {normalized_name}")
+              seen_names.add(normalized_name)
+
+              project = get_json(f"https://pypi.org/pypi/{normalized_name}/{version}/json")
+              matches = [
+                  item for item in project["urls"]
+                  if item.get("filename") == wheel_path.name
+                  and item.get("packagetype") == "bdist_wheel"
+              ]
+              if len(matches) != 1:
+                  raise SystemExit(
+                      f"{normalized_name}=={version}: exact downloaded wheel missing from PyPI metadata"
+                  )
+              published = matches[0]
+              expected_digest = published["digests"]["sha256"]
+              if digest != expected_digest:
+                  raise SystemExit(
+                      f"{wheel_path.name}: SHA-256 mismatch {digest} != {expected_digest}"
+                  )
+              if len(payload) != published["size"]:
+                  raise SystemExit(
+                      f"{wheel_path.name}: byte length mismatch "
+                      f"{len(payload)} != {published['size']}"
+                  )
+
+              requires_dist = sorted(
+                  str(value).strip()
+                  for value in (metadata.get_all("Requires-Dist") or [])
+                  if str(value).strip()
+              )
+              license_expression = str(
+                  metadata.get("License-Expression")
+                  or project["info"].get("license_expression")
+                  or ""
+              ).strip()
+              legacy_license = str(
+                  metadata.get("License")
+                  or project["info"].get("license")
+                  or ""
+              ).strip()
+              classifiers = sorted(
+                  str(value).strip()
+                  for value in (metadata.get_all("Classifier") or [])
+                  if str(value).startswith("License ::")
+              )
+              tags = sorted(
+                  line.removeprefix("Tag: ").strip()
+                  for line in wheel_metadata.splitlines()
+                  if line.startswith("Tag: ")
+              )
+              if not tags:
+                  raise SystemExit(f"{wheel_path.name}: WHEEL metadata exposes no Tag entries")
+
+              artifacts.append(
+                  {
+                      "name": normalized_name,
+                      "version": version,
+                      "filename": wheel_path.name,
+                      "url": published["url"],
+                      "sha256": digest,
+                      "byte_length": len(payload),
+                      "requires_python": (
+                          published.get("requires_python")
+                          or project["info"].get("requires_python")
+                      ),
+                      "requires_dist": requires_dist,
+                      "wheel_tags": tags,
+                      "license_expression": license_expression or None,
+                      "legacy_license": legacy_license or None,
+                      "license_classifiers": classifiers,
+                  }
+              )
+
+          artifacts.sort(key=lambda item: (item["name"], item["version"], item["filename"]))
+          by_name = {item["name"]: item for item in artifacts}
+
+          required = {
+              "numpy": os.environ["NUMPY_VERSION"],
+              os.environ["PYCOLMAP_PACKAGE"]: os.environ["PYCOLMAP_VERSION"],
+          }
+          for name, version in required.items():
+              item = by_name.get(name)
+              if item is None or item["version"] != version:
+                  raise SystemExit(f"missing exact required artifact {name}=={version}")
+
+          pycolmap = by_name[os.environ["PYCOLMAP_PACKAGE"]]
+          expected_requires = sorted([
+              "cuda-toolkit[cudart,curand]<13,>=12",
+              "numpy",
+              'opencv-python-headless; extra == "panorama"',
+              'pillow; extra == "panorama"',
+              'tqdm; extra == "panorama"',
+          ])
+          if pycolmap["requires_dist"] != expected_requires:
+              raise SystemExit(
+                  "pycolmap-cuda12 Requires-Dist drift: "
+                  f"{pycolmap['requires_dist']} != {expected_requires}"
+              )
+          if "cp312-cp312-manylinux_2_28_x86_64" not in pycolmap["filename"]:
+              raise SystemExit(
+                  "unexpected pycolmap-cuda12 target wheel: " + str(pycolmap["filename"])
+              )
+
+          pip_version = subprocess.check_output(
+              [python_bin, "-m", "pip", "--version"],
+              text=True,
+          ).split()[1]
+          if pip_version != "25.2":
+              raise SystemExit(f"unexpected pip resolver version {pip_version}")
+
+          manifest = {
+              "schema_version": 1,
+              "evidence_kind": "external_accelerator_artifact_resolution_only",
+              "runtime_execution_evidence": False,
+              "gpu_execution_evidence": False,
+              "installer_execution_evidence": False,
+              "wheel_import_execution_evidence": False,
+              "target": {
+                  "python": os.environ["TARGET_PYTHON"],
+                  "implementation": "CPython",
+                  "platform": "linux_x86_64",
+                  "architecture": "x86_64",
+                  "cuda_major": 12,
+              },
+              "source": {
+                  "repository": "colmap/colmap",
+                  "tag": "4.2.0",
+                  "revision": os.environ["COLMAP_REVISION"],
+                  "tree": os.environ["COLMAP_TREE"],
+                  "license_git_blob_sha1": os.environ["COLMAP_LICENSE_BLOB"],
+                  "build_workflow_git_blob_sha1": os.environ["COLMAP_BUILD_WORKFLOW_BLOB"],
+                  "direct_license": "BSD-3-Clause",
+              },
+              "resolver": {
+                  "pip": pip_version,
+                  "only_binary": True,
+                  "no_cache": True,
+                  "constraints_from_committed_lock_when_present": True,
+              },
+              "requested": [
+                  {"name": "numpy", "version": os.environ["NUMPY_VERSION"]},
+                  {
+                      "name": os.environ["PYCOLMAP_PACKAGE"],
+                      "version": os.environ["PYCOLMAP_VERSION"],
+                  },
+              ],
+              "artifacts": artifacts,
+          }
+          generated.write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print(
+              f"resolved {len(artifacts)} exact wheels / "
+              f"{sum(int(item['byte_length']) for item in artifacts)} bytes"
+          )
+          PY
+
+      - name: Verify committed lock or expose first qualification result
+        shell: bash
+        run: |
+          set -euo pipefail
+          generated="$RUNNER_TEMP/colmap-mvs-cuda12-4.2.0.json"
+          sha256sum "$generated"
+          if test -f "$LOCK_PATH"; then
+            diff -u "$LOCK_PATH" "$generated"
+            echo "Committed COLMAP MVS accelerator lock matches exact regeneration."
+          else
+            echo "No committed COLMAP MVS accelerator lock exists yet; this run is first-artifact qualification evidence."
+            echo "----- BEGIN GENERATED COLMAP MVS ENVIRONMENT LOCK -----"
+            cat "$generated"
+            echo "----- END GENERATED COLMAP MVS ENVIRONMENT LOCK -----"
+          fi
+
+      - name: Retain machine-readable environment qualification evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v2l15-2-colmap-mvs-environment-lock
+          path: ${{ runner.temp }}/colmap-mvs-cuda12-4.2.0.json
+          if-no-files-found: error
+          retention-days: 30
