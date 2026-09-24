@@ -48,9 +48,7 @@ from wre.reconstruction.geometry_solution_comparison import GeometrySolutionCand
 COLMAP_PATCH_MATCH_DENSE_DEPTH_ADAPTER_ID = "colmap.patch_match_dense_depth"
 COLMAP_PATCH_MATCH_DENSE_DEPTH_PRODUCER_IMPLEMENTATION = "pycolmap.patch_match_stereo"
 COLMAP_PATCH_MATCH_DENSE_DEPTH_PRODUCER_VERSION = SUPPORTED_PYCOLMAP_VERSION
-COLMAP_PATCH_MATCH_DENSE_DEPTH_SOURCE_REVISION = (
-    "be5e29168d4aff238409d60424812df66aac919f"
-)
+COLMAP_PATCH_MATCH_DENSE_DEPTH_SOURCE_REVISION = "be5e29168d4aff238409d60424812df66aac919f"
 COLMAP_PATCH_MATCH_DENSE_DEPTH_DEPENDENCY_REF = "colmap_mvs_cuda12_4_2_0"
 COLMAP_PATCH_MATCH_DENSE_DEPTH_SHIPPING_STATUS = "experimental"
 
@@ -153,9 +151,7 @@ class ColmapPatchMatchDenseDepthConfig:
         }
         for name, expected_value in expected_values.items():
             if getattr(self, name) != expected_value:
-                raise ValueError(
-                    f"V2L15.2 reviewed baseline requires {name}={expected_value!r}"
-                )
+                raise ValueError(f"V2L15.2 reviewed baseline requires {name}={expected_value!r}")
 
         if set(exact) != set(self.canonical_document()):
             raise RuntimeError("COLMAP dense-depth config canonical document is incomplete")
@@ -240,17 +236,14 @@ class ColmapDenseDepthSource:
         if not isinstance(self.image_root, Path):
             raise TypeError("colmap_dense_depth_source.image_root must be pathlib.Path")
         if not isinstance(self.images, tuple) or not self.images:
-            raise ValueError(
-                "colmap_dense_depth_source.images must be a non-empty immutable tuple"
-            )
+            raise ValueError("colmap_dense_depth_source.images must be a non-empty immutable tuple")
         if any(not isinstance(item, ColmapReconstructionInput) for item in self.images):
             raise TypeError(
                 "colmap_dense_depth_source.images members must be ColmapReconstructionInput"
             )
         if not isinstance(self.expected_environment, ColmapEnvironmentIdentity):
             raise TypeError(
-                "colmap_dense_depth_source.expected_environment must be "
-                "ColmapEnvironmentIdentity"
+                "colmap_dense_depth_source.expected_environment must be ColmapEnvironmentIdentity"
             )
         if not isinstance(self.artifact_ref, ArtifactRef):
             raise TypeError("colmap_dense_depth_source.artifact_ref must be ArtifactRef")
@@ -266,8 +259,7 @@ class ColmapDenseDepthSource:
         image_ids = tuple(item.observation.observation_id.value for item in self.images)
         if image_ids != tuple(sorted(image_ids)) or len(image_ids) != len(set(image_ids)):
             raise ValueError(
-                "COLMAP dense-depth images must be unique and canonically ordered by "
-                "ObservationId"
+                "COLMAP dense-depth images must be unique and canonically ordered by ObservationId"
             )
         if tuple(item.observation.observation_id for item in self.images) != (
             self.features.provenance.source_observation_ids
@@ -553,7 +545,9 @@ def _vector3(value: object, context: str) -> tuple[float, float, float]:
     )
 
 
-def _rotation3(value: object) -> tuple[
+def _rotation3(
+    value: object,
+) -> tuple[
     tuple[float, float, float],
     tuple[float, float, float],
     tuple[float, float, float],
@@ -587,9 +581,7 @@ def _validate_workspace_linkage(
     source_by_observation = {
         camera.observation_id: camera for camera in source.source_geometry.camera_solutions
     }
-    observation_by_name = {
-        item.image_name: item.observation_id for item in source.features.images
-    }
+    observation_by_name = {item.image_name: item.observation_id for item in source.features.images}
     expected_names = {
         next(
             feature.image_name
@@ -871,9 +863,7 @@ def _canonical_source_artifacts(
         _image_evidence_ref(verified_images),
         _environment_evidence_ref(environment),
     )
-    by_identity = {
-        (item.artifact_id.value, item.artifact_kind.value): item for item in references
-    }
+    by_identity = {(item.artifact_id.value, item.artifact_kind.value): item for item in references}
     return tuple(by_identity[key] for key in sorted(by_identity))
 
 
@@ -986,13 +976,9 @@ class ColmapPatchMatchDenseDepthAdapter:
         if not isinstance(self.output_root, Path):
             raise TypeError("colmap_dense_depth.output_root must be pathlib.Path")
         if not isinstance(self.hardware_runtime, HardwareRuntimeIdentity):
-            raise TypeError(
-                "colmap_dense_depth.hardware_runtime must be HardwareRuntimeIdentity"
-            )
+            raise TypeError("colmap_dense_depth.hardware_runtime must be HardwareRuntimeIdentity")
         if not isinstance(self.config, ColmapPatchMatchDenseDepthConfig):
-            raise TypeError(
-                "colmap_dense_depth.config must be ColmapPatchMatchDenseDepthConfig"
-            )
+            raise TypeError("colmap_dense_depth.config must be ColmapPatchMatchDenseDepthConfig")
 
     def derive(self) -> DenseDepthArtifact:
         source_model_path = _verified_native_model_path(
@@ -1110,17 +1096,13 @@ class ColmapPatchMatchDenseDepthAdapter:
                         [item.artifact_id.value, item.artifact_kind.value]
                         for item in source_artifacts
                     ],
-                    "depth_fields": [
-                        item.depth_field_id.value for item in depth_fields
-                    ],
+                    "depth_fields": [item.depth_field_id.value for item in depth_fields],
                     "depth_outputs": list(depth_evidence),
                 }
             )
             result = DenseDepthArtifact(
                 artifact_ref=ArtifactRef(
-                    artifact_id=ArtifactId(
-                        f"artifact:colmap-dense:{artifact_identity.value}"
-                    ),
+                    artifact_id=ArtifactId(f"artifact:colmap-dense:{artifact_identity.value}"),
                     artifact_kind=DENSE_DEPTH_ARTIFACT_KIND,
                 ),
                 source_geometry=self.source.source_geometry,
