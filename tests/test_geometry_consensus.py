@@ -105,8 +105,7 @@ def _matmul(
 ) -> RotationMatrix3x3:
     return tuple(
         tuple(
-            sum(left[row][axis] * right[axis][column] for axis in range(3))
-            for column in range(3)
+            sum(left[row][axis] * right[axis][column] for axis in range(3)) for column in range(3)
         )
         for row in range(3)
     )  # type: ignore[return-value]
@@ -204,9 +203,7 @@ def _candidate(
         points: tuple[PointMap, ...] = (point_map,)
     elif representation == "depth":
         first_camera = cameras[0]
-        pixel_count = (
-            first_camera.dimensions.width_px * first_camera.dimensions.height_px
-        )
+        pixel_count = first_camera.dimensions.width_px * first_camera.dimensions.height_px
         depth = DepthField(
             depth_field_id=DepthFieldId(f"depth:{token}"),
             observation_id=first_camera.observation_id,
@@ -244,9 +241,7 @@ def _candidate(
 
 def _competing(*candidates: GeometrySolutionCandidate) -> CompetingGeometrySolutions:
     return CompetingGeometrySolutions(
-        candidates=tuple(
-            sorted(candidates, key=lambda item: item.geometry_solution_id.value)
-        )
+        candidates=tuple(sorted(candidates, key=lambda item: item.geometry_solution_id.value))
     )
 
 
@@ -517,12 +512,8 @@ def test_zero_or_single_shared_observation_emits_only_coverage() -> None:
         )
     )
 
-    assert tuple(_metric_values(zero)) == (
-        SHARED_OBSERVATION_COVERAGE_DESCRIPTOR.name.value,
-    )
-    assert tuple(_metric_values(one)) == (
-        SHARED_OBSERVATION_COVERAGE_DESCRIPTOR.name.value,
-    )
+    assert tuple(_metric_values(zero)) == (SHARED_OBSERVATION_COVERAGE_DESCRIPTOR.name.value,)
+    assert tuple(_metric_values(one)) == (SHARED_OBSERVATION_COVERAGE_DESCRIPTOR.name.value,)
 
 
 def test_degenerate_baselines_keep_rotation_and_zero_translation_coverage() -> None:
@@ -539,9 +530,7 @@ def test_degenerate_baselines_keep_rotation_and_zero_translation_coverage() -> N
     values = _metric_values(result)
 
     assert values[SHARED_OBSERVATION_COVERAGE_DESCRIPTOR.name.value] == 1.0
-    assert values[RELATIVE_ROTATION_DISAGREEMENT_DESCRIPTOR.name.value] == pytest.approx(
-        0.0
-    )
+    assert values[RELATIVE_ROTATION_DISAGREEMENT_DESCRIPTOR.name.value] == pytest.approx(0.0)
     assert values[CONSENSUS_TRANSLATION_PAIR_COVERAGE_DESCRIPTOR.name.value] == 0.0
     assert RELATIVE_TRANSLATION_DIRECTION_DISAGREEMENT_DESCRIPTOR.name.value not in values
 
@@ -574,9 +563,7 @@ def test_different_frame_scale_representation_and_projection_preserve_pose_evide
     values = _metric_values(result)
 
     assert values[SHARED_OBSERVATION_COVERAGE_DESCRIPTOR.name.value] == 1.0
-    assert values[RELATIVE_ROTATION_DISAGREEMENT_DESCRIPTOR.name.value] == pytest.approx(
-        0.0
-    )
+    assert values[RELATIVE_ROTATION_DISAGREEMENT_DESCRIPTOR.name.value] == pytest.approx(0.0)
     assert values[CONSENSUS_TRANSLATION_PAIR_COVERAGE_DESCRIPTOR.name.value] == 1.0
     assert values[
         RELATIVE_TRANSLATION_DIRECTION_DISAGREEMENT_DESCRIPTOR.name.value
