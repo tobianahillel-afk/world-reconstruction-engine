@@ -164,6 +164,15 @@ dependencies:
       source_materialization_runtime_execution_evidence: false
       source_materialization_gpu_execution_evidence: false
       source_materialization_vggt_license_blob_sha1: 079cb728fea5b11bb46c0c9f6ad4b3d2e4d216c7
+      vggt_source_import_compatibility: passed_cpu_no_checkpoint
+      vggt_source_import_proof_head: f71fe8a25412c84229d9c03a736354cad5832560
+      vggt_source_import_python: 3.12.12
+      vggt_source_import_numpy: 2.4.3
+      vggt_source_import_torch: 2.4.1+cpu
+      vggt_source_import_network_or_process_attempts: 0
+      vggt_source_import_model_instantiated: false
+      vggt_source_import_checkpoint_loaded: false
+      vggt_source_import_forward_executed: false
       cuda: '12.4'
       cuda_package_set: locked_in_environment_lock
       gpu_execution_evidence: false
@@ -240,7 +249,9 @@ dependencies:
       retains VGGT LICENSE.txt as Git blob 079cb728fea5b11bb46c0c9f6ad4b3d2e4d216c7,
       excludes MapAnything UniCeption Pi3 SALAD Doppelgangers++ VGGSfM training and
       vggt/dependency source bytes, and records no runtime or GPU execution evidence.
-      The official gated checkpoint identity, exact Python closure, custom-license review,
+      PR #143 closes the bounded VGGT source/no-deps import-compatibility check under
+      NumPy 2.4.3; this does not make the full Python runtime or model execution approved.
+      The official gated checkpoint identity, custom-license/redistribution review,
       supported real GPU evidence and cross-version native-model evidence remain unresolved.
   mapanything_apache:
     status: candidate_optional
@@ -310,8 +321,15 @@ dependencies:
       PR #133 separately freezes the exact reviewed source materialization for this
       backbone at 93 total GLUEMAP+VGGT files / 744,299 bytes with identity
       19efc825c7627dc2d7fdf3fed3aa410823e90e81d2f126c57148549aac5fced1.
-      Source qualification is complete but does not resolve the gated checkpoint or the
-      custom-license shipping review. No execution or adapter implementation is authorized
+      Source qualification is complete. PR #143 additionally proves CPU source-import
+      compatibility under Python 3.12.12, NumPy 2.4.3 and torch 2.4.1+cpu without
+      installing VGGT or resolving its numpy<2 metadata: the VGGT class and retained
+      pose/rotation utilities import from the exact materialization, deterministic
+      round-trips pass, zero network/process attempts occur, no rejected module is
+      imported, and no model instantiation checkpoint load forward GLUEMAP geometry
+      GPU evidence or runtime-profile approval occurs. This closes source/no-deps
+      import compatibility only; the official gated checkpoint and custom-license
+      shipping review remain unresolved. No adapter implementation is authorized
       by this record.
   aliked_n16:
     status: candidate_optional
