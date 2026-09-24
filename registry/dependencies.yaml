@@ -151,6 +151,28 @@ dependencies:
       pypi_runtime_artifacts: 6
       pypi_runtime_artifact_bytes: 167573589
       pypi_runtime_closure: artifact_locked_no_install_evidence
+      redistribution_inventory_status: classified_not_approved
+      redistribution_shipping_approved: false
+      redistribution_conda_builds: 193
+      redistribution_conda_category_counts:
+        permissive_or_notice: 132
+        public_domain_or_special_notice: 10
+        reciprocal_or_dual_review: 26
+        gcc_runtime_exception: 8
+        vendor_custom_eula: 17
+      redistribution_pypi_artifacts: 6
+      redistribution_pypi_direct_license_counts:
+        permissive_or_notice: 6
+        reciprocal_or_restricted: 0
+        missing_direct_license_evidence: 0
+      redistribution_manual_review_families:
+        - NVIDIA CUDA EULA
+        - cuDNN Software License Agreement
+        - Intel MKL LicenseRef
+        - GPL LGPL MPL EPL and dual-choice expressions
+        - GCC runtime exception family
+        - VGGT License v1 and Acceptable Use Policy
+        - official VGGT-1B-Commercial checkpoint terms when official bytes are supplied
       conda_build_strings: locked
       previous_mapanything_source_materialization_manifest: registry/external-sources/gluemap-bounded-materialization.json
       previous_mapanything_source_materialization_files: 91
@@ -211,7 +233,15 @@ dependencies:
       pycolmap-cuda12==4.0.4 in its external GPU environment, which remains isolated from WRE's
       PyCOLMAP 4.2.0 canonicalization environment. Static native review now identifies the
       source-level Ceres 2.2.0 Eigen 3.4.0 METIS 5.1.0 Boost 1.85.0 and GNU 15.2.0
-      runtime terms, and confirms Ceres CUDA is optional for pygluemap. Exact-tree inspection
+      runtime terms, and confirms Ceres CUDA is optional for pygluemap. The exact
+      193-build conda license inventory is now technically partitioned into 132
+      permissive-or-notice builds, 10 public-domain-or-special-notice builds, 26
+      reciprocal-or-dual-review builds, 8 GCC-runtime-exception builds and 17
+      vendor/custom-EULA builds. The six exact PyPI wheels all expose direct
+      permissive-or-notice license evidence. This partition is triage evidence only:
+      it does not determine linking/distribution obligations, approve NVIDIA/cuDNN/Intel
+      vendor terms, approve reciprocal/copyleft use modes, approve the custom VGGT
+      license/AUP, or authorize shipping/default promotion. Exact-tree inspection
       found no upstream conda-lock pixi lock environment export or equivalent build-string manifest.
       WRE therefore uses the separate CPU-only linux-64 micromamba resolution lane with an explicit
       CUDA 12.4 virtual-package override as dependency-lock evidence only. PR #127 first froze
@@ -300,6 +330,8 @@ dependencies:
     checkpoint_byte_length: unresolved_pending_official_gated_access
     license: LicenseRef-VGGT-License-v1
     license_review: pending
+    redistribution_classification: custom_restricted_manual_review
+    redistribution_shipping_approved: false
     notes: >-
       GLUEMAP's exact pinned submodule revision for VGGT is
       44b3afbd1869d8bde4894dd8ea1e293112dd5eba with Git tree
@@ -344,6 +376,8 @@ dependencies:
     checkpoint_byte_length: 2738091
     license: BSD-3-Clause
     license_review: pending
+    redistribution_classification: permissive_notice_manual_review_pending
+    redistribution_shipping_approved: false
     notes: >-
       V2L14.4 static review proves GLUEMAP BaseStarDataset constructs
       lightglue.ALIKED with the aliked-n16 model. The pinned LightGlue source would
