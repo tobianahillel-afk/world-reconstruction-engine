@@ -33,9 +33,7 @@ def _validate_source_artifacts(
             "dense_depth.source_artifacts must use canonical ArtifactId/ArtifactKind order"
         )
 
-    source_geometry_identities = {
-        _artifact_key(item) for item in source_geometry.source_artifacts
-    }
+    source_geometry_identities = {_artifact_key(item) for item in source_geometry.source_artifacts}
     if not source_geometry_identities.issubset(set(identities)):
         raise ValueError(
             "dense_depth.source_artifacts must retain every source GeometrySolutionCandidate "
@@ -72,15 +70,12 @@ def _validate_depth_fields(
             "dense_depth.depth_fields must not contain competing support for one Observation"
         )
 
-    cameras_by_id = {
-        camera.solution_id: camera for camera in source_geometry.camera_solutions
-    }
+    cameras_by_id = {camera.solution_id: camera for camera in source_geometry.camera_solutions}
     for depth in depth_fields:
         camera = cameras_by_id.get(depth.camera_solution_id)
         if camera is None:
             raise ValueError(
-                "dense_depth DepthField must reference a CameraSolution supplied by "
-                "source_geometry"
+                "dense_depth DepthField must reference a CameraSolution supplied by source_geometry"
             )
         if depth.observation_id != camera.observation_id:
             raise ValueError(
@@ -111,13 +106,9 @@ class DenseDepthArtifact:
         if not isinstance(self.artifact_ref, ArtifactRef):
             raise TypeError("dense_depth.artifact_ref must be ArtifactRef")
         if self.artifact_ref.artifact_kind != DENSE_DEPTH_ARTIFACT_KIND:
-            raise ValueError(
-                "dense_depth.artifact_ref must use artifact kind geometry.dense_depth"
-            )
+            raise ValueError("dense_depth.artifact_ref must use artifact kind geometry.dense_depth")
         if not isinstance(self.source_geometry, GeometrySolutionCandidate):
-            raise TypeError(
-                "dense_depth.source_geometry must be GeometrySolutionCandidate"
-            )
+            raise TypeError("dense_depth.source_geometry must be GeometrySolutionCandidate")
         if not isinstance(self.producer, ArtifactProducerIdentity):
             raise TypeError("dense_depth.producer must be ArtifactProducerIdentity")
 
