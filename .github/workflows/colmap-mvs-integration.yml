@@ -467,6 +467,18 @@ jobs:
           )
 
           assert numpy.__version__ == "2.5.3", numpy.__version__
+          print(
+              json.dumps(
+                  {
+                      "pycolmap_version": str(getattr(pycolmap, "__version__", "")),
+                      "colmap_version": str(getattr(pycolmap, "COLMAP_version", "")),
+                      "colmap_build": str(getattr(pycolmap, "COLMAP_build", "")),
+                      "ceres_version": str(getattr(pycolmap, "__ceres_version__", "")),
+                      "has_cuda": bool(getattr(pycolmap, "has_cuda", False)),
+                  },
+                  sort_keys=True,
+              )
+          )
           environment = inspect_colmap_dense_depth_environment(pycolmap)
           assert environment.pycolmap_version == "4.2.0"
           assert environment.upstream_has_cuda is True
