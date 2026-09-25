@@ -1034,7 +1034,7 @@ class ColmapPatchMatchDenseDepthAdapter:
                 )
 
                 undistort_options = _configure_undistortion(pycolmap, self.config)
-                copy_policy = pycolmap.FileCopyType.COPY
+                copy_policy = pycolmap.FileCopyType.copy
                 try:
                     pycolmap.undistort_images(
                         output_root,
