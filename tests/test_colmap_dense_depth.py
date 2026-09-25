@@ -810,6 +810,63 @@ def test_real_cuda_wheel_undistort_workspace_preflight(tmp_path: Path) -> None:
     dense_module._verify_retained_sources(source, verified_images)
     assert _source_bytes(source) == source_before
 
+    patch_options = dense_module._configure_patch_match(pycolmap, config)
+    patchmatch_options = {
+        "allow_missing_files": patch_options.allow_missing_files,
+        "cache_size": patch_options.cache_size,
+        "depth_max": patch_options.depth_max,
+        "depth_min": patch_options.depth_min,
+        "filter": patch_options.filter,
+        "filter_geom_consistency_max_cost": patch_options.filter_geom_consistency_max_cost,
+        "filter_min_ncc": patch_options.filter_min_ncc,
+        "filter_min_num_consistent": patch_options.filter_min_num_consistent,
+        "filter_min_triangulation_angle": patch_options.filter_min_triangulation_angle,
+        "geom_consistency": patch_options.geom_consistency,
+        "geom_consistency_max_cost": patch_options.geom_consistency_max_cost,
+        "geom_consistency_regularizer": patch_options.geom_consistency_regularizer,
+        "gpu_index": patch_options.gpu_index,
+        "incident_angle_sigma": patch_options.incident_angle_sigma,
+        "max_image_size": patch_options.max_image_size,
+        "min_triangulation_angle": patch_options.min_triangulation_angle,
+        "ncc_sigma": patch_options.ncc_sigma,
+        "num_iterations": patch_options.num_iterations,
+        "num_samples": patch_options.num_samples,
+        "num_threads": patch_options.num_threads,
+        "sigma_color": patch_options.sigma_color,
+        "sigma_spatial": patch_options.sigma_spatial,
+        "window_radius": patch_options.window_radius,
+        "window_step": patch_options.window_step,
+        "write_consistency_graph": patch_options.write_consistency_graph,
+    }
+    assert patchmatch_options == {
+        "allow_missing_files": config.allow_missing_files,
+        "cache_size": config.cache_size,
+        "depth_max": config.depth_max,
+        "depth_min": config.depth_min,
+        "filter": config.filter,
+        "filter_geom_consistency_max_cost": config.filter_geom_consistency_max_cost,
+        "filter_min_ncc": config.filter_min_ncc,
+        "filter_min_num_consistent": config.filter_min_num_consistent,
+        "filter_min_triangulation_angle": config.filter_min_triangulation_angle,
+        "geom_consistency": config.geom_consistency,
+        "geom_consistency_max_cost": config.geom_consistency_max_cost,
+        "geom_consistency_regularizer": config.geom_consistency_regularizer,
+        "gpu_index": config.gpu_index,
+        "incident_angle_sigma": config.incident_angle_sigma,
+        "max_image_size": config.max_image_size,
+        "min_triangulation_angle": config.min_triangulation_angle,
+        "ncc_sigma": config.ncc_sigma,
+        "num_iterations": config.num_iterations,
+        "num_samples": config.num_samples,
+        "num_threads": config.num_threads,
+        "sigma_color": config.sigma_color,
+        "sigma_spatial": config.sigma_spatial,
+        "window_radius": config.window_radius,
+        "window_step": config.window_step,
+        "write_consistency_graph": config.write_consistency_graph,
+    }
+    assert patch_options.check() is True
+
     depth_root = output_root / "stereo" / "depth_maps"
     assert not depth_root.exists() or not tuple(depth_root.glob("*.bin"))
 
@@ -856,6 +913,8 @@ def test_real_cuda_wheel_undistort_workspace_preflight(tmp_path: Path) -> None:
         "synthetic_fixture_execution_evidence": True,
         "undistort_execution_evidence": True,
         "workspace_linkage_execution_evidence": True,
+        "patchmatch_options_binding_evidence": True,
+        "patchmatch_options_check_evidence": True,
         "runtime_execution_evidence": True,
         "gpu_execution_evidence": False,
         "patchmatch_execution_evidence": False,
@@ -868,6 +927,7 @@ def test_real_cuda_wheel_undistort_workspace_preflight(tmp_path: Path) -> None:
             "upstream_has_cuda": environment.upstream_has_cuda,
         },
         "fixture": fixture,
+        "patchmatch_options": patchmatch_options,
         "source_immutable_after_undistortion": True,
         "workspace": {
             "images": workspace_images,
