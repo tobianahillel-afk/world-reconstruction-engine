@@ -201,7 +201,7 @@ class _FakePatchMatchOptions:
 
 
 class _FakeFileCopyType:
-    COPY = "COPY"
+    copy = "copy"
 
 
 class _FakeArray:
@@ -759,6 +759,129 @@ def _real_cuda_output_evidence(
 
 
 @pytest.mark.skipif(
+    os.environ.get("WRE_COLMAP_MVS_UNDISTORT_PREFLIGHT") != "1",
+    reason="real PyCOLMAP undistortion preflight runs only in the dedicated MVS lane",
+)
+def test_real_cuda_wheel_undistort_workspace_preflight(tmp_path: Path) -> None:
+    pycolmap = dense_module._load_pycolmap()
+    environment = inspect_colmap_dense_depth_environment(pycolmap)
+    assert environment.upstream_has_cuda is True
+
+    evidence_path_raw = os.environ.get("WRE_COLMAP_MVS_UNDISTORT_PREFLIGHT_EVIDENCE")
+    assert evidence_path_raw
+    evidence_path = Path(evidence_path_raw).expanduser().resolve()
+    assert not evidence_path.exists()
+
+    source, fixture = _real_cuda_source(tmp_path, pycolmap, environment)
+    source_before = _source_bytes(source)
+    verified_images = dense_module._verified_source_images(source)
+    source_model_path = dense_module._verified_native_model_path(
+        source.model_root,
+        source.model_artifact,
+    )
+
+    working_root = tmp_path / "private-input"
+    working_root.mkdir()
+    copied_model_path, copied_image_root = dense_module._copy_private_inputs(
+        source=source,
+        source_model_path=source_model_path,
+        verified_images=verified_images,
+        working_root=working_root,
+    )
+
+    output_root = tmp_path / "mvs-workspace"
+    output_root.mkdir()
+    config = ColmapPatchMatchDenseDepthConfig()
+    undistort_options = dense_module._configure_undistortion(pycolmap, config)
+    pycolmap.undistort_images(
+        output_root,
+        copied_model_path,
+        copied_image_root,
+        image_names=list(dense_module._registered_image_names(source)),
+        output_type="COLMAP",
+        copy_policy=pycolmap.FileCopyType.copy,
+        num_patch_match_src_images=config.num_patch_match_src_images,
+        undistort_options=undistort_options,
+        jpeg_quality=config.jpeg_quality,
+        num_threads=config.undistort_num_threads,
+    )
+
+    dense_module._validate_workspace_linkage(pycolmap, output_root, source)
+    dense_module._verify_retained_sources(source, verified_images)
+    assert _source_bytes(source) == source_before
+
+    depth_root = output_root / "stereo" / "depth_maps"
+    assert not depth_root.exists() or not tuple(depth_root.glob("*.bin"))
+
+    workspace = pycolmap.Reconstruction(output_root / "sparse")
+    assert bool(workspace.is_valid())
+    registered_ids = tuple(sorted(int(value) for value in workspace.reg_image_ids()))
+    assert len(registered_ids) == len(source.source_geometry.camera_solutions)
+
+    workspace_images = []
+    for image_id in registered_ids:
+        image = workspace.image(image_id)
+        camera = workspace.camera(int(image.camera_id))
+        workspace_images.append(
+            {
+                "camera_model": str(camera.model_name),
+                "height": int(camera.height),
+                "image_name": str(image.name),
+                "params": [float(value) for value in camera.params],
+                "width": int(camera.width),
+            }
+        )
+
+    sparse_files = []
+    for path in sorted(
+        (output_root / "sparse").glob("*"),
+        key=lambda item: item.name,
+    ):
+        if not path.is_file():
+            continue
+        digest = hash_file_content(path)
+        sparse_files.append(
+            {
+                "byte_length": digest.byte_length,
+                "name": path.name,
+                "sha256": digest.sha256.value,
+            }
+        )
+    assert sparse_files
+
+    evidence = {
+        "schema_version": 1,
+        "evidence_kind": "pycolmap_cuda12_4_2_0_cpu_undistort_preflight",
+        "wheel_import_execution_evidence": True,
+        "synthetic_fixture_execution_evidence": True,
+        "undistort_execution_evidence": True,
+        "workspace_linkage_execution_evidence": True,
+        "runtime_execution_evidence": True,
+        "gpu_execution_evidence": False,
+        "patchmatch_execution_evidence": False,
+        "stereo_fusion_execution_evidence": False,
+        "environment": {
+            "ceres_version": environment.ceres_version,
+            "colmap_build": environment.colmap_build,
+            "colmap_version": environment.colmap_version,
+            "pycolmap_version": environment.pycolmap_version,
+            "upstream_has_cuda": environment.upstream_has_cuda,
+        },
+        "fixture": fixture,
+        "source_immutable_after_undistortion": True,
+        "workspace": {
+            "images": workspace_images,
+            "sparse_files": sparse_files,
+        },
+    }
+    evidence_path.parent.mkdir(parents=True, exist_ok=True)
+    evidence_path.write_text(
+        json.dumps(evidence, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+
+
+@pytest.mark.skipif(
     os.environ.get("WRE_COLMAP_MVS_REAL_CUDA") != "1",
     reason="real CUDA PatchMatch evidence is manual and requires a trusted GPU runner",
 )
@@ -1010,7 +1133,7 @@ def test_patchmatch_derives_camera_z_depth_without_fusion(tmp_path: Path) -> Non
     assert undistort["input_path"] != source.model_root / "0"
     assert undistort["image_path"] != source.image_root
     assert undistort["image_names"] == ["000000-a.png", "000001-b.png"]
-    assert undistort["copy_policy"] == _FakeFileCopyType.COPY
+    assert undistort["copy_policy"] == _FakeFileCopyType.copy
     assert undistort["num_patch_match_src_images"] == -1
     assert undistort["jpeg_quality"] == -1
     assert undistort["num_threads"] == 1
