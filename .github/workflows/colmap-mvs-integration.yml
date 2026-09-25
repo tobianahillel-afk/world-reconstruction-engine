@@ -787,6 +787,10 @@ jobs:
           import os
           from pathlib import Path
 
+          from wre.reconstruction.colmap_dense_depth import (
+              ColmapPatchMatchDenseDepthConfig,
+          )
+
           evidence_path = Path(os.environ["WRE_COLMAP_MVS_EVIDENCE_PATH"])
           evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
           assert evidence["evidence_kind"] == "real_colmap_patchmatch_dense_depth_cuda"
@@ -794,13 +798,30 @@ jobs:
           assert evidence["gpu_execution_evidence"] is True
           assert evidence["dependency_ref"] == "colmap_mvs_cuda12"
           assert evidence["execution_calls"] == ["undistort_images", "patch_match_stereo"]
+          assert evidence["configuration_sha256"] == (
+              ColmapPatchMatchDenseDepthConfig().sha256.value
+          )
           assert evidence["environment"]["pycolmap_version"] == "4.2.0"
           assert evidence["environment"]["upstream_has_cuda"] is True
+          assert evidence["source"]["source_immutable_after_execution"] is True
+
           fields = evidence["result"]["depth_fields"]
           assert fields
           assert sum(item["valid_pixel_count"] for item in fields) > 0
+          assert all(item["camera_solution_id"] for item in fields)
+          assert all(item["observation_id"] for item in fields)
+          assert all(item["image_name"] for item in fields)
+          assert all(item["depth_value_convention"] == "camera-z" for item in fields)
+          assert all(item["confidence_is_none"] is True for item in fields)
+          assert all(item["raw_normalization_verified"] is True for item in fields)
+          assert all(len(item["depth_payload_sha256"]) == 64 for item in fields)
+          assert all(len(item["raw_depth_payload_sha256"]) == 64 for item in fields)
+
           maps = evidence["result"]["depth_maps"]
           assert maps
+          assert len(maps) == len(fields)
+          assert all(len(item["sha256"]) == 64 for item in maps)
+
           digest = hashlib.sha256(evidence_path.read_bytes()).hexdigest()
           print(f"real_cuda_evidence_sha256={digest}")
           PY
