@@ -36,6 +36,7 @@ from wre.reconstruction.colmap_dense_depth import (
     COLMAP_PATCH_MATCH_DENSE_DEPTH_ADAPTER_ID,
     COLMAP_PATCH_MATCH_DENSE_DEPTH_DEPENDENCY_REF,
     COLMAP_PATCH_MATCH_DENSE_DEPTH_PRODUCER_IMPLEMENTATION,
+    COLMAP_PATCH_MATCH_DENSE_DEPTH_RUNTIME_BUILD,
     COLMAP_PATCH_MATCH_DENSE_DEPTH_SHIPPING_STATUS,
     COLMAP_PATCH_MATCH_DENSE_DEPTH_SOURCE_REVISION,
     ColmapDenseDepthEnvironmentError,
@@ -70,7 +71,7 @@ _ROTATION = (
     (0.0, 1.0, 0.0),
     (0.0, 0.0, 1.0),
 )
-_BUILD = f"Commit {COLMAP_PATCH_MATCH_DENSE_DEPTH_SOURCE_REVISION} with CUDA support"
+_BUILD = COLMAP_PATCH_MATCH_DENSE_DEPTH_RUNTIME_BUILD
 
 
 class _FakeCamera:
@@ -907,14 +908,26 @@ def test_environment_gate_requires_exact_cuda_42_and_public_apis() -> None:
     environment = inspect_colmap_dense_depth_environment(_FakePycolmap())
     assert environment == _environment()
     assert environment.upstream_has_cuda is True
+    assert environment.colmap_build == "Commit be5e291 on 2026-08-31 with CUDA"
+    assert COLMAP_PATCH_MATCH_DENSE_DEPTH_RUNTIME_BUILD == environment.colmap_build
 
     with pytest.raises(ColmapDenseDepthEnvironmentError, match="has_cuda"):
         inspect_colmap_dense_depth_environment(_cpu_module())
 
-    wrong = _FakePycolmap()
-    wrong.COLMAP_build = "Commit wrong with CUDA support"
-    with pytest.raises(ColmapDenseDepthEnvironmentError, match=r"exact 4\.2\.0 source"):
-        inspect_colmap_dense_depth_environment(wrong)
+    wrong_commit = _FakePycolmap()
+    wrong_commit.COLMAP_build = "Commit deadbee on 2026-08-31 with CUDA"
+    with pytest.raises(ColmapDenseDepthEnvironmentError, match="exact official"):
+        inspect_colmap_dense_depth_environment(wrong_commit)
+
+    wrong_date = _FakePycolmap()
+    wrong_date.COLMAP_build = "Commit be5e291 on 2026-08-30 with CUDA"
+    with pytest.raises(ColmapDenseDepthEnvironmentError, match="exact official"):
+        inspect_colmap_dense_depth_environment(wrong_date)
+
+    wrong_accelerator = _FakePycolmap()
+    wrong_accelerator.COLMAP_build = "Commit be5e291 on 2026-08-31 without GPU support"
+    with pytest.raises(ColmapDenseDepthEnvironmentError, match="exact official"):
+        inspect_colmap_dense_depth_environment(wrong_accelerator)
 
     missing = _FakePycolmap()
     missing.patch_match_stereo = None  # type: ignore[assignment]
