@@ -349,6 +349,220 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  cuda-wheel-import-preflight:
+    name: pycolmap-cuda12-4.2.0-cpu-import-preflight
+    needs: qualify-environment
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      LOCK_PATH: registry/external-environments/colmap-mvs-cuda12-4.2.0.json
+      PRELIGHT_EVIDENCE: ${{ runner.temp }}/wre-colmap-mvs-cuda-import-preflight.json
+
+    steps:
+      - name: Checkout WRE
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install exact uv and Python
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.13"
+          python-version: "3.12.12"
+          enable-cache: false
+
+      - name: Sync frozen WRE test harness without PyCOLMAP
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv sync --frozen --group dev
+          .venv/bin/python - <<'PY'
+          import importlib.util
+          import sys
+
+          assert sys.version.split()[0] == "3.12.12", sys.version
+          assert importlib.util.find_spec("pycolmap") is None, (
+              "frozen WRE test harness must not preinstall a CPU PyCOLMAP"
+          )
+          PY
+
+      - name: Download verify and install exact accelerator wheel closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          wheel_dir="$RUNNER_TEMP/colmap-mvs-import-preflight-wheels"
+          rm -rf "$wheel_dir"
+          mkdir -p "$wheel_dir"
+
+          WHEEL_DIR="$wheel_dir" .venv/bin/python - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import os
+          import urllib.request
+          from pathlib import Path
+
+          lock = json.loads(Path(os.environ["LOCK_PATH"]).read_text(encoding="utf-8"))
+          wheel_dir = Path(os.environ["WHEEL_DIR"])
+          artifacts = lock["artifacts"]
+          if len(artifacts) != 5:
+              raise SystemExit(
+                  f"expected exactly five reviewed accelerator wheels, got {len(artifacts)}"
+              )
+
+          for item in artifacts:
+              filename = str(item["filename"])
+              if Path(filename).name != filename or not filename.endswith(".whl"):
+                  raise SystemExit(f"unsafe reviewed wheel filename: {filename}")
+              request = urllib.request.Request(
+                  str(item["url"]),
+                  headers={"User-Agent": "WRE-V2L15.2-CUDA-import-preflight/1"},
+              )
+              with urllib.request.urlopen(request, timeout=120) as response:
+                  payload = response.read()
+              digest = hashlib.sha256(payload).hexdigest()
+              if digest != item["sha256"]:
+                  raise SystemExit(
+                      f"{filename}: SHA-256 mismatch {digest} != {item['sha256']}"
+                  )
+              if len(payload) != item["byte_length"]:
+                  raise SystemExit(
+                      f"{filename}: byte length mismatch "
+                      f"{len(payload)} != {item['byte_length']}"
+                  )
+              (wheel_dir / filename).write_bytes(payload)
+
+          actual = sorted(path.name for path in wheel_dir.glob("*.whl"))
+          expected = sorted(str(item["filename"]) for item in artifacts)
+          if actual != expected:
+              raise SystemExit(f"downloaded wheel membership drift: {actual} != {expected}")
+          PY
+
+          uv pip install --python .venv/bin/python --no-deps "$wheel_dir"/*.whl
+
+      - name: Import exact CUDA wheel and exercise synthetic fixture APIs without PatchMatch
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv/bin/python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          import tempfile
+          from pathlib import Path
+
+          import numpy
+          import pycolmap
+
+          from wre.reconstruction.colmap_dense_depth import (
+              COLMAP_PATCH_MATCH_DENSE_DEPTH_SOURCE_REVISION,
+              inspect_colmap_dense_depth_environment,
+          )
+
+          assert numpy.__version__ == "2.5.3", numpy.__version__
+          environment = inspect_colmap_dense_depth_environment(pycolmap)
+          assert environment.pycolmap_version == "4.2.0"
+          assert environment.upstream_has_cuda is True
+          assert COLMAP_PATCH_MATCH_DENSE_DEPTH_SOURCE_REVISION in environment.colmap_build
+          assert callable(pycolmap.synthesize_dataset)
+          assert callable(pycolmap.synthesize_images)
+          assert callable(pycolmap.undistort_images)
+          assert callable(pycolmap.patch_match_stereo)
+
+          with tempfile.TemporaryDirectory(
+              prefix="wre-colmap-mvs-import-preflight-",
+              dir=os.environ["RUNNER_TEMP"],
+          ) as tmp_raw:
+              root = Path(tmp_raw)
+              database_path = root / "synthetic.db"
+              options = pycolmap.SyntheticDatasetOptions()
+              options.num_rigs = 1
+              options.num_cameras_per_rig = 1
+              options.num_frames_per_rig = 4
+              options.num_points3D = 600
+              options.track_length = -1
+              options.sensor_from_rig_translation_stddev = 0.0
+              options.sensor_from_rig_rotation_stddev = 0.0
+              options.camera_width = 320
+              options.camera_height = 240
+              options.camera_model_id = pycolmap.CameraModelId.PINHOLE
+              options.camera_params = [280.0, 280.0, 160.0, 120.0]
+              options.camera_has_prior_focal_length = True
+              options.num_points2D_without_point3D = 0
+              options.inlier_match_ratio = 1.0
+              options.match_config = pycolmap.SyntheticDatasetMatchConfig.EXHAUSTIVE
+
+              pycolmap.set_random_seed(20260924)
+              with pycolmap.Database.open(database_path) as database:
+                  reconstruction = pycolmap.synthesize_dataset(options, database)
+              assert bool(reconstruction.is_valid())
+              assert int(reconstruction.num_reg_images()) == 4
+              assert int(reconstruction.num_points3D()) == 600
+
+              image_root = root / "images"
+              image_root.mkdir()
+              image_options = pycolmap.SyntheticImageOptions()
+              image_options.feature_peak_radius = 1
+              image_options.feature_patch_radius = 4
+              image_options.feature_patch_max_brightness = 220
+              pycolmap.synthesize_images(image_options, reconstruction, image_root)
+
+              image_names = sorted(
+                  str(reconstruction.image(int(image_id)).name)
+                  for image_id in reconstruction.reg_image_ids()
+              )
+              assert len(image_names) == 4
+              assert all((image_root / image_name).is_file() for image_name in image_names)
+
+              model_path = root / "model"
+              model_path.mkdir()
+              reconstruction.write(model_path)
+              reloaded = pycolmap.Reconstruction(model_path)
+              assert bool(reloaded.is_valid())
+              assert int(reloaded.num_reg_images()) == 4
+              assert int(reloaded.num_points3D()) == 600
+
+          evidence = {
+              "schema_version": 1,
+              "evidence_kind": "pycolmap_cuda12_4_2_0_cpu_import_preflight",
+              "wheel_import_execution_evidence": True,
+              "synthetic_fixture_execution_evidence": True,
+              "gpu_execution_evidence": False,
+              "patchmatch_execution_evidence": False,
+              "stereo_fusion_execution_evidence": False,
+              "environment": {
+                  "ceres_version": environment.ceres_version,
+                  "colmap_build": environment.colmap_build,
+                  "colmap_version": environment.colmap_version,
+                  "pycolmap_version": environment.pycolmap_version,
+                  "upstream_has_cuda": environment.upstream_has_cuda,
+              },
+              "fixture": {
+                  "seed": 20260924,
+                  "camera_model": "PINHOLE",
+                  "camera_width": 320,
+                  "camera_height": 240,
+                  "num_frames": 4,
+                  "num_points3D": 600,
+              },
+          }
+          Path(os.environ["PRELIGHT_EVIDENCE"]).write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print(json.dumps(evidence, sort_keys=True))
+          PY
+
+      - name: Retain CPU import preflight evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v2l15-2-colmap-mvs-cuda-import-preflight
+          path: ${{ env.PRELIGHT_EVIDENCE }}
+          if-no-files-found: error
+          retention-days: 30
+
   real-cuda-patchmatch:
     name: pycolmap-cuda12-4.2.0-real-patchmatch
     if: ${{ github.event_name == 'workflow_dispatch' && inputs.run_real_cuda && github.ref == 'refs/heads/main' && github.repository == 'tobianahillel-afk/world-reconstruction-engine' }}
