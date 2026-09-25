@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import inspect
 import json
+import math
 import os
 from dataclasses import FrozenInstanceError, fields, replace
 from datetime import UTC, datetime
@@ -713,6 +714,8 @@ def _real_cuda_output_evidence(
     result: Any,
     *,
     output_root: Path,
+    source: ColmapDenseDepthSource,
+    pycolmap: Any,
 ) -> dict[str, object]:
     depth_maps = []
     for path in sorted(
@@ -728,13 +731,44 @@ def _real_cuda_output_evidence(
             }
         )
 
+    image_by_observation = {
+        item.observation.observation_id: item.image_name for item in source.images
+    }
     fields = []
     for field in result.depth_fields:
+        image_name = image_by_observation[field.observation_id]
+        raw_path = output_root / "stereo" / "depth_maps" / f"{image_name}.geometric.bin"
+        raw_map = pycolmap.DepthMap()
+        raw_map.read(raw_path)
+        raw_array = raw_map.to_array()
+        assert tuple(int(value) for value in raw_array.shape) == (
+            field.dimensions.height_px,
+            field.dimensions.width_px,
+        )
+        raw_values = tuple(float(value) for value in raw_array.reshape(-1))
+        assert len(raw_values) == len(field.depth_values)
+
+        for raw_value, canonical_value, valid in zip(
+            raw_values,
+            field.depth_values,
+            field.validity,
+            strict=True,
+        ):
+            assert math.isfinite(raw_value)
+            if raw_value > 0.0:
+                assert valid is True
+                assert canonical_value == raw_value
+            else:
+                assert valid is False
+                assert canonical_value == 0.0
+
         valid_values = [
             value for value, valid in zip(field.depth_values, field.validity, strict=True) if valid
         ]
         fields.append(
             {
+                "camera_solution_id": field.camera_solution_id.value,
+                "confidence_is_none": field.confidence is None,
                 "depth_field_id": field.depth_field_id.value,
                 "depth_payload_sha256": _sha256_json_document(
                     {
@@ -742,10 +776,16 @@ def _real_cuda_output_evidence(
                         "validity": list(field.validity),
                     }
                 ),
+                "depth_value_convention": field.depth_value_convention.value,
                 "height_px": field.dimensions.height_px,
+                "image_name": image_name,
                 "max_valid_depth": max(valid_values) if valid_values else None,
                 "min_valid_depth": min(valid_values) if valid_values else None,
                 "observation_id": field.observation_id.value,
+                "raw_depth_payload_sha256": _sha256_json_document(
+                    {"depth_values": list(raw_values)}
+                ),
+                "raw_normalization_verified": True,
                 "valid_pixel_count": len(valid_values),
                 "width_px": field.dimensions.width_px,
             }
@@ -975,12 +1015,14 @@ def test_real_cuda_patchmatch_retained_fixture() -> None:
     source_before = _source_bytes(source)
     proxy = _RecordingRealPycolmap(pycolmap)
     output_root = run_root / "dense-output"
+    config = ColmapPatchMatchDenseDepthConfig()
     result = ColmapPatchMatchDenseDepthAdapter(
         source=source,
         output_root=output_root,
         hardware_runtime=HardwareRuntimeIdentity(
             sha256=Sha256Digest(hardware_sha256),
         ),
+        config=config,
         module=proxy,
     ).derive()
 
@@ -993,7 +1035,12 @@ def test_real_cuda_patchmatch_retained_fixture() -> None:
         field.depth_value_convention is COLMAP_CAMERA_Z_CONVENTION for field in result.depth_fields
     )
 
-    output_evidence = _real_cuda_output_evidence(result, output_root=output_root)
+    output_evidence = _real_cuda_output_evidence(
+        result,
+        output_root=output_root,
+        source=source,
+        pycolmap=pycolmap,
+    )
     assert output_evidence["depth_maps"]
     source_model_files = [
         {
@@ -1018,6 +1065,7 @@ def test_real_cuda_patchmatch_retained_fixture() -> None:
         "runtime_execution_evidence": True,
         "gpu_execution_evidence": True,
         "adapter_id": COLMAP_PATCH_MATCH_DENSE_DEPTH_ADAPTER_ID,
+        "configuration_sha256": config.sha256.value,
         "dependency_ref": COLMAP_PATCH_MATCH_DENSE_DEPTH_DEPENDENCY_REF,
         "environment": {
             "ceres_version": environment.ceres_version,
