@@ -356,13 +356,18 @@ jobs:
     timeout-minutes: 20
     env:
       LOCK_PATH: registry/external-environments/colmap-mvs-cuda12-4.2.0.json
-      PRELIGHT_EVIDENCE: ${{ runner.temp }}/wre-colmap-mvs-cuda-import-preflight.json
 
     steps:
       - name: Checkout WRE
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Initialize CPU import preflight evidence path
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "WRE_COLMAP_MVS_IMPORT_PREFLIGHT_EVIDENCE=$RUNNER_TEMP/wre-colmap-mvs-cuda-import-preflight.json" >> "$GITHUB_ENV"
 
       - name: Install exact uv and Python
         uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
@@ -548,7 +553,7 @@ jobs:
                   "num_points3D": 600,
               },
           }
-          Path(os.environ["PRELIGHT_EVIDENCE"]).write_text(
+          Path(os.environ["WRE_COLMAP_MVS_IMPORT_PREFLIGHT_EVIDENCE"]).write_text(
               json.dumps(evidence, indent=2, sort_keys=True) + "\n",
               encoding="utf-8",
           )
@@ -559,7 +564,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: v2l15-2-colmap-mvs-cuda-import-preflight
-          path: ${{ env.PRELIGHT_EVIDENCE }}
+          path: ${{ env.WRE_COLMAP_MVS_IMPORT_PREFLIGHT_EVIDENCE }}
           if-no-files-found: error
           retention-days: 30
 
