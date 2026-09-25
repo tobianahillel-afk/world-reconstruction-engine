@@ -49,6 +49,11 @@ COLMAP_PATCH_MATCH_DENSE_DEPTH_ADAPTER_ID = "colmap.patch_match_dense_depth"
 COLMAP_PATCH_MATCH_DENSE_DEPTH_PRODUCER_IMPLEMENTATION = "pycolmap.patch_match_stereo"
 COLMAP_PATCH_MATCH_DENSE_DEPTH_PRODUCER_VERSION = SUPPORTED_PYCOLMAP_VERSION
 COLMAP_PATCH_MATCH_DENSE_DEPTH_SOURCE_REVISION = "be5e29168d4aff238409d60424812df66aac919f"
+COLMAP_PATCH_MATCH_DENSE_DEPTH_SOURCE_DATE = "2026-08-31"
+COLMAP_PATCH_MATCH_DENSE_DEPTH_RUNTIME_BUILD = (
+    f"Commit {COLMAP_PATCH_MATCH_DENSE_DEPTH_SOURCE_REVISION[:7]} "
+    f"on {COLMAP_PATCH_MATCH_DENSE_DEPTH_SOURCE_DATE} with CUDA"
+)
 COLMAP_PATCH_MATCH_DENSE_DEPTH_DEPENDENCY_REF = "colmap_mvs_cuda12"
 COLMAP_PATCH_MATCH_DENSE_DEPTH_SHIPPING_STATUS = "experimental"
 
@@ -297,9 +302,10 @@ def _validate_expected_donor_environment(environment: ColmapEnvironmentIdentity)
         raise ValueError("COLMAP dense-depth donor requires COLMAP 4.2.0")
     if not environment.upstream_has_cuda:
         raise ValueError("COLMAP dense-depth donor environment must advertise CUDA support")
-    if COLMAP_PATCH_MATCH_DENSE_DEPTH_SOURCE_REVISION not in environment.colmap_build:
+    if environment.colmap_build != COLMAP_PATCH_MATCH_DENSE_DEPTH_RUNTIME_BUILD:
         raise ValueError(
-            "COLMAP dense-depth donor build must identify the exact COLMAP 4.2.0 source commit"
+            "COLMAP dense-depth donor build must match the exact official "
+            "COLMAP 4.2.0 CUDA runtime identity"
         )
 
 
@@ -325,9 +331,10 @@ def inspect_colmap_dense_depth_environment(
         raise ColmapDenseDepthEnvironmentError(
             "COLMAP PatchMatch donor requires pycolmap.has_cuda == true"
         )
-    if COLMAP_PATCH_MATCH_DENSE_DEPTH_SOURCE_REVISION not in environment.colmap_build:
+    if environment.colmap_build != COLMAP_PATCH_MATCH_DENSE_DEPTH_RUNTIME_BUILD:
         raise ColmapDenseDepthEnvironmentError(
-            "COLMAP PatchMatch donor build does not identify the exact 4.2.0 source commit"
+            "COLMAP PatchMatch donor build does not match the exact official "
+            "4.2.0 CUDA runtime identity"
         )
     if not callable(getattr(pycolmap, "undistort_images", None)):
         raise ColmapDenseDepthEnvironmentError("pycolmap.undistort_images must be callable")
