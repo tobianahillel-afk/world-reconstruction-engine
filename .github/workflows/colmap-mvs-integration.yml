@@ -462,7 +462,7 @@ jobs:
           import pycolmap
 
           from wre.reconstruction.colmap_dense_depth import (
-              COLMAP_PATCH_MATCH_DENSE_DEPTH_SOURCE_REVISION,
+              COLMAP_PATCH_MATCH_DENSE_DEPTH_RUNTIME_BUILD,
               inspect_colmap_dense_depth_environment,
           )
 
@@ -482,7 +482,7 @@ jobs:
           environment = inspect_colmap_dense_depth_environment(pycolmap)
           assert environment.pycolmap_version == "4.2.0"
           assert environment.upstream_has_cuda is True
-          assert COLMAP_PATCH_MATCH_DENSE_DEPTH_SOURCE_REVISION in environment.colmap_build
+          assert environment.colmap_build == COLMAP_PATCH_MATCH_DENSE_DEPTH_RUNTIME_BUILD
           assert callable(pycolmap.synthesize_dataset)
           assert callable(pycolmap.synthesize_images)
           assert callable(pycolmap.undistort_images)
@@ -692,7 +692,7 @@ jobs:
           import pycolmap
 
           from wre.reconstruction.colmap_dense_depth import (
-              COLMAP_PATCH_MATCH_DENSE_DEPTH_SOURCE_REVISION,
+              COLMAP_PATCH_MATCH_DENSE_DEPTH_RUNTIME_BUILD,
               inspect_colmap_dense_depth_environment,
           )
 
@@ -700,7 +700,7 @@ jobs:
           environment = inspect_colmap_dense_depth_environment(pycolmap)
           assert environment.pycolmap_version == "4.2.0"
           assert environment.upstream_has_cuda is True
-          assert COLMAP_PATCH_MATCH_DENSE_DEPTH_SOURCE_REVISION in environment.colmap_build
+          assert environment.colmap_build == COLMAP_PATCH_MATCH_DENSE_DEPTH_RUNTIME_BUILD
           print(environment)
           PY
 
