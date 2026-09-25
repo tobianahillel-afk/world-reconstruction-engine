@@ -201,7 +201,7 @@ class _FakePatchMatchOptions:
 
 
 class _FakeFileCopyType:
-    COPY = "COPY"
+    copy = "copy"
 
 
 class _FakeArray:
@@ -799,7 +799,7 @@ def test_real_cuda_wheel_undistort_workspace_preflight(tmp_path: Path) -> None:
         copied_image_root,
         image_names=list(dense_module._registered_image_names(source)),
         output_type="COLMAP",
-        copy_policy=pycolmap.FileCopyType.COPY,
+        copy_policy=pycolmap.FileCopyType.copy,
         num_patch_match_src_images=config.num_patch_match_src_images,
         undistort_options=undistort_options,
         jpeg_quality=config.jpeg_quality,
@@ -1133,7 +1133,7 @@ def test_patchmatch_derives_camera_z_depth_without_fusion(tmp_path: Path) -> Non
     assert undistort["input_path"] != source.model_root / "0"
     assert undistort["image_path"] != source.image_root
     assert undistort["image_names"] == ["000000-a.png", "000001-b.png"]
-    assert undistort["copy_policy"] == _FakeFileCopyType.COPY
+    assert undistort["copy_policy"] == _FakeFileCopyType.copy
     assert undistort["num_patch_match_src_images"] == -1
     assert undistort["jpeg_quality"] == -1
     assert undistort["num_threads"] == 1
