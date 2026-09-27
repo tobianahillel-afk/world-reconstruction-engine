@@ -457,7 +457,7 @@ def test_result_requires_union_of_input_and_transitive_ancestry() -> None:
             first.artifact_ref,
         ),
     )
-    with pytest.raises(ValueError, match="retain every input artifact and ancestry"):
+    with pytest.raises(ValueError, match="canonical union"):
         DepthConsistencyFusionResult(request=request, fused_depth=missing)
 
     full_ancestry = _canonical_artifacts(
