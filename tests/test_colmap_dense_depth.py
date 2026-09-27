@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib
 import inspect
 import json
 import math
@@ -907,6 +908,28 @@ def test_real_cuda_wheel_undistort_workspace_preflight(tmp_path: Path) -> None:
     }
     assert patch_options.check() is True
 
+    np: Any = importlib.import_module("numpy")
+    roundtrip_input = np.array(
+        ((1.5, 0.0), (-2.0, 3.0)),
+        dtype=np.float32,
+    )
+    roundtrip_path = tmp_path / "depth-map-api-roundtrip.bin"
+    roundtrip_map = pycolmap.DepthMap.from_array(
+        roundtrip_input,
+        depth_min=-2.0,
+        depth_max=3.0,
+    )
+    roundtrip_map.write(roundtrip_path)
+    roundtrip_digest = hash_file_content(roundtrip_path)
+
+    loaded_roundtrip_map = pycolmap.DepthMap()
+    loaded_roundtrip_map.read(roundtrip_path)
+    roundtrip_output = loaded_roundtrip_map.to_array()
+    np.testing.assert_array_equal(roundtrip_output, roundtrip_input)
+    assert tuple(int(value) for value in roundtrip_output.shape) == (2, 2)
+    roundtrip_values = tuple(float(value) for value in roundtrip_output.reshape(-1))
+    assert roundtrip_values == (1.5, 0.0, -2.0, 3.0)
+
     depth_root = output_root / "stereo" / "depth_maps"
     assert not depth_root.exists() or not tuple(depth_root.glob("*.bin"))
 
@@ -955,6 +978,11 @@ def test_real_cuda_wheel_undistort_workspace_preflight(tmp_path: Path) -> None:
         "workspace_linkage_execution_evidence": True,
         "patchmatch_options_binding_evidence": True,
         "patchmatch_options_check_evidence": True,
+        "depth_map_from_array_execution_evidence": True,
+        "depth_map_write_execution_evidence": True,
+        "depth_map_read_execution_evidence": True,
+        "depth_map_to_array_execution_evidence": True,
+        "depth_map_roundtrip_exact_evidence": True,
         "runtime_execution_evidence": True,
         "gpu_execution_evidence": False,
         "patchmatch_execution_evidence": False,
@@ -968,6 +996,13 @@ def test_real_cuda_wheel_undistort_workspace_preflight(tmp_path: Path) -> None:
         },
         "fixture": fixture,
         "patchmatch_options": patchmatch_options,
+        "depth_map_api_roundtrip": {
+            "byte_length": roundtrip_digest.byte_length,
+            "input_values": list(roundtrip_values),
+            "output_values": list(roundtrip_values),
+            "sha256": roundtrip_digest.sha256.value,
+            "shape": [2, 2],
+        },
         "source_immutable_after_undistortion": True,
         "workspace": {
             "images": workspace_images,
