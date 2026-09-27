@@ -292,6 +292,12 @@ from wre.reconstruction.geometry_solution_comparison import (
     GeometrySolutionPair,
     derive_geometry_solution_pairs,
 )
+from wre.reconstruction.learned_depth_prior import (
+    LearnedDepthPriorAdapter,
+    LearnedDepthPriorRequest,
+    LearnedDepthPriorResult,
+    build_learned_depth_prior_result,
+)
 from wre.reconstruction.legacy_geometry_conversion import (
     LegacySparseGeometryConversionResult,
     convert_sparse_reconstruction_estimate,
@@ -513,11 +519,15 @@ __all__ = [
     "GeometrySolutionCandidate",
     "GeometrySolutionPair",
     "ImportedColmapSparseModel",
+    "LearnedDepthPriorAdapter",
+    "LearnedDepthPriorRequest",
+    "LearnedDepthPriorResult",
     "LegacySparseGeometryConversionResult",
     "LocalDa3ReferenceRuntime",
     "benchmark_da3_execution",
     "build_depth_consistency_fusion_result",
     "build_geometry_refinement_result",
+    "build_learned_depth_prior_result",
     "canonicalize_colmap_sparse_model",
     "colmap_native_sparse_model_artifact_ref",
     "colmap_sparse_model_content_identity",
