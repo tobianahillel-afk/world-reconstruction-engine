@@ -2300,7 +2300,7 @@ work_items:
   - id: V2L15.4
     lot: V2L15
     title: Learned depth prior adapter boundary
-    status: ready
+    status: done
     objective: Define the pure model-independent V2 adapter boundary that binds one exact canonical GeometrySolutionCandidate plus explicit immutable learned-prior input evidence to one canonical DenseDepthArtifact with an explicitly declared DepthValueConventionName, preserving source camera frame scale and provenance semantics without selecting loading or executing a learned model and without converting or calibrating its depth payload.
     allowed_scope:
       - src/wre/reconstruction/learned_depth_prior.py
@@ -2376,7 +2376,86 @@ work_items:
       - immutability regression proving request result and helper do not mutate sort or rewrite source geometry supporting artifacts depth fields or provenance
       - module-surface regression proving Torch CUDA model checkpoint network fusion PointMap SurfaceModel learned-candidate selection coverage quality routing and V2L15.5 implementation remain absent
       - full fast CI and CodeQL
-  - {id: V2L15.5, lot: V2L15, title: Dense depth coverage holes confidence, status: planned, depends_on: [V2L15.4]}
+  - id: V2L15.5
+    lot: V2L15
+    title: Dense depth coverage holes confidence
+    status: ready
+    objective: Define and implement one pure deterministic dense-depth support report over a canonical DenseDepthArtifact that exposes source-camera support coverage, valid-pixel coverage, explicit hole counts and optional confidence summaries without mutating depth evidence filling holes calibrating confidence applying quality thresholds or selecting a reconstruction route.
+    allowed_scope:
+      - src/wre/reconstruction/dense_depth_coverage.py
+      - focused exports in src/wre/reconstruction/__init__.py
+      - tests/test_dense_depth_coverage.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L15.6 can be activated without implementing it
+    out_of_scope:
+      - changing DenseDepthArtifact DepthField validity confidence camera geometry local frame scale or provenance semantics
+      - filling interpolating inpainting extrapolating smoothing or otherwise modifying invalid depth pixels
+      - synthesizing confidence for DepthFields whose confidence is None or recalibrating normalizing thresholding or comparing confidence across model families
+      - treating confidence as probability correctness accuracy or truth when its producer did not establish that semantic
+      - converting depth conventions units local frames metric scale or world placement
+      - fusing MVS and learned priors or selecting between competing DenseDepthArtifact hypotheses
+      - computing consistency residuals against another depth hypothesis or reference truth
+      - emitting QualityDecision pass fail retry escalate unresolved thresholds route decisions fallback default promotion or benchmark winner semantics
+      - implementing V2L15.6 benchmark logic or V2L16 surface hole semantics
+      - creating PointMap SurfaceModel mesh TSDF SDF collision navigation measurement appearance materials dynamics chronology MasterScene or RuntimeScene output
+      - adding NumPy Torch CUDA solver model checkpoint network access or new dependencies
+    depends_on: [V2L15.4]
+    read_before:
+      - docs/00_START_HERE.md
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md
+      - registry/components.yaml
+      - registry/work-items/v2m2.yaml
+      - PROJECT_STATE.yaml
+      - src/wre/domain/depth_fields.py
+      - src/wre/domain/metrics.py
+      - src/wre/reconstruction/dense_depth.py
+      - src/wre/reconstruction/depth_consistency_fusion.py
+      - src/wre/reconstruction/learned_depth_prior.py
+      - src/wre/reconstruction/feed_forward_camera_quality.py
+      - src/wre/reconstruction/__init__.py
+      - tests/test_dense_depth.py
+      - tests/test_depth_consistency_fusion.py
+      - tests/test_learned_depth_prior.py
+      - tests/test_feed_forward_camera_quality.py
+    reuse:
+      - DenseDepthArtifact and its canonical non-empty DepthField tuple as the only depth evidence under evaluation
+      - DepthField validity as the authoritative per-pixel support versus hole signal; do not create a second competing hole mask
+      - optional canonical DepthField confidence values exactly as supplied by the producer, including canonical zero confidence on invalid pixels
+      - MetricDescriptor MetricObservation MetricProvenance and MetricVector for aggregate descriptive scalar outputs
+      - source_depth.artifact_ref as the direct metric-provenance input while the DenseDepthArtifact itself retains transitive source ancestry
+      - pure deterministic evaluator patterns from feed_forward_camera_quality.py without reusing its pinhole or reference-truth assumptions
+    acceptance:
+      - Add frozen slots DenseDepthFieldCoverage and DenseDepthCoverageReport plus one pure evaluate_dense_depth_coverage function in src/wre/reconstruction/dense_depth_coverage.py. No adapter or external execution is required because the report is a deterministic read-only evaluation of one canonical DenseDepthArtifact.
+      - DenseDepthFieldCoverage must identify exactly one existing DepthField by DepthFieldId CameraSolutionId and ObservationId and expose total_pixel_count valid_pixel_count hole_pixel_count valid_pixel_ratio confidence_available and valid_confidence_mean. Counts must be exact non-negative integers, hole_pixel_count must equal total minus valid, and valid_pixel_ratio must equal valid divided by total.
+      - Per-field reports must preserve the DenseDepthArtifact DepthFieldId order exactly. No sort mutation resampling or alternative camera ordering is permitted.
+      - Holes are exactly pixels whose existing DepthField.validity value is False. The evaluator must not create a new mask, infer support from depth magnitude or confidence, or fill a hole.
+      - confidence_available is true exactly when the source DepthField.confidence tuple is present. valid_confidence_mean is None when confidence is absent or when that field has zero valid pixels; otherwise it is the arithmetic mean of the caller-supplied confidence values at valid pixels only. No normalization threshold calibration or probability interpretation is permitted.
+      - DenseDepthCoverageReport must retain the exact source_depth object plus the canonical field reports and one MetricVector of aggregate descriptive measurements. Evaluation must not replace mutate or rewrite source depth fields validity confidence metrics provenance or geometry.
+      - Emit aggregate source-camera support ratio as number of emitted DepthFields divided by number of CameraSolutions on source_depth.source_geometry. This reports missing-camera support separately from pixel holes.
+      - Emit aggregate valid-pixel ratio and hole-pixel ratio over only the emitted DepthFields using exact summed valid and total pixel counts. These two ratios must be complementary within ordinary floating arithmetic and must not pretend that absent source cameras contain observed hole pixels.
+      - Emit confidence-field ratio as number of emitted DepthFields with explicit confidence divided by emitted DepthField count. Emit aggregate valid-confidence mean only when at least one valid pixel from a confidence-bearing field exists; otherwise omit that metric rather than inventing zero confidence.
+      - Aggregate confidence metrics are informational only because producer confidence may not be calibrated or comparable across methods. Coverage ratio is descriptive support evidence; V2L15.5 must not attach acceptance thresholds or QualityDecision semantics.
+      - Metric provenance must use one deterministic V2L15.5 evaluator identity and the exact source_depth.artifact_ref as its direct input artifact. MetricVector observations must use canonical MetricName ordering and stable descriptors units directions and aggregations.
+      - Export only the pure support-report types descriptors evaluator identity and evaluate_dense_depth_coverage function from wre.reconstruction. Do not expose hole filling fusion learned-model quality-decision benchmark routing or V2L15.6 implementation.
+    tests:
+      - frozen slots exact field-shape and wrong-type regressions for DenseDepthFieldCoverage and DenseDepthCoverageReport
+      - deterministic fully-valid partially-valid and all-invalid DepthField fixtures proving exact total valid hole counts and valid-pixel ratios
+      - partial source-camera coverage regression proving camera support ratio uses source camera count while pixel-hole ratios use emitted-field pixels only
+      - hole semantics regression proving validity False alone defines holes and depth values or confidence never convert a hole into support
+      - confidence None regression proving confidence_available false valid_confidence_mean None and no synthesized aggregate confidence metric
+      - caller-supplied confidence regression proving valid-confidence arithmetic means use only valid pixels and invalid canonical zero values do not dilute the mean
+      - mixed confidence availability regression proving confidence-field ratio is exact and aggregate mean uses only valid pixels from confidence-bearing fields
+      - zero-valid-pixel confidence regression proving valid_confidence_mean and aggregate confidence metric are omitted rather than fabricated
+      - canonical field-order and MetricVector descriptor/provenance regressions
+      - immutability regression proving evaluation does not mutate rewrite sort resample fill or calibrate DenseDepthArtifact DepthField validity confidence geometry or provenance
+      - module-surface regression proving NumPy Torch CUDA solvers models checkpoints fusion hole filling QualityDecision QualityPolicy benchmark routing SurfaceModel and V2L15.6 implementation remain absent
+      - full fast CI and CodeQL
   - {id: V2L15.6, lot: V2L15, title: Dense depth benchmark, status: planned, depends_on: [V2L15.5]}
   - {id: V2L16.1, lot: V2L16, title: SurfaceModel contract and intended use metadata, status: planned, depends_on: [V2L15.6]}
   - {id: V2L16.2, lot: V2L16, title: Baseline depth fusion to surface adapter, status: planned, depends_on: [V2L16.1]}
