@@ -56,14 +56,11 @@ class LearnedDepthPriorRequest:
 
     def __post_init__(self) -> None:
         if not isinstance(self.source_geometry, GeometrySolutionCandidate):
-            raise TypeError(
-                "learned_depth_prior.source_geometry must be GeometrySolutionCandidate"
-            )
+            raise TypeError("learned_depth_prior.source_geometry must be GeometrySolutionCandidate")
         _validate_supporting_artifacts(self.supporting_artifacts)
         if not isinstance(self.output_depth_value_convention, DepthValueConventionName):
             raise TypeError(
-                "learned_depth_prior.output_depth_value_convention must be "
-                "DepthValueConventionName"
+                "learned_depth_prior.output_depth_value_convention must be DepthValueConventionName"
             )
 
 
@@ -76,40 +73,27 @@ class LearnedDepthPriorResult:
 
     def __post_init__(self) -> None:
         if not isinstance(self.request, LearnedDepthPriorRequest):
-            raise TypeError(
-                "learned_depth_prior_result.request must be LearnedDepthPriorRequest"
-            )
+            raise TypeError("learned_depth_prior_result.request must be LearnedDepthPriorRequest")
         if not isinstance(self.depth_prior, DenseDepthArtifact):
-            raise TypeError(
-                "learned_depth_prior_result.depth_prior must be DenseDepthArtifact"
-            )
+            raise TypeError("learned_depth_prior_result.depth_prior must be DenseDepthArtifact")
 
         if self.depth_prior.source_geometry != self.request.source_geometry:
             raise ValueError(
                 "learned depth prior must preserve the exact source GeometrySolutionCandidate"
             )
 
-        supporting_identities = {
-            _artifact_key(item) for item in self.request.supporting_artifacts
-        }
+        supporting_identities = {_artifact_key(item) for item in self.request.supporting_artifacts}
         if _artifact_key(self.depth_prior.artifact_ref) in supporting_identities:
-            raise ValueError(
-                "learned depth prior output must not reuse a supporting ArtifactRef"
-            )
+            raise ValueError("learned depth prior output must not reuse a supporting ArtifactRef")
 
         for depth_field in self.depth_prior.depth_fields:
-            if (
-                depth_field.depth_value_convention
-                != self.request.output_depth_value_convention
-            ):
+            if depth_field.depth_value_convention != self.request.output_depth_value_convention:
                 raise ValueError(
                     "learned depth prior DepthFields must preserve the declared "
                     "DepthValueConventionName"
                 )
 
-        actual_ancestry = tuple(
-            _artifact_key(item) for item in self.depth_prior.source_artifacts
-        )
+        actual_ancestry = tuple(_artifact_key(item) for item in self.depth_prior.source_artifacts)
         required_ancestry = _required_source_artifact_identities(self.request)
         if actual_ancestry != required_ancestry:
             raise ValueError(
