@@ -62,10 +62,7 @@ def _artifact(identifier: str, kind: str = "evidence.learned_depth") -> Artifact
 
 
 def _canonical_artifacts(*items: ArtifactRef) -> tuple[ArtifactRef, ...]:
-    unique = {
-        (item.artifact_id.value, item.artifact_kind.value): item
-        for item in items
-    }
+    unique = {(item.artifact_id.value, item.artifact_kind.value): item for item in items}
     return tuple(unique[key] for key in sorted(unique))
 
 
@@ -103,10 +100,7 @@ def _candidate(
     source_artifacts: tuple[ArtifactRef, ...] | None = None,
 ) -> GeometrySolutionCandidate:
     frame = LocalFrameId(f"frame:{token}")
-    cameras = tuple(
-        _camera(chr(ord("a") + index), frame=frame)
-        for index in range(camera_count)
-    )
+    cameras = tuple(_camera(chr(ord("a") + index), frame=frame) for index in range(camera_count))
     point_map = PointMap(
         point_map_id=PointMapId(f"points:{token}"),
         local_frame_id=frame,
