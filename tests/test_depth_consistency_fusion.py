@@ -479,6 +479,18 @@ def test_result_requires_union_of_input_and_transitive_ancestry() -> None:
     assert result.fused_depth is fused
     assert result.fused_depth.source_artifacts is full_ancestry
 
+    unexpected = _dense(
+        "fused-unexpected",
+        source=source,
+        depth_fields=(_depth(camera, "depth:fused-unexpected"),),
+        source_artifacts=_canonical_artifacts(
+            *full_ancestry,
+            _artifact("artifact:unexpected-extra"),
+        ),
+    )
+    with pytest.raises(ValueError, match="canonical union"):
+        DepthConsistencyFusionResult(request=request, fused_depth=unexpected)
+
 
 def test_fusion_may_conservatively_reduce_support_without_fabricating_cameras() -> None:
     source = _candidate("reduced")
