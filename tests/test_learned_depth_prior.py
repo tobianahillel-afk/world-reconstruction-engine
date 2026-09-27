@@ -383,7 +383,7 @@ def test_output_depth_convention_must_match_declared_convention_without_conversi
     result = LearnedDepthPriorResult(request=request, depth_prior=matching)
     assert (
         result.depth_prior.depth_fields[0].depth_value_convention
-        is request.output_depth_value_convention
+        == request.output_depth_value_convention
     )
 
     mismatched = _dense(
