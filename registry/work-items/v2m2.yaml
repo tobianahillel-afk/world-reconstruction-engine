@@ -2124,7 +2124,7 @@ work_items:
   - id: V2L15.2
     lot: V2L15
     title: COLMAP MVS PatchMatch donor baseline adapter
-    status: ready
+    status: done
     objective: Implement the first classical dense-depth donor adapter using the exact official COLMAP and PyCOLMAP 4.2.0 PatchMatch MVS path to derive one canonical DenseDepthArtifact from one audited COLMAP-origin source GeometrySolutionCandidate while preserving exact camera and observation linkage source local scale producer provenance and immutable source evidence without running stereo fusion or promoting dense depth to point or surface truth.
     allowed_scope:
       - src/wre/reconstruction/colmap_dense_depth.py
@@ -2134,7 +2134,7 @@ work_items:
       - registry/adapter-models.yaml only for the experimental COLMAP PatchMatch dense-depth adapter descriptor
       - registry/external-environments/colmap-mvs-cuda12-4.2.0.json only if needed to freeze the exact external CUDA dependency closure before execution
       - one dedicated .github/workflows/colmap-mvs-integration.yml accelerator lane for retained real donor evidence
-      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after all implementation and retained accelerator evidence are green so V2L15.3 can be activated without implementing it
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry after all implementation and CPU-verifiable evidence are green; if the only missing proof is unavailable accelerator execution it may be recorded as deferred under docs/23_ENGINEERING_EXECUTION.md so V2L15.3 can be activated without claiming that GPU evidence passed and without implementing V2L15.3 in the same PR
     out_of_scope:
       - changing DenseDepthArtifact DepthField CameraSolution GeometrySolution GeometrySolutionCandidate ArtifactRef producer identity or COLMAP sparse-model semantics
       - running pycolmap.stereo_fusion or creating a fused PointMap point cloud SurfaceModel mesh TSDF SDF collision navigation or measurement output
@@ -2203,7 +2203,7 @@ work_items:
       - Producer provenance must identify pycolmap.patch_match_stereo version 4.2.0 exact COLMAP build and the canonical configuration digest. source_artifacts must retain all source GeometrySolutionCandidate ancestry plus the exact native sparse-model and dense-stage image/environment evidence in canonical order without erasing provenance.
       - Preserve source_geometry.geometry_solution.local_frame_id and scale_status exactly. PatchMatch depth remains in the source local gauge and must not create a METRIC world or geographic claim.
       - Register the adapter as experimental and accelerator-only with hardware-sensitive artifact identity. It must never become the default or satisfy the mandatory CPU route merely because retained accelerator evidence passes.
-      - V2L15.2 cannot be marked done until a dedicated supported accelerator lane retains one real exact PyCOLMAP 4.2.0 PatchMatch run over a small deterministic fixture and proves source immutability environment identity output hashes camera linkage camera-z interpretation and successful DenseDepthArtifact normalization. The current repository has no supported GPU runner so this is an explicit completion blocker until such a lane is provisioned.
+      - Real exact PyCOLMAP 4.2.0 PatchMatch CUDA execution remains required before this donor may be described as accelerator-validated, used for GPU-dependent shipping/default/performance claims, or promoted beyond experimental optional status. Under the unavailable-accelerator evidence rule in docs/23_ENGINEERING_EXECUTION.md, lifecycle completion may defer only this hardware execution proof when no supported runner exists, provided all CPU-verifiable implementation environment format provenance and normalization evidence is green, the dedicated real-CUDA workflow remains retained, and project state explicitly records gpu_execution_evidence as deferred and unverified.
     tests:
       - frozen exact configuration and source-binding structural regressions including wrong environment native-model ArtifactRef image-root and generic-geometry failures
       - exact environment-gate regression proving pycolmap 4.2.0 version build PatchMatch API DepthMap API and pycolmap.has_cuda true are required before execution
@@ -2220,8 +2220,83 @@ work_items:
       - source-artifact ancestry and immutability regressions proving canonical source evidence is retained and source geometry images native model and donor arrays are not mutated
       - adapter-registry regression proving experimental accelerator-only shipping status exact pycolmap-cuda12 4.2.0 dependency identity and no default promotion
       - module-surface regression proving stereo_fusion PointMap SurfaceModel mesh TSDF SDF learned priors routing selection and V2L15.3 implementation remain absent
-      - dedicated retained accelerator integration test over one deterministic fixture on a supported CUDA runner plus full fast CI and CodeQL
-  - {id: V2L15.3, lot: V2L15, title: Depth consistency fusion contract, status: planned, depends_on: [V2L15.2]}
+      - dedicated retained accelerator integration test over one deterministic fixture remains the deferred real-GPU evidence lane when no supported CUDA runner exists; lifecycle completion still requires full fast CI CodeQL and all CPU-verifiable real-wheel preflight evidence, and must not relabel the skipped GPU lane as passed
+  - id: V2L15.3
+    lot: V2L15
+    title: Depth consistency fusion contract
+    status: ready
+    objective: Define the pure solver-independent V2 contract for combining at least two canonical DenseDepthArtifact hypotheses that belong to the exact same source GeometrySolutionCandidate into one new DenseDepthArtifact while preserving camera observation convention frame scale provenance and immutable source ancestry without executing a fusion solver computing quality metrics filling holes or creating point or surface truth.
+    allowed_scope:
+      - src/wre/reconstruction/depth_consistency_fusion.py
+      - focused exports in src/wre/reconstruction/__init__.py
+      - tests/test_depth_consistency_fusion.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L15.4 can be activated without implementing it
+    out_of_scope:
+      - executing COLMAP stereo_fusion PatchMatch OpenMVS TSDF volumetric fusion point fusion or another dense reconstruction solver
+      - changing DenseDepthArtifact DepthField GeometrySolutionCandidate CameraSolution ArtifactRef ArtifactProducerIdentity or depth-value convention semantics
+      - implementing V2L15.4 learned depth priors or later work
+      - converting camera-z ray-distance inverse-depth disparity metric-world or another depth convention
+      - aligning rescaling or fusing artifacts from different GeometrySolutionCandidate values local frames scale statuses camera solutions observations or image dimensions
+      - inventing missing cameras filling holes hallucinating unsupported pixels synthesizing confidence or calibrating confidence
+      - computing coverage holes consistency residual quality benchmark ranking selection retry fallback routing or default promotion owned by V2L15.5 V2L15.6 or routing layers
+      - creating or mutating GeometrySolution PointMap SurfaceModel mesh TSDF SDF collision navigation measurement appearance materials dynamics chronology MasterScene or RuntimeScene output
+    depends_on: [V2L15.2]
+    read_before:
+      - docs/00_START_HERE.md
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md
+      - docs/27_RESEARCH_CANDIDATE_COVERAGE.md
+      - registry/components.yaml
+      - registry/work-items/v2m2.yaml
+      - PROJECT_STATE.yaml
+      - src/wre/domain/depth_fields.py
+      - src/wre/reconstruction/dense_depth.py
+      - src/wre/reconstruction/geometry_solution_comparison.py
+      - src/wre/reconstruction/colmap_dense_depth.py
+      - src/wre/reconstruction/geometry_refinement.py
+      - src/wre/reconstruction/__init__.py
+      - tests/test_dense_depth.py
+      - tests/test_colmap_dense_depth.py
+      - tests/test_geometry_refinement.py
+    reuse:
+      - DenseDepthArtifact from V2L15.1 as both the input hypothesis boundary and the only fused dense-depth output representation
+      - exact GeometrySolutionCandidate equality as the ownership boundary so fusion never implies cross-frame cross-scale camera or geometry alignment
+      - canonical DepthField CameraSolutionId ObservationId ImageDimensions and DepthValueConventionName semantics from V2L11 and V2L15.1
+      - ArtifactRef ArtifactProducerIdentity and canonical source-artifact ancestry rules from existing reconstruction contracts
+      - the pure request result adapter-boundary pattern from geometry_refinement.py rather than embedding a solver or policy into the core contract
+      - V2L15.2 as one optional experimental DenseDepthArtifact producer whose deferred GPU evidence does not make its output mandatory or default
+    acceptance:
+      - Add frozen slots DepthConsistencyFusionRequest DepthConsistencyFusionResult and one DepthConsistencyFusionAdapter Protocol in src/wre/reconstruction/depth_consistency_fusion.py plus one pure build_depth_consistency_fusion_result helper. The module validates evidence relationships only and executes no fusion algorithm.
+      - DepthConsistencyFusionRequest must contain one immutable tuple of at least two DenseDepthArtifact inputs. Input artifact identities must be unique and the tuple must be in canonical ArtifactId/ArtifactKind order; construction validates but never sorts or mutates caller evidence.
+      - Every input artifact must reference the exact same complete source GeometrySolutionCandidate value. Matching only GeometrySolutionId LocalFrameId or camera IDs is insufficient; differing producer ancestry camera/depth payload or source evidence fails closed rather than being aligned or coerced.
+      - Partial and non-identical camera coverage across inputs is valid. For any source camera represented by more than one input artifact, all overlapping DepthField values must use the exact same CameraSolutionId ObservationId ImageDimensions and DepthValueConventionName. The request performs no depth-convention or unit conversion.
+      - DepthConsistencyFusionResult must contain the exact request plus one new DenseDepthArtifact fused_depth. The fused artifact must preserve the request source GeometrySolutionCandidate exactly and its geometry.dense_depth ArtifactRef must differ from every input artifact reference.
+      - Every fused DepthField must support a camera observation pair that appears in at least one input artifact and must preserve that camera's exact dimensions. A fused field may not introduce support for a previously unsupported source camera or observation.
+      - For each fused camera, every input field available for that camera must agree on one depth-value convention and the fused DepthField must retain that same convention. The contract validates convention identity only and places no numeric fusion formula or range constraint on caller-supplied fused positive depth values beyond the canonical DepthField invariants.
+      - Every fused DepthFieldId must be new evidence and must not reuse any DepthFieldId from the input artifacts. Missing cameras remain missing and fusion may conservatively reduce support; the contract must never fabricate fields or require complete source-camera coverage.
+      - fused_depth.source_artifacts must retain the canonical union of every input DenseDepthArtifact source_artifacts plus every input DenseDepthArtifact artifact_ref and therefore transitively retain all source GeometrySolutionCandidate ancestry. Missing ancestry duplicate identities or non-canonical ordering fails closed.
+      - Preserve source local_frame_id and scale_status only through the exact retained source GeometrySolutionCandidate. The contract cannot upgrade unresolved scale assert metric world placement or establish compatibility with another geometry hypothesis.
+      - Export only the pure fusion contract surface from wre.reconstruction. Do not expose COLMAP stereo fusion learned priors coverage metrics quality scoring surface generation routing selection or V2L15.4 implementation.
+    tests:
+      - frozen slots and exact field-shape regressions for request result and adapter Protocol
+      - request wrong-type immutable-tuple minimum-two unique-artifact and canonical-order regressions
+      - exact source GeometrySolutionCandidate identity regression proving same geometry ID with changed producer camera depth or ancestry is rejected
+      - partial and disjoint camera-coverage acceptance plus overlapping camera convention mismatch rejection
+      - result wrong-type source-geometry mismatch and reused input ArtifactRef rejection
+      - fused support regression proving output cameras observations and dimensions must already be represented by at least one input artifact
+      - new DepthFieldId regression proving fused fields cannot reuse donor depth identities
+      - depth-convention preservation regression proving overlapping inputs and fused output use one exact convention with no conversion
+      - ancestry-union regression proving every input artifact_ref and every transitive source ArtifactRef is retained canonically with no duplicates
+      - unresolved-scale local-frame and source-geometry preservation regression proving no metric world or cross-frame claim
+      - immutability regression proving request construction result construction and helper do not mutate sort or rewrite input artifacts depth fields source geometry or ancestry
+      - module-surface regression proving solver execution stereo_fusion PointMap SurfaceModel mesh TSDF SDF learned prior coverage quality routing selection and V2L15.4 implementation remain absent
+      - full fast CI and CodeQL
   - {id: V2L15.4, lot: V2L15, title: Learned depth prior adapter boundary, status: planned, depends_on: [V2L15.3]}
   - {id: V2L15.5, lot: V2L15, title: Dense depth coverage holes confidence, status: planned, depends_on: [V2L15.4]}
   - {id: V2L15.6, lot: V2L15, title: Dense depth benchmark, status: planned, depends_on: [V2L15.5]}

@@ -174,6 +174,21 @@ A candidate-refresh / technology gate may conclude **NO-GO / deferred optional**
 
 For mandatory product capabilities, CPU-only portability is part of the baseline hardware contract. Accelerator-only candidates may remain registered benchmark/specialist work, but their absence must not block later mandatory work when an accepted CPU route already satisfies the capability contract. A later explicit work item may revisit the deferred accelerator candidate when hardware and evidence become available.
 
+### Unavailable accelerator evidence
+
+When a work item contains evidence that can only be produced on unavailable GPU/accelerator hardware, that evidence may be **deferred without being treated as passed** so CPU-independent downstream work can continue. This exception is hardware-specific and does not weaken ordinary acceptance criteria.
+
+Deferral is allowed only when all of the following are true:
+
+- the solver-independent contract and every CPU-verifiable implementation/test for the item are complete and green;
+- the missing evidence is strictly accelerator-execution evidence, not a missing semantic, format, provenance, correctness or CPU-baseline test;
+- the accelerator route remains experimental/optional and is not promoted to the mandatory CPU path, shipping default or benchmark winner;
+- the exact dependency/configuration and a dedicated retained accelerator workflow remain recorded so the deferred proof can be executed later without reinterpretation;
+- project state and the work-item contract explicitly say that accelerator execution is **deferred/unverified**, including which claims remain prohibited;
+- any later shipping/default/performance decision that actually depends on the accelerator must still wait for the real hardware evidence.
+
+Never rewrite a deferred accelerator test as successful, synthesize output, substitute a CPU simulation for GPU execution, or use deferral to bypass a missing mandatory CPU capability.
+
 A dependency is **not** upgraded merely because a larger version number exists. Keeping an older pinned version requires a concrete reproducibility, platform, licensing or integration rationale when a materially newer viable release exists.
 
 An adapter must declare at least:
