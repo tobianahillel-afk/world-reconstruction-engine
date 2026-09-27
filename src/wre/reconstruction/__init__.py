@@ -242,6 +242,12 @@ from wre.reconstruction.depth_consistency_fusion import (
     DepthConsistencyFusionResult,
     build_depth_consistency_fusion_result,
 )
+from wre.reconstruction.learned_depth_prior import (
+    LearnedDepthPriorAdapter,
+    LearnedDepthPriorRequest,
+    LearnedDepthPriorResult,
+    build_learned_depth_prior_result,
+)
 from wre.reconstruction.feed_forward_camera_quality import (
     FEED_FORWARD_CAMERA_QUALITY_EVALUATOR,
     FEED_FORWARD_CAMERA_QUALITY_IMPLEMENTATION,
@@ -502,6 +508,9 @@ __all__ = [
     "DepthConsistencyFusionAdapter",
     "DepthConsistencyFusionRequest",
     "DepthConsistencyFusionResult",
+    "LearnedDepthPriorAdapter",
+    "LearnedDepthPriorRequest",
+    "LearnedDepthPriorResult",
     "FeedForwardCameraQualityRequest",
     "FeedForwardGeometryResult",
     "GeometryConsensusRequest",
@@ -517,6 +526,7 @@ __all__ = [
     "LocalDa3ReferenceRuntime",
     "benchmark_da3_execution",
     "build_depth_consistency_fusion_result",
+    "build_learned_depth_prior_result",
     "build_geometry_refinement_result",
     "canonicalize_colmap_sparse_model",
     "colmap_native_sparse_model_artifact_ref",
