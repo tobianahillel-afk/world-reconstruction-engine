@@ -179,7 +179,7 @@ class DenseDepthFieldCoverage:
                 )
             return
 
-        mean = _require_finite_ratio(
+        _require_finite_ratio(
             self.valid_confidence_mean,
             "dense_depth_field_coverage.valid_confidence_mean",
         )
@@ -189,10 +189,9 @@ class DenseDepthFieldCoverage:
             )
         if valid == 0:
             raise ValueError(
-                "dense_depth_field_coverage.valid_confidence_mean must be None with zero valid pixels"
+                "dense_depth_field_coverage.valid_confidence_mean must be None "
+                "with zero valid pixels"
             )
-        if mean != self.valid_confidence_mean:
-            raise AssertionError("unreachable confidence validation state")
 
 
 def _summarize_depth_field(depth_field: DepthField) -> DenseDepthFieldCoverage:
@@ -372,10 +371,10 @@ __all__ = [
     "DENSE_DEPTH_COVERAGE_IMPLEMENTATION",
     "DENSE_DEPTH_COVERAGE_REVISION",
     "DENSE_DEPTH_COVERAGE_VERSION",
-    "DenseDepthCoverageReport",
-    "DenseDepthFieldCoverage",
     "HOLE_PIXEL_RATIO_DESCRIPTOR",
     "VALID_CONFIDENCE_MEAN_DESCRIPTOR",
     "VALID_PIXEL_RATIO_DESCRIPTOR",
+    "DenseDepthCoverageReport",
+    "DenseDepthFieldCoverage",
     "evaluate_dense_depth_coverage",
 ]
