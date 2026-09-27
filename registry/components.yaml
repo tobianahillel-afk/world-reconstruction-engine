@@ -272,11 +272,13 @@ components:
     implementation:
       - src/wre/reconstruction/dense_depth.py
       - src/wre/reconstruction/colmap_dense_depth.py
+      - src/wre/reconstruction/depth_consistency_fusion.py
       - src/wre/reconstruction/__init__.py
       - registry/adapter-models.yaml
     tests:
       - tests/test_dense_depth.py
       - tests/test_colmap_dense_depth.py
+      - tests/test_depth_consistency_fusion.py
     status: implementing
   physical_surface: {owner_lot: V2L16, implementation: [], tests: [], status: planned}
   photometric_pipeline: {owner_lot: V2L17, implementation: [], tests: [], status: planned}
