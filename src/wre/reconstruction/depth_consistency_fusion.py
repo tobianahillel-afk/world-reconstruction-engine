@@ -32,8 +32,7 @@ def _validate_inputs(inputs: object) -> None:
     source_geometry = artifacts[0].source_geometry
     if any(item.source_geometry != source_geometry for item in artifacts[1:]):
         raise ValueError(
-            "depth_consistency_fusion.inputs must share the exact source "
-            "GeometrySolutionCandidate"
+            "depth_consistency_fusion.inputs must share the exact source GeometrySolutionCandidate"
         )
 
     fields_by_camera: dict[object, list[DepthField]] = {}
@@ -47,13 +46,9 @@ def _validate_inputs(inputs: object) -> None:
         first = fields[0]
         for field in fields[1:]:
             if field.observation_id != first.observation_id:
-                raise ValueError(
-                    "overlapping depth inputs must use the same ObservationId"
-                )
+                raise ValueError("overlapping depth inputs must use the same ObservationId")
             if field.dimensions != first.dimensions:
-                raise ValueError(
-                    "overlapping depth inputs must use the same ImageDimensions"
-                )
+                raise ValueError("overlapping depth inputs must use the same ImageDimensions")
             if field.depth_value_convention != first.depth_value_convention:
                 raise ValueError(
                     "overlapping depth inputs must use the same DepthValueConventionName"
@@ -105,8 +100,7 @@ class DepthConsistencyFusionResult:
     def __post_init__(self) -> None:
         if not isinstance(self.request, DepthConsistencyFusionRequest):
             raise TypeError(
-                "depth_consistency_fusion_result.request must be "
-                "DepthConsistencyFusionRequest"
+                "depth_consistency_fusion_result.request must be DepthConsistencyFusionRequest"
             )
         if not isinstance(self.fused_depth, DenseDepthArtifact):
             raise TypeError(
@@ -115,9 +109,7 @@ class DepthConsistencyFusionResult:
 
         source_geometry = self.request.inputs[0].source_geometry
         if self.fused_depth.source_geometry != source_geometry:
-            raise ValueError(
-                "fused depth must preserve the exact source GeometrySolutionCandidate"
-            )
+            raise ValueError("fused depth must preserve the exact source GeometrySolutionCandidate")
 
         input_artifact_identities = {
             _artifact_key(artifact.artifact_ref) for artifact in self.request.inputs
@@ -138,33 +130,23 @@ class DepthConsistencyFusionResult:
 
             supporting_fields = support_by_camera.get(fused_field.camera_solution_id)
             if not supporting_fields:
-                raise ValueError(
-                    "fused DepthField support must already exist in an input artifact"
-                )
+                raise ValueError("fused DepthField support must already exist in an input artifact")
 
             first = supporting_fields[0]
             if fused_field.observation_id != first.observation_id:
-                raise ValueError(
-                    "fused DepthField ObservationId must match input support"
-                )
+                raise ValueError("fused DepthField ObservationId must match input support")
             if fused_field.dimensions != first.dimensions:
-                raise ValueError(
-                    "fused DepthField ImageDimensions must match input support"
-                )
+                raise ValueError("fused DepthField ImageDimensions must match input support")
 
             conventions = {field.depth_value_convention for field in supporting_fields}
             if len(conventions) != 1:
-                raise ValueError(
-                    "input support for a fused camera must use one depth convention"
-                )
+                raise ValueError("input support for a fused camera must use one depth convention")
             if fused_field.depth_value_convention not in conventions:
                 raise ValueError(
                     "fused DepthField must preserve the input DepthValueConventionName"
                 )
 
-        fused_ancestry = {
-            _artifact_key(item) for item in self.fused_depth.source_artifacts
-        }
+        fused_ancestry = {_artifact_key(item) for item in self.fused_depth.source_artifacts}
         if not _required_ancestry(self.request).issubset(fused_ancestry):
             raise ValueError(
                 "fused depth source_artifacts must retain every input artifact and ancestry"
