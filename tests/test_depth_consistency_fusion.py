@@ -422,7 +422,7 @@ def test_fused_depth_fields_must_use_new_ids_and_preserve_convention() -> None:
         ),
         source_artifacts=ancestry,
     )
-    with pytest.raises(ValueError, match="preserve.*DepthValueConventionName"):
+    with pytest.raises(ValueError, match=r"preserve.*DepthValueConventionName"):
         DepthConsistencyFusionResult(request=request, fused_depth=converted)
 
 
