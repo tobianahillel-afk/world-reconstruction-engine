@@ -484,7 +484,14 @@ def test_report_rejects_noncanonical_field_or_metric_content() -> None:
     with pytest.raises(ValueError, match="exactly summarize"):
         DenseDepthCoverageReport(
             source_depth=dense,
-            field_coverages=(replace(field, hole_pixel_count=1, valid_pixel_count=3, valid_pixel_ratio=0.75),),
+            field_coverages=(
+                replace(
+                    field,
+                    hole_pixel_count=1,
+                    valid_pixel_count=3,
+                    valid_pixel_ratio=0.75,
+                ),
+            ),
             metrics=valid.metrics,
         )
 
