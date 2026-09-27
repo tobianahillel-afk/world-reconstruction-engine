@@ -583,6 +583,73 @@ jobs:
           .venv/bin/python -m pytest -q \
             tests/test_colmap_dense_depth.py::test_real_cuda_wheel_undistort_workspace_preflight
 
+      - name: Validate retained CPU DepthMap API evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv/bin/python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          from pathlib import Path
+
+          evidence_path = Path(
+              os.environ["WRE_COLMAP_MVS_UNDISTORT_PREFLIGHT_EVIDENCE"]
+          )
+          evidence = json.loads(evidence_path.read_text(encoding="utf-8"))
+
+          for key in (
+              "wheel_import_execution_evidence",
+              "synthetic_fixture_execution_evidence",
+              "undistort_execution_evidence",
+              "workspace_linkage_execution_evidence",
+              "patchmatch_options_binding_evidence",
+              "patchmatch_options_check_evidence",
+              "depth_map_from_array_execution_evidence",
+              "depth_map_write_execution_evidence",
+              "depth_map_read_execution_evidence",
+              "depth_map_to_array_execution_evidence",
+              "depth_map_roundtrip_exact_evidence",
+              "runtime_execution_evidence",
+          ):
+              if evidence.get(key) is not True:
+                  raise SystemExit(f"missing positive preflight evidence: {key}")
+
+          for key in (
+              "gpu_execution_evidence",
+              "patchmatch_execution_evidence",
+              "stereo_fusion_execution_evidence",
+          ):
+              if evidence.get(key) is not False:
+                  raise SystemExit(f"unexpected execution claim: {key}")
+
+          roundtrip = evidence.get("depth_map_api_roundtrip")
+          if not isinstance(roundtrip, dict):
+              raise SystemExit("missing depth_map_api_roundtrip evidence")
+          if roundtrip.get("shape") != [2, 2]:
+              raise SystemExit(f"unexpected depth-map shape: {roundtrip.get('shape')}")
+          expected_values = [1.5, 0.0, -2.0, 3.0]
+          if roundtrip.get("input_values") != expected_values:
+              raise SystemExit(
+                  f"unexpected depth-map input values: {roundtrip.get('input_values')}"
+              )
+          if roundtrip.get("output_values") != expected_values:
+              raise SystemExit(
+                  f"unexpected depth-map output values: {roundtrip.get('output_values')}"
+              )
+          if not isinstance(roundtrip.get("byte_length"), int) or roundtrip["byte_length"] <= 0:
+              raise SystemExit("invalid depth-map binary byte length")
+          sha256 = roundtrip.get("sha256")
+          if not isinstance(sha256, str) or len(sha256) != 64:
+              raise SystemExit("invalid depth-map binary SHA-256")
+
+          print(
+              "Real PyCOLMAP DepthMap from_array/write/read/to_array round-trip "
+              "evidence validated without PatchMatch."
+          )
+          PY
+
       - name: Retain CPU import preflight evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
