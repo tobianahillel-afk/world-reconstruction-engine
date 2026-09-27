@@ -71,7 +71,7 @@ dependencies:
     resolved_cuda_toolkit: 12.9.2.0
     resolved_cuda_runtime: 12.9.79
     resolved_curand: 10.3.10.19
-    runtime_execution_evidence: false
+    runtime_execution_evidence: true
     gpu_execution_evidence: false
     license: BSD-3-Clause
     license_review: pending
@@ -86,12 +86,18 @@ dependencies:
       nvidia-cuda-runtime-cu12 12.9.79 and nvidia-curand-cu12 10.3.10.19.
       The PyCOLMAP wheel SHA-256 is
       98da20b2c53467d152738a3f5b78104ea78a8e364a9d001acb89058635c9c9fc.
-      No wheel was installed or imported and no CUDA/PatchMatch execution occurred.
+      The exact official CUDA wheel has now been installed and imported on a standard
+      CPU-hosted runner for real environment inspection, synthetic sparse fixture creation,
+      no-resize undistort_images workspace preparation, PatchMatchOptions binding/check,
+      real DepthMap binary round-trip and production WRE camera-z normalization preflight.
+      Those retained runs explicitly record gpu_execution_evidence=false and
+      patchmatch_execution_evidence=false: no CUDA PatchMatch kernel has executed.
       NVIDIA runtime wheels are proprietary and the cuda-toolkit metapackage exposes
-      no usable direct license field in its wheel metadata, so transitive
-      redistribution review remains pending. This dependency may support only the
-      experimental V2L15.2 accelerator donor and must not satisfy the mandatory CPU
-      route or be treated as shipping/default approval.
+      no usable direct license field in its wheel metadata, so transitive redistribution
+      review remains pending. Under the repository unavailable-accelerator evidence rule,
+      real CUDA execution is deferred rather than reported as passed. This dependency may
+      support only the experimental V2L15.2 accelerator donor and must not satisfy the
+      mandatory CPU route or be treated as shipping/default/performance approval.
   da3_base:
     status: candidate_optional
     role: [feed_forward_geometry_preview]
