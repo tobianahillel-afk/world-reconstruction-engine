@@ -252,11 +252,41 @@ def test_contract_has_exact_frozen_shapes_and_protocol_surface() -> None:
 @pytest.mark.parametrize(
     ("source_geometry", "supporting_artifacts", "convention", "error_type", "message"),
     [
-        (cast(Any, "geometry"), (_artifact("artifact:a"),), DepthValueConventionName("camera-z"), TypeError, "source_geometry"),
-        (_candidate("a"), cast(Any, []), DepthValueConventionName("camera-z"), TypeError, "immutable tuple"),
-        (_candidate("a"), (), DepthValueConventionName("camera-z"), ValueError, "non-empty"),
-        (_candidate("a"), cast(Any, ("artifact",)), DepthValueConventionName("camera-z"), TypeError, "ArtifactRef"),
-        (_candidate("a"), (_artifact("artifact:a"),), cast(Any, "camera-z"), TypeError, "DepthValueConventionName"),
+        (
+            cast(Any, "geometry"),
+            (_artifact("artifact:a"),),
+            DepthValueConventionName("camera-z"),
+            TypeError,
+            "source_geometry",
+        ),
+        (
+            _candidate("a"),
+            cast(Any, []),
+            DepthValueConventionName("camera-z"),
+            TypeError,
+            "immutable tuple",
+        ),
+        (
+            _candidate("a"),
+            (),
+            DepthValueConventionName("camera-z"),
+            ValueError,
+            "non-empty",
+        ),
+        (
+            _candidate("a"),
+            cast(Any, ("artifact",)),
+            DepthValueConventionName("camera-z"),
+            TypeError,
+            "ArtifactRef",
+        ),
+        (
+            _candidate("a"),
+            (_artifact("artifact:a"),),
+            cast(Any, "camera-z"),
+            TypeError,
+            "DepthValueConventionName",
+        ),
     ],
 )
 def test_request_rejects_wrong_member_shapes(
