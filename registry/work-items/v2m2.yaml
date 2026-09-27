@@ -2224,7 +2224,7 @@ work_items:
   - id: V2L15.3
     lot: V2L15
     title: Depth consistency fusion contract
-    status: ready
+    status: done
     objective: Define the pure solver-independent V2 contract for combining at least two canonical DenseDepthArtifact hypotheses that belong to the exact same source GeometrySolutionCandidate into one new DenseDepthArtifact while preserving camera observation convention frame scale provenance and immutable source ancestry without executing a fusion solver computing quality metrics filling holes or creating point or surface truth.
     allowed_scope:
       - src/wre/reconstruction/depth_consistency_fusion.py
@@ -2297,7 +2297,85 @@ work_items:
       - immutability regression proving request construction result construction and helper do not mutate sort or rewrite input artifacts depth fields source geometry or ancestry
       - module-surface regression proving solver execution stereo_fusion PointMap SurfaceModel mesh TSDF SDF learned prior coverage quality routing selection and V2L15.4 implementation remain absent
       - full fast CI and CodeQL
-  - {id: V2L15.4, lot: V2L15, title: Learned depth prior adapter boundary, status: planned, depends_on: [V2L15.3]}
+  - id: V2L15.4
+    lot: V2L15
+    title: Learned depth prior adapter boundary
+    status: ready
+    objective: Define the pure model-independent V2 adapter boundary that binds one exact canonical GeometrySolutionCandidate plus explicit immutable learned-prior input evidence to one canonical DenseDepthArtifact with an explicitly declared DepthValueConventionName, preserving source camera frame scale and provenance semantics without selecting loading or executing a learned model and without converting or calibrating its depth payload.
+    allowed_scope:
+      - src/wre/reconstruction/learned_depth_prior.py
+      - focused exports in src/wre/reconstruction/__init__.py
+      - tests/test_learned_depth_prior.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L15.5 can be activated without implementing it
+    out_of_scope:
+      - choosing integrating downloading loading or executing DA3 VGGT Pi3 MapAnything Marigold Metric3D UniDepth or another learned model
+      - adding Torch CUDA accelerator model checkpoints network access runtime environments or new dependency approvals
+      - changing DenseDepthArtifact DepthField GeometrySolutionCandidate CameraSolution ArtifactRef ArtifactProducerIdentity or depth-value convention semantics
+      - converting relative depth camera-z ray-distance inverse-depth disparity metric-world or another depth convention
+      - inferring calibrating or upgrading metric scale world placement local-frame alignment or camera geometry
+      - synthesizing confidence calibrating confidence filling holes inventing unsupported cameras or requiring complete camera coverage
+      - fusing learned priors with MVS or other DenseDepthArtifact values; V2L15.3 owns the fusion contract and later routing decides whether it is used
+      - computing coverage holes consistency residual quality benchmark ranking selection retry fallback routing or default promotion owned by V2L15.5 V2L15.6 or routing layers
+      - implementing V2L15.5 or later work
+      - creating PointMap SurfaceModel mesh TSDF SDF collision navigation measurement appearance materials dynamics chronology MasterScene or RuntimeScene output
+    depends_on: [V2L15.3]
+    read_before:
+      - docs/00_START_HERE.md
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md
+      - docs/27_RESEARCH_CANDIDATE_COVERAGE.md
+      - registry/components.yaml
+      - registry/dependencies.yaml
+      - registry/adapter-models.yaml
+      - registry/work-items/v2m2.yaml
+      - PROJECT_STATE.yaml
+      - src/wre/domain/depth_fields.py
+      - src/wre/reconstruction/dense_depth.py
+      - src/wre/reconstruction/depth_consistency_fusion.py
+      - src/wre/reconstruction/geometry_solution_comparison.py
+      - src/wre/reconstruction/geometry_refinement.py
+      - src/wre/reconstruction/da3_preview.py
+      - src/wre/reconstruction/__init__.py
+      - tests/test_dense_depth.py
+      - tests/test_depth_consistency_fusion.py
+      - tests/test_geometry_refinement.py
+    reuse:
+      - DenseDepthArtifact from V2L15.1 as the only canonical learned-prior output representation
+      - exact GeometrySolutionCandidate equality as the camera frame scale and geometry ownership boundary
+      - DepthValueConventionName as an explicit declared output semantic rather than a model-name heuristic
+      - ArtifactRef ArtifactProducerIdentity and canonical source-artifact ancestry rules from existing reconstruction contracts
+      - the pure request result adapter-boundary pattern from geometry_refinement.py and depth_consistency_fusion.py
+      - DA3 reviewed depth semantics only as prior evidence that learned outputs may remain relative and unresolved; do not couple this boundary to DA3 runtime or checkpoint code
+    acceptance:
+      - Add frozen slots LearnedDepthPriorRequest LearnedDepthPriorResult and one LearnedDepthPriorAdapter Protocol in src/wre/reconstruction/learned_depth_prior.py plus one pure build_learned_depth_prior_result helper. The module validates evidence relationships only and executes no model.
+      - LearnedDepthPriorRequest must contain exactly one source_geometry GeometrySolutionCandidate, one non-empty immutable supporting_artifacts tuple of ArtifactRef values, and one DepthValueConventionName output_depth_value_convention.
+      - supporting_artifacts must have unique ArtifactId/ArtifactKind identities and canonical order. Construction validates but never sorts mutates downloads resolves or interprets the evidence.
+      - LearnedDepthPriorResult must contain the exact request plus one DenseDepthArtifact depth_prior. The output must preserve request.source_geometry by exact value equality and must use a geometry.dense_depth ArtifactRef that is not reused from supporting_artifacts.
+      - Every output DepthField must use request.output_depth_value_convention exactly. The contract performs no conversion and makes no assumption that a named learned model is metric camera-z inverse-depth or otherwise calibrated.
+      - DenseDepthArtifact camera linkage continues to enforce that each output field references a source CameraSolution with exact ObservationId and ImageDimensions. Partial camera coverage is valid and the boundary must not fabricate missing cameras.
+      - depth_prior.source_artifacts must retain the canonical union of request.source_geometry.source_artifacts and every request supporting_artifact. Missing ancestry duplicate identities or non-canonical order fails closed through this boundary and the reused DenseDepthArtifact contract.
+      - Confidence remains optional canonical DepthField evidence. The boundary must not require synthesize normalize threshold or calibrate confidence values.
+      - Preserve source local_frame_id and scale_status only through request.source_geometry. Relative or unresolved learned depth does not establish metric scale world placement or compatibility with another GeometrySolutionCandidate.
+      - Export only the pure learned-prior boundary from wre.reconstruction. Do not expose Torch model classes checkpoint loading candidate selection depth fusion coverage quality routing or V2L15.5 implementation.
+    tests:
+      - frozen slots and exact field-shape regressions for request result and adapter Protocol
+      - request wrong-type non-empty immutable supporting-artifact unique canonical-order and output-depth-convention regressions
+      - exact source GeometrySolutionCandidate preservation regression including same geometry ID with changed producer camera depth or ancestry rejection
+      - result wrong-type and reused supporting ArtifactRef rejection
+      - output depth-convention mismatch rejection with no conversion
+      - partial source-camera coverage acceptance and foreign camera observation or dimensions remaining rejected by DenseDepthArtifact
+      - supporting-artifact plus source-geometry ancestry union regression
+      - optional confidence preservation regression proving None and caller-supplied canonical confidence are not synthesized or calibrated
+      - unresolved-scale local-frame preservation regression proving no metric or world-placement claim
+      - immutability regression proving request result and helper do not mutate sort or rewrite source geometry supporting artifacts depth fields or provenance
+      - module-surface regression proving Torch CUDA model checkpoint network fusion PointMap SurfaceModel learned-candidate selection coverage quality routing and V2L15.5 implementation remain absent
+      - full fast CI and CodeQL
   - {id: V2L15.5, lot: V2L15, title: Dense depth coverage holes confidence, status: planned, depends_on: [V2L15.4]}
   - {id: V2L15.6, lot: V2L15, title: Dense depth benchmark, status: planned, depends_on: [V2L15.5]}
   - {id: V2L16.1, lot: V2L16, title: SurfaceModel contract and intended use metadata, status: planned, depends_on: [V2L15.6]}

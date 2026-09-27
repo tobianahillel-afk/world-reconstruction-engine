@@ -5,23 +5,23 @@ roadmap_version: '2.0'
 phase: implementation
 milestone: V2M2
 lot: V2L15
-active_work_item: V2L15.3
+active_work_item: V2L15.4
 status: ready
-last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5, V2L3.6, V2L4.1, V2L4.2, V2L4.3, V2L4.4, V2L4.5, V2L4.6, V2L5.1, V2L5.2, V2L5.3, V2L5.4, V2L5.5, V2L5.6, V2L6.1, V2L6.2, V2L6.3, V2L6.4, V2L6.5, V2L6.6, V2L7.1, V2L7.2, V2L7.3, V2L7.4, V2L7.5, V2L7.6, V2L8.1, V2L8.2, V2L8.3, V2L8.4, V2L8.5, V2L9.1, V2L9.2, V2L9.3, V2L9.4, V2L9.5, V2L10.1, V2L10.2, V2L10.3, V2L10.4, V2L10.5, V2L10.6, V2L11.1, V2L11.2, V2L11.3, V2L11.4, V2L11.5, V2L11.6, V2L12.1, V2L12.2, V2L12.3, V2L12.4, V2L12.5, V2L13.1, V2L13.2, V2L13.3, V2L13.4, V2L13.5, V2L13.6, V2L14.1, V2L14.2, V2L14.3, V2L14.4, V2L14.5, V2L14.6, V2L15.1, V2L15.2]
-last_merged_pr: 164
+last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5, V2L3.6, V2L4.1, V2L4.2, V2L4.3, V2L4.4, V2L4.5, V2L4.6, V2L5.1, V2L5.2, V2L5.3, V2L5.4, V2L5.5, V2L5.6, V2L6.1, V2L6.2, V2L6.3, V2L6.4, V2L6.5, V2L6.6, V2L7.1, V2L7.2, V2L7.3, V2L7.4, V2L7.5, V2L7.6, V2L8.1, V2L8.2, V2L8.3, V2L8.4, V2L8.5, V2L9.1, V2L9.2, V2L9.3, V2L9.4, V2L9.5, V2L10.1, V2L10.2, V2L10.3, V2L10.4, V2L10.5, V2L10.6, V2L11.1, V2L11.2, V2L11.3, V2L11.4, V2L11.5, V2L11.6, V2L12.1, V2L12.2, V2L12.3, V2L12.4, V2L12.5, V2L13.1, V2L13.2, V2L13.3, V2L13.4, V2L13.5, V2L13.6, V2L14.1, V2L14.2, V2L14.3, V2L14.4, V2L14.5, V2L14.6, V2L15.1, V2L15.2, V2L15.3]
+last_merged_pr: 166
 current_goal: >-
-  V2L15.2 now provides the experimental COLMAP PatchMatch dense-depth donor implementation plus exact CPU-verifiable real-wheel workspace,
-  PatchMatchOptions, DepthMap binary and production camera-z normalization evidence. Real CUDA PatchMatch execution is explicitly deferred and
-  unverified under the unavailable-accelerator evidence rule; the donor remains optional experimental and non-default. Advance only V2L15.3
-  by defining the pure solver-independent depth-consistency fusion boundary over multiple DenseDepthArtifact hypotheses that share one exact
-  GeometrySolutionCandidate, without executing a fusion solver, learned prior, quality metric, point fusion or surface generation.
+  V2L15.3 now provides the pure solver-independent depth-consistency fusion boundary for multiple DenseDepthArtifact hypotheses that share one
+  exact GeometrySolutionCandidate, with fail-closed camera convention support and ancestry semantics but no numeric fusion algorithm. Real CUDA
+  PatchMatch execution for the optional V2L15.2 donor remains explicitly deferred and unverified. Advance only V2L15.4 by defining the pure
+  model-independent learned-depth-prior adapter boundary that maps explicit immutable prior evidence and one exact source geometry hypothesis
+  to canonical DenseDepthArtifact evidence without selecting loading executing or calibrating a learned model.
 next_action: >-
-  Implement only V2L15.3 under its executable registry contract. Add the pure DepthConsistencyFusionRequest DepthConsistencyFusionResult and
-  DepthConsistencyFusionAdapter boundary plus focused tests. Require at least two canonical DenseDepthArtifact inputs with one exact shared
-  GeometrySolutionCandidate, fail closed on cross-source or overlapping depth-convention mismatches, require fused output support and ancestry
-  to come only from the input evidence, and preserve frame/scale semantics. Do not execute COLMAP stereo_fusion or another solver, do not
-  convert depth conventions, compute coverage/quality metrics, add learned priors, create PointMap/SurfaceModel output, implement V2L15.4, or
-  reinterpret the deferred V2L15.2 GPU lane as passed.
+  Implement only V2L15.4 under its executable registry contract. Add the pure LearnedDepthPriorRequest LearnedDepthPriorResult and
+  LearnedDepthPriorAdapter boundary plus focused tests. Bind one exact GeometrySolutionCandidate, a canonical non-empty tuple of explicit
+  supporting ArtifactRef evidence and one declared DepthValueConventionName to a canonical DenseDepthArtifact result while preserving source
+  cameras frame scale provenance and optional confidence exactly. Do not choose download load or execute DA3 VGGT Pi3 MapAnything Marigold
+  Metric3D UniDepth or another model, do not add Torch CUDA checkpoints network access or dependencies, do not convert or calibrate depth or
+  confidence, do not fuse with MVS, compute coverage/quality metrics, implement V2L15.5, or reinterpret the deferred V2L15.2 GPU lane as passed.
 blockers: []
 architecture:
   product_blueprint: docs/01_PRODUCT.md
