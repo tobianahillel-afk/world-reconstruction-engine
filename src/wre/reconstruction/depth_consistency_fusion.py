@@ -147,9 +147,11 @@ class DepthConsistencyFusionResult:
                 )
 
         fused_ancestry = {_artifact_key(item) for item in self.fused_depth.source_artifacts}
-        if not _required_ancestry(self.request).issubset(fused_ancestry):
+        required_ancestry = _required_ancestry(self.request)
+        if fused_ancestry != required_ancestry:
             raise ValueError(
-                "fused depth source_artifacts must retain every input artifact and ancestry"
+                "fused depth source_artifacts must equal the canonical union of every "
+                "input artifact and ancestry"
             )
 
 
