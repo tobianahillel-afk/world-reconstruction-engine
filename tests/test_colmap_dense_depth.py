@@ -933,6 +933,56 @@ def test_real_cuda_wheel_undistort_workspace_preflight(tmp_path: Path) -> None:
     depth_root = output_root / "stereo" / "depth_maps"
     assert not depth_root.exists() or not tuple(depth_root.glob("*.bin"))
 
+    feature_by_observation = {
+        item.observation_id: item.image_name for item in source.features.images
+    }
+    first_camera = source.source_geometry.camera_solutions[0]
+    first_image_name = feature_by_observation[first_camera.observation_id]
+    manual_depth_values = np.full(
+        (
+            first_camera.dimensions.height_px,
+            first_camera.dimensions.width_px,
+        ),
+        4.0,
+        dtype=np.float32,
+    )
+    manual_depth_values.reshape(-1)[:4] = (1.5, 0.0, -2.0, 3.0)
+    depth_root.mkdir(parents=True, exist_ok=True)
+    manual_depth_path = depth_root / f"{first_image_name}.geometric.bin"
+    pycolmap.DepthMap.from_array(
+        manual_depth_values,
+        depth_min=-2.0,
+        depth_max=4.0,
+    ).write(manual_depth_path)
+
+    normalization_identity = dense_module._normalization_identity(
+        source=source,
+        verified_images=verified_images,
+        environment=environment,
+        config=config,
+        hardware_runtime=_hardware(),
+    )
+    normalized_fields, normalized_evidence = dense_module._read_depth_fields(
+        pycolmap=pycolmap,
+        workspace_root=output_root,
+        source=source,
+        normalization_identity=normalization_identity,
+    )
+    assert len(normalized_fields) == 1
+    assert len(normalized_evidence) == 1
+    normalized_field = normalized_fields[0]
+    assert normalized_field.camera_solution_id == first_camera.solution_id
+    assert normalized_field.observation_id == first_camera.observation_id
+    assert normalized_field.depth_value_convention is COLMAP_CAMERA_Z_CONVENTION
+    assert normalized_field.confidence is None
+    assert normalized_field.depth_values[:4] == (1.5, 0.0, 0.0, 3.0)
+    assert normalized_field.validity[:4] == (True, False, False, True)
+    assert len(normalized_field.depth_values) == (
+        first_camera.dimensions.width_px * first_camera.dimensions.height_px
+    )
+    assert sum(normalized_field.validity) == len(normalized_field.validity) - 2
+    manual_depth_digest = hash_file_content(manual_depth_path)
+
     workspace = pycolmap.Reconstruction(output_root / "sparse")
     assert bool(workspace.is_valid())
     registered_ids = tuple(sorted(int(value) for value in workspace.reg_image_ids()))
@@ -983,6 +1033,9 @@ def test_real_cuda_wheel_undistort_workspace_preflight(tmp_path: Path) -> None:
         "depth_map_read_execution_evidence": True,
         "depth_map_to_array_execution_evidence": True,
         "depth_map_roundtrip_exact_evidence": True,
+        "manual_depth_fixture_execution_evidence": True,
+        "depth_field_normalization_execution_evidence": True,
+        "partial_depth_coverage_execution_evidence": True,
         "runtime_execution_evidence": True,
         "gpu_execution_evidence": False,
         "patchmatch_execution_evidence": False,
@@ -1002,6 +1055,21 @@ def test_real_cuda_wheel_undistort_workspace_preflight(tmp_path: Path) -> None:
             "output_values": list(roundtrip_values),
             "sha256": roundtrip_digest.sha256.value,
             "shape": [2, 2],
+        },
+        "manual_depth_normalization": {
+            "byte_length": manual_depth_digest.byte_length,
+            "camera_solution_id": normalized_field.camera_solution_id.value,
+            "canonical_values_prefix": list(normalized_field.depth_values[:4]),
+            "canonical_validity_prefix": list(normalized_field.validity[:4]),
+            "confidence_is_none": normalized_field.confidence is None,
+            "depth_value_convention": normalized_field.depth_value_convention.value,
+            "image_name": first_image_name,
+            "observation_id": normalized_field.observation_id.value,
+            "raw_values_prefix": [1.5, 0.0, -2.0, 3.0],
+            "sha256": manual_depth_digest.sha256.value,
+            "source_camera_count": len(source.source_geometry.camera_solutions),
+            "normalized_field_count": len(normalized_fields),
+            "valid_pixel_count": sum(normalized_field.validity),
         },
         "source_immutable_after_undistortion": True,
         "workspace": {

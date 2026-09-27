@@ -611,6 +611,9 @@ jobs:
               "depth_map_read_execution_evidence",
               "depth_map_to_array_execution_evidence",
               "depth_map_roundtrip_exact_evidence",
+              "manual_depth_fixture_execution_evidence",
+              "depth_field_normalization_execution_evidence",
+              "partial_depth_coverage_execution_evidence",
               "runtime_execution_evidence",
           ):
               if evidence.get(key) is not True:
@@ -644,8 +647,35 @@ jobs:
           if not isinstance(sha256, str) or len(sha256) != 64:
               raise SystemExit("invalid depth-map binary SHA-256")
 
+          normalization = evidence.get("manual_depth_normalization")
+          if not isinstance(normalization, dict):
+              raise SystemExit("missing manual_depth_normalization evidence")
+          if normalization.get("source_camera_count") != 4:
+              raise SystemExit(
+                  "manual depth normalization must retain the four-camera source fixture"
+              )
+          if normalization.get("normalized_field_count") != 1:
+              raise SystemExit(
+                  "manual depth normalization must prove partial one-camera coverage"
+              )
+          if normalization.get("raw_values_prefix") != [1.5, 0.0, -2.0, 3.0]:
+              raise SystemExit("unexpected raw manual depth prefix")
+          if normalization.get("canonical_values_prefix") != [1.5, 0.0, 0.0, 3.0]:
+              raise SystemExit("unexpected canonical manual depth prefix")
+          if normalization.get("canonical_validity_prefix") != [True, False, False, True]:
+              raise SystemExit("unexpected canonical manual depth validity prefix")
+          if normalization.get("depth_value_convention") != "camera-z":
+              raise SystemExit("manual depth normalization must remain camera-z")
+          if normalization.get("confidence_is_none") is not True:
+              raise SystemExit("manual depth normalization must not synthesize confidence")
+          if not isinstance(normalization.get("byte_length"), int) or normalization["byte_length"] <= 0:
+              raise SystemExit("invalid manual depth-map binary byte length")
+          normalization_sha256 = normalization.get("sha256")
+          if not isinstance(normalization_sha256, str) or len(normalization_sha256) != 64:
+              raise SystemExit("invalid manual depth-map binary SHA-256")
+
           print(
-              "Real PyCOLMAP DepthMap from_array/write/read/to_array round-trip "
+              "Real PyCOLMAP DepthMap IO and WRE camera-z normalization "
               "evidence validated without PatchMatch."
           )
           PY
