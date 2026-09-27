@@ -2334,7 +2334,7 @@
     "ninja",
     "pkg-config",
     "pybind11>=3.0",
-    "scikit-build-core>=0.10",
+    "scikit-build-core=1.0.3=pyh04d0eab_0",
     "clangxx",
     "libgcc-devel_linux-64=16.2.0=he3ce08f_105",
     "libstdcxx-devel_linux-64=16.2.0=h86e191b_105",
@@ -2356,7 +2356,12 @@
     "einops=0.8.2",
     "imagesize=2.0.0",
     "safetensors=0.7.0",
-    "huggingface_hub=1.12.0"
+    "huggingface_hub=1.12.0",
+    "filelock=4.0.3=pyhd8ed1ab_0",
+    "libexpat=2.8.4=hd2095e1_0",
+    "importlib-resources=7.1.0=pyhd8ed1ab_0",
+    "importlib_resources=7.1.0=pyhd8ed1ab_0",
+    "zipp=4.1.0=pyhcf101f3_0"
   ],
   "resolver": {
     "micromamba_release": "2.9.0-0",
