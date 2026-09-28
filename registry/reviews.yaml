@@ -88,7 +88,11 @@ lot_reviews:
     reviewed_at: '2026-09-24'
     evidence:
       - docs/reviews/V2L14-precision-global-refinement-review.md
-  V2L15: {status: pending, reviewed_at: null, evidence: []}
+  V2L15:
+    status: passed
+    reviewed_at: '2026-09-28'
+    evidence:
+      - docs/reviews/V2L15-dense-depth-mvs-fusion-review.md
   V2L16: {status: pending, reviewed_at: null, evidence: []}
   V2L17: {status: pending, reviewed_at: null, evidence: []}
   V2L18: {status: pending, reviewed_at: null, evidence: []}
