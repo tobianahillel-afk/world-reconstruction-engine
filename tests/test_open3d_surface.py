@@ -37,8 +37,6 @@ from wre.domain.surfaces import (
 from wre.reconstruction.dense_depth import DENSE_DEPTH_ARTIFACT_KIND, DenseDepthArtifact
 from wre.reconstruction.geometry_solution_comparison import GeometrySolutionCandidate
 from wre.reconstruction.open3d_surface import (
-    OPEN3D_CAMERA_Z_CONVENTION,
-    OPEN3D_PINHOLE_PROJECTION,
     OPEN3D_SURFACE_ADAPTER_ID,
     OPEN3D_SURFACE_CAPABILITY,
     OPEN3D_SURFACE_CAPABILITY_NAME,
@@ -576,7 +574,7 @@ def test_wrong_open3d_version_fails_before_output_creation(tmp_path: Path) -> No
     module = _FakeOpen3d()
     module.__version__ = "0.21.0"
 
-    with pytest.raises(Open3dSurfaceEnvironmentError, match="exactly 0.20.0"):
+    with pytest.raises(Open3dSurfaceEnvironmentError, match=r"exactly 0\\.20\\.0"):
         _adapter(tmp_path, module=module).derive()
     assert not (tmp_path / "surface-output").exists()
 
@@ -837,7 +835,7 @@ def test_symlink_output_path_is_rejected_without_touching_target(tmp_path: Path)
 
 def test_extra_output_or_appearance_ply_fails_and_cleans_output(tmp_path: Path) -> None:
     extra = _FakeOpen3d(extra_output=True)
-    with pytest.raises(Open3dSurfaceError, match="exactly surface.ply"):
+    with pytest.raises(Open3dSurfaceError, match=r"exactly surface\\.ply"):
         _adapter(tmp_path / "extra", module=extra).derive()
     assert not (tmp_path / "extra" / "surface-output").exists()
 
