@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from statistics import median
 
 from wre.domain.artifacts import ArtifactRef
+from wre.domain.camera_solutions import CameraSolutionId
 from wre.domain.benchmarks import (
     BenchmarkFixtureIdentity,
     BenchmarkRecord,
@@ -192,7 +193,7 @@ def _reference_metrics(
         field.observation_id: field for field in reference.depth_fields
     }
 
-    candidate_by_camera: dict[object, DepthField] = {}
+    candidate_by_camera: dict[CameraSolutionId, DepthField] = {}
     for field in candidate.depth_fields:
         reference_field = reference_by_camera.get(field.camera_solution_id)
         reference_observation_field = reference_by_observation.get(field.observation_id)
@@ -371,7 +372,9 @@ class DenseDepthBenchmarkResult:
 
     def __post_init__(self) -> None:
         if not isinstance(self.request, DenseDepthBenchmarkRequest):
-            raise TypeError("dense_depth_benchmark_result.request must be DenseDepthBenchmarkRequest")
+            raise TypeError(
+                "dense_depth_benchmark_result.request must be DenseDepthBenchmarkRequest"
+            )
         if not isinstance(self.candidates, tuple):
             raise TypeError(
                 "dense_depth_benchmark_result.candidates must be an immutable tuple"
