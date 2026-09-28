@@ -2693,7 +2693,7 @@ work_items:
       - ArtifactMaterializationEntry and ArtifactMaterializationMetadata for the exact published mesh file identity
       - ArtifactProducerIdentity ConfigurationIdentity and existing content-hashing helpers for reproducible producer configuration and output provenance
       - the fresh disjoint output-root fail-closed and cleanup-on-failure patterns used by existing external reconstruction adapters
-      - Open3D v0.20.0 as the refreshed mature baseline candidate: tag commit b6c5e196384ad71e75b6e6f9c5da22d046221f1d, MIT root license, official CPython 3.12 Linux x86_64 release wheel open3d-0.20.0-cp312-cp312-manylinux_2_35_x86_64.whl with SHA-256 f5cc6106d9c0c41beb8160aa99c2b663e7f08588a598ec7d464391a4cfe684d6 and byte length 400788891
+      - Open3D v0.20.0 as the refreshed mature baseline candidate using tag commit b6c5e196384ad71e75b6e6f9c5da22d046221f1d, MIT root license and the official CPython 3.12 Linux x86_64 release wheel open3d-0.20.0-cp312-cp312-manylinux_2_35_x86_64.whl with SHA-256 f5cc6106d9c0c41beb8160aa99c2b663e7f08588a598ec7d464391a4cfe684d6 and byte length 400788891
       - Open3D t.geometry.VoxelBlockGrid depth-only integration and extract_triangle_mesh rather than legacy RGB-D color fabrication or a WRE-owned TSDF implementation
     acceptance:
       - Qualify Open3D 0.20.0 only as an optional exact external CPU dependency. Pin the exact official source revision and CPython 3.12 Linux x86_64 wheel identity above plus its resolved runtime closure in registry/external-environments/open3d-surface-cpu-0.20.0.json. Keep Open3D out of WRE's mandatory uv environment and record direct/transitive license metadata without treating registry presence as shipping approval.
