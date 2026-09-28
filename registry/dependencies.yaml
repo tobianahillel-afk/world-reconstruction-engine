@@ -671,7 +671,13 @@ dependencies:
     license_review: pending
   open3d:
     status: candidate_optional
-    role: [icp, gicp, geometry_refinement, depth_fusion, tsdf, physical_surface]
+    role: [icp, gicp, geometry_refinement]
+    integration: adapter
+    version_policy: pin_when_integrated
+    license_review: pending
+  open3d_surface_cpu:
+    status: candidate_optional
+    role: [depth_fusion, tsdf, physical_surface]
     integration: optional_exact_external_environment
     version_policy: pin_exact_external_environment
     pinned_version: 0.20.0
@@ -696,12 +702,13 @@ dependencies:
       external environment. The lock also records the exact Ubuntu CPU graphics/OpenMP
       host packages required by the qualification lane. The bounded baseline uses only
       CPU:0 tensor VoxelBlockGrid depth-only TSDF integration and triangle-mesh PLY
-      export. Open3D remains outside WRE's mandatory uv environment; the WRE runtime
-      dependency exifread is installed separately from the exact identity already pinned
-      by WRE's uv.lock and is not part of the Open3D closure. No CUDA/SYCL backend is
-      authorized. The Open3D source/root wheel is MIT while transitive wheel/system
-      redistribution review remains pending; this record does not promote the
-      experimental surface route to a shipping default.
+      export. This concrete surface environment is separate from the generic open3d
+      candidate used by future ICP/GICP/refinement work. Open3D remains outside WRE's
+      mandatory uv environment; WRE's exact exifread runtime dependency is installed
+      separately from its existing uv.lock identity and is not part of this closure.
+      No CUDA/SYCL backend is authorized. The Open3D source/root wheel is MIT while
+      transitive wheel/system redistribution review remains pending; this record does
+      not promote the experimental surface route to a shipping default.
   openmvg:
     status: candidate_validation
     role: [ac_ransac, global_geometry_validation]
