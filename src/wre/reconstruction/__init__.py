@@ -319,6 +319,22 @@ from wre.reconstruction.geometry_solution_comparison import (
     GeometrySolutionPair,
     derive_geometry_solution_pairs,
 )
+from wre.reconstruction.open3d_surface import (
+    OPEN3D_SURFACE_ADAPTER_ID,
+    OPEN3D_SURFACE_CAPABILITY,
+    OPEN3D_SURFACE_CAPABILITY_NAME,
+    OPEN3D_SURFACE_DEPENDENCY_REF,
+    OPEN3D_SURFACE_ENVIRONMENT,
+    OPEN3D_SURFACE_PRODUCER_IMPLEMENTATION,
+    OPEN3D_SURFACE_PRODUCER_VERSION,
+    OPEN3D_SURFACE_SHIPPING_STATUS,
+    OPEN3D_SURFACE_SOURCE_REVISION,
+    Open3dSurfaceEnvironmentError,
+    Open3dSurfaceError,
+    Open3dSurfaceResult,
+    Open3dTsdfSurfaceAdapter,
+    Open3dTsdfSurfaceConfig,
+)
 from wre.reconstruction.learned_depth_prior import (
     LearnedDepthPriorAdapter,
     LearnedDepthPriorRequest,
@@ -605,5 +621,19 @@ __all__ = [
     "publish_colmap_pair_matches",
     "reconstruct_colmap_globally",
     "reconstruct_colmap_incrementally",
-    "verify_colmap_geometry",
+    "verify_colmap_geometry",    "OPEN3D_SURFACE_ADAPTER_ID",
+    "OPEN3D_SURFACE_CAPABILITY",
+    "OPEN3D_SURFACE_CAPABILITY_NAME",
+    "OPEN3D_SURFACE_DEPENDENCY_REF",
+    "OPEN3D_SURFACE_ENVIRONMENT",
+    "OPEN3D_SURFACE_PRODUCER_IMPLEMENTATION",
+    "OPEN3D_SURFACE_PRODUCER_VERSION",
+    "OPEN3D_SURFACE_SHIPPING_STATUS",
+    "OPEN3D_SURFACE_SOURCE_REVISION",
+    "Open3dSurfaceEnvironmentError",
+    "Open3dSurfaceError",
+    "Open3dSurfaceResult",
+    "Open3dTsdfSurfaceAdapter",
+    "Open3dTsdfSurfaceConfig",
+
 ]
