@@ -4,24 +4,24 @@ project_name: World Reconstruction Engine
 roadmap_version: '2.0'
 phase: implementation
 milestone: V2M2
-lot: V2L15
-active_work_item: V2L15.6
+lot: V2L16
+active_work_item: V2L16.1
 status: ready
-last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5, V2L3.6, V2L4.1, V2L4.2, V2L4.3, V2L4.4, V2L4.5, V2L4.6, V2L5.1, V2L5.2, V2L5.3, V2L5.4, V2L5.5, V2L5.6, V2L6.1, V2L6.2, V2L6.3, V2L6.4, V2L6.5, V2L6.6, V2L7.1, V2L7.2, V2L7.3, V2L7.4, V2L7.5, V2L7.6, V2L8.1, V2L8.2, V2L8.3, V2L8.4, V2L8.5, V2L9.1, V2L9.2, V2L9.3, V2L9.4, V2L9.5, V2L10.1, V2L10.2, V2L10.3, V2L10.4, V2L10.5, V2L10.6, V2L11.1, V2L11.2, V2L11.3, V2L11.4, V2L11.5, V2L11.6, V2L12.1, V2L12.2, V2L12.3, V2L12.4, V2L12.5, V2L13.1, V2L13.2, V2L13.3, V2L13.4, V2L13.5, V2L13.6, V2L14.1, V2L14.2, V2L14.3, V2L14.4, V2L14.5, V2L14.6, V2L15.1, V2L15.2, V2L15.3, V2L15.4, V2L15.5]
-last_merged_pr: 168
+last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5, V2L3.6, V2L4.1, V2L4.2, V2L4.3, V2L4.4, V2L4.5, V2L4.6, V2L5.1, V2L5.2, V2L5.3, V2L5.4, V2L5.5, V2L5.6, V2L6.1, V2L6.2, V2L6.3, V2L6.4, V2L6.5, V2L6.6, V2L7.1, V2L7.2, V2L7.3, V2L7.4, V2L7.5, V2L7.6, V2L8.1, V2L8.2, V2L8.3, V2L8.4, V2L8.5, V2L9.1, V2L9.2, V2L9.3, V2L9.4, V2L9.5, V2L10.1, V2L10.2, V2L10.3, V2L10.4, V2L10.5, V2L10.6, V2L11.1, V2L11.2, V2L11.3, V2L11.4, V2L11.5, V2L11.6, V2L12.1, V2L12.2, V2L12.3, V2L12.4, V2L12.5, V2L13.1, V2L13.2, V2L13.3, V2L13.4, V2L13.5, V2L13.6, V2L14.1, V2L14.2, V2L14.3, V2L14.4, V2L14.5, V2L14.6, V2L15.1, V2L15.2, V2L15.3, V2L15.4, V2L15.5, V2L15.6]
+last_merged_pr: 171
 current_goal: >-
-  V2L15.5 now provides a pure deterministic read-only support report over canonical DenseDepthArtifact evidence with separate source-camera
-  coverage valid-pixel coverage explicit validity-defined holes optional confidence availability and descriptive valid-confidence means while
-  preserving the exact source artifact and metric provenance. Real CUDA PatchMatch execution for the optional V2L15.2 donor remains explicitly
-  deferred and unverified. Advance only V2L15.6 by running one CPU-only controlled dense-depth benchmark and closing the V2L15 lot review
-  without selecting a universal backend or treating synthetic contract evidence as real solver execution.
+  V2L15 is complete and its lot review passes with one retained CPU-only controlled benchmark over canonical DenseDepthArtifact evidence.
+  The optional V2L15.2 real CUDA PatchMatch donor remains explicitly deferred and unverified, no universal dense-depth backend is selected,
+  and no learned runtime has been promoted. Advance only V2L16.1 by defining the pure solver-independent immutable SurfaceModel metadata
+  contract that preserves exact source geometry local-frame scale and provenance semantics while declaring intended collision navigation and
+  measurement uses without asserting suitability.
 next_action: >-
-  Implement only V2L15.6 under its executable registry contract. Add the pure controlled dense-depth benchmark over one exact source geometry,
-  one trusted reference DenseDepthArtifact and at least two canonical candidate DenseDepthArtifact values; compose unchanged V2L15.5 support
-  metrics with reference-valid coverage plus median absolute and absolute-relative depth error on jointly valid pixels only. Retain one
-  deterministic CPU-only benchmark JSON and V2L15 lot review with no winner score threshold route default or shipping promotion. Do not execute
-  or claim the deferred V2L15.2 real CUDA PatchMatch lane, do not add a learned runtime or fill/fuse depth evidence, and do not implement V2L16.1
-  or any SurfaceModel behavior in the same work item.
+  Implement only V2L16.1 under its executable registry contract. Add the geometry.surface artifact kind, open SurfaceRepresentationName,
+  closed SurfaceIntendedUse values for collision measurement and navigation, and one frozen SurfaceModel provenance envelope over an exact
+  GeometrySolutionCandidate. Preserve exact local-frame and scale status, canonical source-artifact ancestry and intended-use metadata while
+  keeping intended use distinct from proven suitability. Do not execute meshing depth fusion TSDF SDF Poisson Open3D or another surface
+  generator, do not create runtime collision/nav assets or generated hole filling, do not add suitability metrics from V2L16.3, and do not
+  implement V2L16.2 or later behavior in the same PR.
 blockers: []
 architecture:
   product_blueprint: docs/01_PRODUCT.md
