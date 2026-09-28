@@ -8,7 +8,6 @@ from typing import Any, cast
 
 import pytest
 
-import wre.reconstruction.open3d_surface as surface_module
 from wre.domain.artifacts import ArtifactId, ArtifactKind, ArtifactRef
 from wre.domain.camera_solutions import (
     CameraProjectionModelName,
@@ -189,7 +188,8 @@ def _dense(
         _depth_field(camera, camera.solution_id.value)
         for camera in source.camera_solutions
     )
-    source_artifacts = source.source_artifacts + (
+    source_artifacts = (
+        *source.source_artifacts,
         extra_source or _artifact("source:dense-extra", "evidence.depth_support"),
     )
     return DenseDepthArtifact(
@@ -418,7 +418,7 @@ def test_constants_and_frozen_shapes_are_exact() -> None:
         "device",
         "depth_scale",
     )
-    assert tuple(field.name for field in fields(Open3dSurfaceEnvironmentIdentity))[0] == (
+    assert next(field.name for field in fields(Open3dSurfaceEnvironmentIdentity)) == (
         "manifest_sha256"
     )
     assert source.geometry_solution.scale_status is GeometryScaleStatus.UNRESOLVED
@@ -501,7 +501,7 @@ def test_environment_inspection_requires_exact_tensor_tsdf_api() -> None:
 
     wrong_version = _FakeOpen3d()
     wrong_version.__version__ = "0.20.1"
-    with pytest.raises(Open3dSurfaceEnvironmentError, match="0.20.0"):
+    with pytest.raises(Open3dSurfaceEnvironmentError, match=r"0\.20\.0"):
         inspect_open3d_surface_environment(environment, wrong_version)
 
     broken = _FakeOpen3d()
@@ -567,7 +567,11 @@ def test_real_call_boundary_forwards_depth_intrinsics_and_camera_from_local_pose
     }
     assert str(cast(dict[str, object], vbg_call[1])["device"]) == "CPU:0"
 
-    compute_calls = [value for name, value in module.calls if name == "compute_unique_block_coordinates"]
+    compute_calls = [
+        value
+        for name, value in module.calls
+        if name == "compute_unique_block_coordinates"
+    ]
     integrate_calls = [value for name, value in module.calls if name == "integrate"]
     assert len(compute_calls) == 2
     assert len(integrate_calls) == 2
