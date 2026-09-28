@@ -327,6 +327,29 @@ entries:
     failure_signals: []
     metric_names: []
     resume_mode: unsupported
+  - adapter_id: open3d.depth_tsdf_surface
+    capability:
+      name: geometry.surface.depth_fusion
+      input_kinds: [geometry.dense_depth]
+      output_kinds: [geometry.surface]
+    producer:
+      implementation: open3d.t.geometry.VoxelBlockGrid.depth_only
+      version: 0.20.0
+      revision: b6c5e196384ad71e75b6e6f9c5da22d046221f1d
+    dependency_refs: [open3d]
+    model: null
+    checkpoint: null
+    artifact_key_hardware_policy: required
+    license:
+      direct: MIT
+      review: pending
+      transitive_notes: "The exact optional Open3D 0.20.0 CPU environment is frozen as a 59-wheel Linux x86_64 CPython 3.12 closure with direct wheel-license metadata plus the exact qualification host-package inventory. The root Open3D source/wheel is MIT; transitive redistribution review remains pending."
+      redistribution_notes: "WRE keeps Open3D outside the mandatory uv environment, executes only the exact reviewed external CPU closure, installs WRE's own locked exifread dependency separately, performs no runtime download after setup, and does not authorize CUDA/SYCL or default promotion through this experimental descriptor."
+    shipping_status: experimental
+    reproducibility_notes: "V2L16.2 consumes exactly one canonical camera-z DenseDepthArtifact with canonical pinhole cameras, forwards camera-from-local extrinsics without inversion, uses caller-explicit local-unit TSDF parameters with depth_scale=1.0 on CPU:0, integrates depth only into Open3D VoxelBlockGrid tsdf+weight attributes, rejects empty/non-finite/triangleless output, and publishes exactly one geometry-only surface.ply plus canonical SurfaceModel/materialization provenance. Confidence is not thresholded, scale/frame semantics are preserved exactly, and intended-use metadata is not a suitability claim."
+    failure_signals: [dependency_unavailable, environment_incompatible]
+    metric_names: []
+    resume_mode: unsupported
   - adapter_id: selavpr_plus.visual_retrieval
     capability:
       name: retrieval.learned_pair_proposals
@@ -356,26 +379,3 @@ entries:
     metric_names: []
     resume_mode: unsupported
 
-  - adapter_id: open3d.depth_tsdf_surface
-    capability:
-      name: geometry.surface.depth_fusion
-      input_kinds: [geometry.dense_depth]
-      output_kinds: [geometry.surface]
-    producer:
-      implementation: open3d.t.geometry.VoxelBlockGrid.depth_only
-      version: 0.20.0
-      revision: b6c5e196384ad71e75b6e6f9c5da22d046221f1d
-    dependency_refs: [open3d]
-    model: null
-    checkpoint: null
-    artifact_key_hardware_policy: required
-    license:
-      direct: MIT
-      review: pending
-      transitive_notes: "The exact optional Open3D 0.20.0 CPU environment is frozen as a 59-wheel Linux x86_64 CPython 3.12 closure with direct wheel-license metadata plus the exact qualification host-package inventory. The root Open3D source/wheel is MIT; transitive redistribution review remains pending."
-      redistribution_notes: "WRE keeps Open3D outside the mandatory uv environment, executes only the exact reviewed external CPU closure, installs WRE's own locked exifread dependency separately, performs no runtime download after setup, and does not authorize CUDA/SYCL or default promotion through this experimental descriptor."
-    shipping_status: experimental
-    reproducibility_notes: "V2L16.2 consumes exactly one canonical camera-z DenseDepthArtifact with canonical pinhole cameras, forwards camera-from-local extrinsics without inversion, uses caller-explicit local-unit TSDF parameters with depth_scale=1.0 on CPU:0, integrates depth only into Open3D VoxelBlockGrid tsdf+weight attributes, rejects empty/non-finite/triangleless output, and publishes exactly one geometry-only surface.ply plus canonical SurfaceModel/materialization provenance. Confidence is not thresholded, scale/frame semantics are preserved exactly, and intended-use metadata is not a suitability claim."
-    failure_signals: [dependency_unavailable, environment_incompatible]
-    metric_names: []
-    resume_mode: unsupported
