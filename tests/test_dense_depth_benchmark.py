@@ -666,3 +666,50 @@ def test_workflow_is_cpu_only_and_retains_machine_readable_evidence() -> None:
         "patch_match_stereo",
     ):
         assert forbidden not in workflow.lower()
+
+def test_v2l15_lot_review_and_v2l16_handoff_are_recorded() -> None:
+    root = Path(__file__).resolve().parents[1]
+    review = (
+        root / "docs" / "reviews" / "V2L15-dense-depth-mvs-fusion-review.md"
+    ).read_text(encoding="utf-8")
+    for item in (
+        "V2L15.1",
+        "V2L15.2",
+        "V2L15.3",
+        "V2L15.4",
+        "V2L15.5",
+        "V2L15.6",
+        "V2L16.1",
+        "deferred / unverified",
+        "model-independent contract work only",
+        "No production dense-depth backend is promoted",
+    ):
+        assert item in review
+    assert "**Review status:** PASS" in review
+    assert "**V2L15 lot review: PASS.**" in review
+
+    reviews = (root / "registry" / "reviews.yaml").read_text(encoding="utf-8")
+    assert "  V2L15:\n    status: passed\n    reviewed_at: '2026-09-28'" in reviews
+    assert "docs/reviews/V2L15-dense-depth-mvs-fusion-review.md" in reviews
+
+    components = (root / "registry" / "components.yaml").read_text(encoding="utf-8")
+    dense_depth_block = components.split("  dense_depth_mvs:", 1)[1].split(
+        "  physical_surface:",
+        1,
+    )[0]
+    assert "src/wre/reconstruction/dense_depth_benchmark.py" in dense_depth_block
+    assert "tests/test_dense_depth_benchmark.py" in dense_depth_block
+    assert "status: implemented" in dense_depth_block
+
+    state = (root / "PROJECT_STATE.yaml").read_text(encoding="utf-8")
+    assert "V2L15.6" in state
+    assert "V2L16.1" in state
+
+    work_items = (root / "registry" / "work-items" / "v2m2.yaml").read_text(
+        encoding="utf-8"
+    )
+    assert "id: V2L15.6" in work_items
+    assert "title: Controlled dense depth benchmark and lot review\n    status: done" in work_items
+    assert "id: V2L16.1" in work_items
+    assert "title: SurfaceModel contract and intended use metadata" in work_items
+
