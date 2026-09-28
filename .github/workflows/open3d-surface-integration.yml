@@ -1,13 +1,6 @@
 name: open3d-surface-integration
 
 on:
-  # Bootstrap only: remove this branch-limited trigger after the reviewed environment lock is captured.
-  push:
-    branches:
-      - "feature/v2l16-2-open3d-surface-baseline"
-    paths:
-      - ".github/workflows/open3d-surface-integration.yml"
-      - "registry/external-environments/open3d-surface-cpu-0.20.0.json"
   pull_request:
     paths:
       - ".github/workflows/open3d-surface-integration.yml"
