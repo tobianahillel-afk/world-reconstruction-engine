@@ -1,0 +1,68 @@
+name: dense-depth-controlled-benchmark
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/dense-depth-controlled-benchmark.yml"
+      - "src/wre/reconstruction/dense_depth.py"
+      - "src/wre/reconstruction/dense_depth_coverage.py"
+      - "src/wre/reconstruction/dense_depth_benchmark.py"
+      - "src/wre/reconstruction/__init__.py"
+      - "tests/test_dense_depth_benchmark.py"
+      - "tests/fixtures/synthetic/dense-depth-controlled/**"
+      - "docs/reviews/V2L15-dense-depth-mvs-fusion-review.md"
+      - "registry/components.yaml"
+      - "registry/reviews.yaml"
+      - "registry/work-items/v2m2.yaml"
+      - "PROJECT_STATE.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    name: cpu-controlled-dense-depth-evidence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout WRE
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.13"
+          python-version: "3.12.12"
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Install locked development environment
+        run: uv sync --frozen --group dev
+
+      - name: Exercise controlled dense depth benchmark
+        env:
+          WRE_DENSE_DEPTH_CONTROLLED_BENCHMARK: "1"
+          WRE_DENSE_DEPTH_CONTROLLED_BENCHMARK_OUTPUT: ${{ runner.temp }}/v2l15-6-controlled-dense-depth.json
+        run: >-
+          uv run python -m pytest
+          tests/test_dense_depth_benchmark.py
+          -k retained_controlled_dense_depth_benchmark
+          -vv
+
+      - name: Retain machine-readable dense depth benchmark evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v2l15-6-controlled-dense-depth-benchmark
+          path: ${{ runner.temp }}/v2l15-6-controlled-dense-depth.json
+          if-no-files-found: error
+          retention-days: 30
