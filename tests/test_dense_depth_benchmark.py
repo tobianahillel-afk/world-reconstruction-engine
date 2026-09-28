@@ -350,7 +350,7 @@ def test_request_rejects_wrong_type_order_duplicates_and_reference_identity() ->
         artifact_ref=request.reference_depth.artifact_ref,
     )
     with pytest.raises(ValueError, match="reference ArtifactRef"):
-        replace(request, candidates=(duplicate_reference, partial))
+        replace(request, candidates=(partial, duplicate_reference))
 
 
 def test_request_rejects_different_source_geometry_without_alignment() -> None:
@@ -469,15 +469,16 @@ def test_support_metric_observations_and_provenance_are_retained_unchanged() -> 
     item = result.candidates[0]
     expected = evaluate_dense_depth_coverage(item.candidate)
 
-    expected_by_name = {
+    assert item.coverage == expected
+    coverage_by_name = {
         observation.descriptor.name.value: observation
-        for observation in expected.metrics.observations
+        for observation in item.coverage.metrics.observations
     }
     record_by_name = {
         observation.descriptor.name.value: observation
         for observation in item.benchmark_record.metrics.observations
     }
-    for name, observation in expected_by_name.items():
+    for name, observation in coverage_by_name.items():
         assert record_by_name[name] is observation
 
     reference_names = {
