@@ -141,8 +141,10 @@ jobs:
               wheel_path.write_bytes(payload)
               with zipfile.ZipFile(wheel_path) as archive:
                   metadata_names = [
-                      member for member in archive.namelist()
+                      member
+                      for member in archive.namelist()
                       if member.endswith(".dist-info/METADATA")
+                      and member.count("/") == 1
                   ]
                   if len(metadata_names) != 1:
                       raise SystemExit(
