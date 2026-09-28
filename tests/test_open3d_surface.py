@@ -588,7 +588,7 @@ def test_wrong_open3d_version_fails_before_output_creation(tmp_path: Path) -> No
     module = _FakeOpen3d()
     module.__version__ = "0.21.0"
 
-    with pytest.raises(Open3dSurfaceEnvironmentError, match=r"exactly 0\\.20\\.0"):
+    with pytest.raises(Open3dSurfaceEnvironmentError, match=r"exactly 0\.20\.0"):
         _adapter(tmp_path, module=module).derive()
     assert not (tmp_path / "surface-output").exists()
 
@@ -847,7 +847,7 @@ def test_symlink_output_path_is_rejected_without_touching_target(tmp_path: Path)
 
 def test_extra_output_or_appearance_ply_fails_and_cleans_output(tmp_path: Path) -> None:
     extra = _FakeOpen3d(extra_output=True)
-    with pytest.raises(Open3dSurfaceError, match=r"exactly surface\\.ply"):
+    with pytest.raises(Open3dSurfaceError, match=r"exactly surface\.ply"):
         _adapter(tmp_path / "extra", module=extra).derive()
     assert not (tmp_path / "extra" / "surface-output").exists()
 
