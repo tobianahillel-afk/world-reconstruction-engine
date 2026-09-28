@@ -116,6 +116,7 @@ def _candidate(
     token: str,
     *,
     cameras: tuple[CameraSolution, ...],
+    depth_fields: tuple[DepthField, ...],
     scale: GeometryScaleStatus = GeometryScaleStatus.UNRESOLVED,
     source_artifacts: tuple[ArtifactRef, ...],
 ) -> GeometrySolutionCandidate:
@@ -125,14 +126,14 @@ def _candidate(
         local_frame_id=frame,
         scale_status=scale,
         camera_solution_ids=tuple(camera.solution_id for camera in cameras),
-        depth_field_ids=(),
+        depth_field_ids=tuple(depth.depth_field_id for depth in depth_fields),
         point_map_ids=(),
         metrics=_metrics(),
     )
     return GeometrySolutionCandidate(
         geometry_solution=geometry,
         camera_solutions=cameras,
-        depth_fields=(),
+        depth_fields=depth_fields,
         point_maps=(),
         producer=_producer(f"geometry:{token}"),
         source_artifacts=source_artifacts,
@@ -186,10 +187,23 @@ def _dense(
         intrinsics=intrinsics,
         translation=(-1.0, 0.75, 2.0),
     )
+    depth_a = _depth(
+        camera_a,
+        "a",
+        convention=convention,
+        confidence=confidence_a,
+    )
+    depth_b = _depth(
+        camera_b,
+        "b",
+        convention=convention,
+        confidence=confidence_b,
+    )
     ancestor = _artifact("artifact:geometry", "geometry.solution")
     source = _candidate(
         token,
         cameras=(camera_a, camera_b),
+        depth_fields=(depth_a, depth_b),
         scale=scale,
         source_artifacts=(ancestor,),
     )
@@ -206,20 +220,7 @@ def _dense(
             artifact_kind=DENSE_DEPTH_ARTIFACT_KIND,
         ),
         source_geometry=source,
-        depth_fields=(
-            _depth(
-                camera_a,
-                "a",
-                convention=convention,
-                confidence=confidence_a,
-            ),
-            _depth(
-                camera_b,
-                "b",
-                convention=convention,
-                confidence=confidence_b,
-            ),
-        ),
+        depth_fields=(depth_a, depth_b),
         producer=_producer("dense"),
         source_artifacts=sources,
     )
