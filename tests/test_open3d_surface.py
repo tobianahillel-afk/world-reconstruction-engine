@@ -185,8 +185,7 @@ def _dense(
     extra_source: ArtifactRef | None = None,
 ) -> DenseDepthArtifact:
     depth_fields = fields_value or tuple(
-        _depth_field(camera, camera.solution_id.value)
-        for camera in source.camera_solutions
+        _depth_field(camera, camera.solution_id.value) for camera in source.camera_solutions
     )
     source_artifacts = (
         *source.source_artifacts,
@@ -299,12 +298,8 @@ class _FakeMesh:
     ) -> None:
         vertex_count = len(cast(Any, vertices))
         triangle_count = len(cast(Any, triangles))
-        self.vertex = SimpleNamespace(
-            positions=_FakeMeshAttribute(vertices, (vertex_count, 3))
-        )
-        self.triangle = SimpleNamespace(
-            indices=_FakeMeshAttribute(triangles, (triangle_count, 3))
-        )
+        self.vertex = SimpleNamespace(positions=_FakeMeshAttribute(vertices, (vertex_count, 3)))
+        self.triangle = SimpleNamespace(indices=_FakeMeshAttribute(triangles, (triangle_count, 3)))
 
 
 class _FakeVoxelBlockGrid:
@@ -395,9 +390,7 @@ def test_constants_and_frozen_shapes_are_exact() -> None:
     assert OPEN3D_SURFACE_PRODUCER_IMPLEMENTATION == "open3d.t.geometry.VoxelBlockGrid.depth_only"
     assert OPEN3D_SURFACE_PRODUCER_VERSION == "0.20.0"
     assert OPEN3D_SURFACE_SOURCE_REVISION == "b6c5e196384ad71e75b6e6f9c5da22d046221f1d"
-    assert OPEN3D_SURFACE_WHEEL_FILENAME == (
-        "open3d-0.20.0-cp312-cp312-manylinux_2_35_x86_64.whl"
-    )
+    assert OPEN3D_SURFACE_WHEEL_FILENAME == ("open3d-0.20.0-cp312-cp312-manylinux_2_35_x86_64.whl")
     assert OPEN3D_SURFACE_WHEEL_SHA256.value == (
         "f5cc6106d9c0c41beb8160aa99c2b663e7f08588a598ec7d464391a4cfe684d6"
     )
@@ -568,9 +561,7 @@ def test_real_call_boundary_forwards_depth_intrinsics_and_camera_from_local_pose
     assert str(cast(dict[str, object], vbg_call[1])["device"]) == "CPU:0"
 
     compute_calls = [
-        value
-        for name, value in module.calls
-        if name == "compute_unique_block_coordinates"
+        value for name, value in module.calls if name == "compute_unique_block_coordinates"
     ]
     integrate_calls = [value for name, value in module.calls if name == "integrate"]
     assert len(compute_calls) == 2
@@ -638,9 +629,7 @@ def test_real_call_boundary_forwards_depth_intrinsics_and_camera_from_local_pose
     assert result.materialization.entries[0].relative_path == "surface.ply"
     assert result.materialization.entries[0].sha256 == materialized_hash.sha256
     assert result.materialization.entries[0].byte_length == materialized_hash.byte_length
-    assert tuple(path.name for path in (tmp_path / "surface-output").iterdir()) == (
-        "surface.ply",
-    )
+    assert tuple(path.name for path in (tmp_path / "surface-output").iterdir()) == ("surface.ply",)
 
     forbidden_call_names = {
         "color",
@@ -675,10 +664,7 @@ def test_producer_identity_binds_config_and_exact_external_environment(tmp_path:
     )
     assert first.surface_model.producer.producer.version == OPEN3D_SURFACE_PRODUCER_VERSION
     assert first.surface_model.producer.producer.revision == OPEN3D_SURFACE_SOURCE_REVISION
-    assert (
-        first.surface_model.producer.configuration
-        != second.surface_model.producer.configuration
-    )
+    assert first.surface_model.producer.configuration != second.surface_model.producer.configuration
     assert first.surface_model.artifact_ref != second.surface_model.artifact_ref
 
 
