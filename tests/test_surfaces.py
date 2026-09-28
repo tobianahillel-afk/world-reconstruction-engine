@@ -109,9 +109,7 @@ def _candidate(
         point_maps=(point_map,),
         producer=_producer(f"geometry:{token}"),
         source_artifacts=(
-            source_artifacts
-            if source_artifacts is not None
-            else (_artifact(f"artifact:{token}"),)
+            source_artifacts if source_artifacts is not None else (_artifact(f"artifact:{token}"),)
         ),
     )
 
@@ -140,9 +138,7 @@ def _surface(
         scale_status=scale_status or source_geometry.geometry_solution.scale_status,
         producer=_producer(token),
         source_artifacts=(
-            source_artifacts
-            if source_artifacts is not None
-            else source_geometry.source_artifacts
+            source_artifacts if source_artifacts is not None else source_geometry.source_artifacts
         ),
     )
 
