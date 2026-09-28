@@ -141,6 +141,7 @@ jobs:
                       name
                       for name in archive.namelist()
                       if name.endswith(".dist-info/METADATA")
+                      and name.count("/") == 1
                   ]
                   if len(metadata_paths) != 1:
                       raise SystemExit(
