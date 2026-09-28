@@ -300,7 +300,10 @@ def _validate_intended_uses(value: object) -> tuple[SurfaceIntendedUse, ...]:
 
 
 def _validate_source(source: DenseDepthArtifact) -> dict[str, CameraSolution]:
-    cameras = {camera.solution_id.value: camera for camera in source.source_geometry.camera_solutions}
+    cameras = {
+        camera.solution_id.value: camera
+        for camera in source.source_geometry.camera_solutions
+    }
     for depth in source.depth_fields:
         if depth.depth_value_convention != OPEN3D_CAMERA_Z_CONVENTION:
             raise Open3dSurfaceError(
