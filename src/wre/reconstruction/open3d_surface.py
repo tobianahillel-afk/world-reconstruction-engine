@@ -301,8 +301,7 @@ def _validate_intended_uses(value: object) -> tuple[SurfaceIntendedUse, ...]:
 
 def _validate_source(source: DenseDepthArtifact) -> dict[str, CameraSolution]:
     cameras = {
-        camera.solution_id.value: camera
-        for camera in source.source_geometry.camera_solutions
+        camera.solution_id.value: camera for camera in source.source_geometry.camera_solutions
     }
     for depth in source.depth_fields:
         if depth.depth_value_convention != OPEN3D_CAMERA_Z_CONVENTION:
@@ -434,9 +433,7 @@ def _canonical_source_artifacts(source: DenseDepthArtifact) -> tuple[ArtifactRef
         source.artifact_ref,
         *source.source_artifacts,
     )
-    by_identity = {
-        (item.artifact_id.value, item.artifact_kind.value): item for item in references
-    }
+    by_identity = {(item.artifact_id.value, item.artifact_kind.value): item for item in references}
     return tuple(by_identity[key] for key in sorted(by_identity))
 
 
