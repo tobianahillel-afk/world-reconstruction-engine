@@ -77,6 +77,71 @@ jobs:
           assert pip.__version__ == "25.2", pip.__version__
           PY
 
+      - name: Install and inventory required host graphics runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends libegl1 libgl1 libgomp1
+
+          system_packages="$RUNNER_TEMP/open3d-system-packages.json"
+          SYSTEM_PACKAGES="$system_packages" .venv-open3d/bin/python - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import os
+          import re
+          import subprocess
+          from pathlib import Path
+
+          names = ("libegl1", "libgl1", "libgomp1")
+          records = []
+          for name in names:
+              query = subprocess.check_output(
+                  [
+                      "dpkg-query",
+                      "-W",
+                      "-f",
+                      r"${Package}\t${Version}\t${Architecture}\n",
+                      name,
+                  ],
+                  text=True,
+              ).strip()
+              package, version, architecture = query.split("\t")
+              copyright_path = Path("/usr/share/doc") / name / "copyright"
+              if not copyright_path.is_file():
+                  raise SystemExit(f"{name}: missing Debian copyright file")
+              payload = copyright_path.read_bytes()
+              text = payload.decode("utf-8", errors="replace")
+              license_tokens = sorted(
+                  {
+                      match.group(1).strip()
+                      for match in re.finditer(r"^License:\s*(.+?)\s*$", text, re.MULTILINE)
+                      if match.group(1).strip()
+                  }
+              )
+              if not license_tokens:
+                  raise SystemExit(f"{name}: no License fields in Debian copyright file")
+              records.append(
+                  {
+                      "architecture": architecture,
+                      "copyright_file": str(copyright_path),
+                      "copyright_sha256": hashlib.sha256(payload).hexdigest(),
+                      "license_tokens": license_tokens,
+                      "name": package,
+                      "version": version,
+                  }
+              )
+
+          Path(os.environ["SYSTEM_PACKAGES"]).write_text(
+              json.dumps(records, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print(json.dumps(records, sort_keys=True))
+          PY
+          echo "WRE_OPEN3D_SYSTEM_PACKAGES=$system_packages" >> "$GITHUB_ENV"
+
       - name: Resolve exact Open3D wheel closure without executing it
         shell: bash
         run: |
@@ -89,7 +154,7 @@ jobs:
 
           .venv-open3d/bin/python -m pip install             --dry-run             --ignore-installed             --only-binary=:all:             --no-cache-dir             --report "$report"             "open3d==0.20.0"
 
-          REPORT="$report" WHEEL_DIR="$wheel_dir" GENERATED="$generated"           .venv-open3d/bin/python - <<'PY'
+          REPORT="$report" WHEEL_DIR="$wheel_dir" GENERATED="$generated" SYSTEM_PACKAGES="$WRE_OPEN3D_SYSTEM_PACKAGES"           .venv-open3d/bin/python - <<'PY'
           from __future__ import annotations
 
           import hashlib
@@ -105,6 +170,9 @@ jobs:
           report = json.loads(Path(os.environ["REPORT"]).read_text(encoding="utf-8"))
           wheel_dir = Path(os.environ["WHEEL_DIR"])
           generated = Path(os.environ["GENERATED"])
+          system_packages = json.loads(
+              Path(os.environ["SYSTEM_PACKAGES"]).read_text(encoding="utf-8")
+          )
 
           artifacts = []
           for item in report.get("install", []):
@@ -234,6 +302,8 @@ jobs:
                   "architecture": "x86_64",
                   "device": "CPU:0",
               },
+              "requested_system_packages": ["libegl1", "libgl1", "libgomp1"],
+              "system_packages": system_packages,
               "resolver": {
                   "pip": "25.2",
                   "only_binary": True,
