@@ -525,7 +525,7 @@ class Open3dTsdfSurfaceAdapter:
             voxel_grid = open3d.t.geometry.VoxelBlockGrid(
                 attr_names=("tsdf", "weight"),
                 attr_dtypes=(open3d.core.float32, open3d.core.float32),
-                attr_channels=((1,), (1,)),
+                attr_channels=(1, 1),
                 voxel_size=self.config.voxel_size_local_units,
                 block_resolution=self.config.block_resolution,
                 block_count=self.config.block_count,
