@@ -46,17 +46,10 @@ from wre.reconstruction.dense_depth_coverage import (
 from wre.reconstruction.geometry_solution_comparison import GeometrySolutionCandidate
 
 _FIXTURE_PATH = (
-    Path(__file__).parent
-    / "fixtures"
-    / "synthetic"
-    / "dense-depth-controlled"
-    / "fixture.json"
+    Path(__file__).parent / "fixtures" / "synthetic" / "dense-depth-controlled" / "fixture.json"
 )
 _WORKFLOW_PATH = (
-    Path(__file__).parents[1]
-    / ".github"
-    / "workflows"
-    / "dense-depth-controlled-benchmark.yml"
+    Path(__file__).parents[1] / ".github" / "workflows" / "dense-depth-controlled-benchmark.yml"
 )
 _EXPECTED_FIXTURE_SHA256 = "7356108b43fe0be5b1c206afa5f14d35262ba5c7d8b51fb093a969dc3dad3f1a"
 _FORBIDDEN_RECORD_KEYS = {
@@ -244,9 +237,7 @@ def _request() -> DenseDepthBenchmarkRequest:
             sha256=Sha256Digest(fixture_sha),
         ),
         hardware=HardwareRuntimeIdentity(
-            sha256=Sha256Digest(
-                hashlib.sha256(b"v2l15.6-controlled-cpu-locked-wre").hexdigest()
-            )
+            sha256=Sha256Digest(hashlib.sha256(b"v2l15.6-controlled-cpu-locked-wre").hexdigest())
         ),
         reference=reference,
         candidates=candidates,
@@ -255,8 +246,7 @@ def _request() -> DenseDepthBenchmarkRequest:
 
 def _metric_values(vector: MetricVector) -> dict[str, float]:
     return {
-        observation.descriptor.name.value: observation.value
-        for observation in vector.observations
+        observation.descriptor.name.value: observation.value for observation in vector.observations
     }
 
 
@@ -307,8 +297,7 @@ def _result_document(result: DenseDepthBenchmarkResult) -> dict[str, Any]:
     }
     for item in result.candidates:
         observed_names = {
-            observation.descriptor.name.value
-            for observation in item.reference_metrics.observations
+            observation.descriptor.name.value for observation in item.reference_metrics.observations
         }
         candidates.append(
             {
@@ -479,16 +468,14 @@ def test_overlapping_field_semantics_fail_closed_without_conversion() -> None:
 
 def test_controlled_reference_metrics_use_exact_valid_support_and_medians() -> None:
     result = benchmark_dense_depth_candidates(_request())
-    by_id = {
-        item.candidate.artifact_ref.artifact_id.value: item for item in result.candidates
-    }
+    by_id = {item.candidate.artifact_ref.artifact_id.value: item for item in result.candidates}
 
     full = _metric_values(by_id["dense:candidate-full"].reference_metrics)
     assert full["geometry.dense_depth.reference_valid_coverage_ratio"] == 1.0
     assert full["geometry.dense_depth.reference_absolute_error_median"] == 0.5
-    assert full[
-        "geometry.dense_depth.reference_absolute_relative_error_median"
-    ] == pytest.approx(0.25)
+    assert full["geometry.dense_depth.reference_absolute_relative_error_median"] == pytest.approx(
+        0.25
+    )
 
     partial = _metric_values(by_id["dense:candidate-partial"].reference_metrics)
     assert partial["geometry.dense_depth.reference_valid_coverage_ratio"] == pytest.approx(
@@ -548,10 +535,7 @@ def test_confidence_is_informational_and_cannot_change_reference_error_values() 
             confidence=(
                 None
                 if field.confidence is None
-                else tuple(
-                    1.0 if supported else 0.0
-                    for supported in field.validity
-                )
+                else tuple(1.0 if supported else 0.0 for supported in field.validity)
             ),
         )
         for field in first.depth_fields
@@ -570,14 +554,13 @@ def test_confidence_is_informational_and_cannot_change_reference_error_values() 
     original = benchmark_dense_depth_candidates(request).candidates[0]
     alternate = benchmark_dense_depth_candidates(alternate_request).candidates[0]
 
-    assert _metric_values(original.reference_metrics) == _metric_values(
-        alternate.reference_metrics
-    )
+    assert _metric_values(original.reference_metrics) == _metric_values(alternate.reference_metrics)
     support_original = _metric_values(original.coverage.metrics)
     support_alternate = _metric_values(alternate.coverage.metrics)
-    assert support_original["geometry.dense_depth.valid_confidence_mean"] != support_alternate[
-        "geometry.dense_depth.valid_confidence_mean"
-    ]
+    assert (
+        support_original["geometry.dense_depth.valid_confidence_mean"]
+        != support_alternate["geometry.dense_depth.valid_confidence_mean"]
+    )
 
 
 def test_benchmark_records_are_descriptive_quality_records_without_selection_semantics() -> None:
@@ -593,8 +576,7 @@ def test_benchmark_records_are_descriptive_quality_records_without_selection_sem
         assert record.performance_evidence == ()
         assert record.comparison_baseline is None
         names = tuple(
-            observation.descriptor.name.value
-            for observation in record.metrics.observations
+            observation.descriptor.name.value for observation in record.metrics.observations
         )
         assert names == tuple(sorted(names))
         for attribute in (
