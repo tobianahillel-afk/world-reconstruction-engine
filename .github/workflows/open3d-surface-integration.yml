@@ -307,6 +307,261 @@ jobs:
             echo "----- END GENERATED OPEN3D SURFACE ENVIRONMENT LOCK -----"
           fi
 
+      - name: Install exact locked Open3D CPU environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          runtime="$RUNNER_TEMP/open3d-surface-runtime"
+          wheel_dir="$RUNNER_TEMP/open3d-surface-wheels"
+          rm -rf "$runtime"
+          uv venv "$runtime" --python 3.12.12
+          uv pip install \
+            --python "$runtime/bin/python" \
+            --no-index \
+            --find-links "$wheel_dir" \
+            "open3d==$OPEN3D_VERSION"
+
+          LOCK_PATH="$LOCK_PATH" "$runtime/bin/python" - <<'PY'
+          import importlib.metadata
+          import json
+          import re
+          from pathlib import Path
+
+          lock = json.loads(Path(__import__("os").environ["LOCK_PATH"]).read_text(encoding="utf-8"))
+
+          def normalized(value: str) -> str:
+              return re.sub(r"[-_.]+", "-", value).lower()
+
+          installed = {
+              normalized(dist.metadata["Name"]): dist.version
+              for dist in importlib.metadata.distributions()
+              if dist.metadata.get("Name")
+          }
+          expected = {
+              normalized(item["metadata_name"]): item["metadata_version"]
+              for item in lock["artifacts"]
+          }
+          missing = sorted(name for name in expected if name not in installed)
+          mismatched = sorted(
+              (name, expected[name], installed.get(name))
+              for name in expected
+              if installed.get(name) != expected[name]
+          )
+          if missing or mismatched:
+              raise SystemExit(
+                  f"exact Open3D environment mismatch: missing={missing}, mismatched={mismatched}"
+              )
+
+          import open3d
+
+          if open3d.__version__ != "0.20.0":
+              raise SystemExit(f"unexpected Open3D version: {open3d.__version__!r}")
+          print(f"verified {len(expected)} exact installed Open3D runtime distributions")
+          PY
+
+      - name: Exercise real Open3D CPU depth-only surface adapter
+        shell: bash
+        env:
+          PYTHONPATH: ${{ github.workspace }}/src
+        run: |
+          set -euo pipefail
+          runtime="$RUNNER_TEMP/open3d-surface-runtime"
+          "$runtime/bin/python" - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import os
+          import shutil
+          from pathlib import Path
+
+          import open3d as o3d
+
+          from wre.domain.artifacts import ArtifactId, ArtifactKind, ArtifactRef
+          from wre.domain.camera_solutions import (
+              CameraProjectionModelName,
+              CameraSolution,
+              CameraSolutionId,
+          )
+          from wre.domain.cameras import ImageDimensions
+          from wre.domain.depth_fields import (
+              DepthField,
+              DepthFieldId,
+              DepthValueConventionName,
+          )
+          from wre.domain.fragments import LocalFrameId
+          from wre.domain.geometry_solutions import (
+              GeometryScaleStatus,
+              GeometrySolution,
+              GeometrySolutionId,
+          )
+          from wre.domain.metrics import MetricVector
+          from wre.domain.observations import ObservationId, Sha256Digest
+          from wre.domain.producer_identity import (
+              ArtifactProducerIdentity,
+              ConfigurationIdentity,
+          )
+          from wre.domain.runs import ProducerRef
+          from wre.domain.surfaces import SurfaceIntendedUse
+          from wre.reconstruction.dense_depth import (
+              DENSE_DEPTH_ARTIFACT_KIND,
+              DenseDepthArtifact,
+          )
+          from wre.reconstruction.geometry_solution_comparison import (
+              GeometrySolutionCandidate,
+          )
+          from wre.reconstruction.open3d_surface import (
+              OPEN3D_SURFACE_ENVIRONMENT_LOCK_SHA256,
+              Open3dTsdfSurfaceAdapter,
+              Open3dTsdfSurfaceConfig,
+          )
+
+          def metrics() -> MetricVector:
+              return MetricVector(observations=())
+
+          def producer(token: str) -> ArtifactProducerIdentity:
+              return ArtifactProducerIdentity(
+                  producer=ProducerRef(
+                      implementation=f"integration.{token}",
+                      version="1",
+                      revision=f"revision:{token}",
+                  ),
+                  configuration=ConfigurationIdentity(
+                      sha256=Sha256Digest(hashlib.sha256(token.encode("utf-8")).hexdigest())
+                  ),
+              )
+
+          width = 64
+          height = 48
+          dimensions = ImageDimensions(width_px=width, height_px=height)
+          frame = LocalFrameId("frame:open3d-integration")
+          camera_a = CameraSolution(
+              solution_id=CameraSolutionId("camera:open3d:a"),
+              observation_id=ObservationId("obs:open3d:a"),
+              local_frame_id=frame,
+              projection_model=CameraProjectionModelName("pinhole"),
+              dimensions=dimensions,
+              intrinsic_parameters=(60.0, 60.0, 31.5, 23.5),
+              rotation_matrix=((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)),
+              translation_xyz=(0.0, 0.0, 0.0),
+              uncertainty_artifacts=(),
+              metrics=metrics(),
+          )
+          camera_b = CameraSolution(
+              solution_id=CameraSolutionId("camera:open3d:b"),
+              observation_id=ObservationId("obs:open3d:b"),
+              local_frame_id=frame,
+              projection_model=CameraProjectionModelName("pinhole"),
+              dimensions=dimensions,
+              intrinsic_parameters=(60.0, 60.0, 31.5, 23.5),
+              rotation_matrix=((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)),
+              translation_xyz=(0.05, 0.0, 0.0),
+              uncertainty_artifacts=(),
+              metrics=metrics(),
+          )
+          depth_values = tuple(1.5 for _ in range(width * height))
+          validity = tuple(True for _ in depth_values)
+          depth_a = DepthField(
+              depth_field_id=DepthFieldId("depth:open3d:a"),
+              observation_id=camera_a.observation_id,
+              camera_solution_id=camera_a.solution_id,
+              dimensions=dimensions,
+              depth_value_convention=DepthValueConventionName("camera-z"),
+              depth_values=depth_values,
+              validity=validity,
+              confidence=None,
+              metrics=metrics(),
+          )
+          depth_b = DepthField(
+              depth_field_id=DepthFieldId("depth:open3d:b"),
+              observation_id=camera_b.observation_id,
+              camera_solution_id=camera_b.solution_id,
+              dimensions=dimensions,
+              depth_value_convention=DepthValueConventionName("camera-z"),
+              depth_values=depth_values,
+              validity=validity,
+              confidence=None,
+              metrics=metrics(),
+          )
+          ancestor = ArtifactRef(
+              artifact_id=ArtifactId("artifact:open3d-integration-geometry"),
+              artifact_kind=ArtifactKind("geometry.solution"),
+          )
+          geometry = GeometrySolution(
+              geometry_solution_id=GeometrySolutionId("geometry:open3d-integration"),
+              local_frame_id=frame,
+              scale_status=GeometryScaleStatus.UNRESOLVED,
+              camera_solution_ids=(camera_a.solution_id, camera_b.solution_id),
+              depth_field_ids=(depth_a.depth_field_id, depth_b.depth_field_id),
+              point_map_ids=(),
+              metrics=metrics(),
+          )
+          candidate = GeometrySolutionCandidate(
+              geometry_solution=geometry,
+              camera_solutions=(camera_a, camera_b),
+              depth_fields=(depth_a, depth_b),
+              point_maps=(),
+              producer=producer("geometry"),
+              source_artifacts=(ancestor,),
+          )
+          dense = DenseDepthArtifact(
+              artifact_ref=ArtifactRef(
+                  artifact_id=ArtifactId("artifact:open3d-integration-dense"),
+                  artifact_kind=DENSE_DEPTH_ARTIFACT_KIND,
+              ),
+              source_geometry=candidate,
+              depth_fields=(depth_a, depth_b),
+              producer=producer("dense"),
+              source_artifacts=(ancestor,),
+          )
+
+          output_root = Path(os.environ["RUNNER_TEMP"]) / "open3d-real-surface"
+          shutil.rmtree(output_root, ignore_errors=True)
+          before_depths = dense.depth_fields
+          before_values = tuple(item.depth_values for item in dense.depth_fields)
+
+          result = Open3dTsdfSurfaceAdapter(
+              source=dense,
+              output_root=output_root,
+              intended_uses=(SurfaceIntendedUse.COLLISION,),
+              config=Open3dTsdfSurfaceConfig(
+                  voxel_size_local_units=0.03,
+                  max_depth_local_units=3.0,
+                  trunc_voxel_multiplier=4.0,
+                  block_resolution=8,
+                  block_count=5000,
+                  mesh_weight_threshold=1.0,
+              ),
+              module=o3d,
+          ).derive()
+
+          output = output_root / "surface.ply"
+          if not output.is_file() or output.stat().st_size <= 0:
+              raise SystemExit("real Open3D adapter did not publish a non-empty surface.ply")
+          if result.surface_model.source_geometry is not candidate:
+              raise SystemExit("real Open3D adapter changed source geometry identity")
+          if result.surface_model.local_frame_id != frame:
+              raise SystemExit("real Open3D adapter changed local frame identity")
+          if result.surface_model.scale_status is not GeometryScaleStatus.UNRESOLVED:
+              raise SystemExit("real Open3D adapter changed unresolved scale semantics")
+          if dense.depth_fields is not before_depths:
+              raise SystemExit("real Open3D adapter replaced source depth tuple")
+          if tuple(item.depth_values for item in dense.depth_fields) != before_values:
+              raise SystemExit("real Open3D adapter mutated source depth values")
+          if dense.artifact_ref not in result.surface_model.source_artifacts:
+              raise SystemExit("real Open3D adapter dropped DenseDepthArtifact ancestry")
+          if result.materialization.entries[0].relative_path != "surface.ply":
+              raise SystemExit("real Open3D materialization path drift")
+          if OPEN3D_SURFACE_ENVIRONMENT_LOCK_SHA256.value != (
+              "ac9b2e1346e7b0a0bbed92eee22887e0e662cc303ea9f97df0e5fde835b07214"
+          ):
+              raise SystemExit("Open3D environment lock identity drift")
+
+          print(
+              "real Open3D CPU surface integration passed: "
+              f"{output.stat().st_size} bytes, artifact={result.surface_model.artifact_ref.artifact_id.value}"
+          )
+          PY
+
       - name: Retain machine-readable environment qualification evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
