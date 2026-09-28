@@ -336,7 +336,7 @@ entries:
       implementation: open3d.t.geometry.VoxelBlockGrid.depth_only
       version: 0.20.0
       revision: b6c5e196384ad71e75b6e6f9c5da22d046221f1d
-    dependency_refs: [open3d]
+    dependency_refs: [open3d_surface_cpu]
     model: null
     checkpoint: null
     artifact_key_hardware_policy: required
