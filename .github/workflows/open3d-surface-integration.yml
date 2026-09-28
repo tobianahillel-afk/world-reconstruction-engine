@@ -1,15 +1,6 @@
 name: open3d-surface-integration
 
 on:
-  # Bootstrap only: remove this branch-limited trigger after the reviewed environment lock is captured.
-  push:
-    branches:
-      - "feature/v2l16-2-open3d-depth-surface"
-    paths:
-      - ".github/workflows/open3d-surface-integration.yml"
-      - "registry/external-environments/open3d-surface-cpu-0.20.0.json"
-      - "src/wre/reconstruction/open3d_surface.py"
-      - "tests/test_open3d_surface.py"
   pull_request:
     paths:
       - ".github/workflows/open3d-surface-integration.yml"
@@ -44,6 +35,9 @@ jobs:
       OPEN3D_WHEEL_SHA256: f5cc6106d9c0c41beb8160aa99c2b663e7f08588a598ec7d464391a4cfe684d6
       OPEN3D_WHEEL_BYTES: "400788891"
       OPEN3D_SOURCE_REVISION: b6c5e196384ad71e75b6e6f9c5da22d046221f1d
+      WRE_EXIFREAD_WHEEL: exifread-3.5.1-py3-none-any.whl
+      WRE_EXIFREAD_WHEEL_URL: https://files.pythonhosted.org/packages/e2/a3/20e34a55c7b225110d3822d07c3cab9e8653d9c179e36783f2ed632a96a7/exifread-3.5.1-py3-none-any.whl
+      WRE_EXIFREAD_WHEEL_SHA256: e5426ce2857423ad401e575ea9d159dc97449dc041fb6e61b35109caea72c311
 
     steps:
       - name: Checkout WRE
@@ -365,6 +359,31 @@ jobs:
           set -euo pipefail
           wheel_dir="$RUNNER_TEMP/open3d-wheels"
           .venv-open3d/bin/python -m pip install             --no-index             --find-links "$wheel_dir"             --no-cache-dir             "open3d==0.20.0"
+
+      - name: Install exact WRE runtime dependency from uv.lock identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          wheel="$RUNNER_TEMP/$WRE_EXIFREAD_WHEEL"
+          WHEEL_URL="$WRE_EXIFREAD_WHEEL_URL" WHEEL_PATH="$wheel" .venv-open3d/bin/python - <<'PY'
+          import os
+          import urllib.request
+          from pathlib import Path
+
+          request = urllib.request.Request(
+              os.environ["WHEEL_URL"],
+              headers={"User-Agent": "world-reconstruction-engine-ci/1.0"},
+          )
+          with urllib.request.urlopen(request, timeout=60) as response:
+              Path(os.environ["WHEEL_PATH"]).write_bytes(response.read())
+          PY
+          echo "$WRE_EXIFREAD_WHEEL_SHA256  $wheel" | sha256sum --check -
+          uv pip install --python .venv-open3d/bin/python --no-deps "$wheel"
+          .venv-open3d/bin/python - <<'PY'
+          import exifread
+
+          assert exifread.__version__ == "3.5.1", exifread.__version__
+          PY
 
       - name: Verify exact Open3D tensor TSDF API
         shell: bash
