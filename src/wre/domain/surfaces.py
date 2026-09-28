@@ -122,9 +122,7 @@ class SurfaceModel:
         if not isinstance(self.source_geometry, GeometrySolutionCandidate):
             raise TypeError("surface_model.source_geometry must be GeometrySolutionCandidate")
         if not isinstance(self.representation, SurfaceRepresentationName):
-            raise TypeError(
-                "surface_model.representation must be SurfaceRepresentationName"
-            )
+            raise TypeError("surface_model.representation must be SurfaceRepresentationName")
         if not isinstance(self.local_frame_id, LocalFrameId):
             raise TypeError("surface_model.local_frame_id must be LocalFrameId")
         if not isinstance(self.scale_status, GeometryScaleStatus):
