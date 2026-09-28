@@ -1,0 +1,322 @@
+name: open3d-surface-integration
+
+on:
+  # Bootstrap only: remove this branch-limited trigger after the reviewed environment lock is captured.
+  push:
+    branches:
+      - "feature/v2l16-2-open3d-surface-baseline"
+    paths:
+      - ".github/workflows/open3d-surface-integration.yml"
+      - "registry/external-environments/open3d-surface-cpu-0.20.0.json"
+  pull_request:
+    paths:
+      - ".github/workflows/open3d-surface-integration.yml"
+      - "registry/external-environments/open3d-surface-cpu-0.20.0.json"
+      - "registry/dependencies.yaml"
+      - "registry/adapter-models.yaml"
+      - "src/wre/reconstruction/open3d_surface.py"
+      - "src/wre/reconstruction/__init__.py"
+      - "tests/test_open3d_surface.py"
+      - "registry/work-items/v2m2.yaml"
+      - "registry/components.yaml"
+      - "PROJECT_STATE.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  qualify-environment:
+    name: open3d-0.20.0-linux-x86_64-cp312-lock
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      LOCK_PATH: registry/external-environments/open3d-surface-cpu-0.20.0.json
+      OPEN3D_VERSION: "0.20.0"
+      OPEN3D_SOURCE_REVISION: b6c5e196384ad71e75b6e6f9c5da22d046221f1d
+      OPEN3D_SOURCE_REPOSITORY: isl-org/Open3D
+      OPEN3D_ROOT_WHEEL: open3d-0.20.0-cp312-cp312-manylinux_2_35_x86_64.whl
+      OPEN3D_ROOT_WHEEL_URL: https://github.com/isl-org/Open3D/releases/download/v0.20.0/open3d-0.20.0-cp312-cp312-manylinux_2_35_x86_64.whl
+      OPEN3D_ROOT_WHEEL_SHA256: f5cc6106d9c0c41beb8160aa99c2b663e7f08588a598ec7d464391a4cfe684d6
+      OPEN3D_ROOT_WHEEL_BYTE_LENGTH: "400788891"
+      TARGET_PYTHON: "3.12.12"
+      TARGET_PLATFORM: linux_x86_64
+      PIP_VERSION: "25.2"
+
+    steps:
+      - name: Checkout WRE
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install exact uv and Python
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.13"
+          python-version: "3.12.12"
+          enable-cache: false
+
+      - name: Resolve and hash exact Open3D wheel closure without installing
+        shell: bash
+        run: |
+          set -euo pipefail
+          wheel_dir="$RUNNER_TEMP/open3d-surface-wheels"
+          rm -rf "$wheel_dir"
+          mkdir -p "$wheel_dir"
+          constraints="$RUNNER_TEMP/open3d-surface-constraints.txt"
+
+          if test -f "$LOCK_PATH"; then
+            LOCK_PATH="$LOCK_PATH" CONSTRAINTS="$constraints" uv run --no-project --python 3.12.12 python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          lock = json.loads(Path(os.environ["LOCK_PATH"]).read_text(encoding="utf-8"))
+          lines = [
+              f"{item['metadata_name']}=={item['metadata_version']}"
+              for item in lock["artifacts"]
+          ]
+          Path(os.environ["CONSTRAINTS"]).write_text(
+              "\n".join(sorted(lines, key=str.lower)) + "\n",
+              encoding="utf-8",
+          )
+          PY
+          else
+            : > "$constraints"
+          fi
+
+          uv run --no-project --python 3.12.12 --with "pip==$PIP_VERSION" \
+            python -m pip download \
+            --disable-pip-version-check \
+            --only-binary=:all: \
+            --dest "$wheel_dir" \
+            --constraint "$constraints" \
+            "$OPEN3D_ROOT_WHEEL_URL"
+
+          WHEEL_DIR="$wheel_dir" uv run --no-project --python 3.12.12 python - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import os
+          import urllib.request
+          import zipfile
+          from email.parser import BytesParser
+          from email.policy import compat32
+          from pathlib import Path
+
+          wheel_dir = Path(os.environ["WHEEL_DIR"])
+          generated = Path(os.environ["RUNNER_TEMP"]) / "open3d-surface-cpu-0.20.0.json"
+          root_filename = os.environ["OPEN3D_ROOT_WHEEL"]
+          root_sha256 = os.environ["OPEN3D_ROOT_WHEEL_SHA256"]
+          root_byte_length = int(os.environ["OPEN3D_ROOT_WHEEL_BYTE_LENGTH"])
+          root_url = os.environ["OPEN3D_ROOT_WHEEL_URL"]
+
+          def normalized_name(value: str) -> str:
+              return value.lower().replace("_", "-").replace(".", "-")
+
+          def get_json(url: str) -> dict:
+              request = urllib.request.Request(
+                  url,
+                  headers={"User-Agent": "WRE-V2L16.2-Open3D-qualification/1"},
+              )
+              with urllib.request.urlopen(request, timeout=60) as response:
+                  return json.load(response)
+
+          artifacts = []
+          seen_names: set[str] = set()
+          wheel_paths = sorted(wheel_dir.glob("*.whl"), key=lambda path: path.name)
+          if not wheel_paths:
+              raise SystemExit("Open3D resolver produced no wheel artifacts")
+
+          for path in wheel_paths:
+              payload = path.read_bytes()
+              digest = hashlib.sha256(payload).hexdigest()
+              with zipfile.ZipFile(path) as archive:
+                  metadata_paths = [
+                      name
+                      for name in archive.namelist()
+                      if name.endswith(".dist-info/METADATA")
+                  ]
+                  if len(metadata_paths) != 1:
+                      raise SystemExit(
+                          f"{path.name}: expected one dist-info/METADATA, found {metadata_paths}"
+                      )
+                  metadata = BytesParser(policy=compat32).parsebytes(
+                      archive.read(metadata_paths[0])
+                  )
+
+              metadata_name = str(metadata.get("Name") or "").strip()
+              metadata_version = str(metadata.get("Version") or "").strip()
+              if not metadata_name or not metadata_version:
+                  raise SystemExit(f"{path.name}: missing METADATA name/version")
+              key = normalized_name(metadata_name)
+              if key in seen_names:
+                  raise SystemExit(f"duplicate resolved distribution: {metadata_name}")
+              seen_names.add(key)
+
+              requires_dist = sorted(
+                  str(value).strip()
+                  for value in (metadata.get_all("Requires-Dist") or [])
+                  if str(value).strip()
+              )
+              license_expression = str(metadata.get("License-Expression") or "").strip()
+              legacy_license = str(metadata.get("License") or "").strip()
+              license_classifiers = sorted(
+                  str(value).strip()
+                  for value in (metadata.get_all("Classifier") or [])
+                  if str(value).startswith("License ::")
+              )
+              if not (license_expression or legacy_license or license_classifiers):
+                  raise SystemExit(
+                      f"{metadata_name}=={metadata_version}: no direct wheel license metadata"
+                  )
+
+              if path.name == root_filename:
+                  if normalized_name(metadata_name) != "open3d":
+                      raise SystemExit(
+                          f"root wheel METADATA name mismatch: {metadata_name!r}"
+                      )
+                  if metadata_version != os.environ["OPEN3D_VERSION"]:
+                      raise SystemExit(
+                          f"root wheel version mismatch: {metadata_version!r}"
+                      )
+                  if digest != root_sha256:
+                      raise SystemExit(
+                          f"root wheel SHA-256 mismatch: {digest} != {root_sha256}"
+                      )
+                  if len(payload) != root_byte_length:
+                      raise SystemExit(
+                          f"root wheel byte length mismatch: {len(payload)} != {root_byte_length}"
+                      )
+                  source = {
+                      "kind": "github_release",
+                      "repository": os.environ["OPEN3D_SOURCE_REPOSITORY"],
+                      "revision": os.environ["OPEN3D_SOURCE_REVISION"],
+                      "url": root_url,
+                  }
+              else:
+                  project = get_json(
+                      f"https://pypi.org/pypi/{metadata_name}/{metadata_version}/json"
+                  )
+                  matches = [
+                      item
+                      for item in project["urls"]
+                      if item.get("filename") == path.name
+                  ]
+                  if len(matches) != 1:
+                      raise SystemExit(
+                          f"{metadata_name}=={metadata_version}: cannot uniquely bind "
+                          f"{path.name} to PyPI metadata"
+                      )
+                  item = matches[0]
+                  if item["digests"]["sha256"] != digest:
+                      raise SystemExit(
+                          f"{path.name}: local/PyPI SHA-256 mismatch"
+                      )
+                  if int(item["size"]) != len(payload):
+                      raise SystemExit(
+                          f"{path.name}: local/PyPI byte length mismatch"
+                      )
+                  source = {
+                      "kind": "pypi",
+                      "url": item["url"],
+                  }
+
+              artifacts.append(
+                  {
+                      "abi_tag": path.name[:-4].rsplit("-", 3)[-2],
+                      "byte_length": len(payload),
+                      "filename": path.name,
+                      "license_classifiers": license_classifiers,
+                      "license_expression": license_expression or None,
+                      "legacy_license": legacy_license or None,
+                      "metadata_name": metadata_name,
+                      "metadata_version": metadata_version,
+                      "platform_tag": path.name[:-4].rsplit("-", 3)[-1],
+                      "python_tag": path.name[:-4].rsplit("-", 3)[-3],
+                      "requires_dist": requires_dist,
+                      "sha256": digest,
+                      "source": source,
+                  }
+              )
+
+          artifacts.sort(
+              key=lambda item: (
+                  normalized_name(str(item["metadata_name"])),
+                  str(item["metadata_version"]),
+                  str(item["filename"]),
+              )
+          )
+
+          root = [
+              item
+              for item in artifacts
+              if normalized_name(str(item["metadata_name"])) == "open3d"
+          ]
+          if len(root) != 1 or root[0]["filename"] != root_filename:
+              raise SystemExit(f"unexpected Open3D root artifact set: {root}")
+
+          manifest = {
+              "schema_version": 1,
+              "evidence_kind": "open3d_surface_cpu_artifact_resolution_only",
+              "runtime_execution_evidence": False,
+              "gpu_execution_evidence": False,
+              "installer_execution_evidence": False,
+              "resolver": {
+                  "name": "pip",
+                  "version": os.environ["PIP_VERSION"],
+              },
+              "target": {
+                  "python": os.environ["TARGET_PYTHON"],
+                  "platform": os.environ["TARGET_PLATFORM"],
+                  "device": "CPU:0",
+              },
+              "open3d": {
+                  "version": os.environ["OPEN3D_VERSION"],
+                  "source_repository": os.environ["OPEN3D_SOURCE_REPOSITORY"],
+                  "source_revision": os.environ["OPEN3D_SOURCE_REVISION"],
+                  "license": "MIT",
+                  "root_wheel": root_filename,
+                  "root_wheel_sha256": root_sha256,
+                  "root_wheel_byte_length": root_byte_length,
+              },
+              "artifacts": artifacts,
+          }
+          generated.write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print(
+              f"resolved {len(artifacts)} exact wheel artifacts / "
+              f"{sum(int(item['byte_length']) for item in artifacts)} bytes"
+          )
+          PY
+
+      - name: Verify committed lock or expose first qualification result
+        shell: bash
+        run: |
+          set -euo pipefail
+          generated="$RUNNER_TEMP/open3d-surface-cpu-0.20.0.json"
+          sha256sum "$generated"
+          if test -f "$LOCK_PATH"; then
+            diff -u "$LOCK_PATH" "$generated"
+            echo "Committed Open3D surface environment lock matches exact regeneration."
+          else
+            echo "No committed Open3D surface environment lock exists yet; this run is first-artifact qualification evidence."
+            echo "----- BEGIN GENERATED OPEN3D SURFACE ENVIRONMENT LOCK -----"
+            cat "$generated"
+            echo "----- END GENERATED OPEN3D SURFACE ENVIRONMENT LOCK -----"
+          fi
+
+      - name: Retain machine-readable environment qualification evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v2l16-2-open3d-surface-environment-lock
+          path: ${{ runner.temp }}/open3d-surface-cpu-0.20.0.json
+          if-no-files-found: error
+          retention-days: 30
