@@ -2629,7 +2629,7 @@ work_items:
   - id: V2L16.2
     lot: V2L16
     title: Baseline depth fusion to surface adapter
-    status: ready
+    status: done
     objective: Implement one bounded classical depth-fusion baseline that consumes one canonical DenseDepthArtifact and materializes one explicit geometry-only triangle-mesh SurfaceModel in the same local frame and scale status, using the current mature Open3D 0.20.0 CPU depth-only TSDF path rather than a custom fusion implementation.
     allowed_scope:
       - src/wre/reconstruction/open3d_surface.py
@@ -2723,7 +2723,89 @@ work_items:
       - failure cleanup fresh-output-root no-symlink and no-runtime-network regressions
       - intended-use-is-not-suitability regression proving the produced SurfaceModel adds no suitability score boolean threshold QualityDecision watertightness collision mesh navmesh or runtime asset semantics
       - real CPU Open3D 0.20.0 synthetic integration evidence plus full fast CI CodeQL and dedicated integration workflow
-  - {id: V2L16.3, lot: V2L16, title: Collision measurement suitability metrics, status: planned, depends_on: [V2L16.2]}
+  - id: V2L16.3
+    lot: V2L16
+    title: Collision measurement suitability metrics
+    status: ready
+    objective: Define and implement one pure deterministic solver-independent surface inspection and metric layer over one existing mesh SurfaceModel, exposing topology and support evidence relevant to later collision and measurement review while keeping intended use distinct from proven suitability and emitting no pass fail safety accuracy watertightness routing or default decision.
+    allowed_scope:
+      - src/wre/reconstruction/surface_suitability.py
+      - focused exports in src/wre/reconstruction/__init__.py
+      - tests/test_surface_suitability.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L16.4 can be activated without implementing it
+    out_of_scope:
+      - reading parsing opening or mutating PLY OBJ glTF mesh files inside the pure metric module
+      - executing Open3D PyMeshLab Trimesh CGAL Poisson TSDF SDF ICP registration remeshing repair simplification or another geometry library or solver
+      - generating repairing filling closing smoothing decimating orienting or otherwise modifying a SurfaceModel or its materialized payload
+      - treating SurfaceIntendedUse as proof of collision measurement or navigation suitability
+      - emitting collision_suitable measurement_suitable navigation_suitable watertight safe accurate ready pass fail threshold QualityDecision score rank winner retry fallback routing default or shipping-promotion semantics
+      - claiming watertightness merely from zero boundary edges or manifoldness merely from one descriptive ratio
+      - claiming measurement accuracy from GeometryScaleStatus.METRIC alone or inventing metric scale when source scale is unresolved
+      - estimating reference-surface error self-intersection free space clearance traversability physics stability or application-specific tolerances without explicit later evidence
+      - implementing the hybrid surface candidate boundary from V2L16.4 unsupported-region semantics from V2L16.5 or benchmark and M2 review from V2L16.6
+      - creating runtime collision navmesh LOD appearance materials environment MasterScene RuntimeScene dynamics or chronology assets
+      - adding NumPy Open3D native dependencies filesystem network subprocess model checkpoint or accelerator access
+    depends_on: [V2L16.2]
+    read_before:
+      - docs/00_START_HERE.md
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md
+      - docs/27_RESEARCH_CANDIDATE_COVERAGE.md
+      - registry/components.yaml
+      - registry/work-items/v2m2.yaml
+      - PROJECT_STATE.yaml
+      - src/wre/domain/artifact_materialization.py
+      - src/wre/domain/geometry_solutions.py
+      - src/wre/domain/metrics.py
+      - src/wre/domain/producer_identity.py
+      - src/wre/domain/surfaces.py
+      - src/wre/reconstruction/dense_depth_coverage.py
+      - src/wre/reconstruction/open3d_surface.py
+      - tests/test_surfaces.py
+      - tests/test_dense_depth_coverage.py
+      - tests/test_open3d_surface.py
+    reuse:
+      - SurfaceModel and SurfaceRepresentationName from V2L16.1 as the exact retained physical-surface identity and representation contract
+      - ArtifactMaterializationMetadata as the immutable binding from a SurfaceModel ArtifactRef to exact retained payload bytes without opening those bytes in this item
+      - GeometryScaleStatus as the only existing statement about whether local distance units are metric; unresolved remains unresolved
+      - MetricDescriptor MetricObservation MetricProvenance MetricVector and ArtifactProducerIdentity for deterministic descriptive metric semantics and provenance
+      - the pure evaluator and canonical metric ordering patterns from dense_depth_coverage.py rather than adding a quality policy or backend-specific score
+      - V2L16.2 real Open3D mesh evidence only as a later fixture or benchmark input; V2L16.3 must not import Open3D or depend on its API
+    acceptance:
+      - Add one pure surface_suitability module using only the standard library plus WRE canonical domain contracts. Open3D NumPy Trimesh PyMeshLab native solvers filesystem network subprocess hardware access and model runtimes must be absent.
+      - Define one frozen slots SurfaceMeshInspection evidence value bound to exactly one existing SurfaceModel and one ArtifactMaterializationMetadata whose artifact_ref exactly matches the surface artifact. The first evaluator accepts only representation mesh and does not reinterpret another representation as triangles.
+      - SurfaceMeshInspection must retain an explicit ArtifactProducerIdentity for the inspection source plus exact non-negative integer observations for vertex_count triangle_count finite_vertex_count degenerate_triangle_count unique_edge_count boundary_edge_count non_manifold_edge_count connected_component_count and largest_component_triangle_count.
+      - Require vertex_count and triangle_count to be positive for this mesh-suitability evaluator. finite_vertex_count cannot exceed vertex_count. degenerate_triangle_count cannot exceed triangle_count. boundary_edge_count and non_manifold_edge_count cannot exceed unique_edge_count. connected_component_count and largest_component_triangle_count must be positive and cannot exceed triangle_count. No invalid count is clamped or repaired.
+      - Define one frozen slots SurfaceSuitabilityReport retaining the exact SurfaceMeshInspection object and one canonical MetricVector. Evaluation must not mutate reorder relabel replace or materialize the source SurfaceModel its materialization or inspection evidence.
+      - Emit at minimum finite-vertex ratio, degenerate-triangle ratio, boundary-edge ratio, non-manifold-edge ratio, largest-component-triangle ratio and connected-component count with stable geometry.surface metric descriptors units directions aggregations and deterministic V2L16.3 evaluator provenance.
+      - finite-vertex ratio is finite_vertex_count divided by vertex_count. degenerate-triangle ratio is degenerate_triangle_count divided by triangle_count. Boundary and non-manifold ratios use unique_edge_count as denominator and are omitted when unique_edge_count is zero rather than fabricating zero or infinity. Largest-component-triangle ratio is largest_component_triangle_count divided by triangle_count.
+      - The report must preserve the source SurfaceModel scale_status verbatim through the retained inspection. GeometryScaleStatus.UNRESOLVED forbids interpreting local lengths areas volumes or tolerances as metric. GeometryScaleStatus.METRIC states unit semantics only and does not prove measurement accuracy.
+      - Metric provenance must use one deterministic V2L16.3 evaluator identity and exactly the source SurfaceModel artifact_ref as its direct ArtifactRef input. The retained SurfaceMeshInspection producer identifies how the caller obtained the topology counts; V2L16.3 does not pretend to verify those counts against payload bytes.
+      - All metric observations are descriptive evidence only. Zero boundary-edge or non-manifold-edge ratios do not prove watertightness self-intersection freedom collision safety navigation readiness or measurement accuracy. No threshold or QualityDecision is attached.
+      - Surface intended uses may be inspected only to preserve context and must not add remove suppress or change metric observations. The same inspection counts produce the same metric vector regardless of whether intended use includes collision measurement navigation or any canonical combination.
+      - Export only the inspection/report types stable descriptors evaluator identity and evaluate_surface_suitability function from wre.reconstruction. Do not expose mesh repair quality-decision routing V2L16.4 candidate generation unsupported-region semantics benchmark or runtime asset behavior.
+      - On green implementation evidence mark V2L16.3 done retain physical_surface implementing and activate V2L16.4 with a complete executable optional hybrid-surface-candidate boundary contract. Do not include V2L16.4 implementation in the same PR.
+    tests:
+      - frozen slots exact field shape wrong-type and materialization-to-surface identity mismatch regressions
+      - mesh-representation-only regression proving non-mesh SurfaceRepresentationName values fail closed rather than being coerced
+      - positive vertex and triangle count plus non-negative bounded topology-count validation regressions
+      - exact finite-vertex degenerate-triangle boundary-edge non-manifold-edge largest-component and connected-component metric descriptor value unit direction aggregation regressions
+      - zero unique-edge regression proving edge-ratio observations are omitted rather than fabricated
+      - unresolved-scale regression proving topology ratios remain descriptive while no metric length area volume tolerance or accuracy claim is created
+      - metric-scale regression proving GeometryScaleStatus.METRIC does not create measurement accuracy or suitability decisions
+      - intended-use invariance regression proving collision measurement navigation metadata does not alter the metric vector
+      - inspection-producer and metric-provenance regression proving exact caller inspection identity plus V2L16.3 evaluator identity and source SurfaceModel ArtifactRef are retained
+      - immutability regression proving evaluator execution does not modify SurfaceModel ArtifactMaterializationMetadata inspection evidence producer or source ancestry
+      - no-watertightness-no-safety regression proving perfect-looking topology counts still emit no watertight collision-safe measurement-ready navigation-ready pass fail or QualityDecision field
+      - module-surface regression proving Open3D NumPy Trimesh PyMeshLab filesystem network subprocess mesh repair hybrid candidate unsupported-region benchmark runtime and V2L16.4 implementation behavior are absent
+      - full fast CI and CodeQL
+
   - {id: V2L16.4, lot: V2L16, title: Hybrid surface candidate adapter boundary, status: planned, depends_on: [V2L16.3]}
   - {id: V2L16.5, lot: V2L16, title: Unsupported region and hole semantics, status: planned, depends_on: [V2L16.4]}
   - {id: V2L16.6, lot: V2L16, title: Physical surface benchmark, status: planned, depends_on: [V2L16.5]}
