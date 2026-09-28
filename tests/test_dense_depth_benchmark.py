@@ -171,12 +171,8 @@ def _depth_field(
         observation_id=camera.observation_id,
         camera_solution_id=camera.solution_id,
         dimensions=camera.dimensions,
-        depth_value_convention=DepthValueConventionName(
-            str(entry["depth_value_convention"])
-        ),
-        depth_values=tuple(
-            float(item) for item in cast(list[float], entry["depth_values"])
-        ),
+        depth_value_convention=DepthValueConventionName(str(entry["depth_value_convention"])),
+        depth_values=tuple(float(item) for item in cast(list[float], entry["depth_values"])),
         validity=tuple(bool(item) for item in cast(list[bool], entry["validity"])),
         confidence=confidence,
         metrics=_metrics(),
@@ -187,9 +183,7 @@ def _dense_artifact(
     entry: dict[str, Any],
     source: GeometrySolutionCandidate,
 ) -> DenseDepthArtifact:
-    cameras_by_id = {
-        camera.solution_id.value: camera for camera in source.camera_solutions
-    }
+    cameras_by_id = {camera.solution_id.value: camera for camera in source.camera_solutions}
     depth_fields = tuple(
         _depth_field(cast(dict[str, Any], item), cameras_by_id)
         for item in cast(list[dict[str, Any]], entry["fields"])
@@ -227,8 +221,7 @@ def _controlled_request() -> DenseDepthBenchmarkRequest:
 
 def _metric_values(vector: MetricVector) -> dict[str, float]:
     return {
-        observation.descriptor.name.value: observation.value
-        for observation in vector.observations
+        observation.descriptor.name.value: observation.value for observation in vector.observations
     }
 
 
@@ -256,9 +249,7 @@ def _result_document(result: DenseDepthBenchmarkResult) -> dict[str, Any]:
             "sha256": result.request.fixture.sha256.value,
         },
         "hardware_sha256": result.request.hardware.sha256.value,
-        "reference_artifact": _artifact_document(
-            result.request.reference_depth.artifact_ref
-        ),
+        "reference_artifact": _artifact_document(result.request.reference_depth.artifact_ref),
         "candidates": [
             {
                 "candidate_artifact": _artifact_document(item.candidate.artifact_ref),
@@ -425,9 +416,7 @@ def test_controlled_fixture_reports_exact_reference_and_support_metrics() -> Non
     complete_reference = _metric_values(complete.reference_metrics)
     assert complete.reference_valid_pixel_count == 8
     assert complete.jointly_valid_pixel_count == 8
-    assert complete_reference[
-        "geometry.dense_depth.reference_valid_coverage_ratio"
-    ] == 1.0
+    assert complete_reference["geometry.dense_depth.reference_valid_coverage_ratio"] == 1.0
     assert complete_reference[
         "geometry.dense_depth.reference_absolute_error_median"
     ] == pytest.approx(0.15)
@@ -445,9 +434,7 @@ def test_controlled_fixture_reports_exact_reference_and_support_metrics() -> Non
     partial_reference = _metric_values(partial.reference_metrics)
     assert partial.reference_valid_pixel_count == 8
     assert partial.jointly_valid_pixel_count == 2
-    assert partial_reference[
-        "geometry.dense_depth.reference_valid_coverage_ratio"
-    ] == 0.25
+    assert partial_reference["geometry.dense_depth.reference_valid_coverage_ratio"] == 0.25
     assert partial_reference[
         "geometry.dense_depth.reference_absolute_error_median"
     ] == pytest.approx(0.25)
@@ -494,8 +481,7 @@ def test_support_metric_observations_and_provenance_are_retained_unchanged() -> 
         assert record_by_name[name] is observation
 
     reference_names = {
-        observation.descriptor.name.value
-        for observation in item.reference_metrics.observations
+        observation.descriptor.name.value for observation in item.reference_metrics.observations
     }
     for observation in item.benchmark_record.metrics.observations:
         if observation.descriptor.name.value not in reference_names:
@@ -609,8 +595,7 @@ def test_source_and_depth_evidence_remain_immutable_after_benchmark() -> None:
     reference_fields = request.reference_depth.depth_fields
     candidate_fields = tuple(item.depth_fields for item in request.candidates)
     candidate_values = tuple(
-        tuple(field.depth_values for field in item.depth_fields)
-        for item in request.candidates
+        tuple(field.depth_values for field in item.depth_fields) for item in request.candidates
     )
 
     result = benchmark_dense_depth_candidates(request)
@@ -618,20 +603,18 @@ def test_source_and_depth_evidence_remain_immutable_after_benchmark() -> None:
     assert result.request is request
     assert request.reference_depth.depth_fields is reference_fields
     assert tuple(item.depth_fields for item in request.candidates) == candidate_fields
-    assert tuple(
-        tuple(field.depth_values for field in item.depth_fields)
-        for item in request.candidates
-    ) == candidate_values
-    assert all(
-        item.coverage.source_depth is item.candidate for item in result.candidates
+    assert (
+        tuple(
+            tuple(field.depth_values for field in item.depth_fields) for item in request.candidates
+        )
+        == candidate_values
     )
+    assert all(item.coverage.source_depth is item.candidate for item in result.candidates)
 
 
 def test_fixture_identity_and_retained_document_are_deterministic_and_nonselective() -> None:
     request = _controlled_request()
-    assert request.fixture.fixture_id == BenchmarkFixtureId(
-        "fixture.dense-depth-controlled.v1"
-    )
+    assert request.fixture.fixture_id == BenchmarkFixtureId("fixture.dense-depth-controlled.v1")
     assert request.fixture.sha256 == Sha256Digest(_FIXTURE_SHA256)
 
     document = _result_document(benchmark_dense_depth_candidates(request))
@@ -646,13 +629,16 @@ def test_fixture_identity_and_retained_document_are_deterministic_and_nonselecti
     assert len(cast(list[Any], document["candidates"])) == 3
     _assert_no_selection_fields(document)
 
-    encoded = json.dumps(
-        document,
-        ensure_ascii=True,
-        indent=2,
-        sort_keys=True,
-        allow_nan=False,
-    ) + "\n"
+    encoded = (
+        json.dumps(
+            document,
+            ensure_ascii=True,
+            indent=2,
+            sort_keys=True,
+            allow_nan=False,
+        )
+        + "\n"
+    )
     assert encoded == (
         json.dumps(
             _result_document(benchmark_dense_depth_candidates(_controlled_request())),
