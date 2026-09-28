@@ -325,12 +325,16 @@ from wre.reconstruction.learned_depth_prior import (
     LearnedDepthPriorResult,
     build_learned_depth_prior_result,
 )
+from wre.reconstruction.legacy_geometry_conversion import (
+    LegacySparseGeometryConversionResult,
+    convert_sparse_reconstruction_estimate,
+)
 from wre.reconstruction.open3d_surface import (
     OPEN3D_CAMERA_Z_CONVENTION,
     OPEN3D_PINHOLE_PROJECTION,
     OPEN3D_SURFACE_ADAPTER_ID,
-    OPEN3D_SURFACE_DEPTH_SCALE,
     OPEN3D_SURFACE_DEPENDENCY_REF,
+    OPEN3D_SURFACE_DEPTH_SCALE,
     OPEN3D_SURFACE_DEVICE,
     OPEN3D_SURFACE_OUTPUT_RELATIVE_PATH,
     OPEN3D_SURFACE_PRODUCER_IMPLEMENTATION,
@@ -348,10 +352,6 @@ from wre.reconstruction.open3d_surface import (
     Open3dTsdfSurfaceAdapter,
     Open3dTsdfSurfaceConfig,
     inspect_open3d_surface_environment,
-)
-from wre.reconstruction.legacy_geometry_conversion import (
-    LegacySparseGeometryConversionResult,
-    convert_sparse_reconstruction_estimate,
 )
 
 __all__ = [
@@ -489,8 +489,8 @@ __all__ = [
     "OPEN3D_CAMERA_Z_CONVENTION",
     "OPEN3D_PINHOLE_PROJECTION",
     "OPEN3D_SURFACE_ADAPTER_ID",
-    "OPEN3D_SURFACE_DEPTH_SCALE",
     "OPEN3D_SURFACE_DEPENDENCY_REF",
+    "OPEN3D_SURFACE_DEPTH_SCALE",
     "OPEN3D_SURFACE_DEVICE",
     "OPEN3D_SURFACE_OUTPUT_RELATIVE_PATH",
     "OPEN3D_SURFACE_PRODUCER_IMPLEMENTATION",
