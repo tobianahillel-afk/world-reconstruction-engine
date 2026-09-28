@@ -1,0 +1,598 @@
+name: open3d-surface-integration
+
+on:
+  # Bootstrap only: remove this branch-limited trigger after the reviewed environment lock is captured.
+  push:
+    branches:
+      - "feature/v2l16-2-open3d-depth-surface"
+    paths:
+      - ".github/workflows/open3d-surface-integration.yml"
+      - "registry/external-environments/open3d-surface-cpu-0.20.0.json"
+      - "src/wre/reconstruction/open3d_surface.py"
+      - "tests/test_open3d_surface.py"
+  pull_request:
+    paths:
+      - ".github/workflows/open3d-surface-integration.yml"
+      - "registry/external-environments/open3d-surface-cpu-0.20.0.json"
+      - "registry/dependencies.yaml"
+      - "registry/adapter-models.yaml"
+      - "src/wre/reconstruction/open3d_surface.py"
+      - "src/wre/reconstruction/__init__.py"
+      - "tests/test_open3d_surface.py"
+      - "registry/work-items/v2m2.yaml"
+      - "registry/components.yaml"
+      - "PROJECT_STATE.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  open3d-surface-cpu:
+    name: open3d-0.20.0-cpu-depth-tsdf
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      LOCK_PATH: registry/external-environments/open3d-surface-cpu-0.20.0.json
+      TARGET_PYTHON: "3.12.12"
+      OPEN3D_VERSION: "0.20.0"
+      OPEN3D_WHEEL: open3d-0.20.0-cp312-cp312-manylinux_2_35_x86_64.whl
+      OPEN3D_WHEEL_SHA256: f5cc6106d9c0c41beb8160aa99c2b663e7f08588a598ec7d464391a4cfe684d6
+      OPEN3D_WHEEL_BYTES: "400788891"
+      OPEN3D_SOURCE_REVISION: b6c5e196384ad71e75b6e6f9c5da22d046221f1d
+      WRE_OPEN3D_SURFACE_EVIDENCE: ${{ runner.temp }}/open3d-surface-evidence.json
+
+    steps:
+      - name: Checkout WRE
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install exact uv and Python
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.13"
+          python-version: "3.12.12"
+          enable-cache: false
+
+      - name: Create isolated resolver environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv venv --python 3.12.12 --seed .venv-open3d
+          uv pip install --python .venv-open3d/bin/python "pip==25.2"
+          .venv-open3d/bin/python - <<'PY'
+          import sys
+          import pip
+          assert sys.version.split()[0] == "3.12.12", sys.version
+          assert pip.__version__ == "25.2", pip.__version__
+          PY
+
+      - name: Resolve exact Open3D wheel closure without executing it
+        shell: bash
+        run: |
+          set -euo pipefail
+          report="$RUNNER_TEMP/open3d-pip-report.json"
+          wheel_dir="$RUNNER_TEMP/open3d-wheels"
+          generated="$RUNNER_TEMP/open3d-surface-cpu-0.20.0.json"
+          rm -rf "$wheel_dir"
+          mkdir -p "$wheel_dir"
+
+          .venv-open3d/bin/python -m pip install             --dry-run             --ignore-installed             --only-binary=:all:             --no-cache-dir             --report "$report"             "open3d==0.20.0"
+
+          REPORT="$report" WHEEL_DIR="$wheel_dir" GENERATED="$generated"           .venv-open3d/bin/python - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import os
+          import urllib.parse
+          import urllib.request
+          import zipfile
+          from email.parser import BytesParser
+          from email.policy import compat32
+          from pathlib import Path
+
+          report = json.loads(Path(os.environ["REPORT"]).read_text(encoding="utf-8"))
+          wheel_dir = Path(os.environ["WHEEL_DIR"])
+          generated = Path(os.environ["GENERATED"])
+
+          artifacts = []
+          for item in report.get("install", []):
+              download = item.get("download_info") or {}
+              url = str(download.get("url") or "")
+              metadata = item.get("metadata") or {}
+              name = str(metadata.get("name") or "").strip()
+              version = str(metadata.get("version") or "").strip()
+              if not name or not version or not url:
+                  raise SystemExit(f"incomplete pip report item: {item}")
+
+              filename = Path(urllib.parse.unquote(urllib.parse.urlparse(url).path)).name
+              if not filename.endswith(".whl") or Path(filename).name != filename:
+                  raise SystemExit(f"non-wheel or unsafe artifact in Open3D closure: {filename}")
+
+              expected_hashes = (download.get("archive_info") or {}).get("hashes") or {}
+              expected_sha256 = str(expected_hashes.get("sha256") or "").lower()
+              if len(expected_sha256) != 64:
+                  raise SystemExit(f"{filename}: missing exact SHA-256 in pip report")
+
+              request = urllib.request.Request(
+                  url,
+                  headers={"User-Agent": "WRE-V2L16.2-Open3D-qualification/1"},
+              )
+              with urllib.request.urlopen(request, timeout=180) as response:
+                  payload = response.read()
+              digest = hashlib.sha256(payload).hexdigest()
+              if digest != expected_sha256:
+                  raise SystemExit(
+                      f"{filename}: downloaded SHA-256 {digest} != {expected_sha256}"
+                  )
+
+              wheel_path = wheel_dir / filename
+              wheel_path.write_bytes(payload)
+              with zipfile.ZipFile(wheel_path) as archive:
+                  metadata_names = [
+                      member for member in archive.namelist()
+                      if member.endswith(".dist-info/METADATA")
+                  ]
+                  if len(metadata_names) != 1:
+                      raise SystemExit(
+                          f"{filename}: expected one dist-info/METADATA, got {metadata_names}"
+                      )
+                  message = BytesParser(policy=compat32).parsebytes(
+                      archive.read(metadata_names[0])
+                  )
+
+              metadata_name = str(message.get("Name") or "").strip()
+              metadata_version = str(message.get("Version") or "").strip()
+              if metadata_name.lower().replace("_", "-") != name.lower().replace("_", "-"):
+                  raise SystemExit(
+                      f"{filename}: METADATA name {metadata_name!r} != report {name!r}"
+                  )
+              if metadata_version != version:
+                  raise SystemExit(
+                      f"{filename}: METADATA version {metadata_version!r} != report {version!r}"
+                  )
+
+              license_expression = str(message.get("License-Expression") or "").strip()
+              legacy_license = str(message.get("License") or "").strip()
+              license_classifiers = sorted(
+                  str(value).strip()
+                  for value in (message.get_all("Classifier") or [])
+                  if str(value).startswith("License ::")
+              )
+              if not (license_expression or legacy_license or license_classifiers):
+                  raise SystemExit(f"{filename}: no direct wheel license metadata")
+
+              artifacts.append(
+                  {
+                      "byte_length": len(payload),
+                      "filename": filename,
+                      "legacy_license": legacy_license or None,
+                      "license_classifiers": license_classifiers,
+                      "license_expression": license_expression or None,
+                      "name": name,
+                      "requires_dist": sorted(
+                          str(value).strip()
+                          for value in (message.get_all("Requires-Dist") or [])
+                          if str(value).strip()
+                      ),
+                      "requires_python": str(message.get("Requires-Python") or "").strip() or None,
+                      "sha256": digest,
+                      "url": url,
+                      "version": version,
+                  }
+              )
+
+          artifacts.sort(key=lambda value: (value["name"].lower(), value["version"], value["filename"]))
+          normalized_names = [item["name"].lower().replace("_", "-") for item in artifacts]
+          if len(normalized_names) != len(set(normalized_names)):
+              raise SystemExit("duplicate normalized distribution names in Open3D closure")
+
+          open3d_items = [
+              item for item in artifacts
+              if item["name"].lower().replace("_", "-") == "open3d"
+          ]
+          if len(open3d_items) != 1:
+              raise SystemExit(f"expected exactly one Open3D wheel, got {open3d_items}")
+          open3d_item = open3d_items[0]
+          if open3d_item["version"] != os.environ["OPEN3D_VERSION"]:
+              raise SystemExit(f"unexpected Open3D version {open3d_item['version']}")
+          if open3d_item["filename"] != os.environ["OPEN3D_WHEEL"]:
+              raise SystemExit(f"unexpected Open3D wheel {open3d_item['filename']}")
+          if open3d_item["sha256"] != os.environ["OPEN3D_WHEEL_SHA256"]:
+              raise SystemExit(f"unexpected Open3D wheel SHA-256 {open3d_item['sha256']}")
+          if open3d_item["byte_length"] != int(os.environ["OPEN3D_WHEEL_BYTES"]):
+              raise SystemExit(f"unexpected Open3D wheel byte length {open3d_item['byte_length']}")
+
+          lock = {
+              "schema_version": 1,
+              "evidence_kind": "external_cpu_environment_artifact_resolution_only",
+              "runtime_execution_evidence": False,
+              "gpu_execution_evidence": False,
+              "installer_execution_evidence": False,
+              "source": {
+                  "repository": "isl-org/Open3D",
+                  "revision": os.environ["OPEN3D_SOURCE_REVISION"],
+                  "direct_license": "MIT",
+              },
+              "target": {
+                  "python": os.environ["TARGET_PYTHON"],
+                  "implementation": "CPython",
+                  "platform": "linux_x86_64",
+                  "architecture": "x86_64",
+                  "device": "CPU:0",
+              },
+              "resolver": {
+                  "pip": "25.2",
+                  "only_binary": True,
+                  "no_cache": True,
+              },
+              "requested": [
+                  {"name": "open3d", "version": os.environ["OPEN3D_VERSION"]}
+              ],
+              "artifacts": artifacts,
+          }
+          generated.write_text(
+              json.dumps(lock, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print(
+              f"resolved {len(artifacts)} exact wheels / "
+              f"{sum(item['byte_length'] for item in artifacts)} bytes"
+          )
+          PY
+
+      - name: Verify committed environment lock or expose first qualification result
+        shell: bash
+        run: |
+          set -euo pipefail
+          generated="$RUNNER_TEMP/open3d-surface-cpu-0.20.0.json"
+          sha256sum "$generated"
+          if test -f "$LOCK_PATH"; then
+            diff -u "$LOCK_PATH" "$generated"
+            echo "Committed Open3D CPU environment lock matches exact regeneration."
+          else
+            echo "No committed Open3D environment lock exists yet; this is first qualification evidence."
+            echo "----- BEGIN GENERATED OPEN3D SURFACE ENVIRONMENT -----"
+            cat "$generated"
+            echo "----- END GENERATED OPEN3D SURFACE ENVIRONMENT -----"
+          fi
+
+      - name: Install only the resolved local wheel closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          wheel_dir="$RUNNER_TEMP/open3d-wheels"
+          .venv-open3d/bin/python -m pip install             --no-index             --find-links "$wheel_dir"             --no-cache-dir             "open3d==0.20.0"
+
+      - name: Verify exact Open3D tensor TSDF API
+        shell: bash
+        env:
+          PYTHONPATH: src
+        run: |
+          set -euo pipefail
+          .venv-open3d/bin/python - <<'PY'
+          import open3d as o3d
+
+          assert o3d.__version__ == "0.20.0", o3d.__version__
+          assert str(o3d.core.Device("CPU:0")) == "CPU:0"
+          assert callable(o3d.t.geometry.VoxelBlockGrid)
+          assert callable(o3d.t.geometry.Image)
+          assert callable(o3d.t.io.write_triangle_mesh)
+          assert o3d.core.float32 is not None
+          assert o3d.core.float64 is not None
+          PY
+
+      - name: Exercise real two-view camera-z depth fusion through WRE adapter
+        shell: bash
+        env:
+          PYTHONPATH: src
+        run: |
+          set -euo pipefail
+          GENERATED_LOCK="$RUNNER_TEMP/open3d-surface-cpu-0.20.0.json"           OUTPUT_ROOT="$RUNNER_TEMP/open3d-surface-output"           .venv-open3d/bin/python - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import math
+          import os
+          import socket
+          from pathlib import Path
+
+          import open3d as o3d
+
+          from wre.domain.artifacts import ArtifactId, ArtifactKind, ArtifactRef
+          from wre.domain.camera_solutions import (
+              CameraProjectionModelName,
+              CameraSolution,
+              CameraSolutionId,
+          )
+          from wre.domain.cameras import ImageDimensions
+          from wre.domain.depth_fields import (
+              DepthField,
+              DepthFieldId,
+              DepthValueConventionName,
+          )
+          from wre.domain.fragments import LocalFrameId
+          from wre.domain.geometry_solutions import (
+              GeometryScaleStatus,
+              GeometrySolution,
+              GeometrySolutionId,
+          )
+          from wre.domain.metrics import MetricVector
+          from wre.domain.observations import ObservationId, Sha256Digest
+          from wre.domain.point_maps import PointMap, PointMapId
+          from wre.domain.producer_identity import (
+              ArtifactProducerIdentity,
+              ConfigurationIdentity,
+          )
+          from wre.domain.runs import ProducerRef
+          from wre.domain.surfaces import SurfaceIntendedUse
+          from wre.reconstruction.dense_depth import (
+              DENSE_DEPTH_ARTIFACT_KIND,
+              DenseDepthArtifact,
+          )
+          from wre.reconstruction.geometry_solution_comparison import (
+              GeometrySolutionCandidate,
+          )
+          from wre.reconstruction.open3d_surface import (
+              Open3dSurfaceEnvironmentIdentity,
+              Open3dTsdfSurfaceAdapter,
+              Open3dTsdfSurfaceConfig,
+          )
+
+          def digest(token: str) -> Sha256Digest:
+              return Sha256Digest(hashlib.sha256(token.encode("utf-8")).hexdigest())
+
+          def producer(token: str) -> ArtifactProducerIdentity:
+              return ArtifactProducerIdentity(
+                  producer=ProducerRef(
+                      implementation=f"integration.{token}",
+                      version="1",
+                      revision=f"revision:{token}",
+                  ),
+                  configuration=ConfigurationIdentity(sha256=digest(token)),
+              )
+
+          def artifact(identifier: str, kind: str = "evidence.synthetic") -> ArtifactRef:
+              return ArtifactRef(ArtifactId(identifier), ArtifactKind(kind))
+
+          metrics = MetricVector(observations=())
+          frame = LocalFrameId("frame:open3d-integration")
+          dims = ImageDimensions(width_px=64, height_px=48)
+          intrinsics = (60.0, 60.0, 31.5, 23.5)
+          cameras = (
+              CameraSolution(
+                  solution_id=CameraSolutionId("camera:a"),
+                  observation_id=ObservationId("obs:a"),
+                  local_frame_id=frame,
+                  projection_model=CameraProjectionModelName("pinhole"),
+                  dimensions=dims,
+                  intrinsic_parameters=intrinsics,
+                  rotation_matrix=((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)),
+                  translation_xyz=(0.0, 0.0, 0.0),
+                  uncertainty_artifacts=(),
+                  metrics=metrics,
+              ),
+              CameraSolution(
+                  solution_id=CameraSolutionId("camera:b"),
+                  observation_id=ObservationId("obs:b"),
+                  local_frame_id=frame,
+                  projection_model=CameraProjectionModelName("pinhole"),
+                  dimensions=dims,
+                  intrinsic_parameters=intrinsics,
+                  rotation_matrix=((1.0, 0.0, 0.0), (0.0, 1.0, 0.0), (0.0, 0.0, 1.0)),
+                  # Camera center is +0.10 in local X, hence world/local -> camera t=-0.10.
+                  translation_xyz=(-0.10, 0.0, 0.0),
+                  uncertainty_artifacts=(),
+                  metrics=metrics,
+              ),
+          )
+          point_map = PointMap(
+              point_map_id=PointMapId("points:open3d-integration"),
+              local_frame_id=frame,
+              source_observation_ids=tuple(camera.observation_id for camera in cameras),
+              positions_xyz=((0.0, 0.0, 2.0),),
+              confidence=None,
+              metrics=metrics,
+          )
+          geometry = GeometrySolution(
+              geometry_solution_id=GeometrySolutionId("geometry:open3d-integration"),
+              local_frame_id=frame,
+              scale_status=GeometryScaleStatus.UNRESOLVED,
+              camera_solution_ids=tuple(camera.solution_id for camera in cameras),
+              depth_field_ids=(),
+              point_map_ids=(point_map.point_map_id,),
+              metrics=metrics,
+          )
+          source_artifacts = (
+              artifact("source:a"),
+              artifact("source:b"),
+          )
+          candidate = GeometrySolutionCandidate(
+              geometry_solution=geometry,
+              camera_solutions=cameras,
+              depth_fields=(),
+              point_maps=(point_map,),
+              producer=producer("geometry"),
+              source_artifacts=source_artifacts,
+          )
+
+          pixel_count = dims.width_px * dims.height_px
+          invalid_indices = {23 * dims.width_px + 31, 24 * dims.width_px + 32}
+          depth_fields = []
+          for camera in cameras:
+              validity = tuple(index not in invalid_indices for index in range(pixel_count))
+              values = tuple(2.0 if valid else 0.0 for valid in validity)
+              confidence = tuple(0.5 if valid else 0.0 for valid in validity)
+              depth_fields.append(
+                  DepthField(
+                      depth_field_id=DepthFieldId(f"depth:{camera.solution_id.value[-1]}"),
+                      observation_id=camera.observation_id,
+                      camera_solution_id=camera.solution_id,
+                      dimensions=dims,
+                      depth_value_convention=DepthValueConventionName("camera-z"),
+                      depth_values=values,
+                      validity=validity,
+                      confidence=confidence,
+                      metrics=metrics,
+                  )
+              )
+          dense = DenseDepthArtifact(
+              artifact_ref=ArtifactRef(
+                  ArtifactId("dense:open3d-integration"),
+                  DENSE_DEPTH_ARTIFACT_KIND,
+              ),
+              source_geometry=candidate,
+              depth_fields=tuple(depth_fields),
+              producer=producer("dense"),
+              source_artifacts=source_artifacts,
+          )
+
+          lock_path = Path(os.environ["GENERATED_LOCK"])
+          lock_payload = lock_path.read_bytes()
+          manifest_sha = Sha256Digest(hashlib.sha256(lock_payload).hexdigest())
+          environment = Open3dSurfaceEnvironmentIdentity(manifest_sha256=manifest_sha)
+
+          output_root = Path(os.environ["OUTPUT_ROOT"])
+          if output_root.exists():
+              raise SystemExit("integration output root must be fresh")
+
+          source_geometry_before = dense.source_geometry
+          depth_fields_before = dense.depth_fields
+          source_artifacts_before = dense.source_artifacts
+
+          original_connect = socket.socket.connect
+
+          def deny_network(self: socket.socket, address: object) -> None:
+              raise RuntimeError(f"runtime network access forbidden: {address!r}")
+
+          socket.socket.connect = deny_network
+          try:
+              result = Open3dTsdfSurfaceAdapter(
+                  output_root=output_root,
+                  expected_environment=environment,
+                  config=Open3dTsdfSurfaceConfig(
+                      voxel_size=0.05,
+                      depth_max=4.0,
+                      trunc_voxel_multiplier=4.0,
+                      block_resolution=8,
+                      block_count=4096,
+                      mesh_weight_threshold=0.5,
+                  ),
+                  module=o3d,
+              ).derive(
+                  dense,
+                  intended_uses=(SurfaceIntendedUse.COLLISION,),
+              )
+          finally:
+              socket.socket.connect = original_connect
+
+          assert dense.source_geometry is source_geometry_before
+          assert dense.depth_fields is depth_fields_before
+          assert dense.source_artifacts is source_artifacts_before
+          assert result.surface_model.source_geometry is candidate
+          assert result.surface_model.local_frame_id == frame
+          assert result.surface_model.scale_status is GeometryScaleStatus.UNRESOLVED
+          assert result.surface_model.intended_uses == (SurfaceIntendedUse.COLLISION,)
+
+          surface_path = output_root / "surface.ply"
+          assert surface_path.is_file() and not surface_path.is_symlink()
+          mesh = o3d.t.io.read_triangle_mesh(str(surface_path))
+          vertex_count = int(mesh.vertex.positions.shape[0])
+          triangle_count = int(mesh.triangle.indices.shape[0])
+          assert vertex_count > 0, vertex_count
+          assert triangle_count > 0, triangle_count
+          vertices = mesh.vertex.positions.numpy().reshape(-1)
+          assert all(math.isfinite(float(value)) for value in vertices)
+
+          entry = result.materialization.entries[0]
+          assert entry.relative_path == "surface.ply"
+          assert entry.byte_length == surface_path.stat().st_size
+          assert entry.sha256.value == hashlib.sha256(surface_path.read_bytes()).hexdigest()
+
+          evidence = {
+              "schema_version": 1,
+              "evidence_kind": "open3d_0_20_0_cpu_depth_tsdf_integration",
+              "runtime_execution_evidence": True,
+              "gpu_execution_evidence": False,
+              "sycl_execution_evidence": False,
+              "open3d_version": o3d.__version__,
+              "environment_manifest_sha256": manifest_sha.value,
+              "device": "CPU:0",
+              "fixture": {
+                  "camera_count": 2,
+                  "camera_projection": "pinhole",
+                  "depth_value_convention": "camera-z",
+                  "width_px": dims.width_px,
+                  "height_px": dims.height_px,
+                  "invalid_pixel_count_per_view": len(invalid_indices),
+                  "source_scale_status": geometry.scale_status.value,
+              },
+              "output": {
+                  "relative_path": entry.relative_path,
+                  "sha256": entry.sha256.value,
+                  "byte_length": entry.byte_length,
+                  "vertex_count": vertex_count,
+                  "triangle_count": triangle_count,
+              },
+              "source_immutability": {
+                  "geometry_identity_preserved": dense.source_geometry is source_geometry_before,
+                  "depth_tuple_identity_preserved": dense.depth_fields is depth_fields_before,
+                  "source_artifact_tuple_identity_preserved": dense.source_artifacts is source_artifacts_before,
+              },
+              "claims": {
+                  "surface_quality_benchmark": False,
+                  "watertightness": False,
+                  "collision_suitability": False,
+                  "navigation_suitability": False,
+                  "measurement_suitability": False,
+                  "default_promotion": False,
+              },
+          }
+          Path(os.environ["WRE_OPEN3D_SURFACE_EVIDENCE"]).write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print(json.dumps(evidence, sort_keys=True))
+          PY
+
+      - name: Validate retained integration evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv-open3d/bin/python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          evidence = json.loads(
+              Path(os.environ["WRE_OPEN3D_SURFACE_EVIDENCE"]).read_text(encoding="utf-8")
+          )
+          assert evidence["runtime_execution_evidence"] is True
+          assert evidence["gpu_execution_evidence"] is False
+          assert evidence["sycl_execution_evidence"] is False
+          assert evidence["open3d_version"] == "0.20.0"
+          assert evidence["device"] == "CPU:0"
+          assert evidence["output"]["vertex_count"] > 0
+          assert evidence["output"]["triangle_count"] > 0
+          assert len(evidence["output"]["sha256"]) == 64
+          assert evidence["output"]["byte_length"] > 0
+          assert all(evidence["source_immutability"].values())
+          assert not any(evidence["claims"].values())
+          PY
+
+      - name: Retain exact environment and output evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v2l16-2-open3d-surface-cpu
+          path: |
+            ${{ runner.temp }}/open3d-surface-cpu-0.20.0.json
+            ${{ env.WRE_OPEN3D_SURFACE_EVIDENCE }}
+          if-no-files-found: error
+          retention-days: 30
