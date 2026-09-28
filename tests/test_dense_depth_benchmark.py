@@ -169,7 +169,9 @@ def _depth_field(
 ) -> DepthField:
     token = cast(str, field["camera"])
     camera = next(
-        item for item in source.camera_solutions if item.solution_id == CameraSolutionId(f"camera:{token}")
+        item
+        for item in source.camera_solutions
+        if item.solution_id == CameraSolutionId(f"camera:{token}")
     )
     confidence_raw = field["confidence"]
     confidence = (
@@ -464,7 +466,7 @@ def test_overlapping_field_semantics_fail_closed_without_conversion() -> None:
     )
     changed_candidate = replace(
         first,
-        depth_fields=(changed_field,) + first.depth_fields[1:],
+        depth_fields=(changed_field, *first.depth_fields[1:]),
     )
     changed_request = replace(
         request,
