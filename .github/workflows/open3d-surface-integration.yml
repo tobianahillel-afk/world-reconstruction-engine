@@ -44,7 +44,6 @@ jobs:
       OPEN3D_WHEEL_SHA256: f5cc6106d9c0c41beb8160aa99c2b663e7f08588a598ec7d464391a4cfe684d6
       OPEN3D_WHEEL_BYTES: "400788891"
       OPEN3D_SOURCE_REVISION: b6c5e196384ad71e75b6e6f9c5da22d046221f1d
-      WRE_OPEN3D_SURFACE_EVIDENCE: ${{ runner.temp }}/open3d-surface-evidence.json
 
     steps:
       - name: Checkout WRE
@@ -58,6 +57,12 @@ jobs:
           version: "0.12.13"
           python-version: "3.12.12"
           enable-cache: false
+
+      - name: Initialize retained evidence path
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "WRE_OPEN3D_SURFACE_EVIDENCE=$RUNNER_TEMP/open3d-surface-evidence.json" >> "$GITHUB_ENV"
 
       - name: Create isolated resolver environment
         shell: bash
