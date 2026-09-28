@@ -289,9 +289,12 @@ components:
   physical_surface:
     owner_lot: V2L16
     implementation:
-      - src/wre/domain/surfaces.py
       - src/wre/domain/__init__.py
+      - src/wre/domain/surfaces.py
+      - src/wre/reconstruction/__init__.py
+      - src/wre/reconstruction/open3d_surface.py
     tests:
+      - tests/test_open3d_surface.py
       - tests/test_surfaces.py
     status: implementing
   photometric_pipeline: {owner_lot: V2L17, implementation: [], tests: [], status: planned}
