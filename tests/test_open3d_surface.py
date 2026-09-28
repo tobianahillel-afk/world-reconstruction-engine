@@ -187,9 +187,14 @@ def _dense(
     depth_fields = fields_value or tuple(
         _depth_field(camera, camera.solution_id.value) for camera in source.camera_solutions
     )
-    source_artifacts = (
-        *source.source_artifacts,
-        extra_source or _artifact("source:dense-extra", "evidence.depth_support"),
+    source_artifacts = tuple(
+        sorted(
+            (
+                *source.source_artifacts,
+                extra_source or _artifact("source:dense-extra", "evidence.depth_support"),
+            ),
+            key=lambda item: (item.artifact_id.value, item.artifact_kind.value),
+        )
     )
     return DenseDepthArtifact(
         artifact_ref=ArtifactRef(
