@@ -136,13 +136,13 @@ class DenseDepthBenchmarkRequest:
         identities = tuple(_artifact_key(item.artifact_ref) for item in self.candidates)
         if len(identities) != len(set(identities)):
             raise ValueError("dense_depth_benchmark candidate artifacts must be unique")
-        if identities != tuple(sorted(identities)):
-            raise ValueError(
-                "dense_depth_benchmark candidates must use canonical ArtifactId/ArtifactKind order"
-            )
         if _artifact_key(self.reference.artifact_ref) in set(identities):
             raise ValueError(
                 "dense_depth_benchmark reference artifact must differ from every candidate"
+            )
+        if identities != tuple(sorted(identities)):
+            raise ValueError(
+                "dense_depth_benchmark candidates must use canonical ArtifactId/ArtifactKind order"
             )
 
         for candidate in self.candidates:
