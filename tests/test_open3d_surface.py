@@ -587,10 +587,11 @@ def test_real_call_boundary_forwards_depth_intrinsics_and_camera_from_local_pose
     assert first_compute[3:] == (1.0, 8.0, 6.0)
     assert cast(tuple[object, ...], integrate_calls[0])[4:] == (1.0, 8.0, 6.0)
 
+    first_depth_values = cast(tuple[float, ...], first_depth.tensor.data)
     # Confidence 0.0 on a valid pixel does not remove depth support.
-    assert first_depth.tensor.data[0] == 1.0
+    assert first_depth_values[0] == 1.0
     # Invalid support stays the canonical exact zero hole.
-    assert first_depth.tensor.data[2] == 0.0
+    assert first_depth_values[2] == 0.0
 
     write_call = next(value for name, value in module.calls if name == "write_triangle_mesh")
     write = cast(dict[str, object], write_call)
