@@ -32,7 +32,7 @@ OPEN3D_SURFACE_ADAPTER_ID = "open3d.depth_tsdf_surface"
 OPEN3D_SURFACE_PRODUCER_IMPLEMENTATION = "open3d.t.geometry.VoxelBlockGrid.depth_only"
 OPEN3D_SURFACE_PRODUCER_VERSION = "0.20.0"
 OPEN3D_SURFACE_SOURCE_REVISION = "b6c5e196384ad71e75b6e6f9c5da22d046221f1d"
-OPEN3D_SURFACE_DEPENDENCY_REF = "open3d_surface_cpu"
+OPEN3D_SURFACE_DEPENDENCY_REF = "open3d"
 OPEN3D_SURFACE_SHIPPING_STATUS = "experimental"
 OPEN3D_SURFACE_WHEEL_FILENAME = "open3d-0.20.0-cp312-cp312-manylinux_2_35_x86_64.whl"
 OPEN3D_SURFACE_WHEEL_SHA256 = Sha256Digest(
@@ -260,25 +260,18 @@ def inspect_open3d_surface_environment(
 
 
 def _camera_by_id(depth: DenseDepthArtifact) -> dict[object, CameraSolution]:
-    return {
-        camera.solution_id: camera
-        for camera in depth.source_geometry.camera_solutions
-    }
+    return {camera.solution_id: camera for camera in depth.source_geometry.camera_solutions}
 
 
 def _validate_depth_field(camera: CameraSolution, depth_field: DepthField) -> None:
     if camera.projection_model != OPEN3D_PINHOLE_PROJECTION:
-        raise Open3dSurfaceError(
-            "Open3D surface baseline accepts only canonical pinhole cameras"
-        )
+        raise Open3dSurfaceError("Open3D surface baseline accepts only canonical pinhole cameras")
     if len(camera.intrinsic_parameters) != 4:
         raise Open3dSurfaceError(
             "Open3D surface baseline requires pinhole intrinsics exactly fx fy cx cy"
         )
     if depth_field.depth_value_convention != OPEN3D_CAMERA_Z_CONVENTION:
-        raise Open3dSurfaceError(
-            "Open3D surface baseline accepts only canonical camera-z depth"
-        )
+        raise Open3dSurfaceError("Open3D surface baseline accepts only canonical camera-z depth")
     if depth_field.observation_id != camera.observation_id:
         raise Open3dSurfaceError("DepthField observation must match its CameraSolution")
     if depth_field.dimensions != camera.dimensions:
@@ -395,8 +388,7 @@ class Open3dTsdfSurfaceAdapter:
             raise TypeError("open3d_surface.output_root must be pathlib.Path")
         if not isinstance(self.expected_environment, Open3dSurfaceEnvironmentIdentity):
             raise TypeError(
-                "open3d_surface.expected_environment must be "
-                "Open3dSurfaceEnvironmentIdentity"
+                "open3d_surface.expected_environment must be Open3dSurfaceEnvironmentIdentity"
             )
         if not isinstance(self.config, Open3dTsdfSurfaceConfig):
             raise TypeError("open3d_surface.config must be Open3dTsdfSurfaceConfig")
@@ -477,9 +469,7 @@ class Open3dTsdfSurfaceAdapter:
                     self.config.trunc_voxel_multiplier,
                 )
 
-            mesh = volume.extract_triangle_mesh(
-                weight_threshold=self.config.mesh_weight_threshold
-            )
+            mesh = volume.extract_triangle_mesh(weight_threshold=self.config.mesh_weight_threshold)
             if not _mesh_has_finite_geometry(mesh):
                 raise Open3dSurfaceError(
                     "Open3D TSDF surface must contain finite vertices and at least one triangle"
