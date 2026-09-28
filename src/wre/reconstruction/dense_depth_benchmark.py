@@ -250,7 +250,9 @@ class DenseDepthBenchmarkResult:
 
     def __post_init__(self) -> None:
         if not isinstance(self.request, DenseDepthBenchmarkRequest):
-            raise TypeError("dense_depth_benchmark_result.request must be DenseDepthBenchmarkRequest")
+            raise TypeError(
+                "dense_depth_benchmark_result.request must be DenseDepthBenchmarkRequest"
+            )
         if not isinstance(self.candidates, tuple):
             raise TypeError(
                 "dense_depth_benchmark_result.candidates must be an immutable tuple"
