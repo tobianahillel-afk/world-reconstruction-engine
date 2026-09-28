@@ -8,6 +8,7 @@ from types import SimpleNamespace
 from typing import Any, cast
 
 import pytest
+import yaml
 
 import wre.reconstruction.open3d_surface as surface_module
 from wre.domain.artifact_materialization import ArtifactMaterializationMetadata
@@ -60,6 +61,22 @@ from wre.reconstruction.open3d_surface import (
     Open3dTsdfSurfaceAdapter,
     Open3dTsdfSurfaceConfig,
 )
+
+
+_ROOT = Path(__file__).resolve().parents[1]
+_REGISTRY_PATH = _ROOT / "registry" / "adapter-models.yaml"
+
+
+def _entries_by_id() -> dict[str, dict[str, Any]]:
+    document = yaml.safe_load(_REGISTRY_PATH.read_text(encoding="utf-8"))
+    assert isinstance(document, dict)
+    entries = document["entries"]
+    assert isinstance(entries, list)
+    return {
+        cast(str, entry["adapter_id"]): cast(dict[str, Any], entry)
+        for entry in entries
+        if isinstance(entry, dict)
+    }
 
 
 def _metrics() -> MetricVector:
@@ -913,6 +930,34 @@ def test_adapter_exposes_only_derive_as_public_execution_operation(tmp_path: Pat
     assert public_callables == {"derive"}
     signature = inspect.signature(type(adapter).derive)
     assert tuple(signature.parameters) == ("self",)
+
+
+def test_adapter_registry_contract_is_exact_experimental_open3d_020() -> None:
+    entry = _entries_by_id()[OPEN3D_SURFACE_ADAPTER_ID]
+
+    assert entry["capability"] == {
+        "name": OPEN3D_SURFACE_CAPABILITY_NAME.value,
+        "input_kinds": ["geometry.dense_depth"],
+        "output_kinds": ["geometry.surface"],
+    }
+    assert entry["producer"] == {
+        "implementation": OPEN3D_SURFACE_PRODUCER_IMPLEMENTATION,
+        "version": OPEN3D_SURFACE_PRODUCER_VERSION,
+        "revision": OPEN3D_SURFACE_SOURCE_REVISION,
+    }
+    assert entry["dependency_refs"] == [OPEN3D_SURFACE_DEPENDENCY_REF]
+    assert entry["model"] is None
+    assert entry["checkpoint"] is None
+    assert entry["artifact_key_hardware_policy"] == "required"
+    assert entry["license"]["direct"] == "MIT"
+    assert entry["license"]["review"] == "pending"
+    assert entry["shipping_status"] == OPEN3D_SURFACE_SHIPPING_STATUS
+    assert entry["failure_signals"] == [
+        "dependency_unavailable",
+        "environment_incompatible",
+    ]
+    assert entry["metric_names"] == []
+    assert entry["resume_mode"] == "unsupported"
 
 
 def test_module_has_no_eager_open3d_numpy_quality_runtime_or_later_surface_dependencies() -> None:
