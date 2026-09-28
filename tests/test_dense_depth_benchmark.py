@@ -670,9 +670,9 @@ def test_workflow_is_cpu_only_and_retains_machine_readable_evidence() -> None:
 
 def test_v2l15_lot_review_and_v2l16_handoff_are_recorded() -> None:
     root = Path(__file__).resolve().parents[1]
-    review = (
-        root / "docs" / "reviews" / "V2L15-dense-depth-mvs-fusion-review.md"
-    ).read_text(encoding="utf-8")
+    review = (root / "docs" / "reviews" / "V2L15-dense-depth-mvs-fusion-review.md").read_text(
+        encoding="utf-8"
+    )
     for item in (
         "V2L15.1",
         "V2L15.2",
