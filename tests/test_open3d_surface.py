@@ -470,9 +470,7 @@ def test_exact_constants_environment_and_capability_contract() -> None:
     assert OPEN3D_SURFACE_DEPENDENCY_REF == "open3d"
     assert OPEN3D_SURFACE_PRODUCER_VERSION == "0.20.0"
     assert OPEN3D_SURFACE_SOURCE_REVISION == "b6c5e196384ad71e75b6e6f9c5da22d046221f1d"
-    assert OPEN3D_SURFACE_ROOT_WHEEL == (
-        "open3d-0.20.0-cp312-cp312-manylinux_2_35_x86_64.whl"
-    )
+    assert OPEN3D_SURFACE_ROOT_WHEEL == ("open3d-0.20.0-cp312-cp312-manylinux_2_35_x86_64.whl")
     assert OPEN3D_SURFACE_ROOT_WHEEL_SHA256 == Sha256Digest(
         "f5cc6106d9c0c41beb8160aa99c2b663e7f08588a598ec7d464391a4cfe684d6"
     )
@@ -489,9 +487,7 @@ def test_exact_constants_environment_and_capability_contract() -> None:
 
     assert OPEN3D_SURFACE_CAPABILITY.capability is OPEN3D_SURFACE_CAPABILITY_NAME
     assert OPEN3D_SURFACE_CAPABILITY.input_kinds == frozenset({DENSE_DEPTH_ARTIFACT_KIND})
-    assert OPEN3D_SURFACE_CAPABILITY.output_kinds == frozenset(
-        {SURFACE_MODEL_ARTIFACT_KIND}
-    )
+    assert OPEN3D_SURFACE_CAPABILITY.output_kinds == frozenset({SURFACE_MODEL_ARTIFACT_KIND})
 
 
 def test_config_has_exact_frozen_explicit_local_unit_shape_and_stable_hash() -> None:
@@ -674,12 +670,10 @@ def test_confidence_never_changes_depth_support_or_open3d_calls(tmp_path: Path) 
     _adapter(tmp_path / "high", source=high, module=high_module).derive()
 
     low_values = [
-        cast(_FakeImage, call[0]).tensor.values
-        for call in low_module.voxel_grids[0].compute_calls
+        cast(_FakeImage, call[0]).tensor.values for call in low_module.voxel_grids[0].compute_calls
     ]
     high_values = [
-        cast(_FakeImage, call[0]).tensor.values
-        for call in high_module.voxel_grids[0].compute_calls
+        cast(_FakeImage, call[0]).tensor.values for call in high_module.voxel_grids[0].compute_calls
     ]
     assert low_values == high_values
 
