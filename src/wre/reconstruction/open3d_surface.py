@@ -109,13 +109,17 @@ class Open3dSurfaceEnvironmentIdentity:
         if self.open3d_version != OPEN3D_SURFACE_PRODUCER_VERSION:
             raise ValueError("Open3D surface environment requires open3d 0.20.0")
         if self.source_revision != OPEN3D_SURFACE_SOURCE_REVISION:
-            raise ValueError("Open3D surface environment source revision must match reviewed source")
+            raise ValueError(
+                "Open3D surface environment source revision must match reviewed source"
+            )
         if self.wheel_filename != OPEN3D_SURFACE_WHEEL_FILENAME:
             raise ValueError("Open3D surface environment wheel filename must match reviewed wheel")
         if self.wheel_sha256 != OPEN3D_SURFACE_WHEEL_SHA256:
             raise ValueError("Open3D surface environment wheel SHA-256 must match reviewed wheel")
         if self.wheel_byte_length != OPEN3D_SURFACE_WHEEL_BYTE_LENGTH:
-            raise ValueError("Open3D surface environment wheel byte length must match reviewed wheel")
+            raise ValueError(
+                "Open3D surface environment wheel byte length must match reviewed wheel"
+            )
         if self.device != OPEN3D_SURFACE_DEVICE:
             raise ValueError("Open3D surface environment requires CPU:0")
 
