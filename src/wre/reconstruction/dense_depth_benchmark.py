@@ -164,21 +164,14 @@ def _validate_matching_field_semantics(
     reference: DepthField,
 ) -> None:
     if candidate.camera_solution_id != reference.camera_solution_id:
-        raise ValueError(
-            "dense_depth_benchmark overlapping fields must preserve CameraSolutionId"
-        )
+        raise ValueError("dense_depth_benchmark overlapping fields must preserve CameraSolutionId")
     if candidate.observation_id != reference.observation_id:
-        raise ValueError(
-            "dense_depth_benchmark overlapping fields must preserve ObservationId"
-        )
+        raise ValueError("dense_depth_benchmark overlapping fields must preserve ObservationId")
     if candidate.dimensions != reference.dimensions:
-        raise ValueError(
-            "dense_depth_benchmark overlapping fields must preserve ImageDimensions"
-        )
+        raise ValueError("dense_depth_benchmark overlapping fields must preserve ImageDimensions")
     if candidate.depth_value_convention != reference.depth_value_convention:
         raise ValueError(
-            "dense_depth_benchmark overlapping fields must preserve "
-            "DepthValueConventionName"
+            "dense_depth_benchmark overlapping fields must preserve DepthValueConventionName"
         )
 
 
@@ -186,12 +179,8 @@ def _reference_metrics(
     candidate: DenseDepthArtifact,
     reference: DenseDepthArtifact,
 ) -> MetricVector:
-    reference_by_camera = {
-        field.camera_solution_id: field for field in reference.depth_fields
-    }
-    reference_by_observation = {
-        field.observation_id: field for field in reference.depth_fields
-    }
+    reference_by_camera = {field.camera_solution_id: field for field in reference.depth_fields}
+    reference_by_observation = {field.observation_id: field for field in reference.depth_fields}
 
     candidate_by_camera: dict[CameraSolutionId, DepthField] = {}
     for field in candidate.depth_fields:
@@ -289,9 +278,7 @@ def _benchmark_record_id(
             "implementation": DENSE_DEPTH_BENCHMARK_IMPLEMENTATION,
             "version": DENSE_DEPTH_BENCHMARK_VERSION,
             "revision": DENSE_DEPTH_BENCHMARK_REVISION,
-            "configuration_sha256": (
-                DENSE_DEPTH_BENCHMARK_EVALUATOR.configuration.sha256.value
-            ),
+            "configuration_sha256": (DENSE_DEPTH_BENCHMARK_EVALUATOR.configuration.sha256.value),
         },
     }
     encoded = json.dumps(
@@ -301,9 +288,7 @@ def _benchmark_record_id(
         separators=(",", ":"),
         allow_nan=False,
     ).encode("utf-8")
-    return BenchmarkRecordId(
-        f"dense-depth:{hashlib.sha256(encoded).hexdigest()[:32]}"
-    )
+    return BenchmarkRecordId(f"dense-depth:{hashlib.sha256(encoded).hexdigest()[:32]}")
 
 
 @dataclass(frozen=True, slots=True)
@@ -317,9 +302,7 @@ class DenseDepthCandidateBenchmarkResult:
 
     def __post_init__(self) -> None:
         if not isinstance(self.candidate, DenseDepthArtifact):
-            raise TypeError(
-                "dense_depth_candidate_benchmark.candidate must be DenseDepthArtifact"
-            )
+            raise TypeError("dense_depth_candidate_benchmark.candidate must be DenseDepthArtifact")
         if not isinstance(self.coverage, DenseDepthCoverageReport):
             raise TypeError(
                 "dense_depth_candidate_benchmark.coverage must be DenseDepthCoverageReport"
@@ -339,8 +322,7 @@ class DenseDepthCandidateBenchmarkResult:
 
         expected_metrics = tuple(
             sorted(
-                self.coverage.metrics.observations
-                + self.reference_metrics.observations,
+                self.coverage.metrics.observations + self.reference_metrics.observations,
                 key=lambda item: item.descriptor.name.value,
             )
         )
@@ -376,12 +358,9 @@ class DenseDepthBenchmarkResult:
                 "dense_depth_benchmark_result.request must be DenseDepthBenchmarkRequest"
             )
         if not isinstance(self.candidates, tuple):
-            raise TypeError(
-                "dense_depth_benchmark_result.candidates must be an immutable tuple"
-            )
+            raise TypeError("dense_depth_benchmark_result.candidates must be an immutable tuple")
         if any(
-            not isinstance(item, DenseDepthCandidateBenchmarkResult)
-            for item in self.candidates
+            not isinstance(item, DenseDepthCandidateBenchmarkResult) for item in self.candidates
         ):
             raise TypeError(
                 "dense_depth_benchmark_result.candidates members must be "
