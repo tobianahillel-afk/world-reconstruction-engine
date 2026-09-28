@@ -144,6 +144,12 @@ from wre.domain.scene_clusters import (
     SceneRelationDisposition,
     SceneRelationHypothesis,
 )
+from wre.domain.surfaces import (
+    SURFACE_MODEL_ARTIFACT_KIND,
+    SurfaceIntendedUse,
+    SurfaceModel,
+    SurfaceRepresentationName,
+)
 from wre.domain.temporal_groups import (
     SyncHypothesis,
     SyncHypothesisDisposition,
@@ -256,6 +262,7 @@ __all__ = [
     "SceneProjectId",
     "SceneRelationDisposition",
     "SceneRelationHypothesis",
+    "SURFACE_MODEL_ARTIFACT_KIND",
     "Sha256Digest",
     "SourceId",
     "SourceRef",
@@ -263,6 +270,9 @@ __all__ = [
     "SparseReconstructionEstimateId",
     "SpatialFragment",
     "SpatialFragmentId",
+    "SurfaceIntendedUse",
+    "SurfaceModel",
+    "SurfaceRepresentationName",
     "SyncHypothesis",
     "SyncHypothesisDisposition",
     "TemporalGroup",
