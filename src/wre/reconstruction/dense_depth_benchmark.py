@@ -125,17 +125,14 @@ def _validate_overlapping_field_semantics(
         if reference_field is None:
             continue
         if candidate_field.observation_id != reference_field.observation_id:
-            raise ValueError(
-                "dense depth benchmark overlapping fields must preserve ObservationId"
-            )
+            raise ValueError("dense depth benchmark overlapping fields must preserve ObservationId")
         if candidate_field.dimensions != reference_field.dimensions:
             raise ValueError(
                 "dense depth benchmark overlapping fields must preserve ImageDimensions"
             )
         if candidate_field.depth_value_convention != reference_field.depth_value_convention:
             raise ValueError(
-                "dense depth benchmark overlapping fields must preserve "
-                "DepthValueConventionName"
+                "dense depth benchmark overlapping fields must preserve DepthValueConventionName"
             )
 
 
@@ -158,9 +155,7 @@ class DenseDepthBenchmarkRequest:
         if len(self.candidates) < 2:
             raise ValueError("dense_depth_benchmark requires at least two candidates")
         if any(not isinstance(item, DenseDepthArtifact) for item in self.candidates):
-            raise TypeError(
-                "dense_depth_benchmark.candidates members must be DenseDepthArtifact"
-            )
+            raise TypeError("dense_depth_benchmark.candidates members must be DenseDepthArtifact")
 
         candidate_keys = tuple(_artifact_key(item.artifact_ref) for item in self.candidates)
         if len(candidate_keys) != len(set(candidate_keys)):
@@ -254,9 +249,7 @@ class DenseDepthBenchmarkResult:
                 "dense_depth_benchmark_result.request must be DenseDepthBenchmarkRequest"
             )
         if not isinstance(self.candidates, tuple):
-            raise TypeError(
-                "dense_depth_benchmark_result.candidates must be an immutable tuple"
-            )
+            raise TypeError("dense_depth_benchmark_result.candidates must be an immutable tuple")
         if any(
             not isinstance(item, DenseDepthBenchmarkCandidateResult) for item in self.candidates
         ):
@@ -268,15 +261,11 @@ class DenseDepthBenchmarkResult:
             raise ValueError(
                 "dense_depth_benchmark_result candidates must exactly match request order"
             )
-        if any(
-            item.benchmark_record.fixture != self.request.fixture for item in self.candidates
-        ):
+        if any(item.benchmark_record.fixture != self.request.fixture for item in self.candidates):
             raise ValueError(
                 "dense_depth_benchmark_result benchmark records must use request fixture"
             )
-        if any(
-            item.benchmark_record.hardware != self.request.hardware for item in self.candidates
-        ):
+        if any(item.benchmark_record.hardware != self.request.hardware for item in self.candidates):
             raise ValueError(
                 "dense_depth_benchmark_result benchmark records must use request hardware"
             )
@@ -302,13 +291,9 @@ def _reference_metrics(
     reference_by_camera = {
         field.camera_solution_id: field for field in reference_depth.depth_fields
     }
-    candidate_by_camera = {
-        field.camera_solution_id: field for field in candidate.depth_fields
-    }
+    candidate_by_camera = {field.camera_solution_id: field for field in candidate.depth_fields}
 
-    reference_valid_pixel_count = sum(
-        sum(field.validity) for field in reference_depth.depth_fields
-    )
+    reference_valid_pixel_count = sum(sum(field.validity) for field in reference_depth.depth_fields)
     jointly_valid_pixel_count = 0
     absolute_errors: list[float] = []
     absolute_relative_errors: list[float] = []
@@ -401,9 +386,7 @@ def _combined_metrics(
         *reference_metrics.observations,
     )
     return MetricVector(
-        observations=tuple(
-            sorted(observations, key=lambda item: item.descriptor.name.value)
-        )
+        observations=tuple(sorted(observations, key=lambda item: item.descriptor.name.value))
     )
 
 
