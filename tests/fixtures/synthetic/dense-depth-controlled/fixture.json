@@ -1,0 +1,199 @@
+{
+  "candidates": [
+    {
+      "artifact_id": "dense:candidate-full",
+      "fields": [
+        {
+          "camera": "a",
+          "confidence": [
+            0.9,
+            0.8,
+            0.7,
+            0.6
+          ],
+          "depth_values": [
+            1.5,
+            2.5,
+            3.5,
+            4.5
+          ],
+          "validity": [
+            true,
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "camera": "b",
+          "confidence": null,
+          "depth_values": [
+            2.5,
+            4.5,
+            6.5,
+            8.5
+          ],
+          "validity": [
+            true,
+            true,
+            true,
+            true
+          ]
+        },
+        {
+          "camera": "c",
+          "confidence": [
+            0.5,
+            0.6,
+            0.7,
+            0.8
+          ],
+          "depth_values": [
+            1.5,
+            1.5,
+            2.5,
+            2.5
+          ],
+          "validity": [
+            true,
+            true,
+            true,
+            true
+          ]
+        }
+      ],
+      "producer_token": "candidate-full"
+    },
+    {
+      "artifact_id": "dense:candidate-partial",
+      "fields": [
+        {
+          "camera": "a",
+          "confidence": [
+            0.8,
+            0.0,
+            0.6,
+            0.0
+          ],
+          "depth_values": [
+            1.5,
+            0.0,
+            2.5,
+            0.0
+          ],
+          "validity": [
+            true,
+            false,
+            true,
+            false
+          ]
+        },
+        {
+          "camera": "b",
+          "confidence": null,
+          "depth_values": [
+            2.0,
+            5.0,
+            0.0,
+            0.0
+          ],
+          "validity": [
+            true,
+            true,
+            false,
+            false
+          ]
+        }
+      ],
+      "producer_token": "candidate-partial"
+    },
+    {
+      "artifact_id": "dense:candidate-zero-overlap",
+      "fields": [
+        {
+          "camera": "c",
+          "confidence": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "depth_values": [
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "validity": [
+            false,
+            false,
+            false,
+            false
+          ]
+        }
+      ],
+      "producer_token": "candidate-zero-overlap"
+    }
+  ],
+  "depth_value_convention": "camera-z",
+  "dimensions": {
+    "height_px": 2,
+    "width_px": 2
+  },
+  "fixture_id": "fixture.dense-depth-controlled.v1",
+  "reference": {
+    "artifact_id": "dense:reference",
+    "fields": [
+      {
+        "camera": "a",
+        "confidence": null,
+        "depth_values": [
+          1.0,
+          2.0,
+          3.0,
+          4.0
+        ],
+        "validity": [
+          true,
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "camera": "b",
+        "confidence": null,
+        "depth_values": [
+          2.0,
+          4.0,
+          6.0,
+          8.0
+        ],
+        "validity": [
+          true,
+          true,
+          true,
+          true
+        ]
+      },
+      {
+        "camera": "c",
+        "confidence": null,
+        "depth_values": [
+          1.0,
+          1.0,
+          2.0,
+          2.0
+        ],
+        "validity": [
+          true,
+          true,
+          true,
+          true
+        ]
+      }
+    ],
+    "producer_token": "reference"
+  },
+  "schema_version": 1
+}

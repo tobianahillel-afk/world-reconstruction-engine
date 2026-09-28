@@ -275,6 +275,7 @@ components:
       - src/wre/reconstruction/depth_consistency_fusion.py
       - src/wre/reconstruction/learned_depth_prior.py
       - src/wre/reconstruction/dense_depth_coverage.py
+      - src/wre/reconstruction/dense_depth_benchmark.py
       - src/wre/reconstruction/__init__.py
       - registry/adapter-models.yaml
     tests:
@@ -283,8 +284,9 @@ components:
       - tests/test_depth_consistency_fusion.py
       - tests/test_learned_depth_prior.py
       - tests/test_dense_depth_coverage.py
-    status: implementing
-  physical_surface: {owner_lot: V2L16, implementation: [], tests: [], status: planned}
+      - tests/test_dense_depth_benchmark.py
+    status: implemented
+  physical_surface: {owner_lot: V2L16, implementation: [], tests: [], status: implementing}
   photometric_pipeline: {owner_lot: V2L17, implementation: [], tests: [], status: planned}
   static_appearance: {owner_lot: V2L18, implementation: [], tests: [], status: planned}
   materials_environment: {owner_lot: V2L19, implementation: [], tests: [], status: planned}
