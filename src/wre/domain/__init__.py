@@ -144,6 +144,12 @@ from wre.domain.scene_clusters import (
     SceneRelationDisposition,
     SceneRelationHypothesis,
 )
+from wre.domain.surfaces import (
+    SURFACE_MODEL_ARTIFACT_KIND,
+    SurfaceIntendedUse,
+    SurfaceModel,
+    SurfaceRepresentationName,
+)
 from wre.domain.temporal_groups import (
     SyncHypothesis,
     SyncHypothesisDisposition,
@@ -154,6 +160,7 @@ from wre.domain.temporal_groups import (
 __all__ = [
     "ARTIFACT_KEY_SCHEMA_VERSION",
     "DECODED_IMAGE_PYRAMID_KIND",
+    "SURFACE_MODEL_ARTIFACT_KIND",
     "AdapterCapabilityDescriptor",
     "AdapterCapabilityName",
     "ArtifactDependencyEdge",
@@ -263,6 +270,9 @@ __all__ = [
     "SparseReconstructionEstimateId",
     "SpatialFragment",
     "SpatialFragmentId",
+    "SurfaceIntendedUse",
+    "SurfaceModel",
+    "SurfaceRepresentationName",
     "SyncHypothesis",
     "SyncHypothesisDisposition",
     "TemporalGroup",

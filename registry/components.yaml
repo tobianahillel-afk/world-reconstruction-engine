@@ -286,7 +286,14 @@ components:
       - tests/test_dense_depth_coverage.py
       - tests/test_dense_depth_benchmark.py
     status: implemented
-  physical_surface: {owner_lot: V2L16, implementation: [], tests: [], status: implementing}
+  physical_surface:
+    owner_lot: V2L16
+    implementation:
+      - src/wre/domain/surfaces.py
+      - src/wre/domain/__init__.py
+    tests:
+      - tests/test_surfaces.py
+    status: implementing
   photometric_pipeline: {owner_lot: V2L17, implementation: [], tests: [], status: planned}
   static_appearance: {owner_lot: V2L18, implementation: [], tests: [], status: planned}
   materials_environment: {owner_lot: V2L19, implementation: [], tests: [], status: planned}
