@@ -250,6 +250,19 @@ from wre.reconstruction.dense_depth_coverage import (
     DenseDepthFieldCoverage,
     evaluate_dense_depth_coverage,
 )
+from wre.reconstruction.dense_depth_benchmark import (
+    DENSE_DEPTH_BENCHMARK_EVALUATOR,
+    DENSE_DEPTH_BENCHMARK_IMPLEMENTATION,
+    DENSE_DEPTH_BENCHMARK_REVISION,
+    DENSE_DEPTH_BENCHMARK_VERSION,
+    REFERENCE_ABSOLUTE_ERROR_MEDIAN_DESCRIPTOR,
+    REFERENCE_ABSOLUTE_RELATIVE_ERROR_MEDIAN_DESCRIPTOR,
+    REFERENCE_VALID_COVERAGE_RATIO_DESCRIPTOR,
+    DenseDepthBenchmarkRequest,
+    DenseDepthBenchmarkResult,
+    DenseDepthCandidateBenchmarkResult,
+    benchmark_dense_depth_candidates,
+)
 from wre.reconstruction.depth_consistency_fusion import (
     DepthConsistencyFusionAdapter,
     DepthConsistencyFusionRequest,
