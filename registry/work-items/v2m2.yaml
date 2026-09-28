@@ -2459,7 +2459,7 @@ work_items:
   - id: V2L15.6
     lot: V2L15
     title: Controlled dense depth benchmark and lot review
-    status: ready
+    status: done
     objective: Run one retained CPU-only controlled benchmark over canonical DenseDepthArtifact evidence from one exact source GeometrySolutionCandidate, combine V2L15.5 support coverage with trusted-reference depth error evidence where exact comparison semantics exist, and close the V2L15 lot review without selecting a universal dense-depth winner or reinterpreting deferred accelerator evidence as passed.
     allowed_scope:
       - src/wre/reconstruction/dense_depth_benchmark.py
@@ -2553,7 +2553,79 @@ work_items:
       - module and workflow surface regression proving CUDA PatchMatch execution learned runtime hole filling surface generation routing selection and V2L16.1 implementation remain absent
       - full fast CI CodeQL COLMAP integration COLMAP MVS qualification DA3 qualification feed-forward comparison dependency review and dedicated dense-depth controlled benchmark lane
 
-  - {id: V2L16.1, lot: V2L16, title: SurfaceModel contract and intended use metadata, status: planned, depends_on: [V2L15.6]}
+  - id: V2L16.1
+    lot: V2L16
+    title: SurfaceModel contract and intended use metadata
+    status: ready
+    objective: Define one pure solver-independent immutable SurfaceModel metadata contract for an explicit physical-surface artifact derived from one exact canonical GeometrySolutionCandidate, preserving local-frame scale and provenance semantics while declaring intended collision navigation and measurement uses without asserting that suitability has already been proven.
+    allowed_scope:
+      - src/wre/domain/surfaces.py
+      - focused exports in src/wre/domain/__init__.py when required
+      - tests/test_surfaces.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L16.2 can be activated without implementing it
+    out_of_scope:
+      - executing meshing depth fusion TSDF SDF Poisson surfel reconstruction Open3D or another surface-generation algorithm
+      - generating a SurfaceModel from dense depth point maps or solver output; that belongs to V2L16.2
+      - computing collision measurement or navigation suitability scores gates thresholds or decisions; that belongs to V2L16.3
+      - adding the optional hybrid surface adapter boundary from V2L16.4
+      - defining unsupported-region hole filling inpainting or generated collision semantics from V2L16.5
+      - benchmarking surface quality or closing V2L16 or V2M2; that belongs to V2L16.6
+      - treating intended use metadata as proof that a surface is safe accurate watertight navigable collision-ready or measurement-ready
+      - converting local frame coordinate convention depth convention source scale or unresolved scale status
+      - inventing metric scale world Earth CRS or geographic placement
+      - creating runtime collision navmesh LOD appearance materials environment dynamics chronology MasterScene or RuntimeScene assets
+      - adding generated completion to unsupported physical regions
+    depends_on: [V2L15.6]
+    read_before:
+      - docs/00_START_HERE.md
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md
+      - docs/reviews/V2L15-dense-depth-mvs-fusion-review.md
+      - registry/components.yaml
+      - registry/reviews.yaml
+      - registry/work-items/v2m2.yaml
+      - PROJECT_STATE.yaml
+      - src/wre/domain/artifacts.py
+      - src/wre/domain/fragments.py
+      - src/wre/domain/geometry_solutions.py
+      - src/wre/domain/producer_identity.py
+      - src/wre/reconstruction/geometry_solution_comparison.py
+      - src/wre/reconstruction/dense_depth.py
+      - tests/test_dense_depth.py
+    reuse:
+      - ArtifactKind ArtifactRef and ArtifactProducerIdentity for exact surface artifact and producer provenance rather than defining solver-private identity types
+      - GeometrySolutionCandidate as the complete immutable source-geometry lineage rather than copying camera depth or point payloads into a new surface contract
+      - LocalFrameId and GeometryScaleStatus from the canonical geometry domain with exact equality to source geometry and no inferred scale upgrade
+      - the canonical unique ArtifactId ArtifactKind source-artifact ancestry validation pattern already used by DenseDepthArtifact
+      - explicit physical-surface separation from AppearanceModel and runtime collision/nav assets required by the frozen architecture
+    acceptance:
+      - Add SURFACE_MODEL_ARTIFACT_KIND equal to ArtifactKind geometry.surface plus one open lowercase SurfaceRepresentationName token and one closed SurfaceIntendedUse enum containing collision measurement and navigation only; representation names describe the retained physical-surface representation without selecting a solver.
+      - Add one frozen slots SurfaceModel with exactly artifact_ref source_geometry representation intended_uses local_frame_id scale_status producer and source_artifacts. The object is an immutable metadata/provenance envelope for an external explicit physical-surface artifact and does not inline solver-private mesh TSDF SDF or surfel payloads.
+      - SurfaceModel artifact_ref must use geometry.surface and must not reuse any source_artifact identity. source_geometry must be one complete GeometrySolutionCandidate value and producer must be ArtifactProducerIdentity.
+      - intended_uses must be a non-empty immutable tuple of unique SurfaceIntendedUse values in canonical value order. Intended use states only what downstream use the artifact was built for; it is not collision measurement or navigation suitability evidence and emits no suitability boolean score threshold or QualityDecision.
+      - local_frame_id must exactly equal source_geometry.geometry_solution.local_frame_id and scale_status must exactly equal source_geometry.geometry_solution.scale_status. Unresolved source scale remains unresolved and no coordinate frame conversion is allowed.
+      - source_artifacts must be non-empty immutable unique and in canonical ArtifactId ArtifactKind order and must retain every artifact already present in source_geometry.source_artifacts. Additional explicit dense-depth fusion or reconstruction evidence may be retained without being interpreted by this pure contract.
+      - SurfaceRepresentationName must fail closed on blank uppercase whitespace or unsupported token syntax but remain open to values such as mesh sdf or surfels without adding representation-specific topology semantics to the core contract.
+      - SurfaceModel must contain no suitability metrics watertightness claim hole filling generated-region semantics collision mesh navmesh runtime LOD appearance or rendering data. Those remain later V2L16 and runtime responsibilities.
+      - Construction must validate only the metadata invariants above and must not sort coerce mutate materialize open or execute any source artifact solver model or external dependency.
+      - On green implementation evidence mark V2L16.1 done retain physical_surface implementing and activate V2L16.2 with a complete executable baseline depth-fusion-to-surface adapter contract. Do not include V2L16.2 implementation in the same PR.
+    tests:
+      - exact frozen SurfaceModel field shape artifact kind and SurfaceIntendedUse values
+      - wrong-type wrong-artifact-kind and source-artifact-identity-collision regressions
+      - SurfaceRepresentationName valid open-token and blank uppercase whitespace invalid-token regressions
+      - intended-use immutable non-empty wrong-member duplicate and noncanonical-order regressions
+      - local-frame mismatch and scale-status mismatch fail-closed regressions including unresolved-scale preservation
+      - source-artifact non-empty wrong-member duplicate noncanonical-order missing-source-ancestry and additional-evidence regressions
+      - source GeometrySolutionCandidate and source-artifact payload immutability regression
+      - intended-use-is-not-suitability regression proving SurfaceModel has no collision_suitable measurement_suitable navigation_suitable suitability score threshold or decision field
+      - module surface regression proving no Open3D PyMeshLab TSDF SDF Poisson meshing depth fusion Surface adapter runtime collision navmesh appearance MasterScene RuntimeScene or V2L16.2 implementation dependency enters the contract
+      - full fast CI and CodeQL
   - {id: V2L16.2, lot: V2L16, title: Baseline depth fusion to surface adapter, status: planned, depends_on: [V2L16.1]}
   - {id: V2L16.3, lot: V2L16, title: Collision measurement suitability metrics, status: planned, depends_on: [V2L16.2]}
   - {id: V2L16.4, lot: V2L16, title: Hybrid surface candidate adapter boundary, status: planned, depends_on: [V2L16.3]}
