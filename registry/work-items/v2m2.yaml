@@ -2556,7 +2556,7 @@ work_items:
   - id: V2L16.1
     lot: V2L16
     title: SurfaceModel contract and intended use metadata
-    status: ready
+    status: done
     objective: Define one pure solver-independent immutable SurfaceModel metadata contract for an explicit physical-surface artifact derived from one exact canonical GeometrySolutionCandidate, preserving local-frame scale and provenance semantics while declaring intended collision navigation and measurement uses without asserting that suitability has already been proven.
     allowed_scope:
       - src/wre/domain/surfaces.py
@@ -2626,7 +2626,103 @@ work_items:
       - intended-use-is-not-suitability regression proving SurfaceModel has no collision_suitable measurement_suitable navigation_suitable suitability score threshold or decision field
       - module surface regression proving no Open3D PyMeshLab TSDF SDF Poisson meshing depth fusion Surface adapter runtime collision navmesh appearance MasterScene RuntimeScene or V2L16.2 implementation dependency enters the contract
       - full fast CI and CodeQL
-  - {id: V2L16.2, lot: V2L16, title: Baseline depth fusion to surface adapter, status: planned, depends_on: [V2L16.1]}
+  - id: V2L16.2
+    lot: V2L16
+    title: Baseline depth fusion to surface adapter
+    status: ready
+    objective: Implement one bounded classical depth-fusion baseline that consumes one canonical DenseDepthArtifact and materializes one explicit geometry-only triangle-mesh SurfaceModel in the same local frame and scale status, using the current mature Open3D 0.20.0 CPU depth-only TSDF path rather than a custom fusion implementation.
+    allowed_scope:
+      - src/wre/reconstruction/open3d_surface.py
+      - focused exports in src/wre/reconstruction/__init__.py when required
+      - tests/test_open3d_surface.py
+      - registry/dependencies.yaml
+      - registry/adapter-models.yaml
+      - registry/external-environments/open3d-surface-cpu-0.20.0.json
+      - .github/workflows/open3d-surface-integration.yml
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation and dedicated integration evidence are green so V2L16.3 can be activated without implementing it
+    out_of_scope:
+      - implementing custom TSDF SDF Poisson Delaunay marching-cubes or other foundational surface-reconstruction algorithms instead of reusing the reviewed Open3D baseline
+      - consuming generic point maps as a fallback when canonical dense depth is absent
+      - accepting non-pinhole camera models or converting distorted fisheye spherical or other projection models inside this baseline
+      - converting any depth convention into camera-z or converting local reconstruction units into metric units
+      - changing LocalFrameId GeometryScaleStatus camera poses camera intrinsics image dimensions or source GeometrySolutionCandidate identity
+      - using confidence as a quality threshold calibrated probability or support-ranking signal in this baseline
+      - filling unsupported pixels extrapolating geometry closing holes or generating unseen surfaces
+      - asserting watertightness collision readiness navigation readiness measurement readiness or any other suitability property; those belong to V2L16.3
+      - implementing the hybrid surface candidate boundary from V2L16.4
+      - defining generated unsupported-region semantics from V2L16.5
+      - benchmarking selecting ranking or promoting a default surface backend; that belongs to V2L16.6
+      - integrating color texture appearance materials environment collision navmesh runtime LOD MasterScene or RuntimeScene data
+      - executing CUDA or SYCL Open3D routes in the baseline qualification lane
+      - implementing V2L16.3 or later behavior in the same PR
+    depends_on: [V2L16.1]
+    read_before:
+      - docs/00_START_HERE.md
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md
+      - docs/27_RESEARCH_CANDIDATE_COVERAGE.md
+      - docs/reviews/V2L15-dense-depth-mvs-fusion-review.md
+      - registry/components.yaml
+      - registry/dependencies.yaml
+      - registry/adapter-models.yaml
+      - registry/work-items/v2m2.yaml
+      - PROJECT_STATE.yaml
+      - src/wre/domain/artifact_materialization.py
+      - src/wre/domain/artifacts.py
+      - src/wre/domain/camera_solutions.py
+      - src/wre/domain/depth_fields.py
+      - src/wre/domain/surfaces.py
+      - src/wre/reconstruction/dense_depth.py
+      - src/wre/reconstruction/geometry_solution_comparison.py
+      - src/wre/reconstruction/colmap_dense_depth.py
+      - src/wre/ingestion/hashing.py
+      - tests/test_dense_depth.py
+      - tests/test_surfaces.py
+    reuse:
+      - the V2L16.1 SurfaceModel SURFACE_MODEL_ARTIFACT_KIND SurfaceRepresentationName and SurfaceIntendedUse contracts as the only core physical-surface metadata semantics
+      - DenseDepthArtifact as the exact dense-depth evidence envelope and GeometrySolutionCandidate lineage rather than defining a solver-private depth container
+      - CameraSolution camera-from-local-frame extrinsics exactly as x_camera equals rotation_matrix times x_local plus translation_xyz
+      - DepthField canonical invalid-pixel zero semantics and the existing camera-z DepthValueConventionName without inventing a conversion path
+      - ArtifactMaterializationEntry and ArtifactMaterializationMetadata for the exact published mesh file identity
+      - ArtifactProducerIdentity ConfigurationIdentity and existing content-hashing helpers for reproducible producer configuration and output provenance
+      - the fresh disjoint output-root fail-closed and cleanup-on-failure patterns used by existing external reconstruction adapters
+      - Open3D v0.20.0 as the refreshed mature baseline candidate: tag commit b6c5e196384ad71e75b6e6f9c5da22d046221f1d, MIT root license, official CPython 3.12 Linux x86_64 release wheel open3d-0.20.0-cp312-cp312-manylinux_2_35_x86_64.whl with SHA-256 f5cc6106d9c0c41beb8160aa99c2b663e7f08588a598ec7d464391a4cfe684d6 and byte length 400788891
+      - Open3D t.geometry.VoxelBlockGrid depth-only integration and extract_triangle_mesh rather than legacy RGB-D color fabrication or a WRE-owned TSDF implementation
+    acceptance:
+      - Qualify Open3D 0.20.0 only as an optional exact external CPU dependency. Pin the exact official source revision and CPython 3.12 Linux x86_64 wheel identity above plus its resolved runtime closure in registry/external-environments/open3d-surface-cpu-0.20.0.json. Keep Open3D out of WRE's mandatory uv environment and record direct/transitive license metadata without treating registry presence as shipping approval.
+      - Add one immutable Open3D TSDF surface configuration whose local-scale-sensitive values are explicit positive finite caller inputs rather than hidden metric defaults. At minimum record voxel size in source local units, maximum integrated depth in source local units, TSDF truncation multiplier, block resolution, block count and mesh weight threshold. The reviewed baseline device is CPU:0 and depth_scale is exactly 1.0 because canonical depth values are supplied directly in source local units.
+      - Add one concrete Open3D surface adapter over exactly one DenseDepthArtifact. The baseline accepts only DepthField values with the canonical camera-z convention and source cameras using the pinhole projection model with exactly fx fy cx cy intrinsics. Unsupported projection/depth conventions fail closed rather than being converted.
+      - Every DenseDepthArtifact field integrated by the adapter must remain bound to its exact source CameraSolution ObservationId ImageDimensions and GeometrySolutionCandidate. Build the Open3D intrinsic matrix from the canonical pinhole parameters and the 4x4 extrinsic directly from the canonical camera-from-local-frame rotation and translation; do not invert relabel resize crop undistort or re-estimate them.
+      - Materialize canonical depth to Open3D float32 only as a private solver input. Valid positive camera-z values remain numerically corresponding depth samples and invalid pixels remain exact zero holes. Optional confidence is preserved in source evidence but is not thresholded or interpreted by this baseline.
+      - Use Open3D t.geometry.VoxelBlockGrid with tsdf and weight attributes only, compute blocks from depth, integrate depth without color, and extract one triangle mesh. Do not run registration odometry ICP SLAM Poisson reconstruction or another surface method.
+      - Reject a fusion result with no finite vertices or no triangles. Do not assert watertightness completeness collision safety navigation safety measurement accuracy or unseen-region completion merely because a mesh exists.
+      - Publish exactly one geometry-only surface.ply beneath a fresh output root with no color texture UV material appearance or generated-completion payload. Audit its SHA-256 and byte length into ArtifactMaterializationMetadata bound to the produced geometry.surface ArtifactRef. Clean up adapter-owned partial output on failure.
+      - Build one SurfaceModel with representation mesh, the caller-supplied canonical non-empty intended-use tuple, exact source GeometrySolutionCandidate, exact source LocalFrameId and exact source GeometryScaleStatus. An unresolved source scale must remain unresolved.
+      - SurfaceModel source_artifacts must canonically retain every source-geometry ancestry item plus the exact DenseDepthArtifact artifact_ref and its retained source_artifacts. The output artifact identity must remain distinct from every input artifact identity.
+      - Producer provenance must identify Open3D 0.20.0 and the exact reviewed source revision plus a canonical hash of the TSDF configuration and exact external environment identity. No floating version latest alias or runtime download is permitted.
+      - The dedicated open3d-surface-integration workflow must install only the reviewed external environment on Linux x86_64 CPU, verify Open3D 0.20.0 and the required VoxelBlockGrid depth-only and triangle-mesh APIs, run one deterministic synthetic two-view pinhole camera-z fixture through the real adapter, retain machine-readable environment/output evidence, and prove the resulting mesh is non-empty while source geometry depth and provenance objects remain unchanged. This is baseline compatibility evidence, not a surface-quality benchmark or default promotion.
+      - On green implementation and dedicated integration evidence mark V2L16.2 done retain physical_surface implementing and activate V2L16.3 with a complete executable suitability-metrics contract. Do not include V2L16.3 implementation in the same PR.
+    tests:
+      - exact Open3D dependency source wheel version hash byte-length license and external-environment identity regressions
+      - configuration frozen-shape positive-finite local-unit values CPU-only device depth-scale and canonical-hash regressions
+      - wrong DenseDepthArtifact source camera projection intrinsic count and non-camera-z convention fail-closed regressions
+      - exact CameraSolution intrinsics and camera-from-local-frame extrinsic forwarding regression with no inversion resize crop or relabeling
+      - valid depth float32 materialization and invalid-pixel zero-hole regression with source DepthField immutability
+      - confidence-is-not-a-threshold regression proving confidence does not remove or add depth support
+      - VoxelBlockGrid depth-only call-sequence regression proving no color RGBD registration odometry ICP SLAM Poisson or fallback method executes
+      - empty non-finite vertex and zero-triangle output fail-closed regressions
+      - geometry-only PLY output and ArtifactMaterializationMetadata hash byte-length path identity regressions
+      - exact source LocalFrameId GeometryScaleStatus GeometrySolutionCandidate intended-use and ancestry preservation including unresolved-scale regression
+      - failure cleanup fresh-output-root no-symlink and no-runtime-network regressions
+      - intended-use-is-not-suitability regression proving the produced SurfaceModel adds no suitability score boolean threshold QualityDecision watertightness collision mesh navmesh or runtime asset semantics
+      - real CPU Open3D 0.20.0 synthetic integration evidence plus full fast CI CodeQL and dedicated integration workflow
   - {id: V2L16.3, lot: V2L16, title: Collision measurement suitability metrics, status: planned, depends_on: [V2L16.2]}
   - {id: V2L16.4, lot: V2L16, title: Hybrid surface candidate adapter boundary, status: planned, depends_on: [V2L16.3]}
   - {id: V2L16.5, lot: V2L16, title: Unsupported region and hole semantics, status: planned, depends_on: [V2L16.4]}
