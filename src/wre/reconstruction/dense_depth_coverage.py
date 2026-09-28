@@ -201,15 +201,18 @@ def _summarize_depth_field(depth_field: DepthField) -> DenseDepthFieldCoverage:
 
     confidence_mean: float | None = None
     if depth_field.confidence is not None and valid:
-        confidence_mean = sum(
-            confidence
-            for confidence, supported in zip(
-                depth_field.confidence,
-                depth_field.validity,
-                strict=True,
+        confidence_mean = (
+            sum(
+                confidence
+                for confidence, supported in zip(
+                    depth_field.confidence,
+                    depth_field.validity,
+                    strict=True,
+                )
+                if supported
             )
-            if supported
-        ) / valid
+            / valid
+        )
 
     return DenseDepthFieldCoverage(
         depth_field_id=depth_field.depth_field_id,
@@ -316,10 +319,7 @@ class DenseDepthCoverageReport:
             raise TypeError(
                 "dense_depth_coverage_report.field_coverages must be an immutable tuple"
             )
-        if any(
-            not isinstance(field, DenseDepthFieldCoverage)
-            for field in self.field_coverages
-        ):
+        if any(not isinstance(field, DenseDepthFieldCoverage) for field in self.field_coverages):
             raise TypeError(
                 "dense_depth_coverage_report.field_coverages members must be "
                 "DenseDepthFieldCoverage"
@@ -328,8 +328,7 @@ class DenseDepthCoverageReport:
             raise TypeError("dense_depth_coverage_report.metrics must be MetricVector")
 
         expected_fields = tuple(
-            _summarize_depth_field(depth_field)
-            for depth_field in self.source_depth.depth_fields
+            _summarize_depth_field(depth_field) for depth_field in self.source_depth.depth_fields
         )
         if self.field_coverages != expected_fields:
             raise ValueError(
@@ -353,10 +352,7 @@ def evaluate_dense_depth_coverage(
     if not isinstance(source_depth, DenseDepthArtifact):
         raise TypeError("source_depth must be DenseDepthArtifact")
 
-    fields = tuple(
-        _summarize_depth_field(depth_field)
-        for depth_field in source_depth.depth_fields
-    )
+    fields = tuple(_summarize_depth_field(depth_field) for depth_field in source_depth.depth_fields)
     return DenseDepthCoverageReport(
         source_depth=source_depth,
         field_coverages=fields,
