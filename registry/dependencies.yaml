@@ -671,10 +671,35 @@ dependencies:
     license_review: pending
   open3d:
     status: candidate_optional
-    role: [icp, gicp, geometry_refinement]
-    integration: adapter
-    version_policy: pin_when_integrated
+    role: [icp, gicp, geometry_refinement, depth_fusion, tsdf, physical_surface]
+    integration: optional_exact_external_environment
+    version_policy: pin_exact_external_environment
+    pinned_version: 0.20.0
+    source_revision: b6c5e196384ad71e75b6e6f9c5da22d046221f1d
+    upstream_repository: isl-org/Open3D
+    python_package: open3d==0.20.0
+    root_wheel: open3d-0.20.0-cp312-cp312-manylinux_2_35_x86_64.whl
+    root_wheel_sha256: f5cc6106d9c0c41beb8160aa99c2b663e7f08588a598ec7d464391a4cfe684d6
+    root_wheel_byte_length: 400788891
+    environment_lock: registry/external-environments/open3d-surface-cpu-0.20.0.json
+    environment_lock_sha256: ac9b2e1346e7b0a0bbed92eee22887e0e662cc303ea9f97df0e5fde835b07214
+    environment_artifact_count: 59
+    environment_byte_length: 453384619
+    target_python: 3.12.12
+    target_platform: linux_x86_64
+    target_device: CPU:0
+    license: MIT
     license_review: pending
+    notes: >-
+      V2L16.2 freezes the official Open3D 0.20.0 CPython 3.12 Linux x86_64
+      release wheel plus its exact 59-wheel runtime closure in a dedicated optional
+      external environment. The bounded baseline uses only CPU:0 tensor VoxelBlockGrid
+      depth-only TSDF integration and triangle-mesh PLY export. Open3D remains outside
+      WRE's mandatory uv environment, no CUDA/SYCL backend is authorized, and the
+      committed environment lock is artifact-resolution evidence that must regenerate
+      exactly. The Open3D source/root wheel is MIT, while the transitive wheel closure
+      retains per-wheel license metadata and remains under redistribution review; this
+      record does not promote the experimental surface route to a shipping default.
   openmvg:
     status: candidate_validation
     role: [ac_ransac, global_geometry_validation]
