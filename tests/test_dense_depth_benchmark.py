@@ -706,14 +706,9 @@ def test_v2l15_lot_review_and_v2l16_handoff_are_recorded() -> None:
     assert "V2L15.6" in state
     assert "V2L16.1" in state
 
-    work_items = (root / "registry" / "work-items" / "v2m2.yaml").read_text(
-        encoding="utf-8"
-    )
+    work_items = (root / "registry" / "work-items" / "v2m2.yaml").read_text(encoding="utf-8")
     assert "id: V2L15.6" in work_items
-    assert (
-        "title: Controlled dense depth benchmark and lot review\n    status: done"
-        in work_items
-    )
+    assert "title: Controlled dense depth benchmark and lot review\n    status: done" in work_items
     assert "id: V2L16.1" in work_items
     assert "title: SurfaceModel contract and intended use metadata" in work_items
 
