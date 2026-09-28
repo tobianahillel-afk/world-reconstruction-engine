@@ -609,7 +609,7 @@ def test_success_forwards_exact_depth_intrinsics_extrinsics_and_depth_only_calls
     assert grid.kwargs == {
         "attr_names": ("tsdf", "weight"),
         "attr_dtypes": ("float32", "float32"),
-        "attr_channels": ((1,), (1,)),
+        "attr_channels": (1, 1),
         "voxel_size": 0.05,
         "block_resolution": 8,
         "block_count": 256,
