@@ -6,12 +6,12 @@ from dataclasses import dataclass
 from statistics import median
 
 from wre.domain.artifacts import ArtifactRef
-from wre.domain.camera_solutions import CameraSolutionId
 from wre.domain.benchmarks import (
     BenchmarkFixtureIdentity,
     BenchmarkRecord,
     BenchmarkRecordId,
 )
+from wre.domain.camera_solutions import CameraSolutionId
 from wre.domain.depth_fields import DepthField
 from wre.domain.hardware_identity import HardwareRuntimeIdentity
 from wre.domain.metrics import (
