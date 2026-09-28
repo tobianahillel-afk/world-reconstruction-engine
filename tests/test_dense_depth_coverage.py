@@ -86,10 +86,7 @@ def _camera(
 
 def _candidate(token: str, camera_count: int = 2) -> GeometrySolutionCandidate:
     frame = LocalFrameId(f"frame:{token}")
-    cameras = tuple(
-        _camera(chr(ord("a") + index), frame=frame)
-        for index in range(camera_count)
-    )
+    cameras = tuple(_camera(chr(ord("a") + index), frame=frame) for index in range(camera_count))
     point_map = PointMap(
         point_map_id=PointMapId(f"points:{token}"),
         local_frame_id=frame,
@@ -127,8 +124,7 @@ def _depth(
     if len(validity) != camera.dimensions.width_px * camera.dimensions.height_px:
         raise AssertionError("test validity must match camera dimensions")
     values = tuple(
-        float(index + 1) if supported else 0.0
-        for index, supported in enumerate(validity)
+        float(index + 1) if supported else 0.0 for index, supported in enumerate(validity)
     )
     return DepthField(
         depth_field_id=DepthFieldId(f"depth:{token}"),
@@ -285,9 +281,7 @@ def test_validity_alone_defines_exact_pixel_support(
         "validity",
         validity=validity,
     )
-    report = evaluate_dense_depth_coverage(
-        _dense("validity", source=source, depth_fields=(depth,))
-    )
+    report = evaluate_dense_depth_coverage(_dense("validity", source=source, depth_fields=(depth,)))
     field = report.field_coverages[0]
 
     assert field.total_pixel_count == 4
@@ -449,8 +443,7 @@ def test_field_order_metric_order_descriptors_and_provenance_are_canonical() -> 
     )
 
     descriptors = {
-        item.descriptor.name.value: item.descriptor
-        for item in report.metrics.observations
+        item.descriptor.name.value: item.descriptor for item in report.metrics.observations
     }
     assert (
         descriptors["geometry.dense_depth.camera_support_ratio"].direction
