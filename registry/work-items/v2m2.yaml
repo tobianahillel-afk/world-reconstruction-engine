@@ -2726,7 +2726,7 @@ work_items:
   - id: V2L16.3
     lot: V2L16
     title: Collision measurement suitability metrics
-    status: ready
+    status: done
     objective: Define and implement one pure deterministic solver-independent surface inspection and metric layer over one existing mesh SurfaceModel, exposing topology and support evidence relevant to later collision and measurement review while keeping intended use distinct from proven suitability and emitting no pass fail safety accuracy watertightness routing or default decision.
     allowed_scope:
       - src/wre/reconstruction/surface_suitability.py
@@ -2806,6 +2806,95 @@ work_items:
       - module-surface regression proving Open3D NumPy Trimesh PyMeshLab filesystem network subprocess mesh repair hybrid candidate unsupported-region benchmark runtime and V2L16.4 implementation behavior are absent
       - full fast CI and CodeQL
 
-  - {id: V2L16.4, lot: V2L16, title: Hybrid surface candidate adapter boundary, status: planned, depends_on: [V2L16.3]}
+  - id: V2L16.4
+    lot: V2L16
+    title: Hybrid surface candidate adapter boundary
+    status: ready
+    objective: Define and implement one pure solver-independent optional hybrid-surface candidate adapter boundary that accepts one canonical source GeometrySolutionCandidate plus explicit supporting ArtifactRefs and caller-declared surface representation and intended uses, and returns one explicit SurfaceModel candidate with exact materialization and lineage without running selecting ranking repairing filling benchmarking or promoting any hybrid method.
+    allowed_scope:
+      - src/wre/reconstruction/hybrid_surface_candidate.py
+      - focused exports in src/wre/reconstruction/__init__.py
+      - tests/test_hybrid_surface_candidate.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L16.5 can be activated without implementing it
+    out_of_scope:
+      - integrating executing vendoring downloading or selecting 2DGS OMeGa SurfaceSplat MeshSplatting Gaussian splat SDF Poisson TSDF Open3D PyMeshLab Trimesh or another concrete surface appearance solver model checkpoint or runtime
+      - defining a technology winner default preferred route fallback retry benchmark rank score threshold QualityDecision or shipping promotion for hybrid surfaces
+      - merging selecting replacing repairing smoothing remeshing decimating closing or otherwise modifying an existing SurfaceModel or materialized payload
+      - treating a photorealistic Gaussian radiance or splat representation as physical collision measurement or navigation truth
+      - emitting or embedding AppearanceModel material color texture radiance Gaussian environment or rendering semantics in the SurfaceModel candidate even when a future specialist jointly optimizes geometry and appearance
+      - silently converting LocalFrameId GeometryScaleStatus camera depth coordinate conventions or unresolved scale into metric scale
+      - filling extrapolating hallucinating or relabeling unsupported physical regions or generated completion; unsupported-region and hole semantics belong to V2L16.5
+      - asserting watertightness collision safety navigation readiness measurement accuracy self-intersection freedom traversability physics stability or application-specific tolerances
+      - parsing or materializing solver-private files in the pure boundary module or adding filesystem network subprocess hardware model runtime or native-library access
+      - implementing the V2L16.5 unsupported-region contract or V2L16.6 benchmark M2 review in the same PR
+      - creating runtime collision navmesh LOD MasterScene RuntimeScene dynamics chronology or appearance assets
+    depends_on: [V2L16.3]
+    read_before:
+      - docs/00_START_HERE.md
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md
+      - docs/27_RESEARCH_CANDIDATE_COVERAGE.md
+      - registry/components.yaml
+      - registry/work-items/v2m2.yaml
+      - PROJECT_STATE.yaml
+      - src/wre/domain/artifact_materialization.py
+      - src/wre/domain/artifacts.py
+      - src/wre/domain/producer_identity.py
+      - src/wre/domain/surfaces.py
+      - src/wre/reconstruction/dense_depth.py
+      - src/wre/reconstruction/geometry_solution_comparison.py
+      - src/wre/reconstruction/geometry_refinement.py
+      - src/wre/reconstruction/learned_depth_prior.py
+      - src/wre/reconstruction/open3d_surface.py
+      - src/wre/reconstruction/surface_suitability.py
+      - tests/test_surfaces.py
+      - tests/test_learned_depth_prior.py
+      - tests/test_surface_suitability.py
+    reuse:
+      - GeometrySolutionCandidate as the complete canonical source geometry hypothesis rather than introducing a solver-private geometry input container
+      - SurfaceModel SurfaceRepresentationName and SurfaceIntendedUse as the only physical-surface output semantics; hybrid method internals do not change those core contracts
+      - ArtifactMaterializationMetadata as the exact retained payload binding for the produced surface candidate
+      - ArtifactRef canonical identity ordering and ArtifactProducerIdentity provenance patterns already used by geometry_refinement.py and learned_depth_prior.py
+      - the request result Protocol and pure build-helper patterns from learned_depth_prior.py and geometry_refinement.py instead of integrating a concrete specialist here
+      - V2L16.3 descriptive suitability metrics only as later comparable evidence; this boundary does not compute select threshold or consume them as truth policy
+      - current research families 2DGS-derived geometry OMeGa SurfaceSplat and MeshSplatting only as living future candidate examples from docs/14 and docs/27, not as selected dependencies or architecture semantics
+    acceptance:
+      - Add one pure hybrid_surface_candidate module using only the standard library plus WRE canonical contracts. It must import or execute no surface solver appearance solver model checkpoint filesystem network subprocess hardware runtime NumPy Open3D Trimesh PyMeshLab torch Gaussian renderer or native dependency.
+      - Define one frozen slots HybridSurfaceCandidateRequest retaining exactly one source_geometry GeometrySolutionCandidate, one immutable tuple of supporting_artifacts ArtifactRefs, one output_representation SurfaceRepresentationName and one canonical non-empty intended_uses tuple of SurfaceIntendedUse values.
+      - supporting_artifacts may be empty but when present must be unique and canonically ordered by ArtifactId and ArtifactKind. They are explicit additional evidence only and must not replace source_geometry ancestry.
+      - intended_uses must be non-empty unique and canonically ordered exactly as SurfaceModel requires. The request records downstream intent only and must not encode or imply suitability.
+      - Define one HybridSurfaceCandidateAdapter Protocol with exactly one derive_candidate request method returning HybridSurfaceCandidateResult. The pure module must execute no specialist itself.
+      - Define one frozen slots HybridSurfaceCandidateResult retaining the exact request, exactly one candidate SurfaceModel and exactly one ArtifactMaterializationMetadata bound to candidate.artifact_ref.
+      - The candidate SurfaceModel must preserve request.source_geometry exactly, preserve its LocalFrameId and GeometryScaleStatus exactly, use request.output_representation exactly and preserve request.intended_uses exactly. No coordinate scale representation or intended-use coercion is permitted.
+      - The candidate artifact_ref must be distinct from every source_geometry source ArtifactRef and every supporting ArtifactRef. The candidate source_artifacts must equal the canonical union of source_geometry.source_artifacts and request.supporting_artifacts with no missing extra duplicate reordered or relabeled ancestry.
+      - The materialization artifact_ref must exactly equal candidate.artifact_ref. The pure boundary validates metadata identity only and does not open hash verify parse rewrite or infer semantics from materialized payload bytes.
+      - The candidate ArtifactProducerIdentity is adapter-owned provenance and must remain exactly the producer supplied on SurfaceModel. The boundary adds no synthetic model checkpoint or appearance provenance.
+      - A future concrete hybrid method may internally estimate geometry and appearance jointly, but this boundary accepts only the explicit physical SurfaceModel result. Appearance radiance splats materials textures and rendering outputs remain separate later contracts and must not be attached to or treated as the physical surface candidate here.
+      - No baseline replacement candidate selection merge score rank threshold QualityDecision pass fail watertightness safety accuracy unsupported-region fill or default promotion field or behavior may be exposed.
+      - Export only HybridSurfaceCandidateAdapter HybridSurfaceCandidateRequest HybridSurfaceCandidateResult and build_hybrid_surface_candidate_result from wre.reconstruction. Do not expose candidate-family-specific configuration solver runtime routing benchmark V2L16.5 or V2L16.6 behavior.
+      - On green implementation evidence mark V2L16.4 done retain physical_surface implementing and activate V2L16.5 with a complete executable unsupported-region and hole-semantics contract. Do not include V2L16.5 implementation in the same PR.
+    tests:
+      - frozen slots exact request and result field-shape plus wrong-type regressions
+      - supporting ArtifactRef immutable tuple uniqueness canonical-order and empty-support regressions
+      - intended-use non-empty unique canonical-order and metadata-not-suitability regressions
+      - Protocol exact method-shape regression proving only derive_candidate is required
+      - candidate exact source GeometrySolutionCandidate LocalFrameId GeometryScaleStatus representation and intended-use preservation regressions
+      - output ArtifactRef distinctness regression against source ancestry and supporting artifacts
+      - exact canonical source_artifact union regression with missing extra duplicate and reordered lineage failing closed
+      - materialization-to-candidate ArtifactRef identity mismatch regression
+      - producer preservation regression proving boundary does not invent model checkpoint appearance or evaluator provenance
+      - unresolved-scale regression proving candidate remains unresolved and metric source remains metric without inferred accuracy
+      - appearance-separation regression proving Gaussian splat radiance texture material AppearanceModel and render-quality semantics are absent from the boundary
+      - immutability regression proving request construction and result validation do not mutate source geometry source SurfaceModel evidence supporting artifacts candidate materialization or ancestry
+      - no-selection-no-repair-no-fill regression proving result exposes no rank score QualityDecision winner merge replace repair watertight safety accuracy generated completion unsupported-region or default semantics
+      - module-surface regression proving concrete hybrid candidate families NumPy Open3D Trimesh PyMeshLab torch filesystem network subprocess runtime benchmark routing V2L16.5 and V2L16.6 implementation behavior are absent
+      - full fast CI and CodeQL
+
   - {id: V2L16.5, lot: V2L16, title: Unsupported region and hole semantics, status: planned, depends_on: [V2L16.4]}
   - {id: V2L16.6, lot: V2L16, title: Physical surface benchmark, status: planned, depends_on: [V2L16.5]}

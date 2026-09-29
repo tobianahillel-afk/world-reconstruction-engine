@@ -5,23 +5,24 @@ roadmap_version: '2.0'
 phase: implementation
 milestone: V2M2
 lot: V2L16
-active_work_item: V2L16.3
+active_work_item: V2L16.4
 status: ready
-last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5, V2L3.6, V2L4.1, V2L4.2, V2L4.3, V2L4.4, V2L4.5, V2L4.6, V2L5.1, V2L5.2, V2L5.3, V2L5.4, V2L5.5, V2L5.6, V2L6.1, V2L6.2, V2L6.3, V2L6.4, V2L6.5, V2L6.6, V2L7.1, V2L7.2, V2L7.3, V2L7.4, V2L7.5, V2L7.6, V2L8.1, V2L8.2, V2L8.3, V2L8.4, V2L8.5, V2L9.1, V2L9.2, V2L9.3, V2L9.4, V2L9.5, V2L10.1, V2L10.2, V2L10.3, V2L10.4, V2L10.5, V2L10.6, V2L11.1, V2L11.2, V2L11.3, V2L11.4, V2L11.5, V2L11.6, V2L12.1, V2L12.2, V2L12.3, V2L12.4, V2L12.5, V2L13.1, V2L13.2, V2L13.3, V2L13.4, V2L13.5, V2L13.6, V2L14.1, V2L14.2, V2L14.3, V2L14.4, V2L14.5, V2L14.6, V2L15.1, V2L15.2, V2L15.3, V2L15.4, V2L15.5, V2L15.6, V2L16.1, V2L16.2]
-last_merged_pr: 175
+last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5, V2L3.6, V2L4.1, V2L4.2, V2L4.3, V2L4.4, V2L4.5, V2L4.6, V2L5.1, V2L5.2, V2L5.3, V2L5.4, V2L5.5, V2L5.6, V2L6.1, V2L6.2, V2L6.3, V2L6.4, V2L6.5, V2L6.6, V2L7.1, V2L7.2, V2L7.3, V2L7.4, V2L7.5, V2L7.6, V2L8.1, V2L8.2, V2L8.3, V2L8.4, V2L8.5, V2L9.1, V2L9.2, V2L9.3, V2L9.4, V2L9.5, V2L10.1, V2L10.2, V2L10.3, V2L10.4, V2L10.5, V2L10.6, V2L11.1, V2L11.2, V2L11.3, V2L11.4, V2L11.5, V2L11.6, V2L12.1, V2L12.2, V2L12.3, V2L12.4, V2L12.5, V2L13.1, V2L13.2, V2L13.3, V2L13.4, V2L13.5, V2L13.6, V2L14.1, V2L14.2, V2L14.3, V2L14.4, V2L14.5, V2L14.6, V2L15.1, V2L15.2, V2L15.3, V2L15.4, V2L15.5, V2L15.6, V2L16.1, V2L16.2, V2L16.3]
+last_merged_pr: 176
 current_goal: >-
-  V2L16.2 is complete with one bounded Open3D 0.20.0 CPU depth-only TSDF baseline over canonical DenseDepthArtifact evidence. The exact
-  59-wheel Linux x86_64 CPython 3.12 external closure regenerates deterministically, and the retained real two-view integration produced one
-  geometry-only surface.ply with 1364 finite vertices and 2580 triangles while preserving source geometry depth frame scale and provenance
-  identity and making no collision navigation measurement watertightness or default-promotion claim. Advance only V2L16.3 with pure
-  solver-independent descriptive mesh suitability evidence; do not turn intended use or favorable topology into a safety verdict.
+  V2L16.3 is complete with one pure deterministic solver-independent descriptive mesh inspection layer over existing SurfaceModel evidence.
+  SurfaceMeshInspection now binds exact caller topology counts to one matching materialized mesh and SurfaceSuitabilityReport emits canonical
+  finite-vertex degenerate-triangle boundary-edge non-manifold-edge largest-component and connected-component observations with exact
+  provenance. The metrics remain descriptive only: favorable topology does not prove watertightness collision safety navigation readiness or
+  measurement accuracy, and intended-use metadata does not change the metric vector. Advance only V2L16.4 with the pure optional hybrid
+  surface-candidate adapter boundary; do not integrate or select a concrete hybrid surface technology in that item.
 next_action: >-
-  Implement only V2L16.3 under its executable registry contract. Add a pure immutable SurfaceMeshInspection and SurfaceSuitabilityReport over
-  one existing mesh SurfaceModel plus matching ArtifactMaterializationMetadata and caller-supplied topology counts. Emit deterministic
-  finite-vertex degenerate-triangle boundary-edge non-manifold-edge largest-component and connected-component metrics with exact provenance.
-  Preserve source scale semantics, omit unavailable edge ratios when no unique edges exist, and keep all observations descriptive. Do not read
-  mesh files, import Open3D or another geometry library, repair or generate geometry, infer metric scale, assert watertightness collision safety
-  navigation readiness or measurement accuracy, apply thresholds or QualityDecision, or implement V2L16.4 or later behavior in the same PR.
+  Implement only V2L16.4 under its executable registry contract. Add a pure immutable HybridSurfaceCandidateRequest/Result plus one
+  HybridSurfaceCandidateAdapter Protocol and build helper over canonical GeometrySolutionCandidate SurfaceModel ArtifactRef and
+  ArtifactMaterializationMetadata contracts. Preserve exact source geometry local frame scale status caller-declared surface representation
+  intended uses and canonical ancestry while keeping physical surface separate from appearance even for future jointly optimized methods. Do
+  not execute or integrate 2DGS OMeGa SurfaceSplat MeshSplatting Open3D or another solver, select rank merge repair fill or replace candidates,
+  create unsupported-region semantics, apply QualityDecision or safety/accuracy claims, or implement V2L16.5 or later behavior in the same PR.
 blockers: []
 architecture:
   product_blueprint: docs/01_PRODUCT.md
