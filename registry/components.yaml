@@ -293,8 +293,10 @@ components:
       - src/wre/domain/surfaces.py
       - src/wre/reconstruction/__init__.py
       - src/wre/reconstruction/open3d_surface.py
+      - src/wre/reconstruction/surface_suitability.py
     tests:
       - tests/test_open3d_surface.py
+      - tests/test_surface_suitability.py
       - tests/test_surfaces.py
     status: implementing
   photometric_pipeline: {owner_lot: V2L17, implementation: [], tests: [], status: planned}
