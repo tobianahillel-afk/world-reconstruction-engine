@@ -523,7 +523,10 @@ def test_intended_use_metadata_does_not_change_metric_vector() -> None:
     second = evaluate_surface_suitability(_inspection("uses-b", surface=all_uses))
 
     assert first.metrics == second.metrics
-    assert first.inspection.surface_model.intended_uses != second.inspection.surface_model.intended_uses
+    assert (
+        first.inspection.surface_model.intended_uses
+        != second.inspection.surface_model.intended_uses
+    )
 
 
 def test_inspection_producer_and_metric_provenance_are_distinct_and_exact() -> None:
