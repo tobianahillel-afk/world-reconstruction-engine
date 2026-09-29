@@ -21,9 +21,7 @@ def _validate_supporting_artifacts(value: object) -> None:
     if not isinstance(value, tuple):
         raise TypeError("hybrid_surface_candidate.supporting_artifacts must be an immutable tuple")
     if any(not isinstance(item, ArtifactRef) for item in value):
-        raise TypeError(
-            "hybrid_surface_candidate.supporting_artifacts members must be ArtifactRef"
-        )
+        raise TypeError("hybrid_surface_candidate.supporting_artifacts members must be ArtifactRef")
 
     identities = tuple(_artifact_key(item) for item in value)
     if len(identities) != len(set(identities)):
@@ -41,9 +39,7 @@ def _validate_intended_uses(value: object) -> None:
     if not value:
         raise ValueError("hybrid_surface_candidate.intended_uses must be non-empty")
     if any(not isinstance(item, SurfaceIntendedUse) for item in value):
-        raise TypeError(
-            "hybrid_surface_candidate.intended_uses members must be SurfaceIntendedUse"
-        )
+        raise TypeError("hybrid_surface_candidate.intended_uses members must be SurfaceIntendedUse")
 
     identifiers = tuple(item.value for item in value)
     if len(identifiers) != len(set(identifiers)):
@@ -82,8 +78,7 @@ class HybridSurfaceCandidateRequest:
         _validate_supporting_artifacts(self.supporting_artifacts)
         if not isinstance(self.output_representation, SurfaceRepresentationName):
             raise TypeError(
-                "hybrid_surface_candidate.output_representation must be "
-                "SurfaceRepresentationName"
+                "hybrid_surface_candidate.output_representation must be SurfaceRepresentationName"
             )
         _validate_intended_uses(self.intended_uses)
 
@@ -99,8 +94,7 @@ class HybridSurfaceCandidateResult:
     def __post_init__(self) -> None:
         if not isinstance(self.request, HybridSurfaceCandidateRequest):
             raise TypeError(
-                "hybrid_surface_candidate_result.request must be "
-                "HybridSurfaceCandidateRequest"
+                "hybrid_surface_candidate_result.request must be HybridSurfaceCandidateRequest"
             )
         if not isinstance(self.candidate, SurfaceModel):
             raise TypeError("hybrid_surface_candidate_result.candidate must be SurfaceModel")
@@ -115,8 +109,7 @@ class HybridSurfaceCandidateResult:
 
         if self.candidate.source_geometry != source_geometry:
             raise ValueError(
-                "hybrid surface candidate must preserve the exact source "
-                "GeometrySolutionCandidate"
+                "hybrid surface candidate must preserve the exact source GeometrySolutionCandidate"
             )
         if self.candidate.local_frame_id != source_solution.local_frame_id:
             raise ValueError(
