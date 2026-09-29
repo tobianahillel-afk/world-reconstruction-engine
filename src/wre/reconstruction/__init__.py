@@ -319,6 +319,12 @@ from wre.reconstruction.geometry_solution_comparison import (
     GeometrySolutionPair,
     derive_geometry_solution_pairs,
 )
+from wre.reconstruction.hybrid_surface_candidate import (
+    HybridSurfaceCandidateAdapter,
+    HybridSurfaceCandidateRequest,
+    HybridSurfaceCandidateResult,
+    build_hybrid_surface_candidate_result,
+)
 from wre.reconstruction.learned_depth_prior import (
     LearnedDepthPriorAdapter,
     LearnedDepthPriorRequest,
@@ -624,6 +630,9 @@ __all__ = [
     "GeometryRefinementResult",
     "GeometrySolutionCandidate",
     "GeometrySolutionPair",
+    "HybridSurfaceCandidateAdapter",
+    "HybridSurfaceCandidateRequest",
+    "HybridSurfaceCandidateResult",
     "ImportedColmapSparseModel",
     "LearnedDepthPriorAdapter",
     "LearnedDepthPriorRequest",
@@ -642,6 +651,7 @@ __all__ = [
     "benchmark_dense_depth_candidates",
     "build_depth_consistency_fusion_result",
     "build_geometry_refinement_result",
+    "build_hybrid_surface_candidate_result",
     "build_learned_depth_prior_result",
     "canonicalize_colmap_sparse_model",
     "colmap_native_sparse_model_artifact_ref",
