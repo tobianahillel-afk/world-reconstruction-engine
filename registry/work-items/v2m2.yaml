@@ -2809,7 +2809,7 @@ work_items:
   - id: V2L16.4
     lot: V2L16
     title: Hybrid surface candidate adapter boundary
-    status: ready
+    status: done
     objective: Define and implement one pure solver-independent optional hybrid-surface candidate adapter boundary that accepts one canonical source GeometrySolutionCandidate plus explicit supporting ArtifactRefs and caller-declared surface representation and intended uses, and returns one explicit SurfaceModel candidate with exact materialization and lineage without running selecting ranking repairing filling benchmarking or promoting any hybrid method.
     allowed_scope:
       - src/wre/reconstruction/hybrid_surface_candidate.py
@@ -2896,5 +2896,87 @@ work_items:
       - module-surface regression proving concrete hybrid candidate families NumPy Open3D Trimesh PyMeshLab torch filesystem network subprocess runtime benchmark routing V2L16.5 and V2L16.6 implementation behavior are absent
       - full fast CI and CodeQL
 
-  - {id: V2L16.5, lot: V2L16, title: Unsupported region and hole semantics, status: planned, depends_on: [V2L16.4]}
+  - id: V2L16.5
+    lot: V2L16
+    title: Unsupported region and hole semantics
+    status: ready
+    objective: Define and implement one pure immutable solver-independent surface support annotation contract that binds explicit caller-supplied region selector ArtifactRefs to one existing SurfaceModel and distinguishes known unsupported physical regions from explicit holes without generating filling repairing extrapolating selecting or certifying the remaining surface.
+    allowed_scope:
+      - src/wre/domain/surface_support.py
+      - focused exports in src/wre/domain/__init__.py
+      - tests/test_surface_support.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L16.6 can be activated without implementing it
+    out_of_scope:
+      - generating detecting rasterizing vectorizing projecting intersecting expanding shrinking or otherwise computing region selector masks geometry or boundaries
+      - reading opening hashing verifying parsing or rewriting region selector payload bytes or SurfaceModel materialization bytes
+      - filling closing inpainting hallucinating extrapolating meshing remeshing repairing smoothing replacing or otherwise modifying a SurfaceModel because a region is unsupported or a hole
+      - treating absence of an annotated region as proof that the remainder of the surface is supported complete watertight collision-safe navigation-ready measurement-accurate or otherwise suitable
+      - treating generated visual completion as reconstructed physical surface or allowing a generated region to become collision measurement or navigation truth by default
+      - introducing CompletionArtifact STRICT REALISTIC CINEMATIC generated-region policy or other V2L43 completion behavior
+      - defining per-intended-use pass fail thresholds QualityDecision score rank benchmark router fallback retry or default surface-selection policy
+      - changing SurfaceModel source geometry LocalFrameId GeometryScaleStatus representation intended uses producer source ancestry or artifact identity
+      - emitting AppearanceModel material texture radiance Gaussian environment MasterScene RuntimeScene navmesh collision mesh LOD dynamics chronology or other downstream runtime assets
+      - importing NumPy Open3D Trimesh PyMeshLab torch rasterizers native libraries filesystem network subprocess hardware runtime or a concrete surface solver
+      - implementing the V2L16.6 benchmark M2 review in the same PR
+    depends_on: [V2L16.4]
+    read_before:
+      - docs/00_START_HERE.md
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md
+      - registry/components.yaml
+      - registry/work-items/v2m2.yaml
+      - PROJECT_STATE.yaml
+      - src/wre/domain/artifacts.py
+      - src/wre/domain/fragments.py
+      - src/wre/domain/producer_identity.py
+      - src/wre/domain/provenance.py
+      - src/wre/domain/surfaces.py
+      - src/wre/reconstruction/dense_depth_coverage.py
+      - src/wre/reconstruction/hybrid_surface_candidate.py
+      - src/wre/reconstruction/surface_suitability.py
+      - tests/test_dense_depth_coverage.py
+      - tests/test_hybrid_surface_candidate.py
+      - tests/test_surfaces.py
+      - tests/test_surface_suitability.py
+    reuse:
+      - SurfaceModel as the exact immutable physical surface being annotated; the support contract must not create replace or mutate a surface
+      - ArtifactRef as the identity of caller-supplied spatial region selector evidence; this item does not define or parse selector payload formats
+      - LocalFrameId from the retained SurfaceModel as the only coordinate-frame identity for the support annotation
+      - ArtifactProducerIdentity and canonical ArtifactRef ordering patterns already used by SurfaceModel DenseDepthArtifact and hybrid_surface_candidate.py
+      - dense-depth coverage fail-closed semantics as precedent that an explicit hole records missing support and never triggers implicit interpolation or completion
+      - V2L16.3 suitability metrics as separate descriptive evidence; region support annotations do not convert topology observations into safety or accuracy decisions
+      - the frozen provenance rule that generated completion remains distinguishable and belongs to later V2L43 contracts rather than this physical-surface support annotation
+    acceptance:
+      - Add one pure src/wre/domain/surface_support.py module using only the standard library plus WRE canonical domain contracts. It must perform no solver model payload filesystem network subprocess hardware runtime or native-library work.
+      - Define SURFACE_SUPPORT_MAP_ARTIFACT_KIND as the canonical ArtifactKind geometry.surface_support.
+      - Define one SurfaceRegionSupportStatus StrEnum with exactly unsupported and hole. Unsupported means the selected region must not be treated as supported physical truth even if the retained SurfaceModel contains geometry there. Hole means no retained physical SurfaceModel coverage is claimed for the selected region. Neither state is a fill request suitability verdict or generated-completion permission.
+      - Define one frozen slots SurfaceSupportRegion retaining exactly one selector_artifact ArtifactRef and one status SurfaceRegionSupportStatus. The selector artifact is caller-supplied region evidence only; the contract does not open parse project rasterize or otherwise interpret its payload.
+      - Define one frozen slots SurfaceSupportMap retaining exactly one artifact_ref ArtifactRef using geometry.surface_support, one exact surface_model SurfaceModel, one local_frame_id LocalFrameId, one canonical non-empty regions tuple of SurfaceSupportRegion values, one producer ArtifactProducerIdentity and one canonical source_artifacts tuple.
+      - SurfaceSupportMap.local_frame_id must exactly equal surface_model.local_frame_id. The annotation must preserve the exact SurfaceModel object/value including its GeometryScaleStatus representation intended uses producer and ancestry and must not infer metric scale or coordinate conversion.
+      - regions must be non-empty unique by selector ArtifactRef identity and canonically ordered by selector ArtifactId and ArtifactKind without reordering. Every selector ArtifactRef must be distinct from surface_model.artifact_ref and the support-map artifact_ref.
+      - SurfaceSupportMap.artifact_ref must be distinct from surface_model.artifact_ref and every selector ArtifactRef. source_artifacts must equal the canonical union of surface_model.artifact_ref and every selector ArtifactRef with no missing extra duplicate reordered or relabeled ancestry.
+      - A SurfaceSupportMap is negative support evidence only. Absence of a region entry must not be interpreted as a positive claim that unlisted surface area is supported suitable watertight collision-safe navigation-ready measurement-accurate reconstructed or complete.
+      - Neither unsupported nor hole may alter SurfaceModel.intended_uses or create per-use suitability. Collision measurement and navigation remain caller intent until later evidence explicitly proves suitability.
+      - Expose no field or behavior for generated fill repair completion synthetic geometry confidence threshold score rank QualityDecision winner route fallback retry watertightness safety accuracy or runtime compilation. V2L43 remains the owner of generated completion policy and provenance.
+      - Export only SURFACE_SUPPORT_MAP_ARTIFACT_KIND SurfaceRegionSupportStatus SurfaceSupportRegion and SurfaceSupportMap from wre.domain. Do not expose selector parsers generators repair utilities benchmark V2L16.6 behavior or completion policy.
+      - On green implementation evidence mark V2L16.5 done retain physical_surface implementing and activate V2L16.6 with a complete executable physical-surface benchmark plus V2M2 review contract. Do not include V2L16.6 implementation in the same PR.
+    tests:
+      - exact artifact-kind enum values frozen slots field shapes and wrong-type regressions
+      - unsupported-versus-hole semantic regression proving exactly two statuses exist and neither exposes supported generated completed filled or suitable state
+      - region selector ArtifactRef immutable type uniqueness canonical-order and identity-collision regressions
+      - SurfaceSupportMap non-empty-region canonical-order and exact LocalFrameId preservation regressions
+      - exact SurfaceModel identity immutability and unresolved-versus-metric scale preservation regressions
+      - exact support-map artifact kind and ArtifactRef distinctness regressions
+      - exact source_artifacts canonical-union regression with missing extra duplicate reordered and relabeled ancestry failing closed
+      - negative-evidence regression proving absence of a region cannot create a positive support completeness watertightness safety accuracy collision navigation measurement or suitability field
+      - intended-use invariance regression proving support annotations neither add remove reorder nor reinterpret SurfaceModel intended uses
+      - no-generated-collision regression proving the module exposes no generated completion fill repair synthetic geometry or ProvenanceClass.GENERATED promotion behavior
+      - immutability regression proving annotation construction does not mutate SurfaceModel selector artifacts producer source ancestry geometry point maps representation intended uses or scale status
+      - module-surface regression proving NumPy Open3D Trimesh PyMeshLab torch filesystem network subprocess solver selector parsing benchmark routing V2L16.6 runtime and V2L43 completion behavior are absent
+      - full fast CI and CodeQL
   - {id: V2L16.6, lot: V2L16, title: Physical surface benchmark, status: planned, depends_on: [V2L16.5]}
