@@ -588,6 +588,12 @@ def test_report_rejects_noncanonical_metrics() -> None:
             metrics=MetricVector(observations=()),
         )
 
+    with pytest.raises(TypeError, match="metrics"):
+        SurfaceSuitabilityReport(
+            inspection=inspection,
+            metrics=cast(Any, "metrics"),
+        )
+
 
 def test_perfect_looking_topology_still_has_no_watertightness_or_safety_verdict() -> None:
     report = evaluate_surface_suitability(
