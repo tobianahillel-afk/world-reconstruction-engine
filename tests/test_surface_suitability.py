@@ -373,7 +373,7 @@ def test_topology_counts_require_positive_or_non_negative_values(
     ],
 )
 def test_topology_counts_fail_closed_when_bounded_counts_exceed_denominators(
-    kwargs: dict[str, int],
+    kwargs: dict[str, Any],
     message: str,
 ) -> None:
     with pytest.raises(ValueError, match=message):
