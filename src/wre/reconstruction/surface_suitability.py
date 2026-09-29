@@ -146,9 +146,7 @@ class SurfaceMeshInspection:
         if not isinstance(self.surface_model, SurfaceModel):
             raise TypeError("surface_mesh_inspection.surface_model must be SurfaceModel")
         if self.surface_model.representation != _MESH_REPRESENTATION:
-            raise ValueError(
-                "surface_mesh_inspection.surface_model must use representation mesh"
-            )
+            raise ValueError("surface_mesh_inspection.surface_model must use representation mesh")
         if not isinstance(self.materialization, ArtifactMaterializationMetadata):
             raise TypeError(
                 "surface_mesh_inspection.materialization must be ArtifactMaterializationMetadata"
