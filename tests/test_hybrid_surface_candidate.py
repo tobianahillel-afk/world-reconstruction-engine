@@ -70,10 +70,7 @@ def _artifact(identifier: str, kind: str = "evidence.source") -> ArtifactRef:
 
 
 def _canonical_artifacts(*values: ArtifactRef) -> tuple[ArtifactRef, ...]:
-    by_key = {
-        (item.artifact_id.value, item.artifact_kind.value): item
-        for item in values
-    }
+    by_key = {(item.artifact_id.value, item.artifact_kind.value): item for item in values}
     return tuple(by_key[key] for key in sorted(by_key))
 
 
@@ -207,8 +204,10 @@ def _valid_parts(
     ArtifactMaterializationMetadata,
 ]:
     source = _candidate(token, scale=scale)
-    retained_support = supporting if supporting is not None else (
-        _artifact(f"artifact:{token}:support", "evidence.depth"),
+    retained_support = (
+        supporting
+        if supporting is not None
+        else (_artifact(f"artifact:{token}:support", "evidence.depth"),)
     )
     request = _request(
         token,
@@ -444,9 +443,7 @@ def test_result_rejects_wrong_member_types(
             request=request if request_value is None else request_value,
             candidate=candidate if candidate_value is None else candidate_value,
             materialization=(
-                materialization
-                if materialization_value is None
-                else materialization_value
+                materialization if materialization_value is None else materialization_value
             ),
         )
 
@@ -470,8 +467,7 @@ def test_result_preserves_source_geometry_frame_scale_representation_and_intent_
 
     assert result.candidate.source_geometry is request.source_geometry
     assert (
-        result.candidate.local_frame_id
-        == request.source_geometry.geometry_solution.local_frame_id
+        result.candidate.local_frame_id == request.source_geometry.geometry_solution.local_frame_id
     )
     assert result.candidate.scale_status is GeometryScaleStatus.METRIC
     assert result.candidate.representation is request.output_representation
