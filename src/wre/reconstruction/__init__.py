@@ -354,6 +354,19 @@ from wre.reconstruction.open3d_surface import (
     inspect_open3d_surface_environment,
 )
 
+from wre.reconstruction.surface_suitability import (
+    BOUNDARY_EDGE_RATIO_DESCRIPTOR,
+    CONNECTED_COMPONENT_COUNT_DESCRIPTOR,
+    DEGENERATE_TRIANGLE_RATIO_DESCRIPTOR,
+    FINITE_VERTEX_RATIO_DESCRIPTOR,
+    LARGEST_COMPONENT_TRIANGLE_RATIO_DESCRIPTOR,
+    NON_MANIFOLD_EDGE_RATIO_DESCRIPTOR,
+    SURFACE_SUITABILITY_EVALUATOR,
+    SurfaceMeshInspection,
+    SurfaceSuitabilityReport,
+    evaluate_surface_suitability,
+)
+
 __all__ = [
     "CAMERA_SUPPORT_RATIO_DESCRIPTOR",
     "COLMAP_BUNDLE_ADJUSTMENT_REFINEMENT_ADAPTER_ID",
@@ -651,5 +664,15 @@ __all__ = [
     "publish_colmap_pair_matches",
     "reconstruct_colmap_globally",
     "reconstruct_colmap_incrementally",
-    "verify_colmap_geometry",
+    "verify_colmap_geometry",    "BOUNDARY_EDGE_RATIO_DESCRIPTOR",
+    "CONNECTED_COMPONENT_COUNT_DESCRIPTOR",
+    "DEGENERATE_TRIANGLE_RATIO_DESCRIPTOR",
+    "FINITE_VERTEX_RATIO_DESCRIPTOR",
+    "LARGEST_COMPONENT_TRIANGLE_RATIO_DESCRIPTOR",
+    "NON_MANIFOLD_EDGE_RATIO_DESCRIPTOR",
+    "SURFACE_SUITABILITY_EVALUATOR",
+    "SurfaceMeshInspection",
+    "SurfaceSuitabilityReport",
+    "evaluate_surface_suitability",
+
 ]
