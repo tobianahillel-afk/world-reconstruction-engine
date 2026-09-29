@@ -292,9 +292,11 @@ components:
       - src/wre/domain/__init__.py
       - src/wre/domain/surfaces.py
       - src/wre/reconstruction/__init__.py
+      - src/wre/reconstruction/hybrid_surface_candidate.py
       - src/wre/reconstruction/open3d_surface.py
       - src/wre/reconstruction/surface_suitability.py
     tests:
+      - tests/test_hybrid_surface_candidate.py
       - tests/test_open3d_surface.py
       - tests/test_surface_suitability.py
       - tests/test_surfaces.py
