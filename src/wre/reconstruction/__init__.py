@@ -664,7 +664,8 @@ __all__ = [
     "publish_colmap_pair_matches",
     "reconstruct_colmap_globally",
     "reconstruct_colmap_incrementally",
-    "verify_colmap_geometry",    "BOUNDARY_EDGE_RATIO_DESCRIPTOR",
+    "verify_colmap_geometry",
+    "BOUNDARY_EDGE_RATIO_DESCRIPTOR",
     "CONNECTED_COMPONENT_COUNT_DESCRIPTOR",
     "DEGENERATE_TRIANGLE_RATIO_DESCRIPTOR",
     "FINITE_VERTEX_RATIO_DESCRIPTOR",
@@ -674,5 +675,4 @@ __all__ = [
     "SurfaceMeshInspection",
     "SurfaceSuitabilityReport",
     "evaluate_surface_suitability",
-
 ]
