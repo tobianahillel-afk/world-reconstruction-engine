@@ -144,6 +144,12 @@ from wre.domain.scene_clusters import (
     SceneRelationDisposition,
     SceneRelationHypothesis,
 )
+from wre.domain.surface_support import (
+    SURFACE_SUPPORT_MAP_ARTIFACT_KIND,
+    SurfaceRegionSupportStatus,
+    SurfaceSupportMap,
+    SurfaceSupportRegion,
+)
 from wre.domain.surfaces import (
     SURFACE_MODEL_ARTIFACT_KIND,
     SurfaceIntendedUse,
@@ -161,6 +167,7 @@ __all__ = [
     "ARTIFACT_KEY_SCHEMA_VERSION",
     "DECODED_IMAGE_PYRAMID_KIND",
     "SURFACE_MODEL_ARTIFACT_KIND",
+    "SURFACE_SUPPORT_MAP_ARTIFACT_KIND",
     "AdapterCapabilityDescriptor",
     "AdapterCapabilityName",
     "ArtifactDependencyEdge",
@@ -271,6 +278,9 @@ __all__ = [
     "SpatialFragment",
     "SpatialFragmentId",
     "SurfaceIntendedUse",
+    "SurfaceRegionSupportStatus",
+    "SurfaceSupportMap",
+    "SurfaceSupportRegion",
     "SurfaceModel",
     "SurfaceRepresentationName",
     "SyncHypothesis",
