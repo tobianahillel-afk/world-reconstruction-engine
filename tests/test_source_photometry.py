@@ -16,7 +16,6 @@ from wre.domain.source_photometry import (
     SourceWhiteBalanceMetadata,
 )
 
-
 OBSERVATION_ID = ObservationId("obs:photometry:0001")
 
 
