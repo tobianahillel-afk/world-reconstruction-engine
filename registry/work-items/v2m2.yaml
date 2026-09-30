@@ -2899,7 +2899,7 @@ work_items:
   - id: V2L16.5
     lot: V2L16
     title: Unsupported region and hole semantics
-    status: ready
+    status: done
     objective: Define and implement one pure immutable solver-independent surface support annotation contract that binds explicit caller-supplied region selector ArtifactRefs to one existing SurfaceModel and distinguishes known unsupported physical regions from explicit holes without generating filling repairing extrapolating selecting or certifying the remaining surface.
     allowed_scope:
       - src/wre/domain/surface_support.py
@@ -2979,4 +2979,101 @@ work_items:
       - immutability regression proving annotation construction does not mutate SurfaceModel selector artifacts producer source ancestry geometry point maps representation intended uses or scale status
       - module-surface regression proving NumPy Open3D Trimesh PyMeshLab torch filesystem network subprocess solver selector parsing benchmark routing V2L16.6 runtime and V2L43 completion behavior are absent
       - full fast CI and CodeQL
-  - {id: V2L16.6, lot: V2L16, title: Physical surface benchmark, status: planned, depends_on: [V2L16.5]}
+  - id: V2L16.6
+    lot: V2L16
+    title: Controlled physical surface benchmark and V2M2 review
+    status: ready
+    objective: Run one retained deterministic CPU-only controlled benchmark over canonical physical SurfaceModel evidence, compose the existing V2L16.3 descriptive topology metrics with exact V2L16.5 negative support annotations without converting either into a safety or completeness verdict, and close both the V2L16 lot review and the V2M2 reliable-static-physical-reconstruction milestone review without selecting a universal surface winner or requiring optional accelerator evidence.
+    allowed_scope:
+      - src/wre/reconstruction/surface_benchmark.py
+      - focused exports in src/wre/reconstruction/__init__.py
+      - tests/test_surface_benchmark.py
+      - tests/fixtures/synthetic/physical-surface-controlled/fixture.json
+      - .github/workflows/physical-surface-controlled-benchmark.yml
+      - docs/reviews/V2L16-physical-surface-v2m2-review.md only after retained benchmark evidence is green
+      - focused lifecycle updates to registry/components.yaml registry/reviews.yaml PROJECT_STATE.yaml this work-item registry and registry/work-items/v2m3.yaml only after retained benchmark and review evidence are green so V2L17.1 can be activated without implementing it
+    out_of_scope:
+      - adding changing selecting promoting or executing a new production surface solver mesher fusion backend learned surface model hybrid model checkpoint or generated-completion system
+      - requiring CUDA GPU NPU or another accelerator for the mandatory controlled benchmark or treating deferred optional accelerator evidence as passed
+      - reading parsing triangulating rasterizing projecting intersecting or otherwise interpreting SurfaceModel materialization bytes or SurfaceSupportRegion selector payload bytes
+      - computing geometric point-to-surface mesh-to-mesh Chamfer Hausdorff signed-distance measurement-accuracy or absolute-position error without an explicit trusted comparable geometry reference
+      - aligning rescaling registering converting LocalFrameId GeometryScaleStatus surface representation units axes or coordinate systems to manufacture comparability
+      - filling repairing inpainting hallucinating extrapolating smoothing remeshing replacing or generating unsupported or hole regions
+      - treating absence of a SurfaceSupportMap or absence of a region entry as evidence of support completeness watertightness collision safety navigation readiness measurement accuracy or reconstruction truth
+      - turning SurfaceIntendedUse values topology observations or negative support annotations into per-use pass fail thresholds QualityDecision safety certification or runtime permission
+      - selecting a winner rank overall score preferred route default backend retry fallback or shipping promotion
+      - changing V2L16.1 through V2L16.5 production contracts or their provenance semantics
+      - creating appearance material environment Gaussian radiance MasterScene RuntimeScene collision mesh navmesh LOD dynamic chronology or V2L17 implementation
+    depends_on: [V2L16.5]
+    read_before:
+      - docs/00_START_HERE.md
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md
+      - docs/reviews/V2L14-precision-global-refinement-review.md
+      - docs/reviews/V2L15-dense-depth-mvs-fusion-review.md
+      - registry/components.yaml
+      - registry/reviews.yaml
+      - registry/work-items/v2m2.yaml
+      - registry/work-items/v2m3.yaml
+      - PROJECT_STATE.yaml
+      - src/wre/domain/artifact_materialization.py
+      - src/wre/domain/artifacts.py
+      - src/wre/domain/benchmarks.py
+      - src/wre/domain/hardware_identity.py
+      - src/wre/domain/metrics.py
+      - src/wre/domain/quality.py
+      - src/wre/domain/surface_support.py
+      - src/wre/domain/surfaces.py
+      - src/wre/reconstruction/hybrid_surface_candidate.py
+      - src/wre/reconstruction/open3d_surface.py
+      - src/wre/reconstruction/surface_suitability.py
+      - tests/test_hybrid_surface_candidate.py
+      - tests/test_open3d_surface.py
+      - tests/test_surface_support.py
+      - tests/test_surface_suitability.py
+      - tests/test_surfaces.py
+      - .github/workflows/open3d-surface-integration.yml
+    reuse:
+      - BenchmarkFixtureIdentity BenchmarkRecord BenchmarkRecordId HardwareRuntimeIdentity and QualityMode from the canonical benchmark domain rather than defining a parallel benchmark vocabulary
+      - SurfaceModel as immutable physical-surface identity and provenance; benchmark code must not create or mutate a production surface
+      - SurfaceMeshInspection and evaluate_surface_suitability from V2L16.3 unchanged as the only topology metric source in the benchmark
+      - SurfaceSupportMap SurfaceSupportRegion and SurfaceRegionSupportStatus from V2L16.5 as exact negative evidence rather than inventing positive supported-area semantics
+      - ArtifactMaterializationMetadata as exact materialization identity bound to each benchmarked surface without reading materialization payload bytes
+      - the V2L16.2 Open3D CPU baseline and its dedicated integration evidence as an existing implementation example; the mandatory controlled benchmark may use checked-in synthetic canonical evidence and must not require importing Open3D
+      - V2L16.4 hybrid candidate boundary as an optional candidate contract only; no concrete hybrid solver is required for milestone closure
+      - existing V2L11 through V2L15 accepted lot-review evidence as the earlier V2M2 reconstruction chain to audit during the milestone review
+    acceptance:
+      - Add one pure surface benchmark module using only standard-library operations plus canonical WRE contracts. Define frozen slots candidate request candidate-result and benchmark-result records plus one deterministic benchmark_surface_candidates function. The mandatory path must not import Open3D NumPy Trimesh PyMeshLab torch or another solver/runtime library.
+      - Each benchmark candidate must retain exactly one SurfaceMeshInspection and an optional SurfaceSupportMap. When a support map is present it must reference the exact same SurfaceModel value and LocalFrameId as the inspection. When it is absent the result must record annotation absence as unknown rather than zero unsupported regions or proof of positive support.
+      - A benchmark request must contain one exact BenchmarkFixtureIdentity one exact HardwareRuntimeIdentity and at least three distinct candidates in canonical SurfaceModel ArtifactId and ArtifactKind order. Surface artifact identities must be unique and candidate order must fail closed rather than being silently reordered.
+      - For every candidate call evaluate_surface_suitability unchanged and retain the complete V2L16.3 MetricVector and evaluator provenance. Do not recompute mesh topology or add a synthetic overall quality score.
+      - Support evidence must remain separate from topology metrics. Retain the exact optional SurfaceSupportMap artifact identity and exact ordered selector ArtifactRef plus unsupported or hole status entries in the candidate result and retained JSON. Do not convert selector count to spatial coverage area probability confidence or a positive supported fraction.
+      - Build one canonical BenchmarkRecord per candidate using the shared fixture identity shared hardware identity the exact SurfaceModel producer QualityMode.QUALITY and exactly the V2L16.3 descriptive MetricVector. No support status may change the metric vector or producer provenance.
+      - Add one deterministic checked-in synthetic controlled fixture with at least three mesh-representation SurfaceModel candidates. The fixture must exercise one candidate with no support annotation one with explicit unsupported evidence and one with explicit hole evidence, while also exercising descriptive topology differences and both unresolved and metric GeometryScaleStatus without claiming that metric scale proves measurement accuracy.
+      - The controlled fixture must provide synthetic ArtifactMaterializationMetadata and topology counts directly as canonical evidence; benchmark execution must not open mesh files selector files or invoke a surface solver.
+      - Add one dedicated physical-surface-controlled-benchmark workflow on ubuntu-24.04 using the normal locked WRE environment. It must require no network model checkpoint solver Open3D import or accelerator and must retain one deterministic machine-readable JSON benchmark artifact.
+      - The retained JSON must include fixture identity hardware identity candidate SurfaceModel artifact and producer identities exact topology MetricVectors optional support-map identities and exact negative region entries plus explicit absent-annotation unknown state. Its schema must contain no supported-area completeness watertight safety accuracy collision-ready navigation-ready measurement-ready winner rank overall score threshold default retry fallback QualityDecision or shipping-promotion field.
+      - Add docs/reviews/V2L16-physical-surface-v2m2-review.md only after benchmark implementation and retained evidence are green. The V2L16 review must cover V2L16.1 through V2L16.6 and distinguish physical-surface identity baseline generation descriptive suitability optional hybrid boundary and negative support semantics from generated completion or runtime safety certification.
+      - The same review must perform the required V2M2 milestone composition audit over accepted V2L11 through V2L16 evidence. V2M2 may PASS only if canonical camera depth point geometry alternatives refinement dense-depth evidence and explicit physical surface compose with immutable provenance explicit unresolved scale holes negative support and fail-closed comparability without collapsing solver outputs into unquestioned truth.
+      - The V2M2 milestone review must state explicit non-capabilities. V2M2 does not provide photorealistic appearance materials environment MasterScene RuntimeScene dynamic 4D chronology generated completion universal solver winner certified collision navigation or measurement safety or proof from any deferred unavailable accelerator lane.
+      - Passing V2L16 and V2M2 must not promote Open3D the optional hybrid boundary COLMAP DA3 GLUEMAP or another specialist as a universal default. Existing route/default policy remains unchanged.
+      - On green retained benchmark and review evidence mark V2L16.6 done physical_surface implemented and V2L16 passed plus V2M2 passed in registry/reviews.yaml. Then expand and activate only V2L17.1 in registry/work-items/v2m3.yaml with a complete executable source-color/exposure-metadata contract. Do not include V2L17 implementation in the same PR.
+    tests:
+      - frozen slots benchmark request candidate result and aggregate result shapes plus wrong-type minimum-candidate duplicate-surface and canonical-order regressions
+      - exact inspection SurfaceModel and optional SurfaceSupportMap identity/frame matching regressions with foreign surface support failing closed
+      - absent support annotation regression proving missing annotation is retained as unknown and does not become zero negative regions positive support or completeness
+      - unsupported and hole retention regressions proving exact selector ArtifactRef and status values survive unchanged and never alter the V2L16.3 MetricVector
+      - V2L16.3 composition regression proving every BenchmarkRecord retains the exact descriptive topology observations evaluator provenance and SurfaceModel input artifact identity
+      - unresolved-versus-metric scale regression proving both remain descriptive and no measurement accuracy distance area volume or tolerance metric is invented
+      - deterministic synthetic fixture hash and retained JSON schema regressions with no winner score rank threshold QualityDecision default route safety certification positive support or generated-completion fields
+      - no-payload-execution regression proving benchmark code does not open inspect hash parse or mutate mesh and selector payload bytes and imports no Open3D NumPy Trimesh PyMeshLab torch solver filesystem network or subprocess behavior
+      - lot-review regression proving V2L16.1 through V2L16.6 are covered and physical surface remains distinct from appearance runtime collision assets and generated completion
+      - milestone-review regression proving V2L11 through V2L16 are composed in the V2M2 audit with explicit deferred accelerator limitations no universal backend winner no photorealistic/runtime claim and no safety certification
+      - lifecycle regression proving V2L16 and V2M2 cannot pass before the review document and retained benchmark evidence exist and only V2L17.1 becomes ready afterward
+      - full fast CI CodeQL Open3D surface integration dense-depth controlled benchmark geometry controlled benchmark COLMAP and DA3 qualification lanes where repository path triggers require them plus the dedicated physical-surface controlled benchmark lane
