@@ -1,0 +1,68 @@
+name: physical-surface-controlled-benchmark
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/physical-surface-controlled-benchmark.yml"
+      - "src/wre/reconstruction/surface_benchmark.py"
+      - "src/wre/reconstruction/surface_suitability.py"
+      - "src/wre/domain/surface_support.py"
+      - "src/wre/domain/surfaces.py"
+      - "src/wre/reconstruction/__init__.py"
+      - "tests/test_surface_benchmark.py"
+      - "tests/fixtures/synthetic/physical-surface-controlled/**"
+      - "docs/reviews/V2L16-physical-surface-v2m2-review.md"
+      - "registry/components.yaml"
+      - "registry/reviews.yaml"
+      - "registry/work-items/v2m2.yaml"
+      - "registry/work-items/v2m3.yaml"
+      - "PROJECT_STATE.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    name: cpu-controlled-physical-surface-evidence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout WRE
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install uv and exact Python
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.13"
+          python-version: "3.12.12"
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Install locked WRE environment
+        run: uv sync --locked --all-groups
+
+      - name: Exercise controlled physical-surface benchmark
+        env:
+          WRE_PHYSICAL_SURFACE_CONTROLLED_BENCHMARK_OUTPUT: ${{ runner.temp }}/v2l16-6-controlled-physical-surface.json
+        run: >-
+          uv run python -m pytest
+          tests/test_surface_benchmark.py
+          -vv
+
+      - name: Retain machine-readable benchmark evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v2l16-6-controlled-physical-surface-benchmark
+          path: ${{ runner.temp }}/v2l16-6-controlled-physical-surface.json
+          if-no-files-found: error
+          retention-days: 30
