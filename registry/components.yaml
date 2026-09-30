@@ -290,6 +290,7 @@ components:
     owner_lot: V2L16
     implementation:
       - src/wre/domain/__init__.py
+      - src/wre/domain/surface_support.py
       - src/wre/domain/surfaces.py
       - src/wre/reconstruction/__init__.py
       - src/wre/reconstruction/hybrid_surface_candidate.py
@@ -298,6 +299,7 @@ components:
     tests:
       - tests/test_hybrid_surface_candidate.py
       - tests/test_open3d_surface.py
+      - tests/test_surface_support.py
       - tests/test_surface_suitability.py
       - tests/test_surfaces.py
     status: implementing
