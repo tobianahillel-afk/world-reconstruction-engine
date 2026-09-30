@@ -59,8 +59,10 @@ This document collects cross-cutting invariants that every WRE subsystem must pr
 6. New scientific models enter as candidates behind existing capability contracts unless they introduce a genuinely new responsibility.
 7. Default changes require benchmark evidence appropriate to the affected profile and quality mode.
 8. CPU-only portability is a product invariant: every mandatory roadmap capability must retain at least one supported CPU route.
-9. GPU/CUDA/NPU or other accelerator-only adapters are optional specialists. They may improve quality or performance, but they must not be the sole dependency of later mandatory work or block milestone progression when a reviewed CPU baseline exists.
-10. Hardware-unavailable candidates fail closed or are explicitly deferred; the router must never silently pretend an unavailable accelerator route is supported.
+9. CPU portability is not a scientific-ranking criterion. A GPU/CUDA/NPU or other accelerator-only candidate may remain the strongest quality candidate for a profile even when WRE cannot execute it on currently available hardware.
+10. A candidate must not be rejected, demoted or omitted from scientific/quality evaluation solely because current development or CI hardware lacks its required accelerator. Hardware/resource eligibility is tracked separately from quality merit.
+11. Hardware-unavailable accelerator execution evidence is **DEFERRED / UNVERIFIED**, not passed and not failed. Upstream/paper evidence may remain recorded separately, but WRE makes no unmeasured local quality/performance claim.
+12. Accelerator-only adapters are optional execution specialists for mandatory-roadmap purposes: they must not be the sole dependency of later mandatory work or block milestone progression when a reviewed CPU baseline exists. The router must never silently pretend an unavailable accelerator route is supported.
 
 ## Artifact graph and caching
 
