@@ -82,13 +82,6 @@ from wre.domain.metadata import (
     GpsMetadataInterpretation,
     ObservationMetadataInterpretation,
 )
-from wre.domain.source_photometry import (
-    SourceColorMetadata,
-    SourceExposureMetadata,
-    SourcePhotometryInterpretationStatus,
-    SourcePhotometryMetadata,
-    SourceWhiteBalanceMetadata,
-)
 from wre.domain.metrics import (
     MetricAggregation,
     MetricDescriptor,
@@ -150,6 +143,13 @@ from wre.domain.scene_clusters import (
     SceneClusterId,
     SceneRelationDisposition,
     SceneRelationHypothesis,
+)
+from wre.domain.source_photometry import (
+    SourceColorMetadata,
+    SourceExposureMetadata,
+    SourcePhotometryInterpretationStatus,
+    SourcePhotometryMetadata,
+    SourceWhiteBalanceMetadata,
 )
 from wre.domain.surface_support import (
     SURFACE_SUPPORT_MAP_ARTIFACT_KIND,
