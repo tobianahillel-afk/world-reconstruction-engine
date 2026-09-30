@@ -165,6 +165,9 @@ from wre.domain.temporal_groups import (
 
 __all__ = [
     "ARTIFACT_KEY_SCHEMA_VERSION",
+    "DECODED_IMAGE_PYRAMID_KIND",
+    "SURFACE_MODEL_ARTIFACT_KIND",
+    "SURFACE_SUPPORT_MAP_ARTIFACT_KIND",
     "AdapterCapabilityDescriptor",
     "AdapterCapabilityName",
     "ArtifactDependencyEdge",
@@ -198,7 +201,6 @@ __all__ = [
     "CaptureTimeInterpretationStatus",
     "CheckpointIdentity",
     "ConfigurationIdentity",
-    "DECODED_IMAGE_PYRAMID_KIND",
     "DecodedImageLevelDescriptor",
     "DecodedImageOrientationPolicy",
     "DecodedImagePixelLayout",
@@ -262,8 +264,6 @@ __all__ = [
     "RawMetadataEntry",
     "ReconstructionRun",
     "ReconstructionRunId",
-    "SURFACE_MODEL_ARTIFACT_KIND",
-    "SURFACE_SUPPORT_MAP_ARTIFACT_KIND",
     "SceneCluster",
     "SceneClusterId",
     "SceneProject",
