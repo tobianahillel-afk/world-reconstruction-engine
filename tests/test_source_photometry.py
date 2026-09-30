@@ -6,8 +6,8 @@ from dataclasses import FrozenInstanceError, fields
 
 import pytest
 
-from wre.domain import ObservationId, ObservationMetadata, RawMetadataEntry
 import wre.domain.source_photometry as source_photometry_module
+from wre.domain import ObservationId, ObservationMetadata, RawMetadataEntry
 from wre.domain.source_photometry import (
     SourceColorMetadata,
     SourceExposureMetadata,
