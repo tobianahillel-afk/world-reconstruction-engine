@@ -213,8 +213,7 @@ class SurfaceCandidateBenchmarkResult:
             )
         if self.benchmark_record.quality_mode is not QualityMode.QUALITY:
             raise ValueError(
-                "surface_candidate_benchmark_result BenchmarkRecord must use "
-                "QualityMode.QUALITY"
+                "surface_candidate_benchmark_result BenchmarkRecord must use QualityMode.QUALITY"
             )
         if self.benchmark_record.metrics != self.suitability.metrics:
             raise ValueError(
@@ -249,9 +248,7 @@ class SurfaceBenchmarkResult:
                 "SurfaceCandidateBenchmarkResult"
             )
         if tuple(item.candidate for item in self.candidates) != self.request.candidates:
-            raise ValueError(
-                "surface_benchmark_result candidates must exactly match request order"
-            )
+            raise ValueError("surface_benchmark_result candidates must exactly match request order")
         for item in self.candidates:
             if item.benchmark_record.fixture != self.request.fixture:
                 raise ValueError(
