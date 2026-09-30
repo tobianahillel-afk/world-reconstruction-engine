@@ -6,8 +6,8 @@ from dataclasses import FrozenInstanceError, fields
 
 import pytest
 
-import wre.domain.source_photometry as source_photometry_module
 from wre.domain import ObservationId, ObservationMetadata, RawMetadataEntry
+import wre.domain.source_photometry as source_photometry_module
 from wre.domain.source_photometry import (
     SourceColorMetadata,
     SourceExposureMetadata,
@@ -217,7 +217,10 @@ def test_absent_state_carries_no_values_evidence_or_issue(factory: object) -> No
         ),
     ],
 )
-def test_absent_state_rejects_interpreted_values(constructor: object, kwargs: dict[str, object]) -> None:
+def test_absent_state_rejects_interpreted_values(
+    constructor: object,
+    kwargs: dict[str, object],
+) -> None:
     with pytest.raises(ValueError, match="absent state"):
         constructor(  # type: ignore[operator]
             status=SourcePhotometryInterpretationStatus.ABSENT,
@@ -456,7 +459,10 @@ def test_evidence_must_be_immutable_unique_and_canonically_ordered() -> None:
         )
 
     canonical = tuple(
-        sorted((COLOR_SPACE, PRIMARIES), key=lambda entry: (entry.namespace, entry.key, entry.value))
+        sorted(
+            (COLOR_SPACE, PRIMARIES),
+            key=lambda entry: (entry.namespace, entry.key, entry.value),
+        )
     )
     reversed_evidence = tuple(reversed(canonical))
     assert reversed_evidence != canonical
@@ -477,7 +483,7 @@ def test_foreign_or_fabricated_evidence_fails_closed() -> None:
         evidence=(foreign,),
     )
 
-    with pytest.raises(ValueError, match="source_metadata.raw_entries"):
+    with pytest.raises(ValueError, match=r"source_metadata\.raw_entries"):
         _photometry(exposure=exposure)
 
 
