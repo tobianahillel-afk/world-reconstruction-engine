@@ -1,0 +1,110 @@
+{
+  "candidates": [
+    {
+      "artifact_id": "surface:candidate-hole",
+      "inspection": {
+        "boundary_edge_count": 2,
+        "connected_component_count": 1,
+        "degenerate_triangle_count": 0,
+        "finite_vertex_count": 12,
+        "largest_component_triangle_count": 10,
+        "non_manifold_edge_count": 0,
+        "producer_token": "inspection-hole",
+        "triangle_count": 10,
+        "unique_edge_count": 18,
+        "vertex_count": 12
+      },
+      "intended_uses": [
+        "measurement"
+      ],
+      "materialization": {
+        "byte_length": 2400,
+        "relative_path": "candidate-hole.ply",
+        "sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      },
+      "producer_token": "candidate-hole",
+      "scale_status": "metric",
+      "support": {
+        "artifact_id": "support:candidate-hole",
+        "producer_token": "support-hole",
+        "regions": [
+          {
+            "selector_artifact_id": "selector:hole:roof",
+            "selector_artifact_kind": "benchmark.surface_region_selector",
+            "status": "hole"
+          }
+        ]
+      }
+    },
+    {
+      "artifact_id": "surface:candidate-unknown",
+      "inspection": {
+        "boundary_edge_count": 3,
+        "connected_component_count": 2,
+        "degenerate_triangle_count": 2,
+        "finite_vertex_count": 8,
+        "largest_component_triangle_count": 6,
+        "non_manifold_edge_count": 1,
+        "producer_token": "inspection-unknown",
+        "triangle_count": 8,
+        "unique_edge_count": 12,
+        "vertex_count": 10
+      },
+      "intended_uses": [
+        "collision"
+      ],
+      "materialization": {
+        "byte_length": 1800,
+        "relative_path": "candidate-unknown.ply",
+        "sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+      },
+      "producer_token": "candidate-unknown",
+      "scale_status": "unresolved",
+      "support": null
+    },
+    {
+      "artifact_id": "surface:candidate-unsupported",
+      "inspection": {
+        "boundary_edge_count": 4,
+        "connected_component_count": 2,
+        "degenerate_triangle_count": 1,
+        "finite_vertex_count": 10,
+        "largest_component_triangle_count": 7,
+        "non_manifold_edge_count": 0,
+        "producer_token": "inspection-unsupported",
+        "triangle_count": 9,
+        "unique_edge_count": 15,
+        "vertex_count": 11
+      },
+      "intended_uses": [
+        "collision",
+        "navigation"
+      ],
+      "materialization": {
+        "byte_length": 2100,
+        "relative_path": "candidate-unsupported.ply",
+        "sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+      },
+      "producer_token": "candidate-unsupported",
+      "scale_status": "metric",
+      "support": {
+        "artifact_id": "support:candidate-unsupported",
+        "producer_token": "support-unsupported",
+        "regions": [
+          {
+            "selector_artifact_id": "selector:unsupported:facade",
+            "selector_artifact_kind": "benchmark.surface_region_selector",
+            "status": "unsupported"
+          },
+          {
+            "selector_artifact_id": "selector:unsupported:ground",
+            "selector_artifact_kind": "benchmark.surface_region_selector",
+            "status": "unsupported"
+          }
+        ]
+      }
+    }
+  ],
+  "fixture_id": "fixture.physical-surface-controlled.v1",
+  "schema_version": 1
+}

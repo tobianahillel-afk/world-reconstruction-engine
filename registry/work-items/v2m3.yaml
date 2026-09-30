@@ -1,7 +1,80 @@
 schema_version: 1
 milestone: V2M3
 work_items:
-  - {id: V2L17.1, lot: V2L17, title: Source color exposure metadata contract, status: planned, depends_on: [V2L16.6]}
+  - id: V2L17.1
+    lot: V2L17
+    title: Source color exposure metadata contract
+    status: ready
+    objective: Define one pure immutable solver-independent source-photometry metadata contract over an exact ObservationMetadata record so declared source-color evidence exposure capture hints and white-balance hints can be represented with explicit absent unknown invalid or resolved state without decoding pixels transforming color normalizing exposure or guessing missing metadata.
+    allowed_scope:
+      - src/wre/domain/source_photometry.py
+      - focused exports in src/wre/domain/__init__.py
+      - tests/test_source_photometry.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L17.2 can be activated without implementing it
+    out_of_scope:
+      - reading image or video payload bytes opening files invoking EXIF parsers ffmpeg Pillow OpenCV colour-science LittleCMS or another decode/color runtime
+      - changing raw Observation ObservationMetadata RawMetadataEntry EXIF ingestion metadata interpretation decoded-image or persistence contracts
+      - assuming sRGB Rec.709 linear light D65 full range limited range gamma transfer primaries matrix coefficients or ICC behavior from MIME type file extension codec camera make model or decoded pixel layout
+      - inferring ISO exposure time aperture exposure compensation white balance color temperature tint or camera response from pixel statistics brightness histograms MediaProfile values or neighboring observations
+      - decoding pixels applying orientation color conversion transfer functions gamma linearization chromatic adaptation ICC transforms tone mapping clipping masks exposure normalization or white-balance normalization
+      - creating an AppearanceModel texture radiance Gaussian material environment MasterScene RuntimeScene or V2L17.2 through V2L17.5 behavior
+      - selecting routes ranking observations emitting QualityDecision safety accuracy realism or reconstruction-truth claims
+      - modifying V2M2 geometry depth or physical-surface artifacts
+    depends_on: [V2L16.6]
+    read_before:
+      - docs/00_START_HERE.md
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md
+      - docs/reviews/V2L16-physical-surface-v2m2-review.md
+      - registry/components.yaml
+      - registry/work-items/v2m3.yaml
+      - PROJECT_STATE.yaml
+      - src/wre/domain/cameras.py
+      - src/wre/domain/metadata.py
+      - src/wre/domain/observations.py
+      - src/wre/domain/decoded_images.py
+      - src/wre/domain/__init__.py
+      - src/wre/ingestion/exif.py
+      - src/wre/ingestion/metadata_interpretation.py
+      - tests/test_observations.py
+      - tests/test_metadata_interpretation.py
+      - tests/test_decoded_image_pyramids.py
+    reuse:
+      - ObservationId ObservationMetadata RawMetadataEntry CameraId and ImageDimensions from the canonical media domain rather than defining parallel source or metadata identities
+      - the existing metadata interpretation precedent that missing evidence stays absent or ambiguous and invalid evidence never exposes a fabricated resolved value
+      - immutable caller-supplied raw metadata evidence already retained by ObservationMetadata; V2L17.1 interprets only explicitly supplied metadata entries and does not re-read source files
+      - DecodedImagePyramidManifest only as a boundary reminder that decoded pixel convention belongs to V2L17.2 and must not be inferred or altered by this item
+    acceptance:
+      - Add one pure domain module using only the Python standard library plus existing canonical WRE domain contracts. Define frozen slots source-photometry records and explicit status enums needed to distinguish absent unknown invalid and resolved color exposure and white-balance evidence.
+      - Bind every SourcePhotometryMetadata value to exactly one existing ObservationMetadata value and the same ObservationId. The raw ObservationMetadata record remains immutable source evidence and must not be rewritten normalized or replaced.
+      - Represent source-color declarations separately from decoded pixel convention. The contract may retain explicitly declared color-space primaries transfer-characteristic matrix/range or profile-name tokens when supplied by evidence, but must not translate those tokens into a working/output color space or assume defaults when declarations are absent.
+      - Represent exposure capture hints separately from normalization. Canonical numeric hints such as ISO speed exposure time f-number and exposure compensation may be retained only when explicitly supported by raw metadata evidence and finite with physically valid sign/domain constraints; partial evidence may remain partial and must not be completed from camera heuristics or pixels.
+      - Represent white-balance capture hints separately from normalization. Explicit mode or color-temperature style hints may be retained only when supported by raw metadata evidence; missing white-balance metadata remains absent or unknown and must not become D65 auto white balance unity gains or a guessed temperature.
+      - Every resolved unknown or invalid interpretation that cites evidence must retain exact RawMetadataEntry values originating from the bound ObservationMetadata raw_entries. Evidence tuples must be immutable deterministic and fail closed on foreign fabricated duplicated or non-canonical entries.
+      - ABSENT state must carry no interpreted value evidence or issue. UNKNOWN must carry relevant raw evidence that cannot be safely mapped to supported semantics and an explanatory issue. INVALID must carry relevant raw evidence plus an explanatory issue and must expose no invalid canonical numeric value. RESOLVED must carry at least one explicit interpreted value and exact supporting evidence with no issue.
+      - Accept image and video-frame observation identities without introducing different semantics merely because the source came from a still image or extracted frame. Video-container-specific extraction remains a future adapter concern; this item defines the canonical result contract only.
+      - Keep color exposure and white-balance interpretations independently stateful so one field family can be resolved while another is absent unknown or invalid.
+      - Do not create or mutate decoded pixel artifacts. V2L17.1 must contain no pixel buffers paths filesystem handles image dimensions derived from decoding color transforms lookup tables response curves normalized gains or output-space values.
+      - On green implementation evidence mark V2L17.1 done add the new contract/test files under photometric_pipeline in registry/components.yaml and activate only V2L17.2 with a complete executable decode working output color-convention contract. Do not implement V2L17.2 in the same PR.
+    tests:
+      - frozen slots exact field-shape and status-enum regressions plus wrong-type failures for ObservationMetadata ObservationId raw evidence and numeric values
+      - exact observation-identity regression proving bound ObservationMetadata and top-level ObservationId cannot disagree
+      - absent-state regressions proving no evidence value issue default color space ISO exposure aperture or white balance appears when metadata is missing
+      - unknown-state regressions proving unsupported declarations remain explicit raw evidence plus issue rather than being guessed into sRGB Rec.709 D65 or another familiar default
+      - invalid-state regressions for malformed non-finite zero-or-negative exposure time non-positive ISO/f-number invalid temperature and contradictory evidence with no invalid canonical numeric value exposed
+      - resolved color-declaration regressions proving only explicitly evidenced declaration tokens survive and decoded/working/output color spaces remain absent
+      - resolved exposure regressions proving independently evidenced ISO exposure-time f-number and exposure-compensation hints remain descriptive capture metadata and are not converted into normalized exposure
+      - resolved white-balance regressions proving explicitly evidenced mode/temperature hints remain capture metadata and do not create gains chromatic adaptation or normalized pixels
+      - evidence-integrity regressions proving every evidence RawMetadataEntry comes from the exact bound ObservationMetadata record with canonical deterministic ordering and no foreign duplicate or fabricated entry
+      - image-versus-video-frame identity regression proving the contract is observation-bound and does not infer photometric semantics from ObservationKind
+      - module-surface regression proving filesystem network subprocess EXIF parser ffmpeg Pillow OpenCV colour-science LittleCMS NumPy torch image decode pixel transformation AppearanceModel V2L17.2 and routing behavior are absent
+      - full fast CI and CodeQL
   - {id: V2L17.2, lot: V2L17, title: Decode working output color convention layer, status: planned, depends_on: [V2L17.1]}
   - {id: V2L17.3, lot: V2L17, title: Exposure white balance normalization artifact, status: planned, depends_on: [V2L17.2]}
   - {id: V2L17.4, lot: V2L17, title: Clipping saturation incompatible camera handling, status: planned, depends_on: [V2L17.3]}

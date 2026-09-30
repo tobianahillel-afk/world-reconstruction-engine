@@ -2982,7 +2982,7 @@ work_items:
   - id: V2L16.6
     lot: V2L16
     title: Controlled physical surface benchmark and V2M2 review
-    status: ready
+    status: done
     objective: Run one retained deterministic CPU-only controlled benchmark over canonical physical SurfaceModel evidence, compose the existing V2L16.3 descriptive topology metrics with exact V2L16.5 negative support annotations without converting either into a safety or completeness verdict, and close both the V2L16 lot review and the V2M2 reliable-static-physical-reconstruction milestone review without selecting a universal surface winner or requiring optional accelerator evidence.
     allowed_scope:
       - src/wre/reconstruction/surface_benchmark.py

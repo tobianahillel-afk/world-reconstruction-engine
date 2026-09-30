@@ -359,6 +359,14 @@ from wre.reconstruction.open3d_surface import (
     Open3dTsdfSurfaceConfig,
     inspect_open3d_surface_environment,
 )
+from wre.reconstruction.surface_benchmark import (
+    SurfaceBenchmarkCandidate,
+    SurfaceBenchmarkRequest,
+    SurfaceBenchmarkResult,
+    SurfaceCandidateBenchmarkResult,
+    SurfaceSupportAnnotationState,
+    benchmark_surface_candidates,
+)
 from wre.reconstruction.surface_suitability import (
     BOUNDARY_EDGE_RATIO_DESCRIPTOR,
     CONNECTED_COMPONENT_COUNT_DESCRIPTOR,
@@ -645,10 +653,16 @@ __all__ = [
     "Open3dSurfaceResult",
     "Open3dTsdfSurfaceAdapter",
     "Open3dTsdfSurfaceConfig",
+    "SurfaceBenchmarkCandidate",
+    "SurfaceBenchmarkRequest",
+    "SurfaceBenchmarkResult",
+    "SurfaceCandidateBenchmarkResult",
     "SurfaceMeshInspection",
     "SurfaceSuitabilityReport",
+    "SurfaceSupportAnnotationState",
     "benchmark_da3_execution",
     "benchmark_dense_depth_candidates",
+    "benchmark_surface_candidates",
     "build_depth_consistency_fusion_result",
     "build_geometry_refinement_result",
     "build_hybrid_surface_candidate_result",
