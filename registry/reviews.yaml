@@ -93,7 +93,11 @@ lot_reviews:
     reviewed_at: '2026-09-28'
     evidence:
       - docs/reviews/V2L15-dense-depth-mvs-fusion-review.md
-  V2L16: {status: pending, reviewed_at: null, evidence: []}
+  V2L16:
+    status: passed
+    reviewed_at: '2026-09-30'
+    evidence:
+      - docs/reviews/V2L16-physical-surface-v2m2-review.md
   V2L17: {status: pending, reviewed_at: null, evidence: []}
   V2L18: {status: pending, reviewed_at: null, evidence: []}
   V2L19: {status: pending, reviewed_at: null, evidence: []}
@@ -140,7 +144,11 @@ milestone_reviews:
     reviewed_at: '2026-09-21'
     evidence:
       - docs/reviews/V2L10-routing-v2m1-review.md
-  V2M2: {status: pending, reviewed_at: null, evidence: []}
+  V2M2:
+    status: passed
+    reviewed_at: '2026-09-30'
+    evidence:
+      - docs/reviews/V2L16-physical-surface-v2m2-review.md
   V2M3: {status: pending, reviewed_at: null, evidence: []}
   V2M4: {status: pending, reviewed_at: null, evidence: []}
   V2M5: {status: pending, reviewed_at: null, evidence: []}
