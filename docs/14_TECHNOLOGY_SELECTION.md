@@ -38,15 +38,31 @@ Every serious candidate is scored separately on relevant dimensions:
 
 A single weighted score can help route selection, but never replaces the dimension vector.
 
-## Hardware portability rule
+## Hardware portability and scientific-ranking rule
 
-Technology selection must distinguish **mandatory product routes** from **optional accelerated specialists**.
+Technology selection must distinguish **scientific/quality merit** from **execution eligibility and product portability**. These are separate axes.
+
+Scientific candidate evaluation is hardware-independent:
+
+- Candidate quality/merit must be evaluated against the relevant geometry, camera, visual, temporal, robustness and failure dimensions without penalizing a method merely because current WRE development/CI hardware cannot execute it.
+- A candidate must not be rejected, demoted, omitted from the serious shortlist or treated as a failed benchmark solely because the current environment lacks the GPU/CUDA/NPU/accelerator it requires.
+- If required hardware is unavailable, the candidate remains eligible; its **local execution evidence** is recorded as **DEFERRED / UNVERIFIED**. Upstream/paper evidence may be recorded separately, but WRE must not fabricate local output or claim locally measured quality, latency, throughput, RAM/VRAM or reliability.
+- A GPU-only candidate may therefore remain the strongest scientific candidate for a data profile even while it is not currently executable on WRE's available hardware.
+
+Product portability is a separate requirement:
 
 - Every mandatory capability must retain at least one reviewed CPU route.
-- A GPU/CUDA/NPU-only candidate can be benchmarked and retained as a specialist, but it cannot become the only path required to complete a mandatory roadmap dependency.
-- A technology gate is allowed to conclude **NO-GO / deferred optional** when the strongest candidate fails the current baseline hardware contract. That is a valid gate result; do not force an adapter integration merely to satisfy a roadmap label.
+- A GPU/CUDA/NPU-only candidate can be benchmarked and retained as a quality or performance specialist, but it cannot become the only path required to complete a mandatory roadmap dependency.
+- A technology gate may conclude **NO-GO / deferred optional for mandatory-route integration** when the current baseline hardware contract cannot support that candidate. This is an integration/deployment decision, **not** a negative scientific ranking.
 - Accelerator availability is part of routing/resource evidence. Absence of the accelerator selects or preserves the CPU route rather than making the engine unusable.
 - When both CPU and accelerated routes exist, compare quality, latency, RAM/VRAM, energy/resource cost and failure behavior under the same WRE contract; acceleration alone is not a truth or default-promotion signal.
+
+Maintain two independent views in benchmark/registry reasoning whenever hardware matters:
+
+1. **Scientific/quality position** — how strong the method is on the relevant capability dimensions, independent of whether WRE can execute it locally today.
+2. **Executability/resource profile** — required hardware, VRAM/RAM, runtime, cost, maturity, license/deployment constraints and whether WRE has verified that route locally.
+
+The router may use the second view to decide where a candidate can run. It must not rewrite the first view merely because hardware is absent.
 
 ## Recommended benchmark modes
 
