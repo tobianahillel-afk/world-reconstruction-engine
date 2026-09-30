@@ -675,7 +675,7 @@ def test_result_records_reject_inconsistent_composition_and_support_state() -> N
     first = result.candidates[0]
     unknown = result.candidates[1]
 
-    with pytest.raises(ValueError, match="exact V2L16.3"):
+    with pytest.raises(ValueError, match=r"exact V2L16\.3"):
         replace(
             first,
             benchmark_record=replace(
