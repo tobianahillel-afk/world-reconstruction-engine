@@ -284,9 +284,7 @@ def _candidate(entry: dict[str, Any]) -> SurfaceBenchmarkCandidate:
     inspection = _inspection(surface, entry)
     support_raw = entry["support"]
     support_map = (
-        None
-        if support_raw is None
-        else _support_map(surface, cast(dict[str, Any], support_raw))
+        None if support_raw is None else _support_map(surface, cast(dict[str, Any], support_raw))
     )
     return SurfaceBenchmarkCandidate(
         inspection=inspection,
@@ -306,9 +304,7 @@ def _request() -> SurfaceBenchmarkRequest:
             sha256=Sha256Digest(_EXPECTED_FIXTURE_SHA256),
         ),
         hardware=HardwareRuntimeIdentity(
-            sha256=Sha256Digest(
-                hashlib.sha256(b"v2l16.6-controlled-cpu-locked-wre").hexdigest()
-            )
+            sha256=Sha256Digest(hashlib.sha256(b"v2l16.6-controlled-cpu-locked-wre").hexdigest())
         ),
         candidates=candidates,
     )
@@ -596,8 +592,7 @@ def test_negative_support_regions_and_identity_are_retained_exactly() -> None:
         SurfaceRegionSupportStatus.UNSUPPORTED,
     )
     assert tuple(
-        region.selector_artifact.artifact_id.value
-        for region in unsupported.support_regions or ()
+        region.selector_artifact.artifact_id.value for region in unsupported.support_regions or ()
     ) == (
         "selector:unsupported:facade",
         "selector:unsupported:ground",
@@ -732,9 +727,10 @@ def test_fixture_hash_retained_json_and_benchmark_are_deterministic(tmp_path: Pa
         for item in candidates
         if item["surface_model"]["artifact"]["artifact_id"] == "surface:candidate-unsupported"
     )
-    assert [
-        region["status"] for region in unsupported["support_annotation"]["regions"]
-    ] == ["unsupported", "unsupported"]
+    assert [region["status"] for region in unsupported["support_annotation"]["regions"]] == [
+        "unsupported",
+        "unsupported",
+    ]
 
     encoded = json.dumps(document, indent=2, sort_keys=True) + "\n"
     output = tmp_path / "physical-surface-controlled.json"
