@@ -144,6 +144,13 @@ from wre.domain.scene_clusters import (
     SceneRelationDisposition,
     SceneRelationHypothesis,
 )
+from wre.domain.source_photometry import (
+    SourceColorMetadata,
+    SourceExposureMetadata,
+    SourcePhotometryInterpretationStatus,
+    SourcePhotometryMetadata,
+    SourceWhiteBalanceMetadata,
+)
 from wre.domain.surface_support import (
     SURFACE_SUPPORT_MAP_ARTIFACT_KIND,
     SurfaceRegionSupportStatus,
@@ -271,8 +278,13 @@ __all__ = [
     "SceneRelationDisposition",
     "SceneRelationHypothesis",
     "Sha256Digest",
+    "SourceColorMetadata",
+    "SourceExposureMetadata",
     "SourceId",
+    "SourcePhotometryInterpretationStatus",
+    "SourcePhotometryMetadata",
     "SourceRef",
+    "SourceWhiteBalanceMetadata",
     "SparseReconstructionEstimate",
     "SparseReconstructionEstimateId",
     "SpatialFragment",
