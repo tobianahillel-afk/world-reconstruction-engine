@@ -33,9 +33,7 @@ class SurfaceSupportRegion:
         if not isinstance(self.selector_artifact, ArtifactRef):
             raise TypeError("surface_support_region.selector_artifact must be ArtifactRef")
         if not isinstance(self.status, SurfaceRegionSupportStatus):
-            raise TypeError(
-                "surface_support_region.status must be SurfaceRegionSupportStatus"
-            )
+            raise TypeError("surface_support_region.status must be SurfaceRegionSupportStatus")
 
 
 def _validate_regions(
@@ -48,15 +46,11 @@ def _validate_regions(
     if not regions:
         raise ValueError("surface_support_map.regions must be non-empty")
     if any(not isinstance(region, SurfaceSupportRegion) for region in regions):
-        raise TypeError(
-            "surface_support_map.regions members must be SurfaceSupportRegion"
-        )
+        raise TypeError("surface_support_map.regions members must be SurfaceSupportRegion")
 
     selector_keys = tuple(_artifact_key(region.selector_artifact) for region in regions)
     if len(selector_keys) != len(set(selector_keys)):
-        raise ValueError(
-            "surface_support_map.regions selector ArtifactRefs must be unique"
-        )
+        raise ValueError("surface_support_map.regions selector ArtifactRefs must be unique")
     if selector_keys != tuple(sorted(selector_keys)):
         raise ValueError(
             "surface_support_map.regions must use canonical selector ArtifactId/ArtifactKind order"
@@ -82,17 +76,14 @@ def _validate_source_artifacts(
     if not isinstance(source_artifacts, tuple):
         raise TypeError("surface_support_map.source_artifacts must be an immutable tuple")
     if any(not isinstance(item, ArtifactRef) for item in source_artifacts):
-        raise TypeError(
-            "surface_support_map.source_artifacts members must be ArtifactRef"
-        )
+        raise TypeError("surface_support_map.source_artifacts members must be ArtifactRef")
 
     identities = tuple(_artifact_key(item) for item in source_artifacts)
     if len(identities) != len(set(identities)):
         raise ValueError("surface_support_map.source_artifacts must be unique")
     if identities != tuple(sorted(identities)):
         raise ValueError(
-            "surface_support_map.source_artifacts must use canonical "
-            "ArtifactId/ArtifactKind order"
+            "surface_support_map.source_artifacts must use canonical ArtifactId/ArtifactKind order"
         )
 
     required = {
@@ -132,22 +123,18 @@ class SurfaceSupportMap:
             raise TypeError("surface_support_map.artifact_ref must be ArtifactRef")
         if self.artifact_ref.artifact_kind != SURFACE_SUPPORT_MAP_ARTIFACT_KIND:
             raise ValueError(
-                "surface_support_map.artifact_ref must use artifact kind "
-                "geometry.surface_support"
+                "surface_support_map.artifact_ref must use artifact kind geometry.surface_support"
             )
         if not isinstance(self.surface_model, SurfaceModel):
             raise TypeError("surface_support_map.surface_model must be SurfaceModel")
         if not isinstance(self.local_frame_id, LocalFrameId):
             raise TypeError("surface_support_map.local_frame_id must be LocalFrameId")
         if not isinstance(self.producer, ArtifactProducerIdentity):
-            raise TypeError(
-                "surface_support_map.producer must be ArtifactProducerIdentity"
-            )
+            raise TypeError("surface_support_map.producer must be ArtifactProducerIdentity")
 
         if self.local_frame_id != self.surface_model.local_frame_id:
             raise ValueError(
-                "surface_support_map.local_frame_id must exactly preserve SurfaceModel "
-                "LocalFrameId"
+                "surface_support_map.local_frame_id must exactly preserve SurfaceModel LocalFrameId"
             )
 
         _validate_regions(
