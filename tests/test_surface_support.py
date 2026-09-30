@@ -166,30 +166,41 @@ def _support_map(
     producer: ArtifactProducerIdentity | None = None,
 ) -> SurfaceSupportMap:
     retained_surface = surface or _surface(token)
-    retained_regions = regions or (
-        _region(f"{token}:a", status=SurfaceRegionSupportStatus.UNSUPPORTED),
-        _region(f"{token}:b", status=SurfaceRegionSupportStatus.HOLE),
+    retained_regions = (
+        regions
+        if regions is not None
+        else (
+            _region(f"{token}:a", status=SurfaceRegionSupportStatus.UNSUPPORTED),
+            _region(f"{token}:b", status=SurfaceRegionSupportStatus.HOLE),
+        )
     )
     retained_ref = artifact_ref or ArtifactRef(
         artifact_id=ArtifactId(f"surface-support:{token}"),
         artifact_kind=SURFACE_SUPPORT_MAP_ARTIFACT_KIND,
     )
-    expected_sources = tuple(
-        sorted(
-            (
-                retained_surface.artifact_ref,
-                *(region.selector_artifact for region in retained_regions),
-            ),
-            key=lambda item: (item.artifact_id.value, item.artifact_kind.value),
+    if source_artifacts is not None:
+        expected_sources = source_artifacts
+    elif isinstance(retained_regions, tuple) and all(
+        isinstance(region, SurfaceSupportRegion) for region in retained_regions
+    ):
+        expected_sources = tuple(
+            sorted(
+                (
+                    retained_surface.artifact_ref,
+                    *(region.selector_artifact for region in retained_regions),
+                ),
+                key=lambda item: (item.artifact_id.value, item.artifact_kind.value),
+            )
         )
-    )
+    else:
+        expected_sources = (retained_surface.artifact_ref,)
     return SurfaceSupportMap(
         artifact_ref=retained_ref,
         surface_model=retained_surface,
         local_frame_id=local_frame_id or retained_surface.local_frame_id,
         regions=retained_regions,
         producer=producer or _producer(f"support:{token}"),
-        source_artifacts=source_artifacts if source_artifacts is not None else expected_sources,
+        source_artifacts=expected_sources,
     )
 
 
