@@ -246,6 +246,4 @@ class SourcePhotometryMetadata:
         ):
             foreign = tuple(entry for entry in evidence if entry not in source_entries)
             if foreign:
-                raise ValueError(
-                    f"{context}.evidence must come from source_metadata.raw_entries"
-                )
+                raise ValueError(f"{context}.evidence must come from source_metadata.raw_entries")
