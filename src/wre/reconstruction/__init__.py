@@ -359,6 +359,14 @@ from wre.reconstruction.open3d_surface import (
     Open3dTsdfSurfaceConfig,
     inspect_open3d_surface_environment,
 )
+from wre.reconstruction.surface_benchmark import (
+    SurfaceBenchmarkCandidate,
+    SurfaceBenchmarkRequest,
+    SurfaceBenchmarkResult,
+    SurfaceCandidateBenchmarkResult,
+    SurfaceSupportAnnotationState,
+    benchmark_surface_candidates,
+)
 from wre.reconstruction.surface_suitability import (
     BOUNDARY_EDGE_RATIO_DESCRIPTOR,
     CONNECTED_COMPONENT_COUNT_DESCRIPTOR,
@@ -538,6 +546,11 @@ __all__ = [
     "SUPPORTED_COLMAP_VERSION",
     "SUPPORTED_PYCOLMAP_VERSION",
     "SURFACE_SUITABILITY_EVALUATOR",
+    "SurfaceBenchmarkCandidate",
+    "SurfaceBenchmarkRequest",
+    "SurfaceBenchmarkResult",
+    "SurfaceCandidateBenchmarkResult",
+    "SurfaceSupportAnnotationState",
     "TRANSLATION_PAIR_COVERAGE_DESCRIPTOR",
     "VALID_CONFIDENCE_MEAN_DESCRIPTOR",
     "VALID_PIXEL_RATIO_DESCRIPTOR",
@@ -649,6 +662,7 @@ __all__ = [
     "SurfaceSuitabilityReport",
     "benchmark_da3_execution",
     "benchmark_dense_depth_candidates",
+    "benchmark_surface_candidates",
     "build_depth_consistency_fusion_result",
     "build_geometry_refinement_result",
     "build_hybrid_surface_candidate_result",
