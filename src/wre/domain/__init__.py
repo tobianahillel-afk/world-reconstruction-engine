@@ -82,6 +82,13 @@ from wre.domain.metadata import (
     GpsMetadataInterpretation,
     ObservationMetadataInterpretation,
 )
+from wre.domain.source_photometry import (
+    SourceColorMetadata,
+    SourceExposureMetadata,
+    SourcePhotometryInterpretationStatus,
+    SourcePhotometryMetadata,
+    SourceWhiteBalanceMetadata,
+)
 from wre.domain.metrics import (
     MetricAggregation,
     MetricDescriptor,
@@ -271,8 +278,13 @@ __all__ = [
     "SceneRelationDisposition",
     "SceneRelationHypothesis",
     "Sha256Digest",
+    "SourceColorMetadata",
+    "SourceExposureMetadata",
     "SourceId",
+    "SourcePhotometryInterpretationStatus",
+    "SourcePhotometryMetadata",
     "SourceRef",
+    "SourceWhiteBalanceMetadata",
     "SparseReconstructionEstimate",
     "SparseReconstructionEstimateId",
     "SpatialFragment",
