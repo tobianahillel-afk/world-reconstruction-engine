@@ -21,6 +21,11 @@ from wre.domain.artifact_materialization import (
     ArtifactMaterializationVerificationStatus,
 )
 from wre.domain.artifact_metadata import ArtifactMetadata
+from wre.domain.appearance import (
+    APPEARANCE_MODEL_ARTIFACT_KIND,
+    AppearanceModel,
+    AppearanceRepresentationName,
+)
 from wre.domain.artifacts import ArtifactId, ArtifactKind, ArtifactRef
 from wre.domain.benchmarks import (
     BenchmarkFixtureId,
@@ -208,6 +213,7 @@ from wre.domain.temporal_groups import (
 )
 
 __all__ = [
+    "APPEARANCE_MODEL_ARTIFACT_KIND",
     "ARTIFACT_KEY_SCHEMA_VERSION",
     "DECODED_IMAGE_PYRAMID_KIND",
     "LINEAR_SRGB_F64",
@@ -232,6 +238,8 @@ __all__ = [
     "ArtifactMetadata",
     "ArtifactProducerIdentity",
     "ArtifactRef",
+    "AppearanceModel",
+    "AppearanceRepresentationName",
     "BenchmarkFixtureId",
     "BenchmarkFixtureIdentity",
     "BenchmarkRecord",
