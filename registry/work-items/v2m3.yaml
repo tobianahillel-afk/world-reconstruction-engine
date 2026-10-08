@@ -4,7 +4,7 @@ work_items:
   - id: V2L17.1
     lot: V2L17
     title: Source color exposure metadata contract
-    status: ready
+    status: done
     objective: Define one pure immutable solver-independent source-photometry metadata contract over an exact ObservationMetadata record so declared source-color evidence exposure capture hints and white-balance hints can be represented with explicit absent unknown invalid or resolved state without decoding pixels transforming color normalizing exposure or guessing missing metadata.
     allowed_scope:
       - src/wre/domain/source_photometry.py
@@ -75,7 +75,77 @@ work_items:
       - image-versus-video-frame identity regression proving the contract is observation-bound and does not infer photometric semantics from ObservationKind
       - module-surface regression proving filesystem network subprocess EXIF parser ffmpeg Pillow OpenCV colour-science LittleCMS NumPy torch image decode pixel transformation AppearanceModel V2L17.2 and routing behavior are absent
       - full fast CI and CodeQL
-  - {id: V2L17.2, lot: V2L17, title: Decode working output color convention layer, status: planned, depends_on: [V2L17.1]}
+  - id: V2L17.2
+    lot: V2L17
+    title: Decode working output color convention layer
+    status: ready
+    objective: Define and verify one auditable decoded-to-working-to-output color convention layer for existing RGB8 decoded observations with explicit supported input color evidence and explicit target semantics, while preserving unknown source declarations and prohibiting implicit conversion or photometric normalization.
+    allowed_scope:
+      - src/wre/domain/color_conventions.py
+      - src/wre/photometry/color_conventions.py and focused src/wre/photometry/__init__.py when needed for the reference path
+      - focused exports in src/wre/domain/__init__.py
+      - tests/test_color_conventions.py and tests/test_color_convention_reference.py
+      - focused adapter or dependency registry updates only if needed to record one verified reusable color-management reference library and its exact version/license
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry after implementation checks are green
+    out_of_scope:
+      - re-reading source EXIF or container metadata or reinterpreting unsupported raw photometry as resolved
+      - changing V2L17.1 source metadata evidence status or semantics
+      - silently treating rgb8_packed decoded pixel layout as sRGB Rec.709 linear-light or a known ICC profile
+      - guessing missing primaries transfer matrix range white point profile or decoded-pixel convention
+      - accepting a color-space conversion when source evidence is absent unknown invalid contradictory or unsupported
+      - mutating raw observations existing decoded-image pyramid bytes or source files
+      - exposure or white-balance normalization chromatic adaptation by default auto tone mapping clipping or saturation correction
+      - AppearanceModel material environment scene geometry routing quality decisions or V2L17.3 through V2L17.5 behavior
+      - implementing a custom general ICC color-management engine or claiming universal camera or gamut support
+    depends_on: [V2L17.1]
+    read_before:
+      - docs/00_START_HERE.md
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md
+      - registry/components.yaml
+      - registry/dependencies.yaml
+      - registry/work-items/v2m3.yaml
+      - PROJECT_STATE.yaml
+      - src/wre/domain/source_photometry.py
+      - src/wre/domain/decoded_images.py
+      - src/wre/domain/cameras.py
+      - src/wre/domain/observations.py
+      - src/wre/domain/artifacts.py
+      - src/wre/domain/__init__.py
+      - src/wre/ingestion/decoded_images.py
+      - tests/test_source_photometry.py
+      - tests/test_decoded_image_pyramids.py
+    reuse:
+      - exact SourcePhotometryMetadata and ObservationId evidence from V2L17.1 without modifying its interpretation or pretending the caller-supplied raw evidence has already been independently verified by a decoder
+      - existing DecodedImagePyramidManifest source asset hash observation identity pixel layout orientation policy and level descriptors
+      - existing provenance and artifact identity primitives for any derived reference-conversion materialization
+      - maintained color-management libraries and documented transfer semantics when actual conversion is required rather than a homegrown universal ICC engine; choose the smallest reproducible CPU reference path after checking exact source license runtime and test evidence
+    acceptance:
+      - Add frozen typed domain records that separately name source-declared color metadata decoded-pixel encoding working color convention and output color convention, plus explicit status for unsupported or unresolved transformations. Pixel byte layout alone must never imply a color encoding.
+      - Bind a conversion request to one existing DecodedImagePyramidManifest and SourcePhotometryMetadata with matching ObservationId. Preserve source observation hash and raw metadata evidence and reject mismatched image identity unsupported layout or conflicting declarations.
+      - Permit a resolved conversion only when source color convention and target working and output conventions are explicitly specified and mutually compatible under a reviewed reference conversion route. Missing contradictory or unsupported information must yield an explicit unresolved or rejected outcome, never an implicit sRGB Rec.709 D65 or linear default.
+      - Define a deterministic canonical conversion plan with explicit input and output conventions transform sequence backend identity precision and quantization assumptions. Changing any input evidence convention or backend configuration must change the declared provenance or conversion identity.
+      - Implement and test one bounded CPU reference conversion for a fully declared supported RGB8 source convention and explicit target convention using a verified maintained library when needed. Prove its numerical result against a small independent fixed-color fixture and reject unsupported transfer ICC matrix and range combinations instead of silently approximating them.
+      - Keep existing decoded-image pyramid files and SourcePhotometryMetadata immutable. If a converted buffer or artifact is emitted, give it a distinct output identity and complete source transform provenance rather than overwriting the RGB8 bytes or calling them radiance truth.
+      - The conversion boundary must not normalize ISO shutter aperture exposure compensation or white-balance gains; those remain distinct future V2L17.3 responsibilities.
+      - On green acceptance evidence mark only V2L17.2 done and activate V2L17.3 with a complete executable contract. Do not implement V2L17.3 in the V2L17.2 PR.
+    tests:
+      - immutable exact-shape enum state and strict type validation for every color convention record and conversion request
+      - observation hash identity and decoded pixel-layout mismatch failures plus unresolved unsupported contradictory source-declaration regressions
+      - no inferred sRGB Rec.709 D65 gamma range ICC or working/output default when metadata is absent
+      - explicit supported source working output convention fixture with deterministic reference conversion and independent numeric tolerances
+      - explicit rejection or unresolved results for ambiguous matrix range transfer white point ICC and unsupported source color evidence
+      - immutable input image and raw photometry evidence with distinct derived output identity when materializing
+      - precise backend version source license deterministic transform and configuration provenance identity regression
+      - no white-balance exposure normalization clipping mask tone mapping AppearanceModel geometry mutation or route policy
+      - full fast CI and any affected image decode or photometry reference lane
   - {id: V2L17.3, lot: V2L17, title: Exposure white balance normalization artifact, status: planned, depends_on: [V2L17.2]}
   - {id: V2L17.4, lot: V2L17, title: Clipping saturation incompatible camera handling, status: planned, depends_on: [V2L17.3]}
   - {id: V2L17.5, lot: V2L17, title: Photometric regression fixture, status: planned, depends_on: [V2L17.4]}
