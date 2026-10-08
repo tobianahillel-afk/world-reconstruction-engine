@@ -158,8 +158,14 @@ def test_rejects_unapproved_targets_backend_and_source_layout() -> None:
         transfer=ColorTransfer.LINEAR,
         storage=ColorSampleStorage.UINT8_RGB,
     )
-    assert assess_color_conversion(_request(working=srgb_float)).status is ColorConversionStatus.REJECTED
-    assert assess_color_conversion(_request(output=uint8_linear)).status is ColorConversionStatus.REJECTED
+    assert (
+        assess_color_conversion(_request(working=srgb_float)).status
+        is ColorConversionStatus.REJECTED
+    )
+    assert (
+        assess_color_conversion(_request(output=uint8_linear)).status
+        is ColorConversionStatus.REJECTED
+    )
     backend = replace(REFERENCE_COLOR_BACKEND, version="999.0.0")
     assert isinstance(backend, ColorReferenceBackend)
     assert (
