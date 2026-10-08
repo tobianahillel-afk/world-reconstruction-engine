@@ -170,24 +170,26 @@ The activation/review must check, as applicable:
 - whether a newer major dependency release materially improves WRE's required capability;
 - a stable baseline plus the strongest currently viable primary/specialist candidates.
 
-A candidate-refresh / technology gate may conclude **NO-GO / deferred optional**. This is the correct outcome when no reviewed external candidate satisfies a mandatory product constraint such as licensing, reproducibility, supported baseline hardware or exact checkpoint availability. Do not force an integration merely because the roadmap item was originally named after an expected candidate.
+A candidate-refresh / technology gate may conclude **NO-GO / deferred optional**. This is the correct outcome when no reviewed external candidate satisfies a mandatory product constraint such as licensing, reproducibility, supported baseline hardware or exact checkpoint availability. Do not force an integration merely because the roadmap item was originally named after an expected candidate. A NO-GO/deferred result describes **current integration eligibility for that route**, not the candidate's scientific merit.
 
-For mandatory product capabilities, CPU-only portability is part of the baseline hardware contract. Accelerator-only candidates may remain registered benchmark/specialist work, but their absence must not block later mandatory work when an accepted CPU route already satisfies the capability contract. A later explicit work item may revisit the deferred accelerator candidate when hardware and evidence become available.
+For mandatory product capabilities, CPU-only portability is part of the baseline hardware contract. Accelerator-only candidates may remain registered benchmark/specialist work, including as the strongest scientific/quality candidate for a profile, but their absence must not block later mandatory work when an accepted CPU route already satisfies the capability contract. CPU portability and scientific ranking are independent concerns. A later explicit work item may revisit the deferred accelerator candidate when hardware and evidence become available.
 
 ### Unavailable accelerator evidence
 
-When a work item contains evidence that can only be produced on unavailable GPU/accelerator hardware, that evidence may be **deferred without being treated as passed** so CPU-independent downstream work can continue. This exception is hardware-specific and does not weaken ordinary acceptance criteria.
+When a work item contains evidence that can only be produced on unavailable GPU/accelerator hardware, that evidence may be **deferred without being treated as passed or failed** so CPU-independent downstream work can continue. Hardware unavailability itself is not a negative benchmark datum and must not demote or remove the candidate from the scientific shortlist. This exception is hardware-specific and does not weaken ordinary acceptance criteria.
 
 Deferral is allowed only when all of the following are true:
 
 - the solver-independent contract and every CPU-verifiable implementation/test for the item are complete and green;
 - the missing evidence is strictly accelerator-execution evidence, not a missing semantic, format, provenance, correctness or CPU-baseline test;
-- the accelerator route remains experimental/optional and is not promoted to the mandatory CPU path, shipping default or benchmark winner;
+- the candidate remains eligible in scientific/quality comparison; only its local accelerator execution evidence is `DEFERRED / UNVERIFIED`;
+- unavailable hardware is recorded in the executability/resource profile, not converted into a quality penalty, failed score or reason to omit the method from the candidate landscape;
+- the accelerator route remains experimental/optional and is not promoted to the mandatory CPU path, shipping default or locally evidenced benchmark winner;
 - the exact dependency/configuration and a dedicated retained accelerator workflow remain recorded so the deferred proof can be executed later without reinterpretation;
 - project state and the work-item contract explicitly say that accelerator execution is **deferred/unverified**, including which claims remain prohibited;
 - any later shipping/default/performance decision that actually depends on the accelerator must still wait for the real hardware evidence.
 
-Never rewrite a deferred accelerator test as successful, synthesize output, substitute a CPU simulation for GPU execution, or use deferral to bypass a missing mandatory CPU capability.
+Never rewrite a deferred accelerator test as successful, synthesize output, substitute a CPU simulation for GPU execution, use hardware absence as evidence that the candidate is scientifically worse, or use deferral to bypass a missing mandatory CPU capability.
 
 A dependency is **not** upgraded merely because a larger version number exists. Keeping an older pinned version requires a concrete reproducibility, platform, licensing or integration rationale when a materially newer viable release exists.
 

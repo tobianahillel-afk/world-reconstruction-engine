@@ -42,6 +42,8 @@ GPU, CUDA, NPU or other accelerator-specific adapters may improve latency, throu
 
 If no reviewed candidate for an optional specialist can run on the available hardware, the technology gate may explicitly defer that candidate without fabricating support or blocking a CPU-capable baseline. Quality/resource differences must remain visible in benchmark and routing evidence.
 
+CPU portability is orthogonal to scientific candidate quality. A GPU/NPU/accelerator-only method may still be the strongest quality candidate for a profile. Lack of that hardware in current WRE development or CI must not lower its scientific standing, remove it from the candidate pool or turn missing local evidence into a failed benchmark. Its local execution evidence remains `DEFERRED / UNVERIFIED` until compatible hardware is available, and no local performance or quality claim may be made without that execution. Hardware/resource requirements are recorded separately and determine where the router can execute a candidate, not how scientifically strong that candidate is.
+
 ## Quality ambition
 
 WRE is designed to be best-in-class at the integrated-system level. It does not assume one internal model can outperform every specialist research system on every benchmark. Instead it combines, routes and evaluates specialist methods so that the complete product can optimize the real trade space:

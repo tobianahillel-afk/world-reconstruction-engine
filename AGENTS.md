@@ -66,6 +66,7 @@ For performance-sensitive work, also consult `docs/28_PERFORMANCE_OPTIMIZATION_P
 - **Preserve provenance class.** Reconstructed/observed, inferred and generated content must remain distinguishable.
 - Generated completion may improve REALISTIC/CINEMATIC outputs but must not silently become reconstructed reality.
 - **Route by data profile.** Sparse photos, large unordered collections, short dynamic videos, long streams, 360 capture, drone footage, multi-camera events and historical media may use different methods.
+- **Separate scientific merit from hardware availability.** A candidate must not be rejected, demoted or omitted from scientific/quality evaluation solely because the current development or CI environment lacks the GPU/NPU/accelerator it needs. When required hardware is unavailable, keep the candidate eligible, mark local execution evidence `DEFERRED / UNVERIFIED`, record upstream/paper evidence separately, and make no unmeasured local quality/performance claim. CPU portability is a separate product-routing requirement, not an algorithm-quality ranking criterion.
 - PREVIEW/FAST/QUALITY/MASTER may spend different compute and use different specialist methods; their outputs must retain route/model/configuration/quality metadata.
 - Quality must be measured per relevant dimension: geometry, cameras, rendering, temporal consistency, latency/resources and runtime performance are not collapsed into one misleading metric.
 - Failed quality gates may retry, escalate, use a registered specialist fallback or remain unresolved.

@@ -50,6 +50,39 @@ jobs:
       - name: Resolve exact reviewed native environment
         run: |
           raw="$RUNNER_TEMP/gluemap-micromamba-raw.json"
+          # Pin the complete already-reviewed conda solve, not just top-level
+          # requirements. Unpinned transitive package updates must not silently
+          # replace accepted build identities in a later CI run.
+          mapfile -t exact_builds < <(python3 - "$LOCK_PATH" <<'PY'
+          import json
+          import re
+          import sys
+          from pathlib import Path
+
+          manifest = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          assert manifest["schema_version"] == 1
+          assert manifest["target_platform"] == "linux-64"
+          assert manifest["virtual_packages"] == {"__cuda": "12.4"}
+          packages = manifest["packages"]
+          assert len(packages) >= 100
+          names = set()
+          for package in packages:
+              name = package["name"]
+              version = package["version"]
+              build = package["build_string"]
+              for part in (name, version, build):
+                  if not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.+!*~-]*", part):
+                      raise SystemExit(f"unsafe exact package constraint: {part!r}")
+              if name in names or not package.get("sha256"):
+                  raise SystemExit(f"duplicate or unhashed exact build: {name}")
+              names.add(name)
+              print(f"{name}={version}={build}")
+          PY
+          )
+          if test "${#exact_builds[@]}" -lt 100; then
+            echo "Reviewed GLUEMAP package lock could not be loaded" >&2
+            exit 1
+          fi
           set +e
           env -u CONDARC micromamba create --name wre-gluemap-lock --platform linux-64 --override-channels --channel conda-forge --strict-channel-priority --no-rc --dry-run --json \
             "python=3.12.12" "numpy=2.4.3" "pip" "cmake>=3.18" "ninja" "pkg-config" "pybind11>=3.0" "scikit-build-core=1.0.3=pyh04d0eab_0" "clangxx" \
@@ -59,7 +92,8 @@ jobs:
             "fsspec=2026.7.0=pyhd8ed1ab_0" "networkx=3.6.1" "pillow=12.2.0" "scipy=1.17.1" "tqdm=4.67.3" "einops=0.8.2" \
             "imagesize=2.0.0" "safetensors=0.7.0" "huggingface_hub=1.12.0" \
             "filelock=4.0.3=pyhd8ed1ab_0" "libexpat=2.8.4=hd2095e1_0" \
-            "importlib-resources=7.1.0=pyhd8ed1ab_0" "importlib_resources=7.1.0=pyhd8ed1ab_0" "zipp=4.1.0=pyhcf101f3_0" > "$raw"
+            "importlib-resources=7.1.0=pyhd8ed1ab_0" "importlib_resources=7.1.0=pyhd8ed1ab_0" "zipp=4.1.0=pyhcf101f3_0" \
+            "${exact_builds[@]}" > "$raw"
           status=$?
           set -e
           cat "$raw"
