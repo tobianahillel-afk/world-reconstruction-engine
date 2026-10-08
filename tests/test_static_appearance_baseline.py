@@ -286,7 +286,7 @@ def test_preflight_has_no_trainer_execution_or_optional_framework_import() -> No
             imported.update(value.name.split(".")[0] for value in node.names)
         elif isinstance(node, ast.ImportFrom) and node.module is not None:
             imported.add(node.module.split(".")[0])
-    assert imported <= {"__future__", "hashlib", "struct", "zlib", "dataclasses", "pathlib", "wre"}
+    assert imported <= {"__future__", "hashlib", "json", "struct", "zlib", "dataclasses", "pathlib", "wre"}
     assert not {"torch", "gsplat", "numpy", "subprocess", "pycolmap"} & imported
 
 
