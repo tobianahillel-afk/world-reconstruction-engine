@@ -208,19 +208,16 @@ def test_plan_is_deterministic_provenance_bound_and_immutable() -> None:
     first = assess_color_conversion(req)
     second = assess_color_conversion(req)
     assert first.status is ColorConversionStatus.READY
-    assert first.plan is not None
-    assert first.plan == second.plan
-    assert first.plan.identity == second.plan.identity
-    assert len(first.plan.steps) == 2
+    first_plan = first.plan
+    second_plan = second.plan
+    assert first_plan is not None
+    assert second_plan is not None
+    assert first_plan == second_plan
+    assert first_plan.identity == second_plan.identity
+    assert len(first_plan.steps) == 2
     with pytest.raises(FrozenInstanceError):
-        first.plan.identity = Sha256Digest("1" * 64)  # type: ignore[misc]
-    assert (
-        assess_color_conversion(_request(source_hash=Sha256Digest("b" * 64))).plan.identity
-        != first.plan.identity
-    )  # type: ignore[union-attr]
-    assert assess_color_conversion(_request(pixels=bytes(reversed(BYTES)))).plan.identity != (
-        first.plan.identity  # type: ignore[union-attr]
-    )
+        first_plan.identity = Sha256Digest("1" * 64)  # type: ignore[misc]
+
     source = req.source_photometry
     alternative = SourcePhotometryMetadata(
         observation_id=source.observation_id,
@@ -233,7 +230,12 @@ def test_plan_is_deterministic_provenance_bound_and_immutable() -> None:
         ),
         white_balance=source.white_balance,
     )
-    assert (
-        assess_color_conversion(replace(req, source_photometry=alternative)).plan.identity
-        != first.plan.identity
-    )  # type: ignore[union-attr]
+    changed_requests = (
+        _request(source_hash=Sha256Digest("b" * 64)),
+        _request(pixels=bytes(reversed(BYTES))),
+        replace(req, source_photometry=alternative),
+    )
+    for changed_request in changed_requests:
+        changed_plan = assess_color_conversion(changed_request).plan
+        assert changed_plan is not None
+        assert changed_plan.identity != first_plan.identity
