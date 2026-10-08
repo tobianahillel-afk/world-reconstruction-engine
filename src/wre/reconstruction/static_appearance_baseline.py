@@ -21,7 +21,21 @@ from wre.domain.artifact_materialization import (
     ArtifactMaterializationMetadata,
 )
 from wre.domain.artifacts import ArtifactRef
-from wre.domain.observations import ObservationId, Sha256Digest
+from wre.domain.color_conventions import (
+    ColorConversionStatus,
+    DecodedPixelColorEncoding,
+)
+from wre.domain.decoded_images import (
+    DecodedImageOrientationPolicy,
+    DecodedImagePixelLayout,
+)
+from wre.domain.observations import ObservationId, ObservationKind, Sha256Digest
+from wre.domain.photometric_normalization import PhotometricNormalizationStatus
+from wre.domain.photometric_validity import (
+    PhotometricCompatibilityAssessment,
+    PhotometricCompatibilityStatus,
+    assess_photometric_compatibility,
+)
 from wre.reconstruction.colmap_canonical_geometry import (
     CanonicalColmapSparseModel,
     _verified_native_model_path,
@@ -369,6 +383,93 @@ def verify_gsplat_static_appearance_native_geometry(
     return canonical
 
 
+def verify_gsplat_static_appearance_source_photometry(
+    request: StaticAppearanceCandidateRequest,
+    source: GsplatStaticAppearancePreflightSource,
+    assessments: tuple[PhotometricCompatibilityAssessment, ...],
+) -> tuple[Sha256Digest, ...]:
+    """Require exact V2L17 source-color evidence for every *unchanged* training PNG.
+
+    The pinned gsplat reference trainer reads the original PNG pixels, not V2L17
+    normalized linear-light buffers. Consequently this gate permits only identity
+    EV/RGB adjustments and a non-resized, source-orientation sRGB RGB8 declaration.
+    It does not assert equal scene radiance or calibrate exposure across cameras.
+    A later executable route must independently prove multi-view suitability.
+    """
+
+    verified = preflight_gsplat_static_appearance_inputs(request, source)
+    if not isinstance(assessments, tuple):
+        raise TypeError("gsplat photometric assessments must be an immutable tuple")
+    if len(assessments) != len(verified.images):
+        raise GsplatStaticAppearancePreflightError(
+            "each gsplat source observation requires one photometric assessment"
+        )
+
+    identities: list[Sha256Digest] = []
+    for image, assessment in zip(verified.images, assessments, strict=True):
+        if not isinstance(assessment, PhotometricCompatibilityAssessment):
+            raise TypeError(
+                "gsplat photometric evidence must be PhotometricCompatibilityAssessment"
+            )
+        if (
+            assessment != assess_photometric_compatibility(assessment.compatibility_input)
+            or assessment.status is not PhotometricCompatibilityStatus.COMPATIBLE
+        ):
+            raise GsplatStaticAppearancePreflightError(
+                "gsplat source photometry is unresolved, incompatible or inconsistent"
+            )
+
+        color = assessment.compatibility_input.color_assessment
+        normalization = assessment.compatibility_input.normalization_assessment
+        if (
+            color.status is not ColorConversionStatus.READY
+            or color.plan is None
+            or normalization.status is not PhotometricNormalizationStatus.READY
+            or normalization.plan is None
+        ):
+            raise GsplatStaticAppearancePreflightError(
+                "gsplat source photometry requires ready V2L17 plans"
+            )
+
+        decoded = color.request
+        manifest = decoded.decoded_manifest
+        if (
+            manifest.source_observation_id != image.observation_id
+            or manifest.source_asset_sha256 != image.sha256
+            or manifest.source_kind is not ObservationKind.IMAGE
+        ):
+            raise GsplatStaticAppearancePreflightError(
+                "gsplat photometric evidence does not identify the exact source PNG"
+            )
+        if (
+            manifest.orientation_policy is not DecodedImageOrientationPolicy.SOURCE_PIXELS
+            or manifest.pixel_layout is not DecodedImagePixelLayout.RGB8_PACKED
+            or decoded.decoded_encoding is not DecodedPixelColorEncoding.SRGB_FULL_RGB8
+            or decoded.decoded_level_index != 0
+        ):
+            raise GsplatStaticAppearancePreflightError(
+                "gsplat source requires unrotated, original-level sRGB RGB8 evidence"
+            )
+        level = manifest.levels[0]
+        if (level.width_px, level.height_px) != (image.width_px, image.height_px):
+            raise GsplatStaticAppearancePreflightError(
+                "gsplat source photometry cannot silently resize or reorient PNG pixels"
+            )
+        factors = normalization.plan.request.factors
+        if factors.exposure_adjustment_ev != 0.0 or factors.white_balance_rgb_gains != (
+            1.0,
+            1.0,
+            1.0,
+        ):
+            raise GsplatStaticAppearancePreflightError(
+                "gsplat reference trainer reads raw PNG; non-identity V2L17 "
+                "normalization is not applied to those training bytes"
+            )
+        identities.append(assessment.identity)
+
+    return tuple(identities)
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class GsplatStaticAppearanceTrainingProfile:
     """Audited single-GPU overrides for the exact upstream reference trainer.
@@ -620,4 +721,5 @@ __all__ = [
     "materialize_verified_gsplat_ply",
     "preflight_gsplat_static_appearance_inputs",
     "verify_gsplat_static_appearance_native_geometry",
+    "verify_gsplat_static_appearance_source_photometry",
 ]
