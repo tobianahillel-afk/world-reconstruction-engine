@@ -83,7 +83,9 @@ class PhotometricValidityRequest:
         if source_request.decoded_manifest.source_observation_id != self.observation_id:
             raise ValueError("photometric_validity_request source observation identity disagrees")
         if source_request.source_photometry.observation_id != self.observation_id:
-            raise ValueError("photometric_validity_request photometry observation identity disagrees")
+            raise ValueError(
+                "photometric_validity_request photometry observation identity disagrees"
+            )
         if self.source_entry != source_request.decoded_level_entry:
             raise ValueError(
                 "photometric_validity_request source path byte length or digest disagrees"
@@ -381,7 +383,9 @@ def assess_photometric_compatibility(
     unresolved_reasons: list[str] = []
 
     if color_observation != normalization_observation:
-        incompatible_reasons.append("color and normalization evidence refer to different observations")
+        incompatible_reasons.append(
+            "color and normalization evidence refer to different observations"
+        )
     if normalization.request.source_plan.request != color.request:
         incompatible_reasons.append("normalization evidence is bound to a foreign color request")
 
