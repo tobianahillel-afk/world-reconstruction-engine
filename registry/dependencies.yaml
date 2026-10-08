@@ -874,6 +874,13 @@ dependencies:
     upstream_repository: nerfstudio-project/gsplat
     reference_training_path: examples/simple_trainer.py
     reference_training_git_blob_sha1: 6a30be737b5c9af53a140f64faf499d8d4d0933f
+    source_tree_sha1: 90c3f0b2352e6d2725bcba1ef0407168f922c0fa
+    reference_requirements_git_blob_sha1: ea0a940ea796e486aa68e8fc284ee01cb5a27662
+    reference_colmap_parser_git_blob_sha1: 6c21f2c663b60d9dc38471a9963a3b5d092e5ed2
+    reference_requirements_numpy: '<2.0.0'
+    reference_requirements_pycolmap_fork: rmbrualla/pycolmap@cc7ea4b7301720ac29287dbe450952511b32125e
+    reference_entrypoint_file_count: 10
+    reference_entrypoint_verification: local_exact_git_blob_preflight_only
     license: Apache-2.0
     license_review: pending
     notes: >-
@@ -882,7 +889,18 @@ dependencies:
       an approved execution profile or the standalone gsplat rasterizer alone.
       The official trainer uses external Torch/CUDA and example dataset, viewer,
       rendering and metrics imports that still need a complete exact wheel/source
-      and transitive license lock. Its COLMAP parser expects native sparse cameras
+      and transitive license lock. V2L18.3 now audits ten exact reviewed upstream
+      trainer-entrypoint/source files offline using their Git blob identities and
+      byte lengths, without importing packages or executing the trainer. This is
+      only a partial source-byte gate, not a full upstream tree, CUDA or license
+      closure. The exact official examples/requirements.txt at blob
+      ea0a940ea796e486aa68e8fc284ee01cb5a27662 requests numpy<2.0.0
+      and rmbrualla/pycolmap commit cc7ea4b7301720ac29287dbe450952511b32125e,
+      rather than the independent approved WRE PyCOLMAP 4.2.0 path.
+      Do not pip-install that floating/unreviewed example environment into WRE;
+      prove one separate exact solver/native Python/Torch/CUDA dependency lock
+      and the SceneManager API compatibility before any GPU run.
+      Its COLMAP parser expects native sparse cameras
       images tracks and colored points that cannot be reconstructed by inventing
       private information from a canonical geometry envelope. The default upstream
       world normalization and image downsampling cannot be used silently because WRE
