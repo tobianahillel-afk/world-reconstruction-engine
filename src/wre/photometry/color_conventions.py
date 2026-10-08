@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import math
 import struct
 from dataclasses import dataclass
 
@@ -17,13 +18,13 @@ from wre.domain.observations import Sha256Digest
 
 @dataclass(frozen=True, slots=True)
 class ConvertedLinearRgbBuffer:
-    """Distinct immutable float64 output with source and transform identities."""
+    """Distinct immutable packed float64 output with source and transform identities."""
 
     plan: ColorConversionPlan
     source_level_sha256: Sha256Digest
     content_sha256: Sha256Digest
     derived_sha256: Sha256Digest
-    channels: tuple[float, ...]
+    packed_rgb_f64_be: bytes
 
     def __post_init__(self) -> None:
         if not isinstance(self.plan, ColorConversionPlan):
@@ -31,26 +32,31 @@ class ConvertedLinearRgbBuffer:
         for name in ("source_level_sha256", "content_sha256", "derived_sha256"):
             if not isinstance(getattr(self, name), Sha256Digest):
                 raise TypeError(f"converted_color.{name} must be Sha256Digest")
-        if not isinstance(self.channels, tuple) or any(
-            type(value) is not float or not 0.0 <= value <= 1.0 for value in self.channels
-        ):
-            raise ValueError("converted_color.channels must be immutable normalized float64 values")
+        if type(self.packed_rgb_f64_be) is not bytes:
+            raise TypeError("converted_color.packed_rgb_f64_be must be immutable bytes")
+
         level = self.plan.request.decoded_manifest.levels[self.plan.request.decoded_level_index]
-        if len(self.channels) != level.width_px * level.height_px * 3:
-            raise ValueError("converted_color.channels do not match decoded dimensions")
+        expected_channels = level.width_px * level.height_px * 3
+        if len(self.packed_rgb_f64_be) != expected_channels * 8:
+            raise ValueError("converted_color packed buffer does not match decoded dimensions")
+        for (value,) in struct.iter_unpack("!d", self.packed_rgb_f64_be):
+            if not math.isfinite(value) or not 0.0 <= value <= 1.0:
+                raise ValueError(
+                    "converted_color packed buffer must contain finite normalized float64 values"
+                )
+
         if self.source_level_sha256 != self.plan.request.decoded_level_entry.sha256:
             raise ValueError("converted_color source level hash mismatch")
-        encoded = b"".join(struct.pack("!d", channel) for channel in self.channels)
-        content_digest = hashlib.sha256(encoded).hexdigest()
+        content_digest = hashlib.sha256(self.packed_rgb_f64_be).hexdigest()
         if self.content_sha256 != Sha256Digest(content_digest):
             raise ValueError("converted_color output content digest mismatch")
-        derived_digest = hashlib.sha256(
-            b"wre.color_conversion_result.v1\0"
-            + self.plan.identity.value.encode("ascii")
-            + b"\0"
-            + encoded
-        ).hexdigest()
-        if self.derived_sha256 != Sha256Digest(derived_digest):
+
+        derived_hasher = hashlib.sha256()
+        derived_hasher.update(b"wre.color_conversion_result.v1\0")
+        derived_hasher.update(self.plan.identity.value.encode("ascii"))
+        derived_hasher.update(b"\0")
+        derived_hasher.update(self.packed_rgb_f64_be)
+        if self.derived_sha256 != Sha256Digest(derived_hasher.hexdigest()):
             raise ValueError("converted_color derived identity mismatch")
 
 
@@ -86,21 +92,26 @@ def convert_rgb8_to_linear_reference(
     if Sha256Digest(hashlib.sha256(decoded_rgb8).hexdigest()) != entry.sha256:
         raise ValueError("decoded RGB8 bytes do not match the bound level digest")
 
-    channels = tuple(_srgb_to_linear(value) for value in decoded_rgb8)
-    encoded = b"".join(struct.pack("!d", value) for value in channels)
-    content_sha = Sha256Digest(hashlib.sha256(encoded).hexdigest())
-    derived_sha = Sha256Digest(
-        hashlib.sha256(
-            b"wre.color_conversion_result.v1\0"
-            + plan.identity.value.encode("ascii")
-            + b"\0"
-            + encoded
-        ).hexdigest()
-    )
+    packed_mutable = bytearray(len(decoded_rgb8) * 8)
+    offset = 0
+    for channel in decoded_rgb8:
+        struct.pack_into("!d", packed_mutable, offset, _srgb_to_linear(channel))
+        offset += 8
+    packed_rgb_f64_be = bytes(packed_mutable)
+    del packed_mutable
+
+    content_sha = Sha256Digest(hashlib.sha256(packed_rgb_f64_be).hexdigest())
+    derived_hasher = hashlib.sha256()
+    derived_hasher.update(b"wre.color_conversion_result.v1\0")
+    derived_hasher.update(plan.identity.value.encode("ascii"))
+    derived_hasher.update(b"\0")
+    derived_hasher.update(packed_rgb_f64_be)
+    derived_sha = Sha256Digest(derived_hasher.hexdigest())
+
     return ConvertedLinearRgbBuffer(
         plan=plan,
         source_level_sha256=entry.sha256,
         content_sha256=content_sha,
         derived_sha256=derived_sha,
-        channels=channels,
+        packed_rgb_f64_be=packed_rgb_f64_be,
     )
