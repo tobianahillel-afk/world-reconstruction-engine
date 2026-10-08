@@ -4,7 +4,7 @@ import ast
 import hashlib
 import struct
 import zlib
-from dataclasses import replace
+from dataclasses import FrozenInstanceError, replace
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -50,6 +50,7 @@ from wre.reconstruction.static_appearance_baseline import (
     GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION,
     GsplatStaticAppearancePreflightError,
     GsplatStaticAppearancePreflightSource,
+    GsplatStaticAppearanceTrainingProfile,
     preflight_gsplat_static_appearance_inputs,
 )
 from wre.reconstruction.static_appearance_candidate import StaticAppearanceCandidateRequest
@@ -285,5 +286,94 @@ def test_preflight_has_no_trainer_execution_or_optional_framework_import() -> No
             imported.update(value.name.split(".")[0] for value in node.names)
         elif isinstance(node, ast.ImportFrom) and node.module is not None:
             imported.add(node.module.split(".")[0])
-    assert imported <= {"__future__", "hashlib", "struct", "zlib", "dataclasses", "pathlib", "wre"}
+    assert imported <= {
+        "__future__",
+        "dataclasses",
+        "hashlib",
+        "json",
+        "pathlib",
+        "struct",
+        "wre",
+        "zlib",
+    }
     assert not {"torch", "gsplat", "numpy", "subprocess", "pycolmap"} & imported
+
+
+def test_safe_training_profile_disables_unsafe_upstream_defaults() -> None:
+    profile = GsplatStaticAppearanceTrainingProfile()
+    overrides = profile.reference_overrides()
+    assert profile.expected_ply_relative_path == "ply/point_cloud_29999.ply"
+    assert overrides["data_factor"] == 1
+    assert overrides["normalize_world_space"] is False
+    assert overrides["global_scale"] == 1.0
+    assert overrides["camera_model"] == "pinhole"
+    assert overrides["pose_opt"] is False
+    assert overrides["pose_noise"] == 0.0
+    assert overrides["disable_viewer"] is True
+    assert overrides["disable_video"] is True
+    assert overrides["ckpt"] is None
+    assert overrides["init_type"] == "sfm"
+    assert overrides["save_ply"] is True
+    assert overrides["ply_steps"] == [30_000]
+    assert overrides["eval_steps"] == []
+    assert overrides["save_steps"] == []
+    assert overrides["steps_scaler"] == 1.0
+    assert overrides["with_ut"] is False
+    assert overrides["app_opt"] is False
+    assert overrides["depth_loss"] is False
+    assert "data_dir" not in overrides
+    assert "result_dir" not in overrides
+
+
+def test_safe_training_profile_canonical_hash_and_source_identity() -> None:
+    profile = GsplatStaticAppearanceTrainingProfile(max_steps=400, test_every=4)
+    assert (
+        profile.configuration_sha256
+        == GsplatStaticAppearanceTrainingProfile(max_steps=400, test_every=4).configuration_sha256
+    )
+    assert (
+        profile.configuration_sha256
+        != GsplatStaticAppearanceTrainingProfile(max_steps=401, test_every=4).configuration_sha256
+    )
+    assert (
+        profile.configuration_sha256
+        != GsplatStaticAppearanceTrainingProfile(max_steps=400, test_every=5).configuration_sha256
+    )
+    assert profile.expected_ply_relative_path == "ply/point_cloud_399.ply"
+    document = profile.canonical_document()
+    assert document["trainer_source_revision"] == GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION
+    assert document["trainer_git_blob_sha1"] == "6a30be737b5c9af53a140f64faf499d8d4d0933f"
+    assert document["upstream_config_overrides"] == profile.reference_overrides()
+
+
+def test_safe_training_profile_is_immutable_and_returns_new_override_document() -> None:
+    profile = GsplatStaticAppearanceTrainingProfile(max_steps=100)
+    identity = profile.configuration_sha256
+    overrides = profile.reference_overrides()
+    overrides["normalize_world_space"] = True
+    ply_steps = overrides["ply_steps"]
+    assert isinstance(ply_steps, list)
+    ply_steps.append(123)
+    assert profile.reference_overrides()["normalize_world_space"] is False
+    assert profile.reference_overrides()["ply_steps"] == [100]
+    assert profile.configuration_sha256 == identity
+    with pytest.raises(FrozenInstanceError):
+        profile.max_steps = 10  # type: ignore[misc]
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "reason"),
+    (
+        ({"max_steps": 0}, "max_steps"),
+        ({"max_steps": True}, "max_steps"),
+        ({"max_steps": 1.5}, "max_steps"),
+        ({"test_every": 1}, "test_every"),
+        ({"test_every": True}, "test_every"),
+        ({"schema_version": 2}, "schema_version"),
+    ),
+)
+def test_safe_training_profile_refuses_invalid_parameters(
+    kwargs: dict[str, object], reason: str
+) -> None:
+    with pytest.raises(ValueError, match=reason):
+        GsplatStaticAppearanceTrainingProfile(**kwargs)  # type: ignore[arg-type]
