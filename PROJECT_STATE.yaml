@@ -4,22 +4,20 @@ project_name: World Reconstruction Engine
 roadmap_version: '2.0'
 phase: implementation
 milestone: V2M3
-lot: V2L17
-active_work_item: V2L17.5
+lot: V2L18
+active_work_item: V2L18.1
 status: ready
-last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5, V2L3.6, V2L4.1, V2L4.2, V2L4.3, V2L4.4, V2L4.5, V2L4.6, V2L5.1, V2L5.2, V2L5.3, V2L5.4, V2L5.5, V2L5.6, V2L6.1, V2L6.2, V2L6.3, V2L6.4, V2L6.5, V2L6.6, V2L7.1, V2L7.2, V2L7.3, V2L7.4, V2L7.5, V2L7.6, V2L8.1, V2L8.2, V2L8.3, V2L8.4, V2L8.5, V2L9.1, V2L9.2, V2L9.3, V2L9.4, V2L9.5, V2L10.1, V2L10.2, V2L10.3, V2L10.4, V2L10.5, V2L10.6, V2L11.1, V2L11.2, V2L11.3, V2L11.4, V2L11.5, V2L11.6, V2L12.1, V2L12.2, V2L12.3, V2L12.4, V2L12.5, V2L13.1, V2L13.2, V2L13.3, V2L13.4, V2L13.5, V2L13.6, V2L14.1, V2L14.2, V2L14.3, V2L14.4, V2L14.5, V2L14.6, V2L15.1, V2L15.2, V2L15.3, V2L15.4, V2L15.5, V2L15.6, V2L16.1, V2L16.2, V2L16.3, V2L16.4, V2L16.5, V2L16.6, V2L17.1, V2L17.2, V2L17.3, V2L17.4]
-last_merged_pr: 189
+last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5, V2L3.6, V2L4.1, V2L4.2, V2L4.3, V2L4.4, V2L4.5, V2L4.6, V2L5.1, V2L5.2, V2L5.3, V2L5.4, V2L5.5, V2L5.6, V2L6.1, V2L6.2, V2L6.3, V2L6.4, V2L6.5, V2L6.6, V2L7.1, V2L7.2, V2L7.3, V2L7.4, V2L7.5, V2L7.6, V2L8.1, V2L8.2, V2L8.3, V2L8.4, V2L8.5, V2L9.1, V2L9.2, V2L9.3, V2L9.4, V2L9.5, V2L10.1, V2L10.2, V2L10.3, V2L10.4, V2L10.5, V2L10.6, V2L11.1, V2L11.2, V2L11.3, V2L11.4, V2L11.5, V2L11.6, V2L12.1, V2L12.2, V2L12.3, V2L12.4, V2L12.5, V2L13.1, V2L13.2, V2L13.3, V2L13.4, V2L13.5, V2L13.6, V2L14.1, V2L14.2, V2L14.3, V2L14.4, V2L14.5, V2L14.6, V2L15.1, V2L15.2, V2L15.3, V2L15.4, V2L15.5, V2L15.6, V2L16.1, V2L16.2, V2L16.3, V2L16.4, V2L16.5, V2L16.6, V2L17.1, V2L17.2, V2L17.3, V2L17.4, V2L17.5]
+last_merged_pr: 190
 current_goal: >-
-  V2M3 photometric implementation is underway. V2L17.1 preserves source photometry evidence, V2L17.2 provides one fail-closed sRGB RGB8 to
-  linear-sRGB reference, V2L17.3 applies only explicit caller-supplied exposure and RGB gains, and V2L17.4 now adds separate immutable RGB8
-  endpoint-candidate masks normalized-above-one evidence and fail-closed compatibility assessment without repairing or routing observations.
-  Advance only V2L17.5 as the deterministic end-to-end photometric regression fixture and V2L17 lot review.
+  V2M3 now has a reviewed fail-closed photometric evidence substrate through V2L17. V2L18 begins the static photorealistic appearance layer while
+  preserving the product invariant that visual appearance is distinct from physical SurfaceModel geometry materials environment and runtime
+  representation. Advance only V2L18.1 as the pure canonical AppearanceModel metadata/provenance contract.
 next_action: >-
-  Implement only V2L17.5 under its complete registry/work-items/v2m3.yaml contract. Build one small checked-in deterministic CPU fixture that
-  composes the accepted V2L17.1 through V2L17.4 contracts, retains canonical machine-readable evidence for ready unresolved rejected and
-  incompatible cases, and proves source endpoints remain candidates rather than sensor-clipping truth while exact 1.0 is not over-range.
-  Add the V2L17 lot review only after the dedicated retained fixture evidence is green. Do not change production photometric semantics create
-  an AppearanceModel or implement V2L18.1 in the same PR.
+  Implement only V2L18.1 under its complete registry/work-items/v2m3.yaml contract. Define one immutable solver-independent AppearanceModel
+  envelope with an open representation token exact GeometrySolutionCandidate ancestry optional exact SurfaceModel support canonical source
+  ObservationId values exact LocalFrameId and GeometryScaleStatus producer identity and canonical source-artifact ancestry. Do not implement a
+  Gaussian/radiance solver renderer training path materials environment runtime compilation routing policy or V2L18.2 in the same PR.
 blockers: []
 architecture:
   product_blueprint: docs/01_PRODUCT.md
