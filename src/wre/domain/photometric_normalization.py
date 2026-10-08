@@ -39,9 +39,7 @@ class PhotometricNormalizationFactors:
             self.exposure_adjustment_ev is not None
             and type(self.exposure_adjustment_ev) is not float
         ):
-            raise TypeError(
-                "photometric_factors.exposure_adjustment_ev must be float or None"
-            )
+            raise TypeError("photometric_factors.exposure_adjustment_ev must be float or None")
         if self.white_balance_rgb_gains is not None:
             if not isinstance(self.white_balance_rgb_gains, tuple):
                 raise TypeError("photometric_factors.white_balance_rgb_gains must be tuple or None")
