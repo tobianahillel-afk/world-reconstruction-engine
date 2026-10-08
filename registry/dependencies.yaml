@@ -864,6 +864,35 @@ dependencies:
     license: MIT
     license_review: pending
     notes: Core/top-level license verified on 2026-09-15. Upstream COPYING documents a PSF-licensed source file and CC-BY-SA-4.0 test data; WRE must not assume bundled test/data artifacts share the MIT terms.
+  gsplat_static_appearance:
+    status: candidate_optional
+    role: [photorealistic_static_appearance, gaussian_splat_training]
+    integration: optional_exact_external_environment
+    version_policy: pin_exact_external_environment
+    pinned_version: 1.5.3
+    source_revision: 937e29912570c372bed6747a5c9bf85fed877bae
+    upstream_repository: nerfstudio-project/gsplat
+    reference_training_path: examples/simple_trainer.py
+    reference_training_git_blob_sha1: 6a30be737b5c9af53a140f64faf499d8d4d0933f
+    license: Apache-2.0
+    license_review: pending
+    notes: >-
+      V2L18.3's provisional first static appearance integration target is official
+      gsplat v1.5.3 plus its exact-source upstream simple_trainer reference; it is not
+      an approved execution profile or the standalone gsplat rasterizer alone.
+      The official trainer uses external Torch/CUDA and example dataset, viewer,
+      rendering and metrics imports that still need a complete exact wheel/source
+      and transitive license lock. Its COLMAP parser expects native sparse cameras
+      images tracks and colored points that cannot be reconstructed by inventing
+      private information from a canonical geometry envelope. The default upstream
+      world normalization and image downsampling cannot be used silently because WRE
+      must preserve exact local frame scale camera calibration photometry and
+      observation identities. Only an exact verified materialized dataset and
+      reviewed no-normalization no-pose-change local execution profile may enter an
+      experimental adapter, with one PLY output and content-addressed manifest.
+      No unreviewed checkpoint, default promotion, quality ranking or GPU result
+      is authorized. Hardware-dependent execution remains DEFERRED/UNVERIFIED
+      until an actual supported GPU fixture succeeds.
   nerfstudio:
     status: candidate_visualization
     role: [photorealistic_view_synthesis, nerf, gaussian_splat_visualization]
