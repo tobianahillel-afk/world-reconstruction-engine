@@ -359,6 +359,12 @@ from wre.reconstruction.open3d_surface import (
     Open3dTsdfSurfaceConfig,
     inspect_open3d_surface_environment,
 )
+from wre.reconstruction.static_appearance_candidate import (
+    StaticAppearanceCandidateAdapter,
+    StaticAppearanceCandidateRequest,
+    StaticAppearanceCandidateResult,
+    build_static_appearance_candidate_result,
+)
 from wre.reconstruction.surface_benchmark import (
     SurfaceBenchmarkCandidate,
     SurfaceBenchmarkRequest,
@@ -638,6 +644,10 @@ __all__ = [
     "GeometryRefinementResult",
     "GeometrySolutionCandidate",
     "GeometrySolutionPair",
+    "StaticAppearanceCandidateAdapter",
+    "StaticAppearanceCandidateRequest",
+    "StaticAppearanceCandidateResult",
+    "build_static_appearance_candidate_result",
     "HybridSurfaceCandidateAdapter",
     "HybridSurfaceCandidateRequest",
     "HybridSurfaceCandidateResult",
