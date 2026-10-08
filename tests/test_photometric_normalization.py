@@ -23,7 +23,6 @@ from wre.domain import (
     ObservationMetadata,
     PhotometricNormalizationBackend,
     PhotometricNormalizationFactors,
-    PhotometricNormalizationPlan,
     PhotometricNormalizationRequest,
     PhotometricNormalizationStatus,
     PhotometricNormalizationStep,
