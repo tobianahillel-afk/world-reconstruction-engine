@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from wre.domain.appearance import AppearanceRepresentationName
+from wre.domain.appearance import APPEARANCE_MODEL_ARTIFACT_KIND, AppearanceRepresentationName
 from wre.domain.artifacts import ArtifactId, ArtifactKind, ArtifactRef
 from wre.domain.camera_solutions import (
     CameraProjectionModelName,
@@ -51,6 +51,7 @@ from wre.reconstruction.static_appearance_baseline import (
     GsplatStaticAppearancePreflightError,
     GsplatStaticAppearancePreflightSource,
     GsplatStaticAppearanceTrainingProfile,
+    materialize_verified_gsplat_ply,
     preflight_gsplat_static_appearance_inputs,
 )
 from wre.reconstruction.static_appearance_candidate import StaticAppearanceCandidateRequest
@@ -291,6 +292,7 @@ def test_preflight_has_no_trainer_execution_or_optional_framework_import() -> No
         "dataclasses",
         "hashlib",
         "json",
+        "math",
         "pathlib",
         "struct",
         "wre",
@@ -377,3 +379,149 @@ def test_safe_training_profile_refuses_invalid_parameters(
 ) -> None:
     with pytest.raises(ValueError, match=reason):
         GsplatStaticAppearanceTrainingProfile(**kwargs)  # type: ignore[arg-type]
+
+
+def _gsplat_ply(*, properties: tuple[str, ...] | None = None, vertices: int = 1) -> bytes:
+    """Exact uncompressed gsplat exporter layout with finite float32 content."""
+    standard = (
+        "x",
+        "y",
+        "z",
+        "f_dc_0",
+        "f_dc_1",
+        "f_dc_2",
+        "f_rest_0",
+        "f_rest_1",
+        "f_rest_2",
+        "opacity",
+        "scale_0",
+        "scale_1",
+        "scale_2",
+        "rot_0",
+        "rot_1",
+        "rot_2",
+        "rot_3",
+    )
+    fields = properties or standard
+    header = (
+        "ply\n"
+        "format binary_little_endian 1.0\n"
+        f"element vertex {vertices}\n"
+        + "".join(f"property float {field}\n" for field in fields)
+        + "end_header\n"
+    ).encode("ascii")
+    payload = tuple(float(index + 1) for index in range(len(fields)))
+    return header + struct.pack("<" + "f" * len(payload), *payload) * vertices
+
+
+def _gsplat_output(
+    tmp_path: Path, data: bytes, *, steps: int = 20
+) -> tuple[Path, GsplatStaticAppearanceTrainingProfile, ArtifactRef]:
+    output = tmp_path / "output"
+    (output / "ply").mkdir(parents=True)
+    profile = GsplatStaticAppearanceTrainingProfile(max_steps=steps)
+    (output / profile.expected_ply_relative_path).write_bytes(data)
+    ref = ArtifactRef(ArtifactId("appearance:gsplat:fixture"), APPEARANCE_MODEL_ARTIFACT_KIND)
+    return output, profile, ref
+
+
+def test_gsplat_ply_materialization_hashes_real_output_and_retains_path(tmp_path: Path) -> None:
+    data = _gsplat_ply(vertices=2)
+    root, profile, ref = _gsplat_output(tmp_path, data)
+    result = materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
+    assert result.artifact_ref == ref
+    assert len(result.entries) == 1
+    assert result.entries[0].relative_path == "ply/point_cloud_19.ply"
+    assert result.entries[0].byte_length == len(data)
+    assert result.entries[0].sha256 == _digest(data)
+    assert (
+        materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
+        == result
+    )
+
+
+@pytest.mark.parametrize(
+    ("data", "reason"),
+    [
+        (b"not-ply\n", "not PLY"),
+        (
+            _gsplat_ply().replace(b"format binary_little_endian", b"format ascii"),
+            "uncompressed little-endian",
+        ),
+        (_gsplat_ply(vertices=0), "non-empty vertex"),
+        (
+            _gsplat_ply().replace(b"property float opacity", b"property double opacity"),
+            "unexpected element",
+        ),
+        (_gsplat_ply(properties=("x", "y", "z", "opacity")), "missing Gaussian"),
+        (_gsplat_ply().replace(b"f_rest_1", b"f_rest_2"), "property schema"),
+        (_gsplat_ply()[:-3], "truncated"),
+        (_gsplat_ply() + b"extra", "unexpected bytes"),
+    ],
+)
+def test_gsplat_ply_materialization_rejects_invalid_format_or_bytes(
+    tmp_path: Path, data: bytes, reason: str
+) -> None:
+    root, profile, ref = _gsplat_output(tmp_path, data)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match=reason):
+        materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
+
+
+def test_gsplat_ply_materialization_rejects_nonfinite_payload(tmp_path: Path) -> None:
+    data = bytearray(_gsplat_ply())
+    data[-4:] = struct.pack("<f", float("nan"))
+    root, profile, ref = _gsplat_output(tmp_path, bytes(data))
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="non-finite"):
+        materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
+
+
+def test_gsplat_ply_materialization_rejects_zero_gaussians_and_forged_header(
+    tmp_path: Path,
+) -> None:
+    data = _gsplat_ply(vertices=1).replace(b"element vertex 1", b"element vertex 0")
+    root, profile, ref = _gsplat_output(tmp_path, data)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="non-empty vertex"):
+        materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
+
+
+def test_gsplat_ply_materialization_rejects_symlink_and_wrong_artifact_kind(
+    tmp_path: Path,
+) -> None:
+    root, profile, ref = _gsplat_output(tmp_path, _gsplat_ply())
+    with pytest.raises(GsplatStaticAppearancePreflightError, match=r"appearance\.static"):
+        materialize_verified_gsplat_ply(
+            artifact_ref=ArtifactRef(ArtifactId("other"), ArtifactKind("geometry.input")),
+            output_root=root,
+            profile=profile,
+        )
+    expected = root / profile.expected_ply_relative_path
+    destination = tmp_path / "replacement.ply"
+    destination.write_bytes(expected.read_bytes())
+    expected.unlink()
+    expected.symlink_to(destination)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="missing"):
+        materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
+
+
+def test_gsplat_ply_materialization_refuses_missing_final_step_file(
+    tmp_path: Path,
+) -> None:
+    root, _profile, ref = _gsplat_output(tmp_path, _gsplat_ply(), steps=20)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="missing"):
+        materialize_verified_gsplat_ply(
+            artifact_ref=ref,
+            output_root=root,
+            profile=GsplatStaticAppearanceTrainingProfile(max_steps=21),
+        )
+
+
+def test_gsplat_ply_materialization_has_no_optional_training_import() -> None:
+    source = Path(__file__).parents[1] / "src/wre/reconstruction/static_appearance_baseline.py"
+    tree = ast.parse(source.read_text(encoding="utf-8"))
+    imported: set[str] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            imported.update(item.name.split(".")[0] for item in node.names)
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            imported.add(node.module.split(".")[0])
+    assert not {"torch", "gsplat", "numpy", "subprocess", "pycolmap", "PIL"} & imported
