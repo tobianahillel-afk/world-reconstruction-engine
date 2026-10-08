@@ -136,9 +136,7 @@ def _parts(
     scale: GeometryScaleStatus = GeometryScaleStatus.UNRESOLVED,
     with_surface: bool = False,
     representation: str = "radiance.static",
-) -> tuple[
-    StaticAppearanceCandidateRequest, AppearanceModel, ArtifactMaterializationMetadata
-]:
+) -> tuple[StaticAppearanceCandidateRequest, AppearanceModel, ArtifactMaterializationMetadata]:
     geometry = _geometry(value, scale=scale)
     surface = _surface(geometry, value=value) if with_surface else None
     supporting = (_artifact(f"support:{value}", "evidence.photometry"),)
@@ -296,10 +294,8 @@ def test_scale_frame_and_representation_remain_open_and_unchanged(
     )
     result = build_static_appearance_candidate_result(request, candidate, manifest)
     assert result.candidate.scale_status is scale
-    assert (
-        result.candidate.local_frame_id
-        is request.source_geometry.geometry_solution.local_frame_id
-    )
+    expected_frame = request.source_geometry.geometry_solution.local_frame_id
+    assert result.candidate.local_frame_id is expected_frame
     assert result.candidate.representation == AppearanceRepresentationName("future:appearance.v3")
     with pytest.raises(ValueError, match="LocalFrameId"):
         replace(candidate, local_frame_id=LocalFrameId("frame:elsewhere"))
@@ -321,12 +317,10 @@ def test_result_rejects_missing_extra_and_reordered_ancestry() -> None:
         is candidate
     )
 
+    excluded = set(request.supporting_artifacts)
+    without_support = tuple(item for item in candidate.source_artifacts if item not in excluded)
     for invalid in (
-        tuple(
-            item
-            for item in candidate.source_artifacts
-            if item not in request.supporting_artifacts
-        ),
+        without_support,
         _ordered(*candidate.source_artifacts, _artifact("artifact:surprise")),
     ):
         # A canonical AppearanceModel permits extra ancestry; the adapter boundary does not.
@@ -362,10 +356,13 @@ def test_result_rejects_candidate_request_materialization_mismatches() -> None:
     request, candidate, manifest = _parts("mismatch")
     other_req, other_candidate, _ = _parts("foreign")
     for bad in (
-        replace(candidate, source_geometry=other_req.source_geometry,
-                local_frame_id=other_req.source_geometry.geometry_solution.local_frame_id,
-                scale_status=other_req.source_geometry.geometry_solution.scale_status,
-                source_artifacts=other_req.source_geometry.source_artifacts),
+        replace(
+            candidate,
+            source_geometry=other_req.source_geometry,
+            local_frame_id=other_req.source_geometry.geometry_solution.local_frame_id,
+            scale_status=other_req.source_geometry.geometry_solution.scale_status,
+            source_artifacts=other_req.source_geometry.source_artifacts,
+        ),
         replace(candidate, source_observation_ids=(ObservationId("obs:other"),)),
         replace(candidate, representation=AppearanceRepresentationName("other")),
     ):
@@ -383,9 +380,7 @@ def test_result_rejects_candidate_request_materialization_mismatches() -> None:
         ),
     )
     with pytest.raises(ValueError, match="optional SurfaceModel"):
-        build_static_appearance_candidate_result(
-            request, complete_with_surface, manifest
-        )
+        build_static_appearance_candidate_result(request, complete_with_surface, manifest)
     with pytest.raises(ValueError, match="ArtifactRef"):
         build_static_appearance_candidate_result(
             request, candidate, replace(manifest, artifact_ref=other_candidate.artifact_ref)
@@ -401,21 +396,30 @@ def test_result_rejects_candidate_request_materialization_mismatches() -> None:
 
 def test_producer_payload_materialization_and_input_identity_are_not_modified() -> None:
     request, candidate, manifest = _parts("unchanged", with_surface=True)
-    saved = (request.source_geometry, request.source_surface, request.source_observation_ids,
-             request.supporting_artifacts, candidate.producer, candidate.source_artifacts,
-             manifest.entries)
+    saved = (
+        request.source_geometry,
+        request.source_surface,
+        request.source_observation_ids,
+        request.supporting_artifacts,
+        candidate.producer,
+        candidate.source_artifacts,
+        manifest.entries,
+    )
     result = build_static_appearance_candidate_result(request, candidate, manifest)
     assert result.candidate.producer is candidate.producer
     assert result.materialization is manifest
     assert result.candidate.artifact_ref.artifact_kind == APPEARANCE_MODEL_ARTIFACT_KIND
     assert (
-        request.source_geometry, request.source_surface, request.source_observation_ids,
-        request.supporting_artifacts, candidate.producer, candidate.source_artifacts,
-        manifest.entries
+        request.source_geometry,
+        request.source_surface,
+        request.source_observation_ids,
+        request.supporting_artifacts,
+        candidate.producer,
+        candidate.source_artifacts,
+        manifest.entries,
     ) == saved
     assert all(
-        isinstance(entry, ArtifactMaterializationEntry)
-        for entry in result.materialization.entries
+        isinstance(entry, ArtifactMaterializationEntry) for entry in result.materialization.entries
     )
 
 
@@ -428,9 +432,23 @@ def test_pure_module_has_no_runtime_solver_rendering_or_payload_io() -> None:
         if isinstance(node, ast.ImportFrom) and node.module:
             imports.add(node.module.split(".")[0])
     assert imports <= {"__future__", "dataclasses", "typing", "wre"}
-    for name in ("open(", "read_bytes(", "read_text(", "subprocess", "torch",
-                 "numpy", "cuda", "gsplat", "nerfstudio", "opensplat",
-                 "render(", "train(", "model_loader", "MasterScene", "RuntimeScene"):
+    for name in (
+        "open(",
+        "read_bytes(",
+        "read_text(",
+        "subprocess",
+        "torch",
+        "numpy",
+        "cuda",
+        "gsplat",
+        "nerfstudio",
+        "opensplat",
+        "render(",
+        "train(",
+        "model_loader",
+        "MasterScene",
+        "RuntimeScene",
+    ):
         assert name not in source
     assert set(module.__all__) == {
         "StaticAppearanceCandidateAdapter",
