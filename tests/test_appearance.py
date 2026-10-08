@@ -418,4 +418,6 @@ def test_module_has_no_solver_renderer_payload_runtime_or_generated_content() ->
     assert "EnvironmentModel" not in source
     assert "MasterScene" not in source
     assert "RuntimeScene" not in source
-    assert "generated-completion truth" in AppearanceModel.__doc__
+    docstring = AppearanceModel.__doc__
+    assert docstring is not None
+    assert "generated-completion truth" in docstring
