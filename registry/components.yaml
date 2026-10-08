@@ -310,13 +310,17 @@ components:
     implementation:
       - src/wre/domain/source_photometry.py
       - src/wre/domain/color_conventions.py
+      - src/wre/domain/photometric_normalization.py
       - src/wre/domain/__init__.py
       - src/wre/photometry/color_conventions.py
+      - src/wre/photometry/photometric_normalization.py
       - src/wre/photometry/__init__.py
     tests:
       - tests/test_source_photometry.py
       - tests/test_color_conventions.py
       - tests/test_color_convention_reference.py
+      - tests/test_photometric_normalization.py
+      - tests/test_photometric_normalization_reference.py
     status: implementing
   static_appearance: {owner_lot: V2L18, implementation: [], tests: [], status: planned}
   materials_environment: {owner_lot: V2L19, implementation: [], tests: [], status: planned}
