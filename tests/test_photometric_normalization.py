@@ -10,8 +10,17 @@ import pytest
 from wre.domain import (
     LINEAR_SRGB_F64,
     REFERENCE_PHOTOMETRIC_NORMALIZATION_BACKEND,
+    ArtifactId,
+    ArtifactInputFingerprint,
+    ArtifactKeyMaterial,
+    ArtifactKind,
     ArtifactMaterializationEntry,
+    ArtifactMaterializationMetadata,
+    ArtifactMetadata,
+    ArtifactProducerIdentity,
+    ArtifactRef,
     ColorConversionRequest,
+    ConfigurationIdentity,
     DecodedImageLevelDescriptor,
     DecodedImageOrientationPolicy,
     DecodedImagePixelLayout,
@@ -26,7 +35,10 @@ from wre.domain import (
     PhotometricNormalizationRequest,
     PhotometricNormalizationStatus,
     PhotometricNormalizationStep,
+    ProducerRef,
+    ProvenanceClass,
     RawMetadataEntry,
+    SceneProjectId,
     Sha256Digest,
     SourceColorMetadata,
     SourceExposureMetadata,
@@ -35,6 +47,7 @@ from wre.domain import (
     SourceWhiteBalanceMetadata,
     assess_color_conversion,
     assess_photometric_normalization,
+    derive_artifact_key,
 )
 from wre.photometry import ConvertedLinearRgbBuffer, convert_rgb8_to_linear_reference
 
@@ -113,15 +126,48 @@ def _source_case(
             ),
         ),
     )
+    artifact_ref = ArtifactRef(
+        artifact_id=ArtifactId("artifact:photometric-normalization-decoded"),
+        artifact_kind=ArtifactKind("media.decoded_image_pyramid"),
+    )
+    producer = ArtifactProducerIdentity(
+        producer=ProducerRef(implementation="test.decoded.photometric", version="1.0.0"),
+        configuration=ConfigurationIdentity(sha256=Sha256Digest("c" * 64)),
+    )
+    artifact = ArtifactMetadata(
+        project_id=SceneProjectId("project:photometric-normalization"),
+        artifact_ref=artifact_ref,
+        artifact_key=derive_artifact_key(
+            ArtifactKeyMaterial(
+                output_kind=artifact_ref.artifact_kind,
+                input_fingerprints=(
+                    ArtifactInputFingerprint(
+                        artifact_kind=ArtifactKind("image.observation"),
+                        sha256=manifest.source_asset_sha256,
+                    ),
+                ),
+                producer=producer,
+            )
+        ),
+        producer=producer,
+        provenance_class=ProvenanceClass.OBSERVED_RECONSTRUCTED,
+    )
+    materialization = ArtifactMaterializationMetadata(
+        artifact_ref=artifact_ref,
+        entries=(
+            ArtifactMaterializationEntry(
+                relative_path="levels/level-000000.rgb",
+                sha256=Sha256Digest(hashlib.sha256(pixels).hexdigest()),
+                byte_length=len(pixels),
+            ),
+        ),
+    )
     color_request = ColorConversionRequest(
         decoded_manifest=manifest,
+        decoded_artifact=artifact,
+        decoded_materialization=materialization,
         source_photometry=photometry,
         decoded_level_index=0,
-        decoded_level_entry=ArtifactMaterializationEntry(
-            relative_path="levels/level-000000.rgb",
-            sha256=Sha256Digest(hashlib.sha256(pixels).hexdigest()),
-            byte_length=len(pixels),
-        ),
         decoded_encoding=DecodedPixelColorEncoding.SRGB_FULL_RGB8,
         working_convention=LINEAR_SRGB_F64,
         output_convention=LINEAR_SRGB_F64,
