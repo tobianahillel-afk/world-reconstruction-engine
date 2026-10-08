@@ -5,6 +5,7 @@ import copy
 import hashlib
 import importlib.util
 import json
+import sys
 from dataclasses import FrozenInstanceError
 from pathlib import Path
 from types import ModuleType
@@ -46,6 +47,7 @@ def _load_runner() -> Any:
     if spec is None or spec.loader is None:
         raise RuntimeError("could not load V2L17.5 fixture runner")
     module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
 
