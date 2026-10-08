@@ -5,7 +5,7 @@ import hashlib
 import struct
 import zlib
 from dataclasses import replace
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import pytest
@@ -105,7 +105,7 @@ def _parts(
             mime_type="image/png",
         ),
         source=SourceRef(SourceId("source:frame")),
-        received_at=datetime(2026, 10, 8, tzinfo=timezone.utc),
+        received_at=datetime(2026, 10, 8, tzinfo=UTC),
     )
     input_image = ColmapReconstructionInput(
         observation=observation,
