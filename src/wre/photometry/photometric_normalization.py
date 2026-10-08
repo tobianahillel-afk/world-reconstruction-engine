@@ -110,7 +110,9 @@ def normalize_linear_rgb_reference(
         gain = gains[index % 3]
         normalized = value * plan.exposure_scale * gain
         if not math.isfinite(normalized) or normalized < 0.0:
-            raise ValueError("normalized channel is not representable as finite non-negative binary64")
+            raise ValueError(
+                "normalized channel is not representable as finite non-negative binary64"
+            )
         channels_list.append(normalized)
 
     channels = tuple(channels_list)
