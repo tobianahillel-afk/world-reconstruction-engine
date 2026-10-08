@@ -141,12 +141,8 @@ def _reviewed_source_fixture(
 
 
 def test_gsplat_reference_source_git_pins_are_the_reviewed_upstream_identity() -> None:
-    assert GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION == (
-        "937e29912570c372bed6747a5c9bf85fed877bae"
-    )
-    assert GSPLAT_STATIC_APPEARANCE_SOURCE_TREE == (
-        "90c3f0b2352e6d2725bcba1ef0407168f922c0fa"
-    )
+    assert GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION == ("937e29912570c372bed6747a5c9bf85fed877bae")
+    assert GSPLAT_STATIC_APPEARANCE_SOURCE_TREE == ("90c3f0b2352e6d2725bcba1ef0407168f922c0fa")
     pins = baseline_module._GSPLAT_REFERENCE_SOURCE_FILES
     assert len(pins) == 10
     assert tuple(path for path, _size, _sha in pins) == tuple(
