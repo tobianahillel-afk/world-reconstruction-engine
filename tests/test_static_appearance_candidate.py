@@ -124,7 +124,9 @@ def _surface(geometry: GeometrySolutionCandidate, *, value: str = "one") -> Surf
         local_frame_id=geometry.geometry_solution.local_frame_id,
         scale_status=geometry.geometry_solution.scale_status,
         producer=_producer(f"surface:{value}"),
-        source_artifacts=_ordered(*geometry.source_artifacts, _artifact(f"surface:evidence:{value}")),
+        source_artifacts=_ordered(
+            *geometry.source_artifacts, _artifact(f"surface:evidence:{value}")
+        ),
     )
 
 
@@ -279,7 +281,10 @@ def test_optional_surface_must_retain_complete_geometry_even_when_ids_match() ->
         replace(request, source_surface=other_frame)
 
     with pytest.raises(ValueError, match="exact source GeometrySolutionCandidate"):
-        replace(request, source_surface=_surface(_geometry("other-scale", scale=GeometryScaleStatus.METRIC)))
+        replace(
+            request,
+            source_surface=_surface(_geometry("other-scale", scale=GeometryScaleStatus.METRIC)),
+        )
 
 
 @pytest.mark.parametrize("scale", (GeometryScaleStatus.UNRESOLVED, GeometryScaleStatus.METRIC))
@@ -291,7 +296,10 @@ def test_scale_frame_and_representation_remain_open_and_unchanged(
     )
     result = build_static_appearance_candidate_result(request, candidate, manifest)
     assert result.candidate.scale_status is scale
-    assert result.candidate.local_frame_id is request.source_geometry.geometry_solution.local_frame_id
+    assert (
+        result.candidate.local_frame_id
+        is request.source_geometry.geometry_solution.local_frame_id
+    )
     assert result.candidate.representation == AppearanceRepresentationName("future:appearance.v3")
     with pytest.raises(ValueError, match="LocalFrameId"):
         replace(candidate, local_frame_id=LocalFrameId("frame:elsewhere"))
@@ -308,7 +316,10 @@ def test_result_rejects_missing_extra_and_reordered_ancestry() -> None:
     request, candidate, manifest = _parts("ancestry", with_surface=True)
     assert request.source_surface is not None
     assert len(candidate.source_artifacts) == 4
-    assert build_static_appearance_candidate_result(request, candidate, manifest).candidate is candidate
+    assert (
+        build_static_appearance_candidate_result(request, candidate, manifest).candidate
+        is candidate
+    )
 
     for invalid in (
         candidate.source_artifacts[:-1],
@@ -322,11 +333,15 @@ def test_result_rejects_missing_extra_and_reordered_ancestry() -> None:
     with pytest.raises(ValueError, match="canonical"):
         replace(candidate, source_artifacts=tuple(reversed(candidate.source_artifacts)))
     with pytest.raises(ValueError, match="unique"):
-        replace(candidate, source_artifacts=candidate.source_artifacts + candidate.source_artifacts[-1:])
+        replace(
+            candidate,
+            source_artifacts=candidate.source_artifacts + candidate.source_artifacts[-1:],
+        )
 
     same_id_different_kind = _artifact("appearance:ancestry", "model.other")
     request_with_support = replace(
-        request, supporting_artifacts=_ordered(*request.supporting_artifacts, same_id_different_kind)
+        request,
+        supporting_artifacts=_ordered(*request.supporting_artifacts, same_id_different_kind),
     )
     with pytest.raises(ValueError, match="canonical union"):
         build_static_appearance_candidate_result(request_with_support, candidate, manifest)
