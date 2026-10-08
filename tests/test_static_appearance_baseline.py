@@ -2,10 +2,9 @@ from __future__ import annotations
 
 import ast
 import hashlib
-from dataclasses import FrozenInstanceError
 import struct
 import zlib
-from dataclasses import replace
+from dataclasses import FrozenInstanceError, replace
 from datetime import UTC, datetime
 from pathlib import Path
 
