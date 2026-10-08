@@ -73,9 +73,7 @@ class GsplatStaticAppearancePreflightSource:
                 "gsplat input observations must be unique and sorted by ObservationId"
             )
         if len(names) != len(set(names)):
-            raise GsplatStaticAppearancePreflightError(
-                "gsplat input image names must be unique"
-            )
+            raise GsplatStaticAppearancePreflightError("gsplat input image names must be unique")
 
 
 @dataclass(frozen=True, slots=True)
@@ -245,17 +243,11 @@ def preflight_gsplat_static_appearance_inputs(
         camera = by_observation[item.observation.observation_id]
         name = item.image_name
         relative = PurePosixPath(name)
-        if (
-            len(relative.parts) != 1
-            or relative.name != name
-            or not name.lower().endswith(".png")
-        ):
+        if len(relative.parts) != 1 or relative.name != name or not name.lower().endswith(".png"):
             raise GsplatStaticAppearancePreflightError(
                 "baseline requires a safe single-level PNG image filename"
             )
-        if camera.projection_model.value != "pinhole" or len(
-            camera.intrinsic_parameters
-        ) != 4:
+        if camera.projection_model.value != "pinhole" or len(camera.intrinsic_parameters) != 4:
             raise GsplatStaticAppearancePreflightError(
                 "gsplat baseline supports only native undistorted PINHOLE cameras"
             )
@@ -285,10 +277,7 @@ def preflight_gsplat_static_appearance_inputs(
                 "source image size or SHA-256 differs from the original Observation"
             )
         width, height = _png_srgb_dimensions(data)
-        if (
-            width != camera.dimensions.width_px
-            or height != camera.dimensions.height_px
-        ):
+        if width != camera.dimensions.width_px or height != camera.dimensions.height_px:
             raise GsplatStaticAppearancePreflightError(
                 "image dimensions disagree with WRE camera calibration; no implicit resize"
             )
