@@ -220,6 +220,15 @@ def assess_color_conversion(
         )
 
     color = request.source_photometry.color
+    evidence_keys = {(entry.namespace, entry.key) for entry in color.evidence}
+    source_values_by_key: dict[tuple[str, str], set[str]] = {}
+    for entry in request.source_photometry.source_metadata.raw_entries:
+        key = (entry.namespace, entry.key)
+        if key in evidence_keys:
+            source_values_by_key.setdefault(key, set()).add(entry.value)
+    if any(len(values) > 1 for values in source_values_by_key.values()):
+        return rejected("source color evidence conflicts with bound raw metadata")
+
     if color.status in (
         SourcePhotometryInterpretationStatus.ABSENT,
         SourcePhotometryInterpretationStatus.UNKNOWN,
