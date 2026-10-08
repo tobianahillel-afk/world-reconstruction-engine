@@ -388,7 +388,6 @@ class GsplatStaticAppearanceTrainingProfile:
         return f"ply/point_cloud_{self.max_steps - 1}.ply"
 
 
-
 _MAX_GSPLAT_PLY_HEADER_BYTES = 16 * 1024
 _MAX_GSPLAT_PLY_PROPERTIES = 256
 _MAX_GSPLAT_PLY_VERTICES = 100_000_000
@@ -433,6 +432,7 @@ def materialize_verified_gsplat_ply(
 
     digest = hashlib.sha256()
     with file_path.open("rb") as stream:
+
         def read_header_line() -> str:
             raw = stream.readline(_MAX_GSPLAT_PLY_HEADER_BYTES + 1)
             if (
@@ -485,23 +485,20 @@ def materialize_verified_gsplat_ply(
                 raise GsplatStaticAppearancePreflightError(
                     "gsplat PLY contains an unexpected element, type or header field"
                 )
-            properties.append(line[len("property float "):])
+            properties.append(line[len("property float ") :])
             if len(properties) > _MAX_GSPLAT_PLY_PROPERTIES:
                 raise GsplatStaticAppearancePreflightError(
                     "gsplat PLY declares too many float properties"
                 )
 
         prefix = ["x", "y", "z", "f_dc_0", "f_dc_1", "f_dc_2"]
-        suffix = ["opacity", "scale_0", "scale_1", "scale_2",
-                  "rot_0", "rot_1", "rot_2", "rot_3"]
+        suffix = ["opacity", "scale_0", "scale_1", "scale_2", "rot_0", "rot_1", "rot_2", "rot_3"]
         if len(properties) < len(prefix) + len(suffix):
-            raise GsplatStaticAppearancePreflightError(
-                "gsplat PLY is missing Gaussian properties"
-            )
-        remainder = properties[len(prefix):-len(suffix)]
+            raise GsplatStaticAppearancePreflightError("gsplat PLY is missing Gaussian properties")
+        remainder = properties[len(prefix) : -len(suffix)]
         if (
-            properties[:len(prefix)] != prefix
-            or properties[-len(suffix):] != suffix
+            properties[: len(prefix)] != prefix
+            or properties[-len(suffix) :] != suffix
             or len(remainder) % 3 != 0
             or remainder != [f"f_rest_{index}" for index in range(len(remainder))]
         ):
@@ -523,9 +520,7 @@ def materialize_verified_gsplat_ply(
         while remaining:
             chunk = stream.read(min(remaining, stride * max(1, 4096 // stride)))
             if not chunk or len(chunk) % stride:
-                raise GsplatStaticAppearancePreflightError(
-                    "gsplat PLY vertex data is incomplete"
-                )
+                raise GsplatStaticAppearancePreflightError("gsplat PLY vertex data is incomplete")
             if any(not math.isfinite(value) for (value,) in struct.iter_unpack("<f", chunk)):
                 raise GsplatStaticAppearancePreflightError(
                     "gsplat PLY contains non-finite Gaussian parameters"
@@ -533,9 +528,7 @@ def materialize_verified_gsplat_ply(
             digest.update(chunk)
             remaining -= len(chunk)
         if stream.read(1):
-            raise GsplatStaticAppearancePreflightError(
-                "gsplat PLY contains trailing bytes"
-            )
+            raise GsplatStaticAppearancePreflightError("gsplat PLY contains trailing bytes")
     if file_path.stat().st_size != size:
         raise GsplatStaticAppearancePreflightError(
             "gsplat PLY changed during materialization verification"
