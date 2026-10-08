@@ -280,9 +280,7 @@ def test_request_and_compatibility_types_fail_closed() -> None:
         replace(request, source_entry=cast(Any, "levels/level-000000.rgb"))
 
     color_assessment = assess_color_conversion(request.source_plan.request)
-    normalization_assessment = assess_photometric_normalization(
-        request.normalization_plan.request
-    )
+    normalization_assessment = assess_photometric_normalization(request.normalization_plan.request)
     with pytest.raises(TypeError, match="color_assessment"):
         PhotometricCompatibilityInput(
             color_assessment=cast(Any, "ready"),
@@ -403,9 +401,7 @@ def test_mask_and_compatibility_identities_follow_complete_lineage() -> None:
     assert changed_lineage_mask.identity != mask.identity
 
     color_assessment = assess_color_conversion(color_request)
-    normalization_assessment = assess_photometric_normalization(
-        request.normalization_plan.request
-    )
+    normalization_assessment = assess_photometric_normalization(request.normalization_plan.request)
     first = assess_photometric_compatibility(
         PhotometricCompatibilityInput(
             color_assessment=color_assessment,
