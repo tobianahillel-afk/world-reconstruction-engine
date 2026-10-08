@@ -154,7 +154,9 @@ def _model(
         local_frame_id=local_frame_id
         if local_frame_id is not None
         else geometry.geometry_solution.local_frame_id,
-        scale_status=scale_status if scale_status is not None else geometry.geometry_solution.scale_status,
+        scale_status=(
+            scale_status if scale_status is not None else geometry.geometry_solution.scale_status
+        ),
         producer=_producer(token),
         source_artifacts=source_artifacts if source_artifacts is not None else default_ancestry,
     )
@@ -225,7 +227,7 @@ def test_rejects_wrong_field_types(
 
 
 def test_artifact_kind_is_exact_and_never_surface_kind() -> None:
-    with pytest.raises(ValueError, match="appearance.static"):
+    with pytest.raises(ValueError, match=r"appearance\\.static"):
         _model("wrong-kind", artifact_ref=_artifact("appearance:wrong", "geometry.surface"))
 
 
@@ -254,7 +256,9 @@ def test_local_frame_and_scale_preserve_source_geometry_exactly(
     assert model.scale_status is scale
 
     with pytest.raises(ValueError, match="LocalFrameId"):
-        _model("foreign-frame", source_geometry=geometry, local_frame_id=LocalFrameId("frame:alien"))
+        _model(
+            "foreign-frame", source_geometry=geometry, local_frame_id=LocalFrameId("frame:alien")
+        )
     other_scale = (
         GeometryScaleStatus.METRIC
         if scale is GeometryScaleStatus.UNRESOLVED
@@ -276,7 +280,9 @@ def test_optional_surface_requires_same_complete_geometry_and_exact_frame_scale(
 
     other = _geometry("foreign")
     with pytest.raises(ValueError, match="exact source geometry"):
-        _model("foreign-surface", source_geometry=geometry, source_surface=_surface("foreign", other))
+        _model(
+            "foreign-surface", source_geometry=geometry, source_surface=_surface("foreign", other)
+        )
 
     # Matching frame and scale alone do not establish identical geometry ancestry.
     alternative_solution = replace(
@@ -285,7 +291,11 @@ def test_optional_surface_requires_same_complete_geometry_and_exact_frame_scale(
     )
     alternate = replace(geometry, geometry_solution=alternative_solution)
     with pytest.raises(ValueError, match="exact source geometry"):
-        _model("foreign-same-frame", source_geometry=geometry, source_surface=_surface("other", alternate))
+        _model(
+            "foreign-same-frame",
+            source_geometry=geometry,
+            source_surface=_surface("other", alternate),
+        )
 
 
 def test_source_artifact_ancestry_is_complete_unique_canonical_and_non_aliasing() -> None:
