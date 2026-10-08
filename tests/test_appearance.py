@@ -227,7 +227,7 @@ def test_rejects_wrong_field_types(
 
 
 def test_artifact_kind_is_exact_and_never_surface_kind() -> None:
-    with pytest.raises(ValueError, match=r"appearance\\.static"):
+    with pytest.raises(ValueError, match=r"appearance\.static"):
         _model("wrong-kind", artifact_ref=_artifact("appearance:wrong", "geometry.surface"))
 
 
