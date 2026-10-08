@@ -456,9 +456,10 @@ def verify_gsplat_static_appearance_source_photometry(
                 "gsplat source photometry cannot silently resize or reorient PNG pixels"
             )
         factors = normalization.plan.request.factors
-        if (
-            factors.exposure_adjustment_ev != 0.0
-            or factors.white_balance_rgb_gains != (1.0, 1.0, 1.0)
+        if factors.exposure_adjustment_ev != 0.0 or factors.white_balance_rgb_gains != (
+            1.0,
+            1.0,
+            1.0,
         ):
             raise GsplatStaticAppearancePreflightError(
                 "gsplat reference trainer reads raw PNG; non-identity V2L17 "
