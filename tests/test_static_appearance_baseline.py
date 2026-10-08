@@ -771,9 +771,7 @@ def _gsplat_photo_assessment(
             declared_range="full",
             evidence=(declaration,),
         ),
-        exposure=SourceExposureMetadata(
-            status=SourcePhotometryInterpretationStatus.ABSENT
-        ),
+        exposure=SourceExposureMetadata(status=SourcePhotometryInterpretationStatus.ABSENT),
         white_balance=SourceWhiteBalanceMetadata(
             status=SourcePhotometryInterpretationStatus.ABSENT
         ),
@@ -868,9 +866,9 @@ def _gsplat_photo_assessment(
 def test_gsplat_photo_gate_requires_exact_ready_identity_evidence(tmp_path: Path) -> None:
     request, source = _parts(tmp_path)
     assessment = _gsplat_photo_assessment(source)
-    assert verify_gsplat_static_appearance_source_photometry(
-        request, source, (assessment,)
-    ) == (assessment.identity,)
+    assert verify_gsplat_static_appearance_source_photometry(request, source, (assessment,)) == (
+        assessment.identity,
+    )
     assert request.source_observation_ids == (ObservationId("obs:frame"),)
 
 
@@ -903,7 +901,9 @@ def test_gsplat_photo_gate_requires_complete_immutable_evidence(tmp_path: Path) 
         verify_gsplat_static_appearance_source_photometry(request, source, ())
     with pytest.raises(TypeError, match="PhotometricCompatibilityAssessment"):
         verify_gsplat_static_appearance_source_photometry(
-            request, source, ("compatible",)  # type: ignore[arg-type]
+            request,
+            source,
+            ("compatible",),  # type: ignore[arg-type]
         )
     assessment = _gsplat_photo_assessment(source)
     false_label = PhotometricCompatibilityAssessment(
@@ -912,6 +912,4 @@ def test_gsplat_photo_gate_requires_complete_immutable_evidence(tmp_path: Path) 
         reasons=("unverified",),
     )
     with pytest.raises(GsplatStaticAppearancePreflightError, match="unresolved"):
-        verify_gsplat_static_appearance_source_photometry(
-            request, source, (false_label,)
-        )
+        verify_gsplat_static_appearance_source_photometry(request, source, (false_label,))
