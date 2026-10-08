@@ -138,6 +138,16 @@ from wre.domain.photometric_normalization import (
     PhotometricNormalizationStep,
     assess_photometric_normalization,
 )
+from wre.domain.photometric_validity import (
+    PhotometricChannelMask,
+    PhotometricCompatibilityAssessment,
+    PhotometricCompatibilityInput,
+    PhotometricCompatibilityStatus,
+    PhotometricMaskKind,
+    PhotometricValidityMasks,
+    PhotometricValidityRequest,
+    assess_photometric_compatibility,
+)
 from wre.domain.point_maps import PointMap, PointMapId
 from wre.domain.producer_identity import (
     ArtifactProducerIdentity,
@@ -301,6 +311,13 @@ __all__ = [
     "PhotometricNormalizationRequest",
     "PhotometricNormalizationStatus",
     "PhotometricNormalizationStep",
+    "PhotometricChannelMask",
+    "PhotometricCompatibilityAssessment",
+    "PhotometricCompatibilityInput",
+    "PhotometricCompatibilityStatus",
+    "PhotometricMaskKind",
+    "PhotometricValidityMasks",
+    "PhotometricValidityRequest",
     "Point3DEstimate",
     "PointMap",
     "PointMapId",
@@ -350,6 +367,7 @@ __all__ = [
     "VideoFrameObservation",
     "VideoObservation",
     "assess_color_conversion",
+    "assess_photometric_compatibility",
     "assess_photometric_normalization",
     "build_decoded_image_level_descriptors",
     "canonical_artifact_key_bytes",
