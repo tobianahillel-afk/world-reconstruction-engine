@@ -235,7 +235,7 @@ def test_rejects_corrupt_png_pixel_data_even_if_asset_digest_matches(tmp_path: P
 def test_rejects_native_sparse_model_tampering(tmp_path: Path) -> None:
     request, source = _parts(tmp_path)
     (source.native_model_root / "0" / "points3D.bin").write_bytes(b"tampered")
-    with pytest.raises(ValueError, match="changed after mapper publication"):
+    with pytest.raises(RuntimeError, match="changed after mapper publication"):
         preflight_gsplat_static_appearance_inputs(request, source)
 
 
