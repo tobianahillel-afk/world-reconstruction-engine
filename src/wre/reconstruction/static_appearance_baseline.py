@@ -8,6 +8,7 @@ exposure consistency, the exact external environment and real GPU execution.
 from __future__ import annotations
 
 import hashlib
+import json
 import struct
 import zlib
 from dataclasses import dataclass
@@ -299,6 +300,89 @@ def preflight_gsplat_static_appearance_inputs(
     )
 
 
+
+@dataclass(frozen=True, slots=True, kw_only=True)
+class GsplatStaticAppearanceTrainingProfile:
+    """Audited single-GPU overrides for the exact upstream reference trainer.
+
+    This is an immutable *configuration contract*, not a training runner or evidence
+    that its external Torch/CUDA/import environment has been approved. The eventual
+    optional runner must reject upstream source drift before constructing Config.
+    """
+
+    max_steps: int = 30_000
+    test_every: int = 8
+    schema_version: int = 1
+
+    def __post_init__(self) -> None:
+        if self.schema_version != 1:
+            raise ValueError("gsplat training profile schema_version must equal 1")
+        if type(self.max_steps) is not int or self.max_steps <= 0:
+            raise ValueError("gsplat max_steps must be a positive integer")
+        if type(self.test_every) is not int or self.test_every < 2:
+            raise ValueError("gsplat test_every must be an integer >= 2")
+
+    def reference_overrides(self) -> dict[str, object]:
+        """Values for exact-source examples.simple_trainer.Config, not CLI guesses."""
+
+        return {
+            "app_opt": False,
+            "camera_model": "pinhole",
+            "ckpt": None,
+            "compression": None,
+            "data_factor": 1,
+            "depth_loss": False,
+            "disable_video": True,
+            "disable_viewer": True,
+            "eval_steps": [],
+            "global_scale": 1.0,
+            "init_type": "sfm",
+            "max_steps": self.max_steps,
+            "normalize_world_space": False,
+            "patch_size": None,
+            "ply_steps": [self.max_steps],
+            "pose_noise": 0.0,
+            "pose_opt": False,
+            "random_bkgd": False,
+            "save_ply": True,
+            "save_steps": [],
+            "steps_scaler": 1.0,
+            "tb_every": 0,
+            "tb_save_image": False,
+            "test_every": self.test_every,
+            "use_bilateral_grid": False,
+            "use_fused_bilagrid": False,
+            "with_eval3d": False,
+            "with_ut": False,
+        }
+
+    def canonical_document(self) -> dict[str, object]:
+        return {
+            "schema_version": self.schema_version,
+            "trainer_source_revision": GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION,
+            "trainer_git_blob_sha1": GSPLAT_STATIC_APPEARANCE_TRAINER_GIT_BLOB,
+            "profile": "wre.gsplat.static_appearance.safe_single_gpu",
+            "upstream_config_overrides": self.reference_overrides(),
+        }
+
+    @property
+    def configuration_sha256(self) -> Sha256Digest:
+        encoded = json.dumps(
+            self.canonical_document(),
+            sort_keys=True,
+            separators=(",", ":"),
+            ensure_ascii=True,
+            allow_nan=False,
+        ).encode("ascii")
+        return Sha256Digest(hashlib.sha256(encoded).hexdigest())
+
+    @property
+    def expected_ply_relative_path(self) -> str:
+        """Exact upstream export location at the last 0-based training step."""
+
+        return f"ply/point_cloud_{self.max_steps - 1}.ply"
+
+
 __all__ = [
     "GSPLAT_STATIC_APPEARANCE_REPRESENTATION",
     "GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION",
@@ -306,6 +390,7 @@ __all__ = [
     "GsplatStaticAppearancePreflightError",
     "GsplatStaticAppearancePreflightEvidence",
     "GsplatStaticAppearancePreflightSource",
+    "GsplatStaticAppearanceTrainingProfile",
     "GsplatStaticAppearanceVerifiedImage",
     "preflight_gsplat_static_appearance_inputs",
 ]
