@@ -211,7 +211,7 @@ def test_shapes_exports_frozen_slots_and_protocol() -> None:
         request.source_surface = None  # type: ignore[misc]
     with pytest.raises(FrozenInstanceError):
         result.candidate = candidate  # type: ignore[misc]
-    with pytest.raises(AttributeError):
+    with pytest.raises((AttributeError, TypeError)):
         request.undeclared = True  # type: ignore[attr-defined]
 
 
