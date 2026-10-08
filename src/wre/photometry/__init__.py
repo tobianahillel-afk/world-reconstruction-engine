@@ -13,7 +13,7 @@ from wre.photometry.photometric_validity import build_photometric_validity_masks
 __all__ = [
     "ConvertedLinearRgbBuffer",
     "NormalizedLinearRgbBuffer",
-    "convert_rgb8_to_linear_reference",
     "build_photometric_validity_masks",
+    "convert_rgb8_to_linear_reference",
     "normalize_linear_rgb_reference",
 ]
