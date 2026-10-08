@@ -155,9 +155,7 @@ def test_fail_closed_unresolved_rejected_foreign_and_unsupported_cases() -> None
     assert foreign["compatibility"]["status"] == "incompatible"
     assert foreign["compatibility"]["color_observation_id"] == "obs:v2l17-5:foreign"
     assert foreign["compatibility"]["normalization_observation_id"] == "obs:v2l17-5:ready"
-    assert any(
-        "different observations" in reason for reason in foreign["compatibility"]["reasons"]
-    )
+    assert any("different observations" in reason for reason in foreign["compatibility"]["reasons"])
 
     unsupported = _record(evidence, "unsupported-color")
     assert unsupported["color"]["status"] == "rejected"
