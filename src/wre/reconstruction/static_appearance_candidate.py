@@ -17,9 +17,13 @@ def _artifact_key(value: ArtifactRef) -> tuple[str, str]:
 
 def _validate_supporting_artifacts(value: object) -> None:
     if not isinstance(value, tuple):
-        raise TypeError("static_appearance_candidate.supporting_artifacts must be an immutable tuple")
+        raise TypeError(
+            "static_appearance_candidate.supporting_artifacts must be an immutable tuple"
+        )
     if any(not isinstance(item, ArtifactRef) for item in value):
-        raise TypeError("static_appearance_candidate.supporting_artifacts members must be ArtifactRef")
+        raise TypeError(
+            "static_appearance_candidate.supporting_artifacts members must be ArtifactRef"
+        )
 
     identities = tuple(_artifact_key(item) for item in value)
     if len(identities) != len(set(identities)):
@@ -39,7 +43,9 @@ def _validate_observation_ids(value: object) -> None:
     if not value:
         raise ValueError("static_appearance_candidate.source_observation_ids must be non-empty")
     if any(not isinstance(item, ObservationId) for item in value):
-        raise TypeError("static_appearance_candidate.source_observation_ids members must be ObservationId")
+        raise TypeError(
+            "static_appearance_candidate.source_observation_ids members must be ObservationId"
+        )
 
     identifiers = tuple(item.value for item in value)
     if len(identifiers) != len(set(identifiers)):
@@ -111,7 +117,8 @@ class StaticAppearanceCandidateResult:
     def __post_init__(self) -> None:
         if not isinstance(self.request, StaticAppearanceCandidateRequest):
             raise TypeError(
-                "static_appearance_candidate_result.request must be StaticAppearanceCandidateRequest"
+                "static_appearance_candidate_result.request must be "
+                "StaticAppearanceCandidateRequest"
             )
         if not isinstance(self.candidate, AppearanceModel):
             raise TypeError(
@@ -128,15 +135,21 @@ class StaticAppearanceCandidateResult:
 
         if self.candidate.source_geometry != request.source_geometry:
             raise ValueError(
-                "static appearance candidate must preserve the exact source GeometrySolutionCandidate"
+                "static appearance candidate must preserve the exact source "
+                "GeometrySolutionCandidate"
             )
         if self.candidate.source_surface != request.source_surface:
-            raise ValueError("static appearance candidate must preserve the exact optional SurfaceModel")
+            raise ValueError(
+                "static appearance candidate must preserve the exact optional SurfaceModel"
+            )
         if self.candidate.source_observation_ids != request.source_observation_ids:
-            raise ValueError("static appearance candidate must preserve source ObservationIds exactly")
+            raise ValueError(
+                "static appearance candidate must preserve source ObservationIds exactly"
+            )
         if self.candidate.representation != request.output_representation:
             raise ValueError(
-                "static appearance candidate must preserve the declared AppearanceRepresentationName"
+                "static appearance candidate must preserve the declared "
+                "AppearanceRepresentationName"
             )
         if self.candidate.local_frame_id != geometry.local_frame_id:
             raise ValueError("static appearance candidate must preserve source LocalFrameId")
