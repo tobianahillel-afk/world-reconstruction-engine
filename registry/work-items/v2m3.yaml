@@ -451,7 +451,7 @@ work_items:
   - id: V2L18.2
     lot: V2L18
     title: Gaussian radiance adapter capability contract
-    status: ready
+    status: done
     objective: Define one pure solver-independent static appearance candidate adapter capability boundary that binds a complete canonical source GeometrySolutionCandidate optional exact SurfaceModel and caller-declared source observations and supporting artifacts to one retained AppearanceModel plus exact materialization metadata. Keep Gaussian radiance and other rendering technologies replaceable and do not run or select a concrete specialist in this work item.
     allowed_scope:
       - src/wre/reconstruction/static_appearance_candidate.py
@@ -533,7 +533,92 @@ work_items:
       - immutability regression proving request result building does not rewrite sort align or modify geometry surface observation artifacts producer or materialization
       - no external import file network subprocess CUDA Torch NumPy native solver or checkpoint behavior regression
       - full fast CI and CodeQL
-  - {id: V2L18.3, lot: V2L18, title: First approved static appearance baseline, status: planned, depends_on: [V2L18.2]}
+  - id: V2L18.3
+    lot: V2L18
+    title: First approved static appearance baseline
+    status: ready
+    objective: Select and integrate only one evidence-approved static appearance baseline behind the V2L18.2 StaticAppearanceCandidateAdapter boundary using explicit reviewed source GeometrySolutionCandidate and photometrically interpretable source observations. Materialize one complete AppearanceModel with exact output-file provenance, without making its particular Gaussian radiance or neural method a core WRE type or a default scene route.
+    allowed_scope:
+      - src/wre/reconstruction/static_appearance_baseline.py
+      - focused exports in src/wre/reconstruction/__init__.py
+      - tests/test_static_appearance_baseline.py
+      - one focused optional exact-external-environment and smoke-fixture workflow under .github/workflows/ only if needed to execute the selected baseline on supported hardware
+      - exact selected runtime source package model checkpoint and redistribution evidence in registry/dependencies.yaml and registry/adapter-models.yaml
+      - focused technology decision and current candidate evidence in docs/14_TECHNOLOGY_SELECTION.md or docs/27_RESEARCH_CANDIDATE_COVERAGE.md if the refreshed selection changes the recorded shortlist
+      - lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry after green implementation evidence, without implementing V2L18.4
+    out_of_scope:
+      - changing the canonical AppearanceModel AppearanceRepresentationName StaticAppearanceCandidateRequest StaticAppearanceCandidateResult ArtifactMaterializationMetadata GeometrySolutionCandidate SurfaceModel SourcePhotometryMetadata or photometric-pipeline contracts
+      - building a second appearance solver or treating gsplat nerfstudio Splatfacto OpenSplat or another candidate as a mandatory universal default without the required exact dependency evidence
+      - scoring ranking merging choosing between completed appearance candidates or implementing V2L18.4 held-out quality geometry-disagreement and camera-motion stability metrics
+      - implementing V2L18.5 exposure distractor specialist V2L18.6 benchmark promotion or any router fallback PREVIEW FAST QUALITY MASTER preference
+      - inventing supported image pixels camera poses calibration scale world frame clipping repair HDR exposure white balance or color conversion when not explicitly supported by input evidence
+      - substituting appearance for physical SurfaceModel measurement collision navigation materials or environment
+      - inserting synthetic generated or inferred scene content into reconstructed appearance without an explicit separate provenance contract
+      - MasterScene RuntimeScene preview viewer texture baking LOD compression streaming and runtime export
+      - fetching floating latest models at execution time bundling unreviewed checkpoints or silently loading remote source packages
+    depends_on: [V2L18.2]
+    read_before:
+      - docs/00_START_HERE.md
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/27_RESEARCH_CANDIDATE_COVERAGE.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md
+      - docs/reviews/V2L17-photometric-pipeline-review.md
+      - registry/dependencies.yaml
+      - registry/adapter-models.yaml
+      - registry/components.yaml
+      - registry/work-items/v2m3.yaml
+      - PROJECT_STATE.yaml
+      - src/wre/domain/appearance.py
+      - src/wre/domain/artifact_materialization.py
+      - src/wre/domain/producer_identity.py
+      - src/wre/domain/camera_solutions.py
+      - src/wre/domain/geometry_solutions.py
+      - src/wre/domain/surfaces.py
+      - src/wre/photometry/photometric_normalization.py
+      - src/wre/reconstruction/geometry_solution_comparison.py
+      - src/wre/reconstruction/static_appearance_candidate.py
+      - src/wre/reconstruction/__init__.py
+      - tests/test_appearance.py
+      - tests/test_static_appearance_candidate.py
+      - tests/test_photometric_pipeline_fixture.py
+    reuse:
+      - the exact V2L18.2 request result Protocol and pure build_static_appearance_candidate_result helper unchanged as the sole output boundary
+      - one complete GeometrySolutionCandidate with exact camera calibration frame scale and producer identity, optional SurfaceModel and canonical source ObservationIds; never reconstruct a solver-private source hypothesis by guessing input state
+      - the V2L17 photometric pipeline's explicit source color decode normalized exposure validity and unsupported-image evidence; do not presume RGB pixels across cameras already represent a shared radiance space
+      - ArtifactProducerIdentity ArtifactRef ArtifactMaterializationMetadata and exact SHA-256 output-file identities from existing canonical production contracts
+      - the 2026-10-08 initial technology refresh as candidate evidence only; nerfstudio-project/gsplat v1.5.3 at 937e29912570c372bed6747a5c9bf85fed877bae is an Apache-2.0 CUDA rasterization library and does not itself provide an approved complete WRE training path; nerfstudio-project/nerfstudio v1.1.5 at 6b60855003011b2ca23c2fe3f8e2ca6314c69924 supplies the Apache-2.0 Splatfacto integration reference but pins an older gsplat/torch environment; OpenSplat is a separate copyleft/portability candidate requiring exact license and binary-closure review
+      - retain scientific suitability separately from current CPU/GPU availability and retain UNVERIFIED/DEFERRED accelerator evidence instead of demoting a strong candidate solely because the present CI has no GPU
+    acceptance:
+      - Before implementing the concrete path, refresh the official source release code license full transitive dependency checkpoint if any and supported hardware evidence for at least gsplat-backed reference training and Nerfstudio/Splatfacto, with OpenSplat assessed as an alternative. Record one justified baseline selection against WRE input compatibility reproducibility license photometric correctness and known algorithm limits; an arbitrary old roadmap favorite is not sufficient.
+      - Pin the selected upstream commit or release source archive and exact external Python native CUDA dependencies where relevant, review the direct/transitive licenses and intended use, and register an experimental non-default adapter descriptor. Record actual proof separately from paper claims and a DEFERRED real-GPU lane if hardware is unavailable. Do not invent runtime throughput or quality measurements.
+      - Add one optional externally executed static_appearance_baseline module implementing the V2L18.2 Protocol for a single selected baseline. Mandatory WRE imports and fast CI must not import GPU frameworks compile kernels install torch or download models.
+      - Require explicit materialized and verified observations and source camera calibration for every image passed to the selected baseline; only supported geometry local frames projection models scales dimensions and color conventions may be converted through an audited deterministic adapter-local conversion. Reject unsupported cameras color-space missing images mismatched observation identities and inconsistent paths rather than silently coercing them.
+      - Preserve the exact request source GeometrySolutionCandidate optional SurfaceModel and ObservationId membership. Training may optimize its private appearance parameters but must not rewrite the caller camera solution or silently change LocalFrameId or GeometryScaleStatus.
+      - Accept only one explicit output representation supported by the chosen exact solver and retain the output under APPEARANCE_MODEL_ARTIFACT_KIND. Preserve exact geometry surface photometric and supporting ArtifactRef ancestry with no undeclared input, inferred checkpoint or synthetic completion.
+      - Retain exact ArtifactProducerIdentity with adapter implementation version normalized configuration and model/checkpoint identity where applicable and one fully canonical ArtifactMaterializationMetadata containing output file paths byte lengths and real SHA-256 digests from the produced files.
+      - Execute the selected baseline only on a private writable workspace; verify pinned binaries inputs and output identities fail closed on missing dependencies unsupported hardware incompatible pose conventions stale artifact hashes non-finite solver output and partial files. No runtime floating network fetch or unsafe solver-private file coercion.
+      - Prove one small real end-to-end fixture on supported hardware when available, including input image/calibration provenance actual produced appearance payload exact materialization verification and repeated contractual validation. If real hardware is absent keep execution evidence explicitly DEFERRED/UNVERIFIED and do not claim the selected baseline exercised or approve it for default use.
+      - Keep surface independent and optional. Absence of an explicit SurfaceModel is never filled with a fabricated physical mesh or inferred collision proxy from the appearance representation.
+      - At completion mark V2L18.3 done retain the static_appearance component implementing and activate V2L18.4 with a complete executable held-out-render and camera-motion/geometry-disagreement metrics contract. Do not implement V2L18.4 in the same PR.
+    tests:
+      - candidate refresh and exact selected upstream source license dependency registry consistency regression
+      - optional dependency import isolation and unsupported runtime hardware fail-closed regression
+      - complete canonical source geometry source surface ObservationId and supporting-artifact identity preservation regressions
+      - valid explicit source image color calibration dimension projection and materialization preflight with missing incompatible tampered and unsupported negative cases
+      - unresolved and metric scale local-frame preservation with no implicit camera alignment or world coordinate conversion
+      - deterministic selected external configuration and producer identity with no hidden checkpoint fallback or remote fetch
+      - retained real output payload and exact ArtifactMaterializationMetadata file hashes sizes and canonical ordering
+      - no surface/material/environment collision geometry or synthetic-completion promotion
+      - representative small-fixture actual baseline execution with explicit supported hardware evidence where available and deferred status otherwise
+      - no candidate ranking held-out quality scoring motion-stability scoring router or V2L18.4 behavior regression
+      - full fast CI CodeQL and applicable exact external integration workflows
   - {id: V2L18.4, lot: V2L18, title: Held out render geometry motion scale stability metrics, status: planned, depends_on: [V2L18.3]}
   - {id: V2L18.5, lot: V2L18, title: In the wild appearance specialist boundary, status: planned, depends_on: [V2L18.4]}
   - {id: V2L18.6, lot: V2L18, title: Appearance quality resource motion stability execution profile benchmark, status: planned, depends_on: [V2L18.5]}

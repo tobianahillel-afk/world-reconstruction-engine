@@ -359,6 +359,12 @@ from wre.reconstruction.open3d_surface import (
     Open3dTsdfSurfaceConfig,
     inspect_open3d_surface_environment,
 )
+from wre.reconstruction.static_appearance_candidate import (
+    StaticAppearanceCandidateAdapter,
+    StaticAppearanceCandidateRequest,
+    StaticAppearanceCandidateResult,
+    build_static_appearance_candidate_result,
+)
 from wre.reconstruction.surface_benchmark import (
     SurfaceBenchmarkCandidate,
     SurfaceBenchmarkRequest,
@@ -653,6 +659,9 @@ __all__ = [
     "Open3dSurfaceResult",
     "Open3dTsdfSurfaceAdapter",
     "Open3dTsdfSurfaceConfig",
+    "StaticAppearanceCandidateAdapter",
+    "StaticAppearanceCandidateRequest",
+    "StaticAppearanceCandidateResult",
     "SurfaceBenchmarkCandidate",
     "SurfaceBenchmarkRequest",
     "SurfaceBenchmarkResult",
@@ -667,6 +676,7 @@ __all__ = [
     "build_geometry_refinement_result",
     "build_hybrid_surface_candidate_result",
     "build_learned_depth_prior_result",
+    "build_static_appearance_candidate_result",
     "canonicalize_colmap_sparse_model",
     "colmap_native_sparse_model_artifact_ref",
     "colmap_sparse_model_content_identity",
