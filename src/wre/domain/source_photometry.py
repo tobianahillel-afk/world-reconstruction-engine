@@ -74,6 +74,9 @@ def _validate_interpretation_state(
     if status is SourcePhotometryInterpretationStatus.RESOLVED:
         if not evidence:
             raise ValueError(f"{context} resolved state requires evidence")
+        evidence_keys = tuple((entry.namespace, entry.key) for entry in evidence)
+        if len(set(evidence_keys)) != len(evidence_keys):
+            raise ValueError(f"{context} resolved state rejects contradictory metadata keys")
         if not has_value:
             raise ValueError(f"{context} resolved state requires at least one interpreted value")
         if issue is not None:
