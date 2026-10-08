@@ -538,10 +538,9 @@ def test_gsplat_ply_materialization_has_no_optional_training_import() -> None:
     assert not {"torch", "gsplat", "numpy", "subprocess", "pycolmap", "PIL"} & imported
 
 
-
-def _native_feature_evidence(tmp_path: Path) -> tuple[
-    ColmapFeatureExtractionResult, ColmapEnvironmentIdentity
-]:
+def _native_feature_evidence(
+    tmp_path: Path,
+) -> tuple[ColmapFeatureExtractionResult, ColmapEnvironmentIdentity]:
     environment = ColmapEnvironmentIdentity(
         pycolmap_version="4.2.0",
         colmap_version="COLMAP 4.2.0",
@@ -631,9 +630,7 @@ def test_native_geometry_rejects_foreign_camera_even_if_geometry_id_is_unchanged
     )
     camera = request.source_geometry.camera_solutions[0]
     different_camera = replace(camera, intrinsic_parameters=(3.0, 2.0, 1.0, 0.5))
-    different_geometry = replace(
-        request.source_geometry, camera_solutions=(different_camera,)
-    )
+    different_geometry = replace(request.source_geometry, camera_solutions=(different_camera,))
     with pytest.raises(GsplatStaticAppearancePreflightError, match="do not match"):
         verify_gsplat_static_appearance_native_geometry(
             replace(request, source_geometry=different_geometry),
@@ -652,9 +649,7 @@ def test_native_geometry_rejects_foreign_point_map_or_scale(
     monkeypatch.setattr(
         baseline_module, "canonicalize_colmap_sparse_model", lambda **kwargs: expected
     )
-    other_point = replace(
-        request.source_geometry.point_maps[0], positions_xyz=((2.0, 2.0, 3.0),)
-    )
+    other_point = replace(request.source_geometry.point_maps[0], positions_xyz=((2.0, 2.0, 3.0),))
     other_map = replace(request.source_geometry, point_maps=(other_point,))
     metric = replace(
         request.source_geometry.geometry_solution, scale_status=GeometryScaleStatus.METRIC
@@ -679,12 +674,11 @@ def test_native_geometry_fails_before_pycolmap_on_foreign_name_mapping(
         features,
         images=(replace(features.images[0], image_name="different.png"),),
     )
+
     def fail_if_called(**kwargs: object) -> None:
         pytest.fail("native reader must not execute after a rejected image mapping")
 
-    monkeypatch.setattr(
-        baseline_module, "canonicalize_colmap_sparse_model", fail_if_called
-    )
+    monkeypatch.setattr(baseline_module, "canonicalize_colmap_sparse_model", fail_if_called)
     with pytest.raises(GsplatStaticAppearancePreflightError, match="naming"):
         verify_gsplat_static_appearance_native_geometry(
             request, source, features=wrong, expected_environment=environment
