@@ -443,7 +443,7 @@ def test_gsplat_ply_materialization_hashes_real_output_and_retains_path(tmp_path
 @pytest.mark.parametrize(
     ("data", "reason"),
     [
-        (b"not-ply", "not PLY"),
+        (b"not-ply\n", "not PLY"),
         (
             _gsplat_ply().replace(b"format binary_little_endian", b"format ascii"),
             "uncompressed little-endian",
