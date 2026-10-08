@@ -127,6 +127,17 @@ from wre.domain.pair_candidates import (
     PairCandidateSourceId,
     merge_pair_candidates,
 )
+from wre.domain.photometric_normalization import (
+    REFERENCE_PHOTOMETRIC_NORMALIZATION_BACKEND,
+    PhotometricNormalizationAssessment,
+    PhotometricNormalizationBackend,
+    PhotometricNormalizationFactors,
+    PhotometricNormalizationPlan,
+    PhotometricNormalizationRequest,
+    PhotometricNormalizationStatus,
+    PhotometricNormalizationStep,
+    assess_photometric_normalization,
+)
 from wre.domain.point_maps import PointMap, PointMapId
 from wre.domain.producer_identity import (
     ArtifactProducerIdentity,
@@ -191,6 +202,7 @@ __all__ = [
     "DECODED_IMAGE_PYRAMID_KIND",
     "LINEAR_SRGB_F64",
     "REFERENCE_COLOR_BACKEND",
+    "REFERENCE_PHOTOMETRIC_NORMALIZATION_BACKEND",
     "SURFACE_MODEL_ARTIFACT_KIND",
     "SURFACE_SUPPORT_MAP_ARTIFACT_KIND",
     "AdapterCapabilityDescriptor",
@@ -282,6 +294,13 @@ __all__ = [
     "PairCandidate",
     "PairCandidateSource",
     "PairCandidateSourceId",
+    "PhotometricNormalizationAssessment",
+    "PhotometricNormalizationBackend",
+    "PhotometricNormalizationFactors",
+    "PhotometricNormalizationPlan",
+    "PhotometricNormalizationRequest",
+    "PhotometricNormalizationStatus",
+    "PhotometricNormalizationStep",
     "Point3DEstimate",
     "PointMap",
     "PointMapId",
@@ -331,6 +350,7 @@ __all__ = [
     "VideoFrameObservation",
     "VideoObservation",
     "assess_color_conversion",
+    "assess_photometric_normalization",
     "build_decoded_image_level_descriptors",
     "canonical_artifact_key_bytes",
     "derive_artifact_key",
