@@ -334,10 +334,12 @@ components:
       - src/wre/domain/appearance.py
       - src/wre/domain/__init__.py
       - src/wre/reconstruction/static_appearance_candidate.py
+      - src/wre/reconstruction/static_appearance_baseline.py
       - src/wre/reconstruction/__init__.py
     tests:
       - tests/test_appearance.py
       - tests/test_static_appearance_candidate.py
+      - tests/test_static_appearance_baseline.py
     status: implementing
   materials_environment: {owner_lot: V2L19, implementation: [], tests: [], status: planned}
   master_scene: {owner_lot: V2L20, implementation: [], tests: [], status: planned}
