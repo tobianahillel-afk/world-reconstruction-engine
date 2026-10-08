@@ -125,9 +125,7 @@ def test_no_pixel_layout_based_color_inference() -> None:
 
 
 def test_invalid_and_unsupported_color_declarations_fail_closed() -> None:
-    invalid = assess_color_conversion(
-        _request(status=SourcePhotometryInterpretationStatus.INVALID)
-    )
+    invalid = assess_color_conversion(_request(status=SourcePhotometryInterpretationStatus.INVALID))
     assert invalid.status is ColorConversionStatus.REJECTED
     ready_source = _request().source_photometry.color
     for replacement in (
@@ -216,9 +214,10 @@ def test_plan_is_deterministic_provenance_bound_and_immutable() -> None:
     assert len(first.plan.steps) == 2
     with pytest.raises(FrozenInstanceError):
         first.plan.identity = Sha256Digest("1" * 64)  # type: ignore[misc]
-    assert assess_color_conversion(
-        _request(source_hash=Sha256Digest("b" * 64))
-    ).plan.identity != first.plan.identity  # type: ignore[union-attr]
+    assert (
+        assess_color_conversion(_request(source_hash=Sha256Digest("b" * 64))).plan.identity
+        != first.plan.identity
+    )  # type: ignore[union-attr]
     assert assess_color_conversion(_request(pixels=bytes(reversed(BYTES)))).plan.identity != (
         first.plan.identity  # type: ignore[union-attr]
     )
@@ -234,6 +233,7 @@ def test_plan_is_deterministic_provenance_bound_and_immutable() -> None:
         ),
         white_balance=source.white_balance,
     )
-    assert assess_color_conversion(
-        replace(req, source_photometry=alternative)
-    ).plan.identity != first.plan.identity  # type: ignore[union-attr]
+    assert (
+        assess_color_conversion(replace(req, source_photometry=alternative)).plan.identity
+        != first.plan.identity
+    )  # type: ignore[union-attr]
