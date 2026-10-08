@@ -322,7 +322,7 @@ def test_result_rejects_missing_extra_and_reordered_ancestry() -> None:
     )
 
     for invalid in (
-        candidate.source_artifacts[:-1],
+        tuple(item for item in candidate.source_artifacts if item not in request.supporting_artifacts),
         _ordered(*candidate.source_artifacts, _artifact("artifact:surprise")),
     ):
         # A canonical AppearanceModel permits extra ancestry; the adapter boundary does not.
