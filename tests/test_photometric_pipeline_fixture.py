@@ -399,14 +399,50 @@ def test_workflow_is_cpu_only_and_retains_canonical_fixture_evidence() -> None:
         assert forbidden not in lowered
 
 
-def test_lifecycle_remains_v2l17_5_until_retained_evidence_and_review_exist() -> None:
+def test_lot_review_and_lifecycle_activate_only_v2l18_1() -> None:
     root = Path(__file__).parents[1]
     state = (root / "PROJECT_STATE.yaml").read_text(encoding="utf-8")
     reviews = (root / "registry" / "reviews.yaml").read_text(encoding="utf-8")
     work_items = (root / "registry" / "work-items" / "v2m3.yaml").read_text(encoding="utf-8")
+    components = (root / "registry" / "components.yaml").read_text(encoding="utf-8")
+    review = (root / "docs" / "reviews" / "V2L17-photometric-pipeline-review.md").read_text(
+        encoding="utf-8"
+    )
 
-    assert "active_work_item: V2L17.5" in state
-    assert "V2L17: {status: pending, reviewed_at: null, evidence: []}" in reviews
-    assert "static_appearance:" not in state
+    assert "lot: V2L18" in state
+    assert "active_work_item: V2L18.1" in state
+    assert "V2L17.5]" in state
+    assert "last_merged_pr: 190" in state
+
+    assert "V2L17:\n    status: passed" in reviews
+    assert "docs/reviews/V2L17-photometric-pipeline-review.md" in reviews
+
     assert "id: V2L17.5" in work_items
-    assert "status: ready" in work_items
+    assert "title: Photometric regression fixture and lot review\n    status: done" in work_items
+    assert "id: V2L18.1" in work_items
+    assert "title: Canonical AppearanceModel contract\n    status: ready" in work_items
+    assert "src/wre/domain/appearance.py" in work_items
+    assert "V2L18.2" in work_items
+
+    assert "photometric_pipeline:" in components
+    assert "tests/test_photometric_pipeline_fixture.py" in components
+    assert "status: implemented" in components
+    assert (
+        "static_appearance: {owner_lot: V2L18, implementation: [], tests: [], status: planned}"
+        in components
+    )
+
+    for item in ("V2L17.1", "V2L17.2", "V2L17.3", "V2L17.4", "V2L17.5"):
+        assert item in review
+    for statement in (
+        "universal ICC",
+        "scene-radiance truth",
+        "automatic exposure",
+        "HDR merge",
+        "highlight recovery",
+        "AppearanceModel",
+        "materials or environment",
+        "QualityDecision",
+    ):
+        assert statement in review
+    assert "V2L17 lot review: PASS." in review
