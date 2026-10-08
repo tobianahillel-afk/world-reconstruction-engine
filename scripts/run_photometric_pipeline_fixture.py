@@ -408,10 +408,7 @@ def _float_values(buffer: bytes) -> list[float]:
 
 
 def _raw_record(entries: tuple[RawMetadataEntry, ...]) -> list[dict[str, str]]:
-    return [
-        {"namespace": item.namespace, "key": item.key, "value": item.value}
-        for item in entries
-    ]
+    return [{"namespace": item.namespace, "key": item.key, "value": item.value} for item in entries]
 
 
 def _source_record(
