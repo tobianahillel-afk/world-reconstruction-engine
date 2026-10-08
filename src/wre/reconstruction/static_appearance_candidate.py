@@ -121,9 +121,7 @@ class StaticAppearanceCandidateResult:
                 "StaticAppearanceCandidateRequest"
             )
         if not isinstance(self.candidate, AppearanceModel):
-            raise TypeError(
-                "static_appearance_candidate_result.candidate must be AppearanceModel"
-            )
+            raise TypeError("static_appearance_candidate_result.candidate must be AppearanceModel")
         if not isinstance(self.materialization, ArtifactMaterializationMetadata):
             raise TypeError(
                 "static_appearance_candidate_result.materialization must be "
