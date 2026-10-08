@@ -5,13 +5,24 @@ import json
 from dataclasses import asdict, dataclass
 from enum import StrEnum
 
-from wre.domain.artifact_materialization import ArtifactMaterializationEntry
+from wre.domain.artifact_keys import (
+    ArtifactInputFingerprint,
+    ArtifactKeyMaterial,
+    derive_artifact_key,
+)
+from wre.domain.artifact_materialization import (
+    ArtifactMaterializationEntry,
+    ArtifactMaterializationMetadata,
+)
+from wre.domain.artifact_metadata import ArtifactMetadata
+from wre.domain.artifacts import ArtifactKind
 from wre.domain.decoded_images import (
+    DECODED_IMAGE_PYRAMID_KIND,
     DecodedImageOrientationPolicy,
     DecodedImagePixelLayout,
     DecodedImagePyramidManifest,
 )
-from wre.domain.observations import Sha256Digest
+from wre.domain.observations import ObservationKind, Sha256Digest
 from wre.domain.source_photometry import (
     SourcePhotometryInterpretationStatus,
     SourcePhotometryMetadata,
@@ -98,15 +109,20 @@ LINEAR_SRGB_F64 = ColorConvention(
     storage=ColorSampleStorage.FLOAT64_RGB,
 )
 
+_DECODED_PYRAMID_KIND = ArtifactKind(DECODED_IMAGE_PYRAMID_KIND)
+_IMAGE_OBSERVATION_KIND = ArtifactKind("image.observation")
+_VIDEO_FRAME_OBSERVATION_KIND = ArtifactKind("video.frame_observation")
+
 
 @dataclass(frozen=True, slots=True)
 class ColorConversionRequest:
     """One explicitly declared source and target, bound to an immutable decoded level."""
 
     decoded_manifest: DecodedImagePyramidManifest
+    decoded_artifact: ArtifactMetadata
+    decoded_materialization: ArtifactMaterializationMetadata
     source_photometry: SourcePhotometryMetadata
     decoded_level_index: int
-    decoded_level_entry: ArtifactMaterializationEntry
     decoded_encoding: DecodedPixelColorEncoding
     working_convention: ColorConvention
     output_convention: ColorConvention
@@ -114,12 +130,14 @@ class ColorConversionRequest:
     def __post_init__(self) -> None:
         if not isinstance(self.decoded_manifest, DecodedImagePyramidManifest):
             raise TypeError("color_request.decoded_manifest must be DecodedImagePyramidManifest")
+        if not isinstance(self.decoded_artifact, ArtifactMetadata):
+            raise TypeError("color_request.decoded_artifact must be ArtifactMetadata")
+        if not isinstance(self.decoded_materialization, ArtifactMaterializationMetadata):
+            raise TypeError(
+                "color_request.decoded_materialization must be ArtifactMaterializationMetadata"
+            )
         if not isinstance(self.source_photometry, SourcePhotometryMetadata):
             raise TypeError("color_request.source_photometry must be SourcePhotometryMetadata")
-        if not isinstance(self.decoded_level_entry, ArtifactMaterializationEntry):
-            raise TypeError(
-                "color_request.decoded_level_entry must be ArtifactMaterializationEntry"
-            )
         if not isinstance(self.decoded_encoding, DecodedPixelColorEncoding):
             raise TypeError("color_request.decoded_encoding must be DecodedPixelColorEncoding")
         if not isinstance(self.working_convention, ColorConvention):
@@ -132,11 +150,54 @@ class ColorConversionRequest:
             raise ValueError("color_request.decoded_level_index is outside the manifest")
         if self.decoded_manifest.source_observation_id != self.source_photometry.observation_id:
             raise ValueError("color_request observation identities disagree")
-        level = self.decoded_manifest.levels[self.decoded_level_index]
-        if self.decoded_level_entry.relative_path != level.relative_path:
-            raise ValueError("color_request level path does not match decoded manifest")
-        if self.decoded_level_entry.byte_length != level.width_px * level.height_px * 3:
-            raise ValueError("color_request decoded level must contain exactly 3 bytes per pixel")
+        if self.decoded_artifact.artifact_ref != self.decoded_materialization.artifact_ref:
+            raise ValueError("color_request decoded artifact and materialization refs disagree")
+        if self.decoded_artifact.artifact_ref.artifact_kind != _DECODED_PYRAMID_KIND:
+            raise ValueError("color_request decoded artifact kind is not a decoded-image pyramid")
+
+        input_kind = (
+            _IMAGE_OBSERVATION_KIND
+            if self.decoded_manifest.source_kind is ObservationKind.IMAGE
+            else _VIDEO_FRAME_OBSERVATION_KIND
+        )
+        expected_artifact_key = derive_artifact_key(
+            ArtifactKeyMaterial(
+                output_kind=_DECODED_PYRAMID_KIND,
+                input_fingerprints=(
+                    ArtifactInputFingerprint(
+                        artifact_kind=input_kind,
+                        sha256=self.decoded_manifest.source_asset_sha256,
+                    ),
+                ),
+                producer=self.decoded_artifact.producer,
+            )
+        )
+        if self.decoded_artifact.artifact_key != expected_artifact_key:
+            raise ValueError(
+                "color_request decoded artifact key does not match manifest source and producer"
+            )
+
+        if len(self.decoded_materialization.entries) != len(self.decoded_manifest.levels):
+            raise ValueError(
+                "color_request decoded materialization must match every manifest level"
+            )
+        for level, entry in zip(
+            self.decoded_manifest.levels,
+            self.decoded_materialization.entries,
+            strict=True,
+        ):
+            if entry.relative_path != level.relative_path:
+                raise ValueError(
+                    "color_request decoded materialization path does not match manifest level"
+                )
+            if entry.byte_length != level.width_px * level.height_px * 3:
+                raise ValueError(
+                    "color_request decoded materialization byte length does not match RGB8 level"
+                )
+
+    @property
+    def decoded_level_entry(self) -> ArtifactMaterializationEntry:
+        return self.decoded_materialization.entries[self.decoded_level_index]
 
 
 @dataclass(frozen=True, slots=True)
@@ -220,6 +281,15 @@ def assess_color_conversion(
         )
 
     color = request.source_photometry.color
+    evidence_keys = {(entry.namespace, entry.key) for entry in color.evidence}
+    source_values_by_key: dict[tuple[str, str], set[str]] = {}
+    for entry in request.source_photometry.source_metadata.raw_entries:
+        key = (entry.namespace, entry.key)
+        if key in evidence_keys:
+            source_values_by_key.setdefault(key, set()).add(entry.value)
+    if any(len(values) > 1 for values in source_values_by_key.values()):
+        return rejected("source color evidence conflicts with bound raw metadata")
+
     if color.status in (
         SourcePhotometryInterpretationStatus.ABSENT,
         SourcePhotometryInterpretationStatus.UNKNOWN,
