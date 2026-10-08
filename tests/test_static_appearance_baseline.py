@@ -11,7 +11,6 @@ from pathlib import Path
 import pytest
 
 import wre.reconstruction.static_appearance_baseline as baseline_module
-from wre.domain.appearance import APPEARANCE_MODEL_ARTIFACT_KIND, AppearanceRepresentationName
 from wre.domain import (
     LINEAR_SRGB_F64,
     ArtifactInputFingerprint,
@@ -19,6 +18,7 @@ from wre.domain import (
     ArtifactMaterializationEntry,
     ArtifactMaterializationMetadata,
     ArtifactMetadata,
+    ColorConversionRequest,
     DecodedImageLevelDescriptor,
     DecodedImageOrientationPolicy,
     DecodedImagePixelLayout,
@@ -40,16 +40,12 @@ from wre.domain import (
     SourcePhotometryInterpretationStatus,
     SourcePhotometryMetadata,
     SourceWhiteBalanceMetadata,
-    ColorConversionRequest,
     assess_color_conversion,
     assess_photometric_compatibility,
     assess_photometric_normalization,
     derive_artifact_key,
 )
-from wre.photometry import (
-    convert_rgb8_to_linear_reference,
-    normalize_linear_rgb_reference,
-)
+from wre.domain.appearance import APPEARANCE_MODEL_ARTIFACT_KIND, AppearanceRepresentationName
 from wre.domain.artifacts import ArtifactId, ArtifactKind, ArtifactRef
 from wre.domain.camera_solutions import (
     CameraProjectionModelName,
@@ -75,6 +71,10 @@ from wre.domain.observations import (
 from wre.domain.point_maps import PointMap, PointMapId
 from wre.domain.producer_identity import ArtifactProducerIdentity, ConfigurationIdentity
 from wre.domain.runs import DerivedArtifactProvenance, ProducerRef, ReconstructionRunId
+from wre.photometry import (
+    convert_rgb8_to_linear_reference,
+    normalize_linear_rgb_reference,
+)
 from wre.reconstruction.colmap_canonical_geometry import (
     CanonicalColmapSparseModel,
     colmap_sparse_model_content_identity,
