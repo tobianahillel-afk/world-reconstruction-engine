@@ -96,12 +96,14 @@ from wre.reconstruction.geometry_solution_comparison import GeometrySolutionCand
 from wre.reconstruction.static_appearance_baseline import (
     GSPLAT_STATIC_APPEARANCE_REPRESENTATION,
     GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION,
+    GSPLAT_STATIC_APPEARANCE_SOURCE_TREE,
     GsplatStaticAppearancePreflightError,
     GsplatStaticAppearancePreflightSource,
     GsplatStaticAppearanceTrainingProfile,
     materialize_verified_gsplat_ply,
     preflight_gsplat_static_appearance_inputs,
     verify_gsplat_static_appearance_native_geometry,
+    verify_gsplat_static_appearance_reference_sources,
     verify_gsplat_static_appearance_source_photometry,
 )
 from wre.reconstruction.static_appearance_candidate import StaticAppearanceCandidateRequest
@@ -109,6 +111,113 @@ from wre.reconstruction.static_appearance_candidate import StaticAppearanceCandi
 
 def _digest(data: bytes) -> Sha256Digest:
     return Sha256Digest(hashlib.sha256(data).hexdigest())
+
+
+def _reviewed_source_fixture(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[Path, dict[str, bytes]]:
+    """Small local synthetic tree; never pretends to be the real upstream commit."""
+
+    root = tmp_path / "reference"
+    data = {
+        "LICENSE": b"synthetic license fixture",
+        "examples/simple_trainer.py": b"print('fixture')\n",
+        "examples/requirements.txt": b"# fixture requirements\n",
+        "gsplat/version.py": b"__version__ = 'fixture'\n",
+    }
+    for path, payload in data.items():
+        candidate = root / path
+        candidate.parent.mkdir(parents=True, exist_ok=True)
+        candidate.write_bytes(payload)
+    monkeypatch.setattr(
+        baseline_module,
+        "_GSPLAT_REFERENCE_SOURCE_FILES",
+        tuple(
+            (path, len(payload), baseline_module._git_blob_sha1(payload))
+            for path, payload in sorted(data.items())
+        ),
+    )
+    return root, data
+
+
+def test_gsplat_reference_source_git_pins_are_the_reviewed_upstream_identity() -> None:
+    assert GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION == ("937e29912570c372bed6747a5c9bf85fed877bae")
+    assert GSPLAT_STATIC_APPEARANCE_SOURCE_TREE == ("90c3f0b2352e6d2725bcba1ef0407168f922c0fa")
+    pins = baseline_module._GSPLAT_REFERENCE_SOURCE_FILES
+    assert len(pins) == 10
+    assert tuple(path for path, _size, _sha in pins) == tuple(
+        sorted(path for path, _size, _sha in pins)
+    )
+    assert (
+        "examples/simple_trainer.py",
+        49728,
+        "6a30be737b5c9af53a140f64faf499d8d4d0933f",
+    ) in pins
+    assert (
+        "examples/datasets/colmap.py",
+        18447,
+        "6c21f2c663b60d9dc38471a9963a3b5d092e5ed2",
+    ) in pins
+    assert baseline_module._git_blob_sha1(b'__version__ = "1.5.3"\n') == (
+        "a06ff4e08777642c97011d6c993690dba5a7a02f"
+    )
+
+
+def test_gsplat_reference_source_gate_verifies_exact_bytes_without_import(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, data = _reviewed_source_fixture(tmp_path, monkeypatch)
+    result = verify_gsplat_static_appearance_reference_sources(root)
+    assert tuple(entry.relative_path for entry in result) == tuple(sorted(data))
+    for entry in result:
+        payload = data[entry.relative_path]
+        assert entry.byte_length == len(payload)
+        assert entry.sha256 == _digest(payload)
+    assert result == verify_gsplat_static_appearance_reference_sources(root)
+
+
+def test_gsplat_reference_source_gate_rejects_same_size_tampering(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, _data = _reviewed_source_fixture(tmp_path, monkeypatch)
+    target = root / "examples/simple_trainer.py"
+    target.write_bytes(b"X" + target.read_bytes()[1:])
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="Git blob differs"):
+        verify_gsplat_static_appearance_reference_sources(root)
+
+
+def test_gsplat_reference_source_gate_rejects_missing_source_or_wrong_size(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, _data = _reviewed_source_fixture(tmp_path, monkeypatch)
+    target = root / "gsplat/version.py"
+    target.unlink()
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="missing"):
+        verify_gsplat_static_appearance_reference_sources(root)
+    target.write_bytes(b"bad")
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="byte length"):
+        verify_gsplat_static_appearance_reference_sources(root)
+
+
+def test_gsplat_reference_source_gate_rejects_symlink_directory_and_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, data = _reviewed_source_fixture(tmp_path, monkeypatch)
+    alias = tmp_path / "source-alias"
+    alias.symlink_to(root, target_is_directory=True)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="symlink"):
+        verify_gsplat_static_appearance_reference_sources(alias)
+    target = root / "LICENSE"
+    target.unlink()
+    target.symlink_to(root / "examples/simple_trainer.py")
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="symlink"):
+        verify_gsplat_static_appearance_reference_sources(root)
+    target.unlink()
+    target.write_bytes(data["LICENSE"])
+    (root / "examples").rename(root / "real-examples")
+    (root / "examples").symlink_to(root / "real-examples", target_is_directory=True)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="symlink"):
+        verify_gsplat_static_appearance_reference_sources(root)
 
 
 def _chunk(kind: bytes, payload: bytes) -> bytes:
