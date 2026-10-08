@@ -50,8 +50,14 @@ jobs:
       - name: Type check
         run: uv run pyright
 
-      - name: Unit tests
-        run: uv run pytest
+      - name: Unit tests (pure and mockable checks; FFmpeg tests run in dedicated lane)
+        run: >-
+          uv run pytest
+          --ignore=tests/test_audio_sync.py
+          --ignore=tests/test_decoded_image_pyramids.py
+          --ignore=tests/test_frame_selection_extraction_regression.py
+          --ignore=tests/test_keyframe_extraction.py
+          --ignore=tests/test_ffmpeg_toolchain_compatibility.py
 
       - name: Lint GitHub Actions
         uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2
