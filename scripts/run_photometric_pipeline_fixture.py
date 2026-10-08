@@ -417,7 +417,7 @@ def _source_record(
     entry = request.decoded_level_entry
     return {
         "decoded_artifact_id": request.decoded_artifact.artifact_ref.artifact_id.value,
-        "decoded_artifact_key": request.decoded_artifact.artifact_key.value,
+        "decoded_artifact_key": request.decoded_artifact.artifact_key.sha256.value,
         "decoded_level": {
             "byte_length": entry.byte_length,
             "relative_path": entry.relative_path,
