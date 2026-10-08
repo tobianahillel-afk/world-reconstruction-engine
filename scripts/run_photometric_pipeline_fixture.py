@@ -118,7 +118,11 @@ def _raw_entry(value: object, context: str) -> RawMetadataEntry:
     )
 
 
-def _evidence(value: object, raw_entries: tuple[RawMetadataEntry, ...], context: str) -> tuple[RawMetadataEntry, ...]:
+def _evidence(
+    value: object,
+    raw_entries: tuple[RawMetadataEntry, ...],
+    context: str,
+) -> tuple[RawMetadataEntry, ...]:
     entries = tuple(
         _raw_entry(item, f"{context}[{index}]")
         for index, item in enumerate(_require_list(value, context))
@@ -587,8 +591,13 @@ def _validate_case(value: object, index: int) -> dict[str, Any]:
         ),
         f"{context}.expected",
     )
-    for index_raw, raw in enumerate(_require_list(case["raw_metadata"], f"{context}.raw_metadata")):
-        _require_exact_keys(raw, ("key", "namespace", "value"), f"{context}.raw_metadata[{index_raw}]")
+    raw_metadata = _require_list(case["raw_metadata"], f"{context}.raw_metadata")
+    for index_raw, raw in enumerate(raw_metadata):
+        _require_exact_keys(
+            raw,
+            ("key", "namespace", "value"),
+            f"{context}.raw_metadata[{index_raw}]",
+        )
     return case
 
 
@@ -663,7 +672,11 @@ def _build_stage(case: dict[str, Any]) -> _CaseStage:
     )
 
 
-def _assert_expected(case: dict[str, Any], stage: _CaseStage, compatibility: PhotometricCompatibilityAssessment) -> None:
+def _assert_expected(
+    case: dict[str, Any],
+    stage: _CaseStage,
+    compatibility: PhotometricCompatibilityAssessment,
+) -> None:
     expected = case["expected"]
     if stage.color_assessment.status.value != expected["color_status"]:
         raise ValueError(f"{stage.case_id} color status differs from expectation")
