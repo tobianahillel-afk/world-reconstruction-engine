@@ -311,12 +311,12 @@ def preflight_gsplat_static_appearance_inputs(
 
 
 __all__ = [
+    "GSPLAT_STATIC_APPEARANCE_REPRESENTATION",
     "GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION",
     "GSPLAT_STATIC_APPEARANCE_TRAINER_GIT_BLOB",
-    "GSPLAT_STATIC_APPEARANCE_REPRESENTATION",
     "GsplatStaticAppearancePreflightError",
+    "GsplatStaticAppearancePreflightEvidence",
     "GsplatStaticAppearancePreflightSource",
     "GsplatStaticAppearanceVerifiedImage",
-    "GsplatStaticAppearancePreflightEvidence",
     "preflight_gsplat_static_appearance_inputs",
 ]
