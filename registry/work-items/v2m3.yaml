@@ -78,7 +78,7 @@ work_items:
   - id: V2L17.2
     lot: V2L17
     title: Decode working output color convention layer
-    status: ready
+    status: done
     objective: Define and verify one auditable decoded-to-working-to-output color convention layer for existing RGB8 decoded observations with explicit supported input color evidence and explicit target semantics, while preserving unknown source declarations and prohibiting implicit conversion or photometric normalization.
     allowed_scope:
       - src/wre/domain/color_conventions.py
@@ -146,7 +146,78 @@ work_items:
       - precise backend version source license deterministic transform and configuration provenance identity regression
       - no white-balance exposure normalization clipping mask tone mapping AppearanceModel geometry mutation or route policy
       - full fast CI and any affected image decode or photometry reference lane
-  - {id: V2L17.3, lot: V2L17, title: Exposure white balance normalization artifact, status: planned, depends_on: [V2L17.2]}
+  - id: V2L17.3
+    lot: V2L17
+    title: Exposure white balance normalization artifact
+    status: ready
+    objective: Define one immutable provenance-rich exposure and white-balance normalization artifact over the explicit linear working-color output from V2L17.2, with caller-supplied finite normalization factors and fail-closed unresolved semantics when factors are absent or unsupported, without estimating factors from pixels or pretending capture metadata alone is radiometric calibration.
+    allowed_scope:
+      - src/wre/domain/photometric_normalization.py
+      - src/wre/photometry/photometric_normalization.py and focused src/wre/photometry/__init__.py exports
+      - focused exports in src/wre/domain/__init__.py
+      - tests/test_photometric_normalization.py and tests/test_photometric_normalization_reference.py
+      - focused dependency registry updates only if a maintained numeric or color primitive is actually required by the bounded reference path
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry after implementation checks are green
+    out_of_scope:
+      - re-reading EXIF container metadata source files or decoded RGB8 files
+      - changing V2L17.1 SourcePhotometryMetadata semantics or V2L17.2 color-conversion request plan backend identity or converted-buffer semantics
+      - deriving normalization automatically from image histograms learned appearance camera make model neighboring frames scene brightness or geometry
+      - treating ISO shutter f-number exposure compensation or color temperature alone as calibrated scene radiance white point or authoritative per-channel gains
+      - automatic exposure matching automatic white balance chromatic adaptation matrices camera response estimation HDR fusion tone mapping gamut conversion clipping saturation masks or highlight recovery
+      - mutating the V2L17.2 ConvertedLinearRgbBuffer source or overwriting decoded-image pyramid files
+      - constraining normalized linear values to the zero-to-one display range because clipping and saturation handling belongs to V2L17.4
+      - AppearanceModel material environment scene geometry routing quality policy V2L17.4 V2L17.5 or later behavior
+    depends_on: [V2L17.2]
+    read_before:
+      - docs/00_START_HERE.md
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md
+      - registry/components.yaml
+      - registry/dependencies.yaml
+      - registry/work-items/v2m3.yaml
+      - PROJECT_STATE.yaml
+      - src/wre/domain/source_photometry.py
+      - src/wre/domain/color_conventions.py
+      - src/wre/photometry/color_conventions.py
+      - src/wre/domain/artifact_materialization.py
+      - src/wre/domain/producer_identity.py
+      - src/wre/domain/provenance.py
+      - tests/test_source_photometry.py
+      - tests/test_color_conventions.py
+      - tests/test_color_convention_reference.py
+    reuse:
+      - exact SourcePhotometryMetadata ObservationId and RawMetadataEntry evidence from V2L17.1 as descriptive capture context only; never reinterpret those hints into hidden normalization factors
+      - exact V2L17.2 ColorConversionPlan and ConvertedLinearRgbBuffer identities as the immutable linear-working-color source of any bounded normalization result
+      - existing Sha256Digest artifact provenance and producer identity primitives rather than inventing parallel content identities
+      - direct positive scalar multiplication in linear light for one bounded deterministic CPU reference once explicit exposure-EV adjustment and RGB white-balance gains are supplied; do not introduce a general auto-white-balance or radiometric-calibration engine
+    acceptance:
+      - Add frozen typed domain records for explicit exposure adjustment white-balance RGB gains normalization request assessment plan and derived normalization identity. Unknown missing contradictory non-finite zero-or-negative gain inputs must remain unresolved or rejected rather than receiving unity or camera-derived defaults.
+      - Bind every normalization request to one exact V2L17.2 ColorConversionPlan or ConvertedLinearRgbBuffer and the same ObservationId and SourcePhotometryMetadata lineage. Reject foreign observation source-plan content or transform identities.
+      - Keep normalization parameters semantically separate from capture hints. Source ISO exposure time f-number exposure compensation white-balance mode and color temperature may be retained in provenance but must not automatically produce exposure-EV adjustment RGB gains or a scene white point.
+      - Permit one bounded reference normalization only when the caller explicitly supplies a finite exposure adjustment in EV and three finite strictly positive RGB gains. Apply exposure as a linear-light scale of two raised to the explicit EV adjustment and apply the three gains channel-wise without tone mapping clipping saturation correction or gamut conversion.
+      - The bounded reference output must preserve finite non-negative linear values even when they exceed 1.0. Values above display range are intentional evidence for V2L17.4 and must not be silently clipped or renormalized.
+      - Define deterministic plan and result identities over the complete source conversion identity source content digest explicit normalization parameters backend identity and transform sequence. Changing any factor evidence source buffer or backend configuration must change the appropriate identity.
+      - Preserve the exact V2L17.2 input buffer and all source/raw metadata immutably. A normalized buffer or materialization must have a distinct identity and explicit provenance and must never be described as calibrated radiance truth.
+      - Missing normalization factors may produce an explicit unresolved assessment but must not silently fall back to exposure zero EV unity RGB gains auto white balance or metadata-derived guesses.
+      - On green implementation evidence mark only V2L17.3 done and activate V2L17.4 with a complete executable clipping saturation and incompatible-camera handling contract. Do not implement V2L17.4 in the V2L17.3 PR.
+    tests:
+      - frozen exact-shape enum record and strict type validation for normalization factors request assessment plan and result
+      - observation and V2L17.2 plan or content identity mismatch failures with no cross-observation normalization
+      - absent explicit factor regression proving ISO shutter aperture exposure compensation white-balance mode and color temperature never synthesize adjustment values
+      - invalid parameter regressions for NaN infinity zero negative RGB gains non-float values and contradictory source identities
+      - deterministic explicit-factor fixture proving linear-light two-to-the-EV scaling plus independent RGB gain multiplication against fixed expected values
+      - above-one output regression proving the reference path does not clip tone-map saturate or renormalize normalized linear values
+      - provenance regressions proving any source plan source content factor or backend change changes normalization identity
+      - input immutability and distinct derived-output identity regressions
+      - module-surface regression proving image statistics auto exposure auto white balance chromatic adaptation camera response HDR clipping saturation AppearanceModel geometry and routing behavior remain absent
+      - full fast CI and CodeQL
   - {id: V2L17.4, lot: V2L17, title: Clipping saturation incompatible camera handling, status: planned, depends_on: [V2L17.3]}
   - {id: V2L17.5, lot: V2L17, title: Photometric regression fixture, status: planned, depends_on: [V2L17.4]}
   - {id: V2L18.1, lot: V2L18, title: Canonical AppearanceModel contract, status: planned, depends_on: [V2L17.5]}
