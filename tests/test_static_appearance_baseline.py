@@ -121,9 +121,9 @@ def _reviewed_source_fixture(
     root = tmp_path / "reference"
     data = {
         "LICENSE": b"synthetic license fixture",
-        "examples/simple_trainer.py": b"print('fixture')\\n",
-        "examples/requirements.txt": b"# fixture requirements\\n",
-        "gsplat/version.py": b"__version__ = 'fixture'\\n",
+        "examples/simple_trainer.py": b"print('fixture')\n",
+        "examples/requirements.txt": b"# fixture requirements\n",
+        "gsplat/version.py": b"__version__ = 'fixture'\n",
     }
     for path, payload in data.items():
         candidate = root / path
@@ -152,9 +152,17 @@ def test_gsplat_reference_source_git_pins_are_the_reviewed_upstream_identity() -
     assert tuple(path for path, _size, _sha in pins) == tuple(
         sorted(path for path, _size, _sha in pins)
     )
-    assert ("examples/simple_trainer.py", 49728, "6a30be737b5c9af53a140f64faf499d8d4d0933f") in pins
-    assert ("examples/datasets/colmap.py", 18447, "6c21f2c663b60d9dc38471a9963a3b5d092e5ed2") in pins
-    assert baseline_module._git_blob_sha1(b'__version__ = "1.5.3"\\n') == (
+    assert (
+        "examples/simple_trainer.py",
+        49728,
+        "6a30be737b5c9af53a140f64faf499d8d4d0933f",
+    ) in pins
+    assert (
+        "examples/datasets/colmap.py",
+        18447,
+        "6c21f2c663b60d9dc38471a9963a3b5d092e5ed2",
+    ) in pins
+    assert baseline_module._git_blob_sha1(b'__version__ = "1.5.3"\n') == (
         "a06ff4e08777642c97011d6c993690dba5a7a02f"
     )
 
