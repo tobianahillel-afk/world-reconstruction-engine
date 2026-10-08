@@ -1,6 +1,11 @@
 """Core solver-independent domain models."""
 
 from wre.domain.adapter_capabilities import AdapterCapabilityDescriptor, AdapterCapabilityName
+from wre.domain.appearance import (
+    APPEARANCE_MODEL_ARTIFACT_KIND,
+    AppearanceModel,
+    AppearanceRepresentationName,
+)
 from wre.domain.artifact_graph import ArtifactDependencyEdge, ArtifactDependencyGraph
 from wre.domain.artifact_invalidation import (
     ArtifactInvalidationPlan,
@@ -21,11 +26,6 @@ from wre.domain.artifact_materialization import (
     ArtifactMaterializationVerificationStatus,
 )
 from wre.domain.artifact_metadata import ArtifactMetadata
-from wre.domain.appearance import (
-    APPEARANCE_MODEL_ARTIFACT_KIND,
-    AppearanceModel,
-    AppearanceRepresentationName,
-)
 from wre.domain.artifacts import ArtifactId, ArtifactKind, ArtifactRef
 from wre.domain.benchmarks import (
     BenchmarkFixtureId,
