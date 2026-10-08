@@ -336,12 +336,14 @@ def test_source_artifact_ancestry_is_complete_unique_canonical_and_non_aliasing(
             source_surface=surface,
             source_artifacts=(source_a, source_b, surface_art),
         )
+    alias = _artifact("artifact:a", "appearance.static")
+    alias_geometry = _geometry("alias", ancestry=(alias, source_b))
     with pytest.raises(ValueError, match="not reuse"):
         _model(
             "alias",
-            source_geometry=geometry,
-            source_artifacts=(source_a, source_b),
-            artifact_ref=source_a,
+            source_geometry=alias_geometry,
+            source_artifacts=(alias, source_b),
+            artifact_ref=alias,
         )
 
 
