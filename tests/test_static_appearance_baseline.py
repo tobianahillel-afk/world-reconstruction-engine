@@ -381,14 +381,26 @@ def test_safe_training_profile_refuses_invalid_parameters(
         GsplatStaticAppearanceTrainingProfile(**kwargs)  # type: ignore[arg-type]
 
 
-
 def _gsplat_ply(*, properties: tuple[str, ...] | None = None, vertices: int = 1) -> bytes:
     """Exact uncompressed gsplat exporter layout with finite float32 content."""
     standard = (
-        "x", "y", "z", "f_dc_0", "f_dc_1", "f_dc_2",
-        "f_rest_0", "f_rest_1", "f_rest_2",
-        "opacity", "scale_0", "scale_1", "scale_2",
-        "rot_0", "rot_1", "rot_2", "rot_3",
+        "x",
+        "y",
+        "z",
+        "f_dc_0",
+        "f_dc_1",
+        "f_dc_2",
+        "f_rest_0",
+        "f_rest_1",
+        "f_rest_2",
+        "opacity",
+        "scale_0",
+        "scale_1",
+        "scale_2",
+        "rot_0",
+        "rot_1",
+        "rot_2",
+        "rot_3",
     )
     fields = properties or standard
     header = (
@@ -416,28 +428,31 @@ def _gsplat_output(
 def test_gsplat_ply_materialization_hashes_real_output_and_retains_path(tmp_path: Path) -> None:
     data = _gsplat_ply(vertices=2)
     root, profile, ref = _gsplat_output(tmp_path, data)
-    result = materialize_verified_gsplat_ply(
-        artifact_ref=ref, output_root=root, profile=profile
-    )
+    result = materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
     assert result.artifact_ref == ref
     assert len(result.entries) == 1
     assert result.entries[0].relative_path == "ply/point_cloud_19.ply"
     assert result.entries[0].byte_length == len(data)
     assert result.entries[0].sha256 == _digest(data)
-    assert materialize_verified_gsplat_ply(
-        artifact_ref=ref, output_root=root, profile=profile
-    ) == result
+    assert (
+        materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
+        == result
+    )
 
 
 @pytest.mark.parametrize(
     ("data", "reason"),
     [
         (b"not-ply", "not PLY"),
-        (_gsplat_ply().replace(b"format binary_little_endian", b"format ascii"),
-         "uncompressed little-endian"),
+        (
+            _gsplat_ply().replace(b"format binary_little_endian", b"format ascii"),
+            "uncompressed little-endian",
+        ),
         (_gsplat_ply(vertices=0), "non-empty vertex"),
-        (_gsplat_ply().replace(b"property float opacity", b"property double opacity"),
-         "unexpected element"),
+        (
+            _gsplat_ply().replace(b"property float opacity", b"property double opacity"),
+            "unexpected element",
+        ),
         (_gsplat_ply(properties=("x", "y", "z", "opacity")), "missing Gaussian"),
         (_gsplat_ply().replace(b"f_rest_1", b"f_rest_2"), "property schema"),
         (_gsplat_ply()[:-3], "truncated"),
@@ -463,9 +478,7 @@ def test_gsplat_ply_materialization_rejects_nonfinite_payload(tmp_path: Path) ->
 def test_gsplat_ply_materialization_rejects_zero_gaussians_and_forged_header(
     tmp_path: Path,
 ) -> None:
-    data = _gsplat_ply(vertices=1).replace(
-        b"element vertex 1", b"element vertex 0"
-    )
+    data = _gsplat_ply(vertices=1).replace(b"element vertex 1", b"element vertex 0")
     root, profile, ref = _gsplat_output(tmp_path, data)
     with pytest.raises(GsplatStaticAppearancePreflightError, match="non-empty vertex"):
         materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
@@ -487,9 +500,7 @@ def test_gsplat_ply_materialization_rejects_symlink_and_wrong_artifact_kind(
     expected.unlink()
     expected.symlink_to(destination)
     with pytest.raises(GsplatStaticAppearancePreflightError, match="missing"):
-        materialize_verified_gsplat_ply(
-            artifact_ref=ref, output_root=root, profile=profile
-        )
+        materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
 
 
 def test_gsplat_ply_materialization_refuses_missing_final_step_file(
