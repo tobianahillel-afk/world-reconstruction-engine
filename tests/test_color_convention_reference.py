@@ -7,6 +7,7 @@ import pytest
 
 import wre.photometry.color_conventions as reference_module
 from wre.domain import (
+    LINEAR_SRGB_F64,
     ArtifactMaterializationEntry,
     ColorConversionStatus,
     DecodedImageLevelDescriptor,
@@ -15,7 +16,6 @@ from wre.domain import (
     DecodedImagePyramidManifest,
     DecodedImagePyramidSpec,
     DecodedPixelColorEncoding,
-    LINEAR_SRGB_F64,
     ObservationId,
     ObservationKind,
     ObservationMetadata,
