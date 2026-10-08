@@ -45,9 +45,7 @@ class NormalizedLinearRgbBuffer:
             type(value) is not float or not math.isfinite(value) or value < 0.0
             for value in self.channels
         ):
-            raise ValueError(
-                "normalized_color.channels must be finite non-negative float64 values"
-            )
+            raise ValueError("normalized_color.channels must be finite non-negative float64 values")
 
         source_level = self.plan.request.source_plan.request.decoded_manifest.levels[
             self.plan.request.source_plan.request.decoded_level_index
