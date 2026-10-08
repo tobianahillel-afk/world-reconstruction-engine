@@ -7,9 +7,9 @@ import struct
 from dataclasses import dataclass
 
 from wre.domain.color_conventions import (
+    REFERENCE_COLOR_BACKEND,
     ColorConversionPlan,
     ColorConversionStatus,
-    REFERENCE_COLOR_BACKEND,
     assess_color_conversion,
 )
 from wre.domain.observations import Sha256Digest
