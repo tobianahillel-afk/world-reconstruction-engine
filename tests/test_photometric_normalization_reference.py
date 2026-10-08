@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import struct
 from dataclasses import FrozenInstanceError, replace
 
 import pytest
@@ -8,8 +9,17 @@ import pytest
 import wre.photometry.photometric_normalization as normalization_module
 from wre.domain import (
     LINEAR_SRGB_F64,
+    ArtifactId,
+    ArtifactInputFingerprint,
+    ArtifactKeyMaterial,
+    ArtifactKind,
     ArtifactMaterializationEntry,
+    ArtifactMaterializationMetadata,
+    ArtifactMetadata,
+    ArtifactProducerIdentity,
+    ArtifactRef,
     ColorConversionRequest,
+    ConfigurationIdentity,
     DecodedImageLevelDescriptor,
     DecodedImageOrientationPolicy,
     DecodedImagePixelLayout,
@@ -22,7 +32,10 @@ from wre.domain import (
     PhotometricNormalizationFactors,
     PhotometricNormalizationRequest,
     PhotometricNormalizationStatus,
+    ProducerRef,
+    ProvenanceClass,
     RawMetadataEntry,
+    SceneProjectId,
     Sha256Digest,
     SourceColorMetadata,
     SourceExposureMetadata,
@@ -31,6 +44,7 @@ from wre.domain import (
     SourceWhiteBalanceMetadata,
     assess_color_conversion,
     assess_photometric_normalization,
+    derive_artifact_key,
 )
 from wre.photometry import (
     ConvertedLinearRgbBuffer,
@@ -93,15 +107,48 @@ def _source_case(
             ),
         ),
     )
+    artifact_ref = ArtifactRef(
+        artifact_id=ArtifactId("artifact:photometric-reference-decoded"),
+        artifact_kind=ArtifactKind("media.decoded_image_pyramid"),
+    )
+    producer = ArtifactProducerIdentity(
+        producer=ProducerRef(implementation="test.decoded.photometric-reference", version="1.0.0"),
+        configuration=ConfigurationIdentity(sha256=Sha256Digest("e" * 64)),
+    )
+    artifact = ArtifactMetadata(
+        project_id=SceneProjectId("project:photometric-reference"),
+        artifact_ref=artifact_ref,
+        artifact_key=derive_artifact_key(
+            ArtifactKeyMaterial(
+                output_kind=artifact_ref.artifact_kind,
+                input_fingerprints=(
+                    ArtifactInputFingerprint(
+                        artifact_kind=ArtifactKind("image.observation"),
+                        sha256=manifest.source_asset_sha256,
+                    ),
+                ),
+                producer=producer,
+            )
+        ),
+        producer=producer,
+        provenance_class=ProvenanceClass.OBSERVED_RECONSTRUCTED,
+    )
+    materialization = ArtifactMaterializationMetadata(
+        artifact_ref=artifact_ref,
+        entries=(
+            ArtifactMaterializationEntry(
+                relative_path="levels/level-000000.rgb",
+                byte_length=len(pixels),
+                sha256=Sha256Digest(hashlib.sha256(pixels).hexdigest()),
+            ),
+        ),
+    )
     request = ColorConversionRequest(
         decoded_manifest=manifest,
+        decoded_artifact=artifact,
+        decoded_materialization=materialization,
         source_photometry=photometry,
         decoded_level_index=0,
-        decoded_level_entry=ArtifactMaterializationEntry(
-            relative_path="levels/level-000000.rgb",
-            byte_length=len(pixels),
-            sha256=Sha256Digest(hashlib.sha256(pixels).hexdigest()),
-        ),
         decoded_encoding=DecodedPixelColorEncoding.SRGB_FULL_RGB8,
         working_convention=LINEAR_SRGB_F64,
         output_convention=LINEAR_SRGB_F64,
@@ -135,7 +182,7 @@ def test_explicit_linear_reference_preserves_values_above_one_without_clipping()
     assert assessment.status is PhotometricNormalizationStatus.READY
     assert assessment.plan is not None
 
-    before = tuple(source.channels)
+    before = bytes(source.packed_rgb_f64_be)
     result = normalize_linear_rgb_reference(assessment.plan, source)
 
     expected = (
@@ -143,9 +190,12 @@ def test_explicit_linear_reference_preserves_values_above_one_without_clipping()
         0.21586050011389926,
         4.0,
     )
-    assert result.channels == pytest.approx(expected, abs=1e-13)
-    assert result.channels[2] > 1.0
-    assert source.channels == before
+    normalized_channels = tuple(
+        value for (value,) in struct.iter_unpack("!d", result.packed_rgb_f64_be)
+    )
+    assert normalized_channels == pytest.approx(expected, abs=1e-13)
+    assert normalized_channels[2] > 1.0
+    assert source.packed_rgb_f64_be == before
     assert result.source_content_sha256 == source.content_sha256
     assert result.source_derived_sha256 == source.derived_sha256
     assert result.derived_sha256 != source.derived_sha256
@@ -188,12 +238,15 @@ def test_normalized_result_is_immutable_and_digest_verified() -> None:
     result = normalize_linear_rgb_reference(plan, source)
 
     assert isinstance(result, NormalizedLinearRgbBuffer)
+    assert type(result.packed_rgb_f64_be) is bytes
     with pytest.raises(FrozenInstanceError):
-        result.channels = ()  # type: ignore[misc]
+        result.packed_rgb_f64_be = b""  # type: ignore[misc]
     with pytest.raises(ValueError, match="content digest"):
         replace(result, content_sha256=Sha256Digest("0" * 64))
     with pytest.raises(ValueError, match="derived identity"):
         replace(result, derived_sha256=Sha256Digest("0" * 64))
+    with pytest.raises(ValueError, match="source dimensions"):
+        replace(result, packed_rgb_f64_be=result.packed_rgb_f64_be[:-8])
 
 
 def test_reference_surface_contains_no_automatic_photometric_behavior() -> None:
