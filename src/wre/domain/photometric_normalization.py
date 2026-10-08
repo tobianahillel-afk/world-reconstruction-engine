@@ -35,13 +35,20 @@ class PhotometricNormalizationFactors:
     white_balance_rgb_gains: tuple[float, float, float] | None
 
     def __post_init__(self) -> None:
-        if self.exposure_adjustment_ev is not None and type(self.exposure_adjustment_ev) is not float:
-            raise TypeError("photometric_factors.exposure_adjustment_ev must be float or None")
+        if (
+            self.exposure_adjustment_ev is not None
+            and type(self.exposure_adjustment_ev) is not float
+        ):
+            raise TypeError(
+                "photometric_factors.exposure_adjustment_ev must be float or None"
+            )
         if self.white_balance_rgb_gains is not None:
             if not isinstance(self.white_balance_rgb_gains, tuple):
                 raise TypeError("photometric_factors.white_balance_rgb_gains must be tuple or None")
             if len(self.white_balance_rgb_gains) != 3:
-                raise ValueError("photometric_factors.white_balance_rgb_gains must contain RGB gains")
+                raise ValueError(
+                    "photometric_factors.white_balance_rgb_gains must contain RGB gains"
+                )
             if any(type(value) is not float for value in self.white_balance_rgb_gains):
                 raise TypeError("photometric_factors.white_balance_rgb_gains members must be float")
 
@@ -88,7 +95,9 @@ class PhotometricNormalizationRequest:
         if not isinstance(self.source_derived_sha256, Sha256Digest):
             raise TypeError("photometric_request.source_derived_sha256 must be Sha256Digest")
         if not isinstance(self.source_photometry, SourcePhotometryMetadata):
-            raise TypeError("photometric_request.source_photometry must be SourcePhotometryMetadata")
+            raise TypeError(
+                "photometric_request.source_photometry must be SourcePhotometryMetadata"
+            )
         if not isinstance(self.factors, PhotometricNormalizationFactors):
             raise TypeError("photometric_request.factors must be PhotometricNormalizationFactors")
         if self.source_plan.request.source_photometry != self.source_photometry:
@@ -144,7 +153,9 @@ class PhotometricNormalizationAssessment:
         if not isinstance(self.status, PhotometricNormalizationStatus):
             raise TypeError("photometric_assessment.status must be PhotometricNormalizationStatus")
         if not isinstance(self.request, PhotometricNormalizationRequest):
-            raise TypeError("photometric_assessment.request must be PhotometricNormalizationRequest")
+            raise TypeError(
+                "photometric_assessment.request must be PhotometricNormalizationRequest"
+            )
         if self.status is PhotometricNormalizationStatus.READY:
             if self.plan is None or self.issue is not None or self.plan.request != self.request:
                 raise ValueError("ready photometric assessment requires matching plan and no issue")
@@ -181,7 +192,7 @@ def assess_photometric_normalization(
     *,
     backend: PhotometricNormalizationBackend = REFERENCE_PHOTOMETRIC_NORMALIZATION_BACKEND,
 ) -> PhotometricNormalizationAssessment:
-    """Approve only explicit finite linear-light factors; never infer them from metadata or pixels."""
+    """Approve explicit finite linear-light factors without inferring them from metadata."""
 
     if not isinstance(request, PhotometricNormalizationRequest):
         raise TypeError("photometric_request must be PhotometricNormalizationRequest")
