@@ -305,7 +305,14 @@ components:
       - tests/test_surface_suitability.py
       - tests/test_surfaces.py
     status: implemented
-  photometric_pipeline: {owner_lot: V2L17, implementation: [], tests: [], status: planned}
+  photometric_pipeline:
+    owner_lot: V2L17
+    implementation:
+      - src/wre/domain/source_photometry.py
+      - src/wre/domain/__init__.py
+    tests:
+      - tests/test_source_photometry.py
+    status: implementing
   static_appearance: {owner_lot: V2L18, implementation: [], tests: [], status: planned}
   materials_environment: {owner_lot: V2L19, implementation: [], tests: [], status: planned}
   master_scene: {owner_lot: V2L20, implementation: [], tests: [], status: planned}

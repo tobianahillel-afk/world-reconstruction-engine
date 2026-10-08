@@ -5,23 +5,21 @@ roadmap_version: '2.0'
 phase: implementation
 milestone: V2M3
 lot: V2L17
-active_work_item: V2L17.1
+active_work_item: V2L17.2
 status: ready
-last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5, V2L3.6, V2L4.1, V2L4.2, V2L4.3, V2L4.4, V2L4.5, V2L4.6, V2L5.1, V2L5.2, V2L5.3, V2L5.4, V2L5.5, V2L5.6, V2L6.1, V2L6.2, V2L6.3, V2L6.4, V2L6.5, V2L6.6, V2L7.1, V2L7.2, V2L7.3, V2L7.4, V2L7.5, V2L7.6, V2L8.1, V2L8.2, V2L8.3, V2L8.4, V2L8.5, V2L9.1, V2L9.2, V2L9.3, V2L9.4, V2L9.5, V2L10.1, V2L10.2, V2L10.3, V2L10.4, V2L10.5, V2L10.6, V2L11.1, V2L11.2, V2L11.3, V2L11.4, V2L11.5, V2L11.6, V2L12.1, V2L12.2, V2L12.3, V2L12.4, V2L12.5, V2L13.1, V2L13.2, V2L13.3, V2L13.4, V2L13.5, V2L13.6, V2L14.1, V2L14.2, V2L14.3, V2L14.4, V2L14.5, V2L14.6, V2L15.1, V2L15.2, V2L15.3, V2L15.4, V2L15.5, V2L15.6, V2L16.1, V2L16.2, V2L16.3, V2L16.4, V2L16.5, V2L16.6]
-last_merged_pr: 180
+last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5, V2L3.6, V2L4.1, V2L4.2, V2L4.3, V2L4.4, V2L4.5, V2L4.6, V2L5.1, V2L5.2, V2L5.3, V2L5.4, V2L5.5, V2L5.6, V2L6.1, V2L6.2, V2L6.3, V2L6.4, V2L6.5, V2L6.6, V2L7.1, V2L7.2, V2L7.3, V2L7.4, V2L7.5, V2L7.6, V2L8.1, V2L8.2, V2L8.3, V2L8.4, V2L8.5, V2L9.1, V2L9.2, V2L9.3, V2L9.4, V2L9.5, V2L10.1, V2L10.2, V2L10.3, V2L10.4, V2L10.5, V2L10.6, V2L11.1, V2L11.2, V2L11.3, V2L11.4, V2L11.5, V2L11.6, V2L12.1, V2L12.2, V2L12.3, V2L12.4, V2L12.5, V2L13.1, V2L13.2, V2L13.3, V2L13.4, V2L13.5, V2L13.6, V2L14.1, V2L14.2, V2L14.3, V2L14.4, V2L14.5, V2L14.6, V2L15.1, V2L15.2, V2L15.3, V2L15.4, V2L15.5, V2L15.6, V2L16.1, V2L16.2, V2L16.3, V2L16.4, V2L16.5, V2L16.6, V2L17.1]
+last_merged_pr: 181
 current_goal: >-
-  V2L16 and V2M2 are complete. WRE now carries canonical camera depth point geometry refinement dense-depth and explicit physical-surface
-  evidence through one retained CPU-controlled benchmark while preserving immutable provenance local-frame identity unresolved scale holes
-  negative support and unknown states. The milestone does not claim photorealism generated completion runtime packaging or certified collision
-  navigation or measurement safety. Advance only V2L17.1 as the first V2M3 item: define source color exposure and white-balance metadata
-  semantics over exact raw ObservationMetadata evidence without decoding pixels or introducing color conversion normalization or AppearanceModel
-  behavior.
+  V2M2 is complete and V2M3 photometric implementation is underway. V2L17.1 now provides an immutable ObservationId-bound source color
+  exposure and white-balance metadata contract with independent absent unknown invalid resolved states and exact RawMetadataEntry evidence.
+  The contract is descriptive only and does not decode pixels infer defaults normalize photometry transform colors or establish an
+  AppearanceModel. Advance only V2L17.2 as the decoded-to-working-to-output color convention boundary over canonical decoded image evidence.
 next_action: >-
-  Implement only V2L17.1 under its executable registry contract. Add one pure immutable source-photometry domain contract bound to exact
-  ObservationId and ObservationMetadata evidence, with independent absent unknown invalid and resolved states for source-color declarations
-  exposure capture hints and white-balance hints. Reuse exact RawMetadataEntry evidence and fail closed on foreign contradictory fabricated or
-  invalid values. Do not read source files decode pixels infer sRGB Rec.709 D65 ISO shutter aperture or white balance from MIME camera identity
-  or image statistics, transform color, normalize exposure/white balance, create an AppearanceModel, or implement V2L17.2 in the same PR.
+  Implement only V2L17.2 under its complete registry/work-items/v2m3.yaml contract. Bind exact SourcePhotometryMetadata evidence and
+  DecodedImagePyramidManifest identity without inferring source color space from rgb8_packed pixel layout. Separate explicit source decoded
+  working and output conventions, reject unresolved conflicting unsupported metadata, and provide one reviewed deterministic CPU reference
+  conversion with explicit provenance and numeric fixture. Reuse maintained color-management technology where applicable. Do not mutate
+  original decoded bytes, normalize exposure or white balance, create AppearanceModel, or implement V2L17.3 in the same PR.
 blockers: []
 architecture:
   product_blueprint: docs/01_PRODUCT.md
@@ -45,4 +43,4 @@ reviews:
 quality:
   fast_ci_required: true
   known_regressions: 0
-updated_at: '2026-09-30'
+updated_at: '2026-10-08'
