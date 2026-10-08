@@ -9,11 +9,17 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import struct
 import zlib
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
+from wre.domain.appearance import APPEARANCE_MODEL_ARTIFACT_KIND
+from wre.domain.artifact_materialization import (
+    ArtifactMaterializationEntry,
+    ArtifactMaterializationMetadata,
+)
 from wre.domain.artifacts import ArtifactRef
 from wre.domain.observations import ObservationId, Sha256Digest
 from wre.reconstruction.colmap_canonical_geometry import _verified_native_model_path
@@ -382,6 +388,170 @@ class GsplatStaticAppearanceTrainingProfile:
         return f"ply/point_cloud_{self.max_steps - 1}.ply"
 
 
+
+_MAX_GSPLAT_PLY_HEADER_BYTES = 16 * 1024
+_MAX_GSPLAT_PLY_PROPERTIES = 256
+_MAX_GSPLAT_PLY_VERTICES = 100_000_000
+
+
+def materialize_verified_gsplat_ply(
+    *,
+    artifact_ref: ArtifactRef,
+    output_root: Path,
+    profile: GsplatStaticAppearanceTrainingProfile,
+) -> ArtifactMaterializationMetadata:
+    """Audit one real uncompressed gsplat exporter payload without importing Torch.
+
+    The input is a private, already-produced training workspace. This function
+    cannot claim a training run, check native cameras, or approve radiometry.
+    It only validates the exact upstream PLY layout and binds its real bytes to
+    the canonical WRE appearance artifact materialization contract.
+    """
+
+    if not isinstance(artifact_ref, ArtifactRef):
+        raise TypeError("gsplat output artifact_ref must be ArtifactRef")
+    if artifact_ref.artifact_kind != APPEARANCE_MODEL_ARTIFACT_KIND:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat output must use the canonical appearance.static ArtifactKind"
+        )
+    if not isinstance(profile, GsplatStaticAppearanceTrainingProfile):
+        raise TypeError("gsplat output profile must be GsplatStaticAppearanceTrainingProfile")
+    if not isinstance(output_root, Path):
+        raise TypeError("gsplat output_root must be pathlib.Path")
+
+    root = _safe_root(output_root, "gsplat output_root")
+    ply_directory = root / "ply"
+    if ply_directory.is_symlink() or not ply_directory.is_dir():
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat output PLY directory must be a real directory"
+        )
+    file_path = root / profile.expected_ply_relative_path
+    if file_path.is_symlink() or not file_path.is_file():
+        raise GsplatStaticAppearancePreflightError("gsplat expected final PLY file is missing")
+    if file_path.resolve(strict=True).parent != ply_directory.resolve(strict=True):
+        raise GsplatStaticAppearancePreflightError("gsplat PLY escaped its output directory")
+
+    digest = hashlib.sha256()
+    with file_path.open("rb") as stream:
+        def read_header_line() -> str:
+            raw = stream.readline(_MAX_GSPLAT_PLY_HEADER_BYTES + 1)
+            if (
+                not raw
+                or len(raw) > _MAX_GSPLAT_PLY_HEADER_BYTES
+                or stream.tell() > _MAX_GSPLAT_PLY_HEADER_BYTES
+                or not raw.endswith(b"\n")
+            ):
+                raise GsplatStaticAppearancePreflightError(
+                    "gsplat PLY header is truncated or oversized"
+                )
+            digest.update(raw)
+            try:
+                return raw.decode("ascii").removesuffix("\n")
+            except UnicodeDecodeError as exc:
+                raise GsplatStaticAppearancePreflightError(
+                    "gsplat PLY header must be ASCII"
+                ) from exc
+
+        if read_header_line() != "ply":
+            raise GsplatStaticAppearancePreflightError("gsplat output is not PLY")
+        if read_header_line() != "format binary_little_endian 1.0":
+            raise GsplatStaticAppearancePreflightError(
+                "gsplat output must be uncompressed little-endian binary PLY"
+            )
+        element_line = read_header_line()
+        parts = element_line.split(" ")
+        if (
+            len(parts) != 3
+            or parts[:2] != ["element", "vertex"]
+            or not parts[2].isascii()
+            or not parts[2].isdecimal()
+            or parts[2].startswith("0")
+        ):
+            raise GsplatStaticAppearancePreflightError(
+                "gsplat PLY must declare one non-empty vertex element"
+            )
+        count = int(parts[2])
+        if count < 1 or count > _MAX_GSPLAT_PLY_VERTICES:
+            raise GsplatStaticAppearancePreflightError(
+                "gsplat PLY vertex count is outside the audited bounded profile"
+            )
+
+        properties: list[str] = []
+        while True:
+            line = read_header_line()
+            if line == "end_header":
+                break
+            if not line.startswith("property float "):
+                raise GsplatStaticAppearancePreflightError(
+                    "gsplat PLY contains an unexpected element, type or header field"
+                )
+            properties.append(line[len("property float "):])
+            if len(properties) > _MAX_GSPLAT_PLY_PROPERTIES:
+                raise GsplatStaticAppearancePreflightError(
+                    "gsplat PLY declares too many float properties"
+                )
+
+        prefix = ["x", "y", "z", "f_dc_0", "f_dc_1", "f_dc_2"]
+        suffix = ["opacity", "scale_0", "scale_1", "scale_2",
+                  "rot_0", "rot_1", "rot_2", "rot_3"]
+        if len(properties) < len(prefix) + len(suffix):
+            raise GsplatStaticAppearancePreflightError(
+                "gsplat PLY is missing Gaussian properties"
+            )
+        remainder = properties[len(prefix):-len(suffix)]
+        if (
+            properties[:len(prefix)] != prefix
+            or properties[-len(suffix):] != suffix
+            or len(remainder) % 3 != 0
+            or remainder != [f"f_rest_{index}" for index in range(len(remainder))]
+        ):
+            raise GsplatStaticAppearancePreflightError(
+                "gsplat PLY property schema differs from the exact exporter"
+            )
+
+        header_length = stream.tell()
+        stride = len(properties) * 4
+        expected_size = header_length + count * stride
+        size = file_path.stat().st_size
+        if size != expected_size:
+            raise GsplatStaticAppearancePreflightError(
+                "gsplat PLY payload is truncated or contains unexpected bytes"
+            )
+        # Check the whole record stream, not just a header, and hash the same
+        # bytes we have inspected. The bounded read limits transient memory.
+        remaining = count * stride
+        while remaining:
+            chunk = stream.read(min(remaining, stride * max(1, 4096 // stride)))
+            if not chunk or len(chunk) % stride:
+                raise GsplatStaticAppearancePreflightError(
+                    "gsplat PLY vertex data is incomplete"
+                )
+            if any(not math.isfinite(value) for (value,) in struct.iter_unpack("<f", chunk)):
+                raise GsplatStaticAppearancePreflightError(
+                    "gsplat PLY contains non-finite Gaussian parameters"
+                )
+            digest.update(chunk)
+            remaining -= len(chunk)
+        if stream.read(1):
+            raise GsplatStaticAppearancePreflightError(
+                "gsplat PLY contains trailing bytes"
+            )
+    if file_path.stat().st_size != size:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat PLY changed during materialization verification"
+        )
+    return ArtifactMaterializationMetadata(
+        artifact_ref=artifact_ref,
+        entries=(
+            ArtifactMaterializationEntry(
+                relative_path=profile.expected_ply_relative_path,
+                sha256=Sha256Digest(digest.hexdigest()),
+                byte_length=size,
+            ),
+        ),
+    )
+
+
 __all__ = [
     "GSPLAT_STATIC_APPEARANCE_REPRESENTATION",
     "GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION",
@@ -392,4 +562,5 @@ __all__ = [
     "GsplatStaticAppearanceTrainingProfile",
     "GsplatStaticAppearanceVerifiedImage",
     "preflight_gsplat_static_appearance_inputs",
+    "materialize_verified_gsplat_ply",
 ]
