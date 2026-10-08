@@ -8,7 +8,6 @@ import json
 import sys
 from dataclasses import FrozenInstanceError
 from pathlib import Path
-from types import ModuleType
 from typing import Any
 
 import pytest
