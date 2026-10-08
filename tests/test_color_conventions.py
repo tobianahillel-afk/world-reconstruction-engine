@@ -7,6 +7,8 @@ from typing import Any, cast
 import pytest
 
 from wre.domain import (
+    LINEAR_SRGB_F64,
+    REFERENCE_COLOR_BACKEND,
     ArtifactMaterializationEntry,
     ColorConvention,
     ColorConversionRequest,
@@ -21,12 +23,10 @@ from wre.domain import (
     DecodedImagePyramidManifest,
     DecodedImagePyramidSpec,
     DecodedPixelColorEncoding,
-    LINEAR_SRGB_F64,
     ObservationId,
     ObservationKind,
     ObservationMetadata,
     RawMetadataEntry,
-    REFERENCE_COLOR_BACKEND,
     Sha256Digest,
     SourceColorMetadata,
     SourceExposureMetadata,
