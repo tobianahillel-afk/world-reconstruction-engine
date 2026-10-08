@@ -117,7 +117,9 @@ class ColorConversionRequest:
         if not isinstance(self.source_photometry, SourcePhotometryMetadata):
             raise TypeError("color_request.source_photometry must be SourcePhotometryMetadata")
         if not isinstance(self.decoded_level_entry, ArtifactMaterializationEntry):
-            raise TypeError("color_request.decoded_level_entry must be ArtifactMaterializationEntry")
+            raise TypeError(
+                "color_request.decoded_level_entry must be ArtifactMaterializationEntry"
+            )
         if not isinstance(self.decoded_encoding, DecodedPixelColorEncoding):
             raise TypeError("color_request.decoded_encoding must be DecodedPixelColorEncoding")
         if not isinstance(self.working_convention, ColorConvention):
@@ -244,7 +246,10 @@ def assess_color_conversion(
         return rejected("decoded pixel encoding is unsupported")
     if request.decoded_manifest.pixel_layout is not DecodedImagePixelLayout.RGB8_PACKED:
         return rejected("decoded pixel layout is unsupported")
-    if request.decoded_manifest.orientation_policy is not DecodedImageOrientationPolicy.SOURCE_PIXELS:
+    if (
+        request.decoded_manifest.orientation_policy
+        is not DecodedImageOrientationPolicy.SOURCE_PIXELS
+    ):
         return rejected("decoded orientation policy is unsupported")
     if request.working_convention != LINEAR_SRGB_F64:
         return rejected("working color convention is unsupported")
@@ -257,4 +262,6 @@ def assess_color_conversion(
         request=request, backend=backend, steps=steps,
         identity=_plan_identity(request, backend, steps),
     )
-    return ColorConversionAssessment(status=ColorConversionStatus.READY, request=request, plan=plan)
+    return ColorConversionAssessment(
+        status=ColorConversionStatus.READY, request=request, plan=plan
+    )
