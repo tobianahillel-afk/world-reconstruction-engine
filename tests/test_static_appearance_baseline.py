@@ -174,9 +174,7 @@ def _parts(
         source_geometry=candidate,
         source_surface=None,
         source_observation_ids=(observation_id,),
-        output_representation=AppearanceRepresentationName(
-            GSPLAT_STATIC_APPEARANCE_REPRESENTATION
-        ),
+        output_representation=AppearanceRepresentationName(GSPLAT_STATIC_APPEARANCE_REPRESENTATION),
         supporting_artifacts=(native_ref,),
     )
     source = GsplatStaticAppearancePreflightSource(
@@ -199,9 +197,7 @@ def test_exact_srgb_png_and_native_manifest_byte_gate(tmp_path: Path) -> None:
     assert evidence.images[0].height_px == 1
     assert evidence.images[0].sha256 == source.images[0].observation.asset.sha256
     assert request.source_geometry.geometry_solution.scale_status is GeometryScaleStatus.UNRESOLVED
-    assert GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION == (
-        "937e29912570c372bed6747a5c9bf85fed877bae"
-    )
+    assert GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION == ("937e29912570c372bed6747a5c9bf85fed877bae")
 
 
 def test_rejects_tampered_image_bytes(tmp_path: Path) -> None:
@@ -242,9 +238,7 @@ def test_rejects_native_sparse_model_tampering(tmp_path: Path) -> None:
 def test_rejects_missing_native_support_and_foreign_observations(tmp_path: Path) -> None:
     request, source = _parts(tmp_path)
     with pytest.raises(GsplatStaticAppearancePreflightError, match="ArtifactRef"):
-        preflight_gsplat_static_appearance_inputs(
-            replace(request, supporting_artifacts=()), source
-        )
+        preflight_gsplat_static_appearance_inputs(replace(request, supporting_artifacts=()), source)
     foreign = replace(
         request,
         source_observation_ids=(ObservationId("obs:unrelated"),),
@@ -269,9 +263,7 @@ def test_rejects_image_root_symlink(tmp_path: Path) -> None:
     alias = tmp_path / "alias"
     alias.symlink_to(source.image_root, target_is_directory=True)
     with pytest.raises(GsplatStaticAppearancePreflightError, match="symlink"):
-        preflight_gsplat_static_appearance_inputs(
-            request, replace(source, image_root=alias)
-        )
+        preflight_gsplat_static_appearance_inputs(request, replace(source, image_root=alias))
 
 
 def test_rejects_unknown_representation(tmp_path: Path) -> None:
@@ -293,7 +285,5 @@ def test_preflight_has_no_trainer_execution_or_optional_framework_import() -> No
             imported.update(value.name.split(".")[0] for value in node.names)
         elif isinstance(node, ast.ImportFrom) and node.module is not None:
             imported.add(node.module.split(".")[0])
-    assert imported <= {
-        "__future__", "hashlib", "struct", "zlib", "dataclasses", "pathlib", "wre"
-    }
+    assert imported <= {"__future__", "hashlib", "struct", "zlib", "dataclasses", "pathlib", "wre"}
     assert not {"torch", "gsplat", "numpy", "subprocess", "pycolmap"} & imported
