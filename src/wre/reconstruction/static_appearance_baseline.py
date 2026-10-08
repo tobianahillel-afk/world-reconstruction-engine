@@ -408,7 +408,9 @@ def verify_gsplat_static_appearance_source_photometry(
     identities: list[Sha256Digest] = []
     for image, assessment in zip(verified.images, assessments, strict=True):
         if not isinstance(assessment, PhotometricCompatibilityAssessment):
-            raise TypeError("gsplat photometric evidence must be PhotometricCompatibilityAssessment")
+            raise TypeError(
+                "gsplat photometric evidence must be PhotometricCompatibilityAssessment"
+            )
         if (
             assessment != assess_photometric_compatibility(assessment.compatibility_input)
             or assessment.status is not PhotometricCompatibilityStatus.COMPATIBLE
