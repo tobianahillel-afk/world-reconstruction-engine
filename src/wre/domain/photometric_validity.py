@@ -265,8 +265,7 @@ class PhotometricCompatibilityInput:
     def __post_init__(self) -> None:
         if not isinstance(self.color_assessment, ColorConversionAssessment):
             raise TypeError(
-                "photometric_compatibility_input.color_assessment must be "
-                "ColorConversionAssessment"
+                "photometric_compatibility_input.color_assessment must be ColorConversionAssessment"
             )
         if not isinstance(
             self.normalization_assessment,
@@ -282,9 +281,7 @@ class PhotometricCompatibilityInput:
                 raise TypeError(
                     f"photometric_compatibility_input.{name} must be Sha256Digest or None"
                 )
-        if (self.normalized_content_sha256 is None) != (
-            self.normalized_derived_sha256 is None
-        ):
+        if (self.normalized_content_sha256 is None) != (self.normalized_derived_sha256 is None):
             raise ValueError(
                 "photometric_compatibility_input normalized content and derived identities "
                 "must be present together"
@@ -340,8 +337,7 @@ class PhotometricCompatibilityAssessment:
     def __post_init__(self) -> None:
         if not isinstance(self.status, PhotometricCompatibilityStatus):
             raise TypeError(
-                "photometric_compatibility_assessment.status must be "
-                "PhotometricCompatibilityStatus"
+                "photometric_compatibility_assessment.status must be PhotometricCompatibilityStatus"
             )
         if not isinstance(self.compatibility_input, PhotometricCompatibilityInput):
             raise TypeError(
@@ -421,10 +417,7 @@ def assess_photometric_compatibility(
         and not normalized_ids_present
     ):
         unresolved_reasons.append("normalized output identities are absent")
-    if (
-        normalization.status is not PhotometricNormalizationStatus.READY
-        and normalized_ids_present
-    ):
+    if normalization.status is not PhotometricNormalizationStatus.READY and normalized_ids_present:
         incompatible_reasons.append(
             "normalized output identities are present without a ready normalization"
         )
