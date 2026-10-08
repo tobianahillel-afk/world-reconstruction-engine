@@ -63,14 +63,42 @@ GSPLAT_STATIC_APPEARANCE_REPRESENTATION = "gaussian.splat.ply"
 # installed gsplat package, Python environment, or CUDA extension is approved.
 _GSPLAT_REFERENCE_SOURCE_FILES: tuple[tuple[str, int, str], ...] = (
     ("LICENSE", 11345, "1dc520ba6aa1ff169e95250cf0398beb3757590a"),
-    ("examples/datasets/colmap.py", 18447, "6c21f2c663b60d9dc38471a9963a3b5d092e5ed2"),
-    ("examples/datasets/normalize.py", 4650, "681623b311625065744813f565666e9a8154a33c"),
-    ("examples/datasets/traj.py", 9447, "9e8a2d69dc969e78d5ea019465fe39c10618cf5c"),
-    ("examples/gsplat_viewer.py", 9675, "e47d75a83f0423b1dab11dbbf75d28b37f6bda07"),
-    ("examples/requirements.txt", 677, "ea0a940ea796e486aa68e8fc284ee01cb5a27662"),
+    (
+        "examples/datasets/colmap.py",
+        18447,
+        "6c21f2c663b60d9dc38471a9963a3b5d092e5ed2",
+    ),
+    (
+        "examples/datasets/normalize.py",
+        4650,
+        "681623b311625065744813f565666e9a8154a33c",
+    ),
+    (
+        "examples/datasets/traj.py",
+        9447,
+        "9e8a2d69dc969e78d5ea019465fe39c10618cf5c",
+    ),
+    (
+        "examples/gsplat_viewer.py",
+        9675,
+        "e47d75a83f0423b1dab11dbbf75d28b37f6bda07",
+    ),
+    (
+        "examples/requirements.txt",
+        677,
+        "ea0a940ea796e486aa68e8fc284ee01cb5a27662",
+    ),
     ("examples/simple_trainer.py", 49728, GSPLAT_STATIC_APPEARANCE_TRAINER_GIT_BLOB),
-    ("examples/utils.py", 7519, "80f8e35f364aa884af00106b352631cc04b10d43"),
-    ("gsplat/version.py", 22, "a06ff4e08777642c97011d6c993690dba5a7a02f"),
+    (
+        "examples/utils.py",
+        7519,
+        "80f8e35f364aa884af00106b352631cc04b10d43",
+    ),
+    (
+        "gsplat/version.py",
+        22,
+        "a06ff4e08777642c97011d6c993690dba5a7a02f",
+    ),
     ("setup.py", 4601, "f152008e5f35604b38e0ec6c98e8e17c525c1bcb"),
 )
 _PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
