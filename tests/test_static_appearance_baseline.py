@@ -318,15 +318,18 @@ def test_safe_training_profile_disables_unsafe_upstream_defaults() -> None:
 
 def test_safe_training_profile_canonical_hash_and_source_identity() -> None:
     profile = GsplatStaticAppearanceTrainingProfile(max_steps=400, test_every=4)
-    assert profile.configuration_sha256 == GsplatStaticAppearanceTrainingProfile(
-        max_steps=400, test_every=4
-    ).configuration_sha256
-    assert profile.configuration_sha256 != GsplatStaticAppearanceTrainingProfile(
-        max_steps=401, test_every=4
-    ).configuration_sha256
-    assert profile.configuration_sha256 != GsplatStaticAppearanceTrainingProfile(
-        max_steps=400, test_every=5
-    ).configuration_sha256
+    assert (
+        profile.configuration_sha256
+        == GsplatStaticAppearanceTrainingProfile(max_steps=400, test_every=4).configuration_sha256
+    )
+    assert (
+        profile.configuration_sha256
+        != GsplatStaticAppearanceTrainingProfile(max_steps=401, test_every=4).configuration_sha256
+    )
+    assert (
+        profile.configuration_sha256
+        != GsplatStaticAppearanceTrainingProfile(max_steps=400, test_every=5).configuration_sha256
+    )
     assert profile.expected_ply_relative_path == "ply/point_cloud_399.ply"
     document = profile.canonical_document()
     assert document["trainer_source_revision"] == GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION
