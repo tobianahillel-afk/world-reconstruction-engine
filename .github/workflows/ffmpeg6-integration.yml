@@ -1,0 +1,96 @@
+name: ffmpeg6-integration
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/ci.yml"
+      - ".github/workflows/ffmpeg6-integration.yml"
+      - "src/wre/ingestion/**"
+      - "tests/test_ffmpeg_toolchain_compatibility.py"
+      - "tests/test_video_ingestion.py"
+      - "tests/test_audio_sync.py"
+      - "tests/test_decoded_image_pyramids.py"
+      - "tests/test_frame_selection_extraction_regression.py"
+      - "tests/test_keyframe_extraction.py"
+      - "src/wre/synchronization/**"
+      - "registry/dependencies.yaml"
+      - "pyproject.toml"
+      - "uv.lock"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/ci.yml"
+      - ".github/workflows/ffmpeg6-integration.yml"
+      - "src/wre/ingestion/**"
+      - "tests/test_ffmpeg_toolchain_compatibility.py"
+      - "tests/test_video_ingestion.py"
+      - "tests/test_audio_sync.py"
+      - "tests/test_decoded_image_pyramids.py"
+      - "tests/test_frame_selection_extraction_regression.py"
+      - "tests/test_keyframe_extraction.py"
+      - "src/wre/synchronization/**"
+      - "registry/dependencies.yaml"
+      - "pyproject.toml"
+      - "uv.lock"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ffmpeg6:
+    name: exact-ubuntu-24.04-ffmpeg-6.1.1
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.13"
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Install locked development environment
+        run: uv sync --frozen --group dev
+
+      - name: Install exact Ubuntu Noble FFmpeg and ffprobe with bounded mirror requests
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Isolated integration lane: mirror availability must not block fast-ci.
+          # Bound each apt phase so a degraded runner mirror fails rather than hangs.
+          timeout 180s sudo apt-get update \
+            -o Acquire::Retries=0 \
+            -o Acquire::http::Timeout=45 \
+            -o Acquire::https::Timeout=45
+          timeout 480s sudo apt-get install --yes --no-install-recommends \
+            -o Acquire::Retries=0 \
+            -o Acquire::http::Timeout=45 \
+            -o Acquire::https::Timeout=45 \
+            ffmpeg=7:6.1.1-3ubuntu5
+          test "$(dpkg-query -W -f='${Version}' ffmpeg)" = "7:6.1.1-3ubuntu5"
+          test "$(ffmpeg -version | head -n 1 | awk '{print $3}')" = "6.1.1-3ubuntu5"
+          test "$(ffprobe -version | head -n 1 | awk '{print $3}')" = "6.1.1-3ubuntu5"
+
+      - name: Exercise all pinned FFmpeg and ffprobe integration tests
+        run: >-
+          uv run pytest
+          tests/test_ffmpeg_toolchain_compatibility.py
+          tests/test_video_ingestion.py
+          tests/test_audio_sync.py
+          tests/test_decoded_image_pyramids.py
+          tests/test_frame_selection_extraction_regression.py
+          tests/test_keyframe_extraction.py
