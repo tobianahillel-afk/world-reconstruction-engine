@@ -305,6 +305,65 @@ The shipping surface should be chosen by geometry/runtime benchmark, not by rend
 - gsplat as a preferred low-level Gaussian rasterization/training backend when compatible.
 - Nerfstudio/Splatfacto as a reusable research/production integration reference.
 
+### V2L18.3 static appearance baseline qualification (2026-10-08)
+
+**Provisional single integration target:** the officially released
+[gsplat v1.5.3](https://github.com/nerfstudio-project/gsplat/releases/tag/v1.5.3)
+(`937e29912570c372bed6747a5c9bf85fed877bae`) together with the
+maintained upstream `examples/simple_trainer.py` at that exact revision.
+This is a **candidate selection for qualification**, not an approved WRE adapter,
+not a supported GPU execution result, and not a universal quality winner.
+The gsplat Apache-2.0 library supplies Gaussian rasterization, and its example
+trainer supplies an actual optimization loop and PLY export path; WRE should
+reuse both rather than implement its own renderer or train loop.
+
+The current official release of Nerfstudio/Splatfacto is v1.1.5
+(`6b60855003011b2ca23c2fe3f8e2ca6314c69924`, Apache-2.0), which
+declares `gsplat==1.4.0` and a substantially larger optional environment.
+It remains the complete training/export **comparison reference**, rather than
+silently replacing the newer gsplat reference trainer. OpenSplat is a relevant
+CPU/AMD/Apple/NVIDIA portability comparison, but its AGPL-3.0 licensing and
+native LibTorch closure need separate review before an experimental adapter
+could be selected for WRE. No candidate here is promoted to a default route.
+
+**Pre-integration scientific and provenance gates** (all still required):
+
+- Exact released gsplat source, example/dataset/parser source and executable
+  PyTorch/CUDA/Python wheel closure, including transitive software licenses,
+  must be resolved into one immutable optional environment. The standalone
+  rasterizer version is not evidence that the example trainer or its import
+  closure was installed and executed.
+- The upstream COLMAP parser consumes native sparse `cameras/images/points3D`
+  evidence, including color, tracks and camera-to-image names. A WRE
+  `GeometrySolutionCandidate` or coordinate-only `PointMap` does **not**
+  recreate those solver-private files. An adapter must use audited exact
+  native materialization or separately verified explicit equivalent evidence;
+  it must never invent sparse track associations, RGB point colors or camera
+  poses.
+- Upstream `Config` defaults to `normalize_world_space=True`,
+  `data_factor=4`, video/viewer output and optional pose settings. None may
+  silently alter WRE's `LocalFrameId`, image dimensions, calibration,
+  `GeometryScaleStatus`, source observations or image photometry. Require
+  reviewed configuration that disables world normalization, implicit image
+  downsampling, camera-pose optimization, viewer and video generation, and
+  reject unsupported projections/photometric conventions instead of silently
+  coercing them. Verify this at the exact upstream source, not just the CLI
+  option spelling.
+- The baseline must consume explicitly verified image bytes and color
+  convention/normalization evidence. Its raw `uint8/255` RGB training
+  convention is **not** proof of a common linear-radiance space or known
+  exposures. Untested HDR/mixed exposure input remains rejected or deferred.
+- Training optimizes private Gaussian parameters only. Preserve the
+  immutable input geometry/camera/surface identity and ancestry, and retain
+  exactly one actual output PLY under `appearance.static`, with measured byte
+  length and SHA-256, explicit producer/configuration identity and no
+  unverified `.pt` pickle load.
+- Real accelerator execution and appearance quality remain
+  **DEFERRED / UNVERIFIED** until a supported GPU fixture exercises the
+  exact source and output. The absence of a GPU is not a scientific
+  rejection. V2L18.4 owns held-out scoring and ranking; V2L18.3 cannot
+  claim promotion based on upstream example results.
+
 ### In-the-wild appearance
 
 - WildGaussians-class robust appearance models;
