@@ -55,7 +55,24 @@ from wre.reconstruction.static_appearance_candidate import StaticAppearanceCandi
 
 GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION = "937e29912570c372bed6747a5c9bf85fed877bae"
 GSPLAT_STATIC_APPEARANCE_TRAINER_GIT_BLOB = "6a30be737b5c9af53a140f64faf499d8d4d0933f"
+GSPLAT_STATIC_APPEARANCE_SOURCE_TREE = "90c3f0b2352e6d2725bcba1ef0407168f922c0fa"
 GSPLAT_STATIC_APPEARANCE_REPRESENTATION = "gaussian.splat.ply"
+
+# Exact git-blob identities at the reviewed gsplat v1.5.3 source revision.
+# These are the *reference trainer's entrypoints*, not proof that an arbitrary
+# installed gsplat package, Python environment, or CUDA extension is approved.
+_GSPLAT_REFERENCE_SOURCE_FILES: tuple[tuple[str, int, str], ...] = (
+    ("LICENSE", 11345, "1dc520ba6aa1ff169e95250cf0398beb3757590a"),
+    ("examples/datasets/colmap.py", 18447, "6c21f2c663b60d9dc38471a9963a3b5d092e5ed2"),
+    ("examples/datasets/normalize.py", 4650, "681623b311625065744813f565666e9a8154a33c"),
+    ("examples/datasets/traj.py", 9447, "9e8a2d69dc969e78d5ea019465fe39c10618cf5c"),
+    ("examples/gsplat_viewer.py", 9675, "e47d75a83f0423b1dab11dbbf75d28b37f6bda07"),
+    ("examples/requirements.txt", 677, "ea0a940ea796e486aa68e8fc284ee01cb5a27662"),
+    ("examples/simple_trainer.py", 49728, GSPLAT_STATIC_APPEARANCE_TRAINER_GIT_BLOB),
+    ("examples/utils.py", 7519, "80f8e35f364aa884af00106b352631cc04b10d43"),
+    ("gsplat/version.py", 22, "a06ff4e08777642c97011d6c993690dba5a7a02f"),
+    ("setup.py", 4601, "f152008e5f35604b38e0ec6c98e8e17c525c1bcb"),
+)
 _PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 _MAX_IMAGE_BYTES = 128 * 1024 * 1024
 _MAX_IMAGE_PIXELS = 24_000_000
@@ -133,6 +150,69 @@ def _safe_root(root: Path, label: str) -> Path:
     if not resolved.is_dir():
         raise GsplatStaticAppearancePreflightError(f"{label} must be a directory")
     return resolved
+
+
+def _git_blob_sha1(data: bytes) -> str:
+    """Git's blob object identity; do not confuse it with a SHA-256 artifact digest."""
+
+    header = f"blob {len(data)}\\0".encode("ascii")
+    return hashlib.sha1(header + data, usedforsecurity=False).hexdigest()
+
+
+def verify_gsplat_static_appearance_reference_sources(
+    source_root: Path,
+) -> tuple[ArtifactMaterializationEntry, ...]:
+    """Verify reviewed *trainer entrypoint* bytes in an offline local source tree.
+
+    Check the exact upstream requirements/parser/helper files as well as the
+    trainer before any future external runner imports them. This is NOT a
+    full-tree, transitive-license, Python ABI, Torch/CUDA, or GPU execution
+    approval. No source download, subprocess, import, or code execution occurs.
+    """
+
+    if not isinstance(source_root, Path):
+        raise TypeError("gsplat reference source_root must be pathlib.Path")
+    root = _safe_root(source_root, "gsplat reference source_root")
+    entries: list[ArtifactMaterializationEntry] = []
+    for relative, expected_size, expected_git_blob in _GSPLAT_REFERENCE_SOURCE_FILES:
+        candidate = root
+        for part in PurePosixPath(relative).parts:
+            candidate = candidate / part
+            if candidate.is_symlink():
+                raise GsplatStaticAppearancePreflightError(
+                    f"gsplat reference source path contains symlink: {relative}"
+                )
+        try:
+            resolved = candidate.resolve(strict=True)
+        except (OSError, RuntimeError) as exc:
+            raise GsplatStaticAppearancePreflightError(
+                f"gsplat reference source file missing: {relative}"
+            ) from exc
+        if not resolved.is_file() or not resolved.is_relative_to(root):
+            raise GsplatStaticAppearancePreflightError(
+                f"gsplat reference source path invalid: {relative}"
+            )
+        if resolved.stat().st_size != expected_size:
+            raise GsplatStaticAppearancePreflightError(
+                f"gsplat reference source byte length differs: {relative}"
+            )
+        data = resolved.read_bytes()
+        if len(data) != expected_size or _git_blob_sha1(data) != expected_git_blob:
+            raise GsplatStaticAppearancePreflightError(
+                f"gsplat reference source Git blob differs: {relative}"
+            )
+        if resolved.stat().st_size != expected_size:
+            raise GsplatStaticAppearancePreflightError(
+                f"gsplat reference source changed during verification: {relative}"
+            )
+        entries.append(
+            ArtifactMaterializationEntry(
+                relative_path=relative,
+                sha256=Sha256Digest(hashlib.sha256(data).hexdigest()),
+                byte_length=len(data),
+            )
+        )
+    return tuple(entries)
 
 
 def _png_srgb_dimensions(data: bytes) -> tuple[int, int]:
@@ -712,6 +792,7 @@ def materialize_verified_gsplat_ply(
 __all__ = [
     "GSPLAT_STATIC_APPEARANCE_REPRESENTATION",
     "GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION",
+    "GSPLAT_STATIC_APPEARANCE_SOURCE_TREE",
     "GSPLAT_STATIC_APPEARANCE_TRAINER_GIT_BLOB",
     "GsplatStaticAppearancePreflightError",
     "GsplatStaticAppearancePreflightEvidence",
@@ -721,5 +802,6 @@ __all__ = [
     "materialize_verified_gsplat_ply",
     "preflight_gsplat_static_appearance_inputs",
     "verify_gsplat_static_appearance_native_geometry",
+    "verify_gsplat_static_appearance_reference_sources",
     "verify_gsplat_static_appearance_source_photometry",
 ]
