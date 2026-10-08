@@ -228,15 +228,21 @@ def preflight_gsplat_static_appearance_inputs(
     image_root = _safe_root(source.image_root, "gsplat image_root")
 
     cameras = request.source_geometry.camera_solutions
-    camera_ids = tuple(camera.observation_id for camera in cameras)
+    by_observation = {camera.observation_id: camera for camera in cameras}
+    camera_ids = set(by_observation)
     selected_ids = tuple(item.observation.observation_id for item in source.images)
-    if camera_ids != request.source_observation_ids or selected_ids != camera_ids:
+    if (
+        len(by_observation) != len(cameras)
+        or set(selected_ids) != camera_ids
+        or selected_ids != request.source_observation_ids
+    ):
         raise GsplatStaticAppearancePreflightError(
             "source images must match every canonical CameraSolution and requested ObservationId"
         )
 
     verified: list[GsplatStaticAppearanceVerifiedImage] = []
-    for item, camera in zip(source.images, cameras, strict=True):
+    for item in source.images:
+        camera = by_observation[item.observation.observation_id]
         name = item.image_name
         relative = PurePosixPath(name)
         if (
@@ -269,6 +275,8 @@ def preflight_gsplat_static_appearance_inputs(
             raise GsplatStaticAppearancePreflightError(
                 "source image is not the exact bound file inside image_root"
             )
+        if actual.stat().st_size > _MAX_IMAGE_BYTES:
+            raise GsplatStaticAppearancePreflightError("input PNG exceeds the bounded size")
         data = actual.read_bytes()
         digest = Sha256Digest(hashlib.sha256(data).hexdigest())
         asset = item.observation.asset
