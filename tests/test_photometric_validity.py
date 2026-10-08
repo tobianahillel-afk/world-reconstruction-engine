@@ -62,7 +62,6 @@ from wre.photometry import (
     normalize_linear_rgb_reference,
 )
 
-
 PIXELS = bytes((0, 1, 254, 255, 128, 255))
 
 
