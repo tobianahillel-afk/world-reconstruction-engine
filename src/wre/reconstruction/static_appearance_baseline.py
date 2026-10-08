@@ -300,7 +300,6 @@ def preflight_gsplat_static_appearance_inputs(
     )
 
 
-
 @dataclass(frozen=True, slots=True, kw_only=True)
 class GsplatStaticAppearanceTrainingProfile:
     """Audited single-GPU overrides for the exact upstream reference trainer.
