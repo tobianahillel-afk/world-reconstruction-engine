@@ -155,7 +155,7 @@ def _safe_root(root: Path, label: str) -> Path:
 def _git_blob_sha1(data: bytes) -> str:
     """Git's blob object identity; do not confuse it with a SHA-256 artifact digest."""
 
-    header = f"blob {len(data)}\\0".encode("ascii")
+    header = f"blob {len(data)}\0".encode("ascii")
     return hashlib.sha1(header + data, usedforsecurity=False).hexdigest()
 
 
