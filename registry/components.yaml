@@ -317,6 +317,7 @@ components:
       - src/wre/photometry/photometric_normalization.py
       - src/wre/photometry/photometric_validity.py
       - src/wre/photometry/__init__.py
+      - scripts/run_photometric_pipeline_fixture.py
     tests:
       - tests/test_source_photometry.py
       - tests/test_color_conventions.py
@@ -325,7 +326,8 @@ components:
       - tests/test_photometric_normalization_reference.py
       - tests/test_photometric_validity.py
       - tests/test_photometric_validity_reference.py
-    status: implementing
+      - tests/test_photometric_pipeline_fixture.py
+    status: implemented
   static_appearance: {owner_lot: V2L18, implementation: [], tests: [], status: planned}
   materials_environment: {owner_lot: V2L19, implementation: [], tests: [], status: planned}
   master_scene: {owner_lot: V2L20, implementation: [], tests: [], status: planned}

@@ -1,0 +1,64 @@
+name: photometric-pipeline-controlled
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/photometric-pipeline-controlled.yml"
+      - "scripts/run_photometric_pipeline_fixture.py"
+      - "tests/test_photometric_pipeline_fixture.py"
+      - "tests/fixtures/synthetic/photometric-pipeline-controlled/**"
+      - "docs/reviews/V2L17-photometric-pipeline-review.md"
+      - "registry/components.yaml"
+      - "registry/reviews.yaml"
+      - "registry/work-items/v2m3.yaml"
+      - "PROJECT_STATE.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  controlled:
+    name: cpu-controlled-photometric-pipeline-evidence
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout WRE
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install uv and exact Python
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.13"
+          python-version: "3.12.12"
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Install locked WRE environment
+        run: uv sync --locked --all-groups
+
+      - name: Generate canonical photometric pipeline evidence
+        run: >-
+          uv run python scripts/run_photometric_pipeline_fixture.py
+          --fixture tests/fixtures/synthetic/photometric-pipeline-controlled/fixture.json
+          --output ${{ runner.temp }}/photometric-pipeline-controlled.json
+
+      - name: Exercise controlled fixture regressions
+        run: uv run python -m pytest tests/test_photometric_pipeline_fixture.py -vv
+
+      - name: Retain machine-readable photometric evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v2l17-5-photometric-pipeline-controlled
+          path: ${{ runner.temp }}/photometric-pipeline-controlled.json
+          if-no-files-found: error
+          retention-days: 30

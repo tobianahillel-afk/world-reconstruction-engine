@@ -1,0 +1,531 @@
+{
+  "cases": [
+    {
+      "case_id": "foreign-normalization",
+      "compatibility_normalization_case_id": "ready-endpoints-overrange",
+      "decoded_encoding": "srgb_iec61966_2_1_full_rgb8",
+      "dimensions": {
+        "height_px": 1,
+        "width_px": 1
+      },
+      "expected": {
+        "color_status": "ready",
+        "compatibility_reason_substrings": [
+          "different observations",
+          "foreign color request",
+          "foreign to the color plan"
+        ],
+        "compatibility_status": "incompatible",
+        "converted_values": [
+          0.014443843596092545,
+          0.05126945837404324,
+          0.11697066775851084
+        ],
+        "normalization_status": "ready",
+        "normalized_above_one_mask": [
+          0,
+          0,
+          0
+        ],
+        "normalized_values": [
+          0.014443843596092545,
+          0.05126945837404324,
+          0.11697066775851084
+        ],
+        "source_high_endpoint_candidate_mask": [
+          0,
+          0,
+          0
+        ],
+        "source_low_endpoint_candidate_mask": [
+          0,
+          0,
+          0
+        ]
+      },
+      "normalization_factors": {
+        "exposure_adjustment_ev": 0,
+        "white_balance_rgb_gains": [
+          1,
+          1,
+          1
+        ]
+      },
+      "observation_id": "obs:v2l17-5:foreign",
+      "raw_metadata": [
+        {
+          "key": "color",
+          "namespace": "caller",
+          "value": "sRGB"
+        }
+      ],
+      "rgb8": [
+        32,
+        64,
+        96
+      ],
+      "source_color": {
+        "declared_color_space": "sRGB",
+        "declared_matrix_coefficients": "identity",
+        "declared_primaries": "bt709_d65",
+        "declared_range": "full",
+        "declared_transfer_characteristic": "srgb",
+        "evidence": [
+          {
+            "key": "color",
+            "namespace": "caller",
+            "value": "sRGB"
+          }
+        ],
+        "issue": null,
+        "profile_name": null,
+        "status": "resolved"
+      },
+      "source_exposure": {
+        "evidence": [],
+        "exposure_compensation_ev": null,
+        "exposure_time_seconds": null,
+        "f_number": null,
+        "iso_speed": null,
+        "issue": null,
+        "status": "absent"
+      },
+      "source_white_balance": {
+        "color_temperature_kelvin": null,
+        "evidence": [],
+        "issue": null,
+        "mode": null,
+        "status": "absent"
+      }
+    },
+    {
+      "case_id": "ready-endpoints-overrange",
+      "compatibility_normalization_case_id": null,
+      "decoded_encoding": "srgb_iec61966_2_1_full_rgb8",
+      "dimensions": {
+        "height_px": 1,
+        "width_px": 2
+      },
+      "expected": {
+        "color_status": "ready",
+        "compatibility_reason_substrings": [],
+        "compatibility_status": "compatible",
+        "converted_values": [
+          0,
+          1,
+          1,
+          0.05126945837404324,
+          1,
+          0.21586050011389926
+        ],
+        "normalization_status": "ready",
+        "normalized_above_one_mask": [
+          0,
+          0,
+          1,
+          0,
+          0,
+          0
+        ],
+        "normalized_values": [
+          0,
+          1,
+          4,
+          0.10253891674808648,
+          1,
+          0.863442000455597
+        ],
+        "source_high_endpoint_candidate_mask": [
+          0,
+          1,
+          1,
+          0,
+          1,
+          0
+        ],
+        "source_low_endpoint_candidate_mask": [
+          1,
+          0,
+          0,
+          0,
+          0,
+          0
+        ]
+      },
+      "normalization_factors": {
+        "exposure_adjustment_ev": 1,
+        "white_balance_rgb_gains": [
+          1,
+          0.5,
+          2
+        ]
+      },
+      "observation_id": "obs:v2l17-5:ready",
+      "raw_metadata": [
+        {
+          "key": "color",
+          "namespace": "caller",
+          "value": "sRGB"
+        },
+        {
+          "key": "exposure_time",
+          "namespace": "exif",
+          "value": "0.008"
+        },
+        {
+          "key": "f_number",
+          "namespace": "exif",
+          "value": "2.8"
+        },
+        {
+          "key": "iso",
+          "namespace": "exif",
+          "value": "100"
+        },
+        {
+          "key": "white_balance",
+          "namespace": "exif",
+          "value": "manual"
+        }
+      ],
+      "rgb8": [
+        0,
+        255,
+        255,
+        64,
+        255,
+        128
+      ],
+      "source_color": {
+        "declared_color_space": "sRGB",
+        "declared_matrix_coefficients": "identity",
+        "declared_primaries": "bt709_d65",
+        "declared_range": "full",
+        "declared_transfer_characteristic": "srgb",
+        "evidence": [
+          {
+            "key": "color",
+            "namespace": "caller",
+            "value": "sRGB"
+          }
+        ],
+        "issue": null,
+        "profile_name": null,
+        "status": "resolved"
+      },
+      "source_exposure": {
+        "evidence": [
+          {
+            "key": "exposure_time",
+            "namespace": "exif",
+            "value": "0.008"
+          },
+          {
+            "key": "f_number",
+            "namespace": "exif",
+            "value": "2.8"
+          },
+          {
+            "key": "iso",
+            "namespace": "exif",
+            "value": "100"
+          }
+        ],
+        "exposure_compensation_ev": null,
+        "exposure_time_seconds": 0.008,
+        "f_number": 2.8,
+        "iso_speed": 100,
+        "issue": null,
+        "status": "resolved"
+      },
+      "source_white_balance": {
+        "color_temperature_kelvin": null,
+        "evidence": [
+          {
+            "key": "white_balance",
+            "namespace": "exif",
+            "value": "manual"
+          }
+        ],
+        "issue": null,
+        "mode": "manual",
+        "status": "resolved"
+      }
+    },
+    {
+      "case_id": "rejected-explicit-factors",
+      "compatibility_normalization_case_id": null,
+      "decoded_encoding": "srgb_iec61966_2_1_full_rgb8",
+      "dimensions": {
+        "height_px": 1,
+        "width_px": 1
+      },
+      "expected": {
+        "color_status": "ready",
+        "compatibility_reason_substrings": [
+          "photometric normalization is rejected"
+        ],
+        "compatibility_status": "incompatible",
+        "converted_values": [
+          0.005181516702338386,
+          0.014443843596092545,
+          0.05126945837404324
+        ],
+        "normalization_status": "rejected",
+        "normalized_above_one_mask": null,
+        "normalized_values": null,
+        "source_high_endpoint_candidate_mask": null,
+        "source_low_endpoint_candidate_mask": null
+      },
+      "normalization_factors": {
+        "exposure_adjustment_ev": 0,
+        "white_balance_rgb_gains": [
+          1,
+          0,
+          1
+        ]
+      },
+      "observation_id": "obs:v2l17-5:rejected",
+      "raw_metadata": [
+        {
+          "key": "color",
+          "namespace": "caller",
+          "value": "sRGB"
+        }
+      ],
+      "rgb8": [
+        16,
+        32,
+        64
+      ],
+      "source_color": {
+        "declared_color_space": "sRGB",
+        "declared_matrix_coefficients": "identity",
+        "declared_primaries": "bt709_d65",
+        "declared_range": "full",
+        "declared_transfer_characteristic": "srgb",
+        "evidence": [
+          {
+            "key": "color",
+            "namespace": "caller",
+            "value": "sRGB"
+          }
+        ],
+        "issue": null,
+        "profile_name": null,
+        "status": "resolved"
+      },
+      "source_exposure": {
+        "evidence": [],
+        "exposure_compensation_ev": null,
+        "exposure_time_seconds": null,
+        "f_number": null,
+        "iso_speed": null,
+        "issue": null,
+        "status": "absent"
+      },
+      "source_white_balance": {
+        "color_temperature_kelvin": null,
+        "evidence": [],
+        "issue": null,
+        "mode": null,
+        "status": "absent"
+      }
+    },
+    {
+      "case_id": "unresolved-missing-factors",
+      "compatibility_normalization_case_id": null,
+      "decoded_encoding": "srgb_iec61966_2_1_full_rgb8",
+      "dimensions": {
+        "height_px": 1,
+        "width_px": 1
+      },
+      "expected": {
+        "color_status": "ready",
+        "compatibility_reason_substrings": [
+          "photometric normalization is unresolved"
+        ],
+        "compatibility_status": "unresolved",
+        "converted_values": [
+          0.003035269835488375,
+          0.21586050011389926,
+          0.9559733532492861
+        ],
+        "normalization_status": "unresolved",
+        "normalized_above_one_mask": null,
+        "normalized_values": null,
+        "source_high_endpoint_candidate_mask": null,
+        "source_low_endpoint_candidate_mask": null
+      },
+      "normalization_factors": {
+        "exposure_adjustment_ev": null,
+        "white_balance_rgb_gains": null
+      },
+      "observation_id": "obs:v2l17-5:unresolved",
+      "raw_metadata": [
+        {
+          "key": "color",
+          "namespace": "caller",
+          "value": "sRGB"
+        },
+        {
+          "key": "exposure_compensation_ev",
+          "namespace": "exif",
+          "value": "1.0"
+        },
+        {
+          "key": "iso",
+          "namespace": "exif",
+          "value": "800"
+        },
+        {
+          "key": "white_balance",
+          "namespace": "exif",
+          "value": "auto"
+        },
+        {
+          "key": "white_balance_temperature_kelvin",
+          "namespace": "exif",
+          "value": "4200"
+        }
+      ],
+      "rgb8": [
+        10,
+        128,
+        250
+      ],
+      "source_color": {
+        "declared_color_space": "sRGB",
+        "declared_matrix_coefficients": "identity",
+        "declared_primaries": "bt709_d65",
+        "declared_range": "full",
+        "declared_transfer_characteristic": "srgb",
+        "evidence": [
+          {
+            "key": "color",
+            "namespace": "caller",
+            "value": "sRGB"
+          }
+        ],
+        "issue": null,
+        "profile_name": null,
+        "status": "resolved"
+      },
+      "source_exposure": {
+        "evidence": [
+          {
+            "key": "exposure_compensation_ev",
+            "namespace": "exif",
+            "value": "1.0"
+          },
+          {
+            "key": "iso",
+            "namespace": "exif",
+            "value": "800"
+          }
+        ],
+        "exposure_compensation_ev": 1,
+        "exposure_time_seconds": null,
+        "f_number": null,
+        "iso_speed": 800,
+        "issue": null,
+        "status": "resolved"
+      },
+      "source_white_balance": {
+        "color_temperature_kelvin": 4200,
+        "evidence": [
+          {
+            "key": "white_balance",
+            "namespace": "exif",
+            "value": "auto"
+          },
+          {
+            "key": "white_balance_temperature_kelvin",
+            "namespace": "exif",
+            "value": "4200"
+          }
+        ],
+        "issue": null,
+        "mode": "auto",
+        "status": "resolved"
+      }
+    },
+    {
+      "case_id": "unsupported-color",
+      "compatibility_normalization_case_id": "ready-endpoints-overrange",
+      "decoded_encoding": "srgb_iec61966_2_1_full_rgb8",
+      "dimensions": {
+        "height_px": 1,
+        "width_px": 1
+      },
+      "expected": {
+        "color_status": "rejected",
+        "compatibility_reason_substrings": [
+          "different observations",
+          "foreign color request",
+          "color conversion is rejected",
+          "foreign to the color plan"
+        ],
+        "compatibility_status": "incompatible",
+        "converted_values": null,
+        "normalization_status": null,
+        "normalized_above_one_mask": null,
+        "normalized_values": null,
+        "source_high_endpoint_candidate_mask": null,
+        "source_low_endpoint_candidate_mask": null
+      },
+      "normalization_factors": {
+        "exposure_adjustment_ev": null,
+        "white_balance_rgb_gains": null
+      },
+      "observation_id": "obs:v2l17-5:unsupported-color",
+      "raw_metadata": [
+        {
+          "key": "color",
+          "namespace": "caller",
+          "value": "Display-P3"
+        }
+      ],
+      "rgb8": [
+        64,
+        128,
+        192
+      ],
+      "source_color": {
+        "declared_color_space": "Display-P3",
+        "declared_matrix_coefficients": "identity",
+        "declared_primaries": "display_p3_d65",
+        "declared_range": "full",
+        "declared_transfer_characteristic": "srgb",
+        "evidence": [
+          {
+            "key": "color",
+            "namespace": "caller",
+            "value": "Display-P3"
+          }
+        ],
+        "issue": null,
+        "profile_name": null,
+        "status": "resolved"
+      },
+      "source_exposure": {
+        "evidence": [],
+        "exposure_compensation_ev": null,
+        "exposure_time_seconds": null,
+        "f_number": null,
+        "iso_speed": null,
+        "issue": null,
+        "status": "absent"
+      },
+      "source_white_balance": {
+        "color_temperature_kelvin": null,
+        "evidence": [],
+        "issue": null,
+        "mode": null,
+        "status": "absent"
+      }
+    }
+  ],
+  "fixture_id": "fixture.photometric-pipeline-controlled.v1",
+  "schema_version": 1
+}

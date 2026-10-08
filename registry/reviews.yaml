@@ -98,7 +98,11 @@ lot_reviews:
     reviewed_at: '2026-09-30'
     evidence:
       - docs/reviews/V2L16-physical-surface-v2m2-review.md
-  V2L17: {status: pending, reviewed_at: null, evidence: []}
+  V2L17:
+    status: passed
+    reviewed_at: '2026-10-08'
+    evidence:
+      - docs/reviews/V2L17-photometric-pipeline-review.md
   V2L18: {status: pending, reviewed_at: null, evidence: []}
   V2L19: {status: pending, reviewed_at: null, evidence: []}
   V2L20: {status: pending, reviewed_at: null, evidence: []}

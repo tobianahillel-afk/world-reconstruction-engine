@@ -289,7 +289,7 @@ work_items:
   - id: V2L17.5
     lot: V2L17
     title: Photometric regression fixture and lot review
-    status: ready
+    status: done
     objective: Compose the accepted V2L17.1 through V2L17.4 source-photometry color-conversion explicit-normalization validity-mask and compatibility contracts in one deterministic CPU-only controlled regression fixture, retain machine-readable evidence that fail-closed and no-repair semantics survive end to end, and close the V2L17 color-and-photometric-pipeline lot review without creating an AppearanceModel or promoting the bounded reference path into a universal camera pipeline.
     allowed_scope:
       - tests/fixtures/synthetic/photometric-pipeline-controlled/fixture.json
@@ -369,7 +369,85 @@ work_items:
       - lot-review regression proving V2L17.1 through V2L17.5 are covered and photometric evidence remains distinct from physical surface static appearance materials environment and runtime representation
       - lifecycle regression proving V2L17 cannot pass before the review document and retained fixture evidence exist and only V2L18.1 becomes ready afterward
       - full fast CI CodeQL and the dedicated photometric-pipeline-controlled workflow plus existing qualification lanes where repository path triggers require them
-  - {id: V2L18.1, lot: V2L18, title: Canonical AppearanceModel contract, status: planned, depends_on: [V2L17.5]}
+  - id: V2L18.1
+    lot: V2L18
+    title: Canonical AppearanceModel contract
+    status: ready
+    objective: Define one pure immutable solver-independent canonical AppearanceModel metadata and provenance contract for a retained static photorealistic appearance artifact so later Gaussian radiance neural or other renderable representations can share exact WRE identity ancestry local-frame and scale semantics without turning appearance into physical geometry materials environment runtime assets or a solver-specific payload.
+    allowed_scope:
+      - src/wre/domain/appearance.py
+      - focused exports in src/wre/domain/__init__.py
+      - tests/test_appearance.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L18.2 can be activated without implementing it
+    out_of_scope:
+      - implementing training optimization rendering rasterization splatting radiance-field neural-field texture baking image synthesis or another appearance solver
+      - adding 3D Gaussian Splatting 2DGS NeRF Mip-Splatting gsplat nerfstudio OpenSplat CUDA GPU NPU model checkpoint or external rendering dependencies
+      - changing GeometrySolutionCandidate SurfaceModel SourcePhotometryMetadata color-conversion normalization validity-mask material environment or physical-surface semantics
+      - using AppearanceModel as collision measurement navigation watertightness support or physical-geometry truth
+      - inventing resolving aligning transforming or coercing LocalFrameId GeometryScaleStatus camera pose depth point geometry or surface scale
+      - creating MaterialModel EnvironmentModel MasterScene RuntimeScene LOD compression streaming viewer or V2L18.2 through V2L18.6 behavior
+      - adding held-out rendering metrics geometry-disagreement metrics routing ranking default promotion fallback QualityDecision or benchmark policy
+      - relabeling generated completion synthetic content or unsupported regions as observed reconstructed appearance
+    depends_on: [V2L17.5]
+    read_before:
+      - docs/00_START_HERE.md
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md
+      - docs/reviews/V2L16-physical-surface-v2m2-review.md
+      - docs/reviews/V2L17-photometric-pipeline-review.md
+      - registry/components.yaml
+      - registry/work-items/v2m3.yaml
+      - PROJECT_STATE.yaml
+      - src/wre/domain/artifacts.py
+      - src/wre/domain/observations.py
+      - src/wre/domain/fragments.py
+      - src/wre/domain/geometry_solutions.py
+      - src/wre/domain/surfaces.py
+      - src/wre/domain/producer_identity.py
+      - src/wre/domain/provenance.py
+      - src/wre/domain/__init__.py
+      - src/wre/reconstruction/geometry_solution_comparison.py
+      - tests/test_surfaces.py
+      - tests/test_geometry_solution_comparison.py
+      - tests/test_photometric_pipeline_fixture.py
+    reuse:
+      - ArtifactRef ArtifactKind ArtifactProducerIdentity ObservationId LocalFrameId GeometryScaleStatus and canonical tuple ordering rules from existing WRE domain contracts rather than creating parallel identity provenance frame or scale vocabularies
+      - GeometrySolutionCandidate unchanged as the exact spatial reconstruction hypothesis supporting appearance and as the authoritative source of local-frame and scale state
+      - SurfaceModel unchanged as optional explicit physical support when an appearance representation was built against one; absence of a SurfaceModel must remain distinct from a fabricated surface
+      - source ObservationId values and canonical source-artifact ancestry as provenance links only; V2L18.1 must not reinterpret pixels color metadata normalization or validity evidence
+      - V2L17 reviewed photometric evidence only as an upstream responsibility boundary; no V2L17 value is mutated or promoted into appearance truth by this contract
+      - the open-token pattern used by SurfaceRepresentationName for solver-independent retained representation names
+    acceptance:
+      - Add one pure src/wre/domain/appearance.py module using only the Python standard library plus existing canonical WRE domain contracts and one focused export update. Do not import an appearance solver renderer learned model numerical array library or hardware runtime.
+      - Define one frozen slots AppearanceRepresentationName open lowercase token so Gaussian radiance neural texture or future representations can be named without making any current solver family part of core semantics.
+      - Define one frozen slots AppearanceModel immutable metadata/provenance envelope with one exact output ArtifactRef of canonical static-appearance kind one complete source GeometrySolutionCandidate one optional exact SurfaceModel support value a non-empty canonical tuple of source ObservationId values one AppearanceRepresentationName exact LocalFrameId exact GeometryScaleStatus ArtifactProducerIdentity and a non-empty canonical tuple of source ArtifactRef ancestry.
+      - AppearanceModel local_frame_id and scale_status must exactly preserve the source GeometrySolutionCandidate values. The contract must not resolve unresolved scale or reinterpret a local frame as world Earth geographic or runtime coordinates.
+      - When source_surface is present it must refer to the same complete source GeometrySolutionCandidate and preserve the same LocalFrameId and GeometryScaleStatus. A foreign geometry surface frame or scale must fail closed rather than be aligned or coerced.
+      - source_observation_ids must be an immutable non-empty unique tuple in canonical ObservationId value order. The contract records which observations support appearance but does not read their pixel payloads infer visibility weights or claim complete scene coverage.
+      - source_artifacts must be immutable non-empty unique and canonically ordered by ArtifactId and ArtifactKind. They must retain every artifact in source_geometry.source_artifacts and when source_surface is present must retain both its artifact_ref and every source_surface.source_artifact. The output appearance artifact identity must not reuse a source artifact identity.
+      - The contract must not inline solver-private Gaussian positions covariance spherical-harmonic coefficients neural weights texture pixels material channels environment maps rendering settings or runtime payloads. Those remain artifact payloads owned by later adapters and runtime stages.
+      - AppearanceModel is visual evidence only. Its docstring and tests must make explicit that it is not collision measurement navigation physical-surface material environment or generated-completion truth.
+      - Generated or synthetic completion must not be silently represented as ordinary reconstructed appearance by this item. V2L18.1 defines the static reconstructed appearance envelope only; future generated completion retains its separate provenance responsibility.
+      - On green implementation evidence mark V2L18.1 done add appearance.py and tests/test_appearance.py under static_appearance in registry/components.yaml and activate only V2L18.2 with a complete Gaussian/radiance adapter capability contract. Do not implement V2L18.2 in the same PR.
+    tests:
+      - frozen slots exact field-shape representation-token and canonical static-appearance artifact-kind regressions
+      - wrong-type failures for output artifact source geometry optional source surface source observations representation frame scale producer and source artifacts
+      - frame-and-scale regressions proving AppearanceModel exactly preserves source geometry LocalFrameId and GeometryScaleStatus including unresolved scale
+      - optional-surface integrity regressions proving foreign geometry frame or scale fails closed while absence remains valid and does not fabricate a physical surface
+      - source-observation regressions proving non-empty immutable unique canonical ordering with no implicit sorting mutation duplicate or inferred observation
+      - ancestry regressions proving all source GeometrySolutionCandidate artifacts and when present the SurfaceModel artifact plus its ancestry are retained and the output artifact cannot alias a source identity
+      - representation openness regression accepting a valid future lowercase token while rejecting blank uppercase whitespace overlength or illegal-character names without enumerating solver brands in core semantics
+      - immutability regressions proving source geometry surface observation tuples producer and ancestry are not mutated by AppearanceModel construction
+      - separation regressions proving the module contains no Gaussian payload coefficients neural weights pixels MaterialModel EnvironmentModel MasterScene RuntimeScene renderer training optimization routing QualityDecision collision measurement or navigation implementation behavior
+      - module-surface regression proving NumPy torch CUDA gsplat nerfstudio OpenSplat image decode filesystem network subprocess checkpoint download and accelerator behavior are absent
+      - full fast CI and CodeQL
   - {id: V2L18.2, lot: V2L18, title: Gaussian radiance adapter capability contract, status: planned, depends_on: [V2L18.1]}
   - {id: V2L18.3, lot: V2L18, title: First approved static appearance baseline, status: planned, depends_on: [V2L18.2]}
   - {id: V2L18.4, lot: V2L18, title: Held out render geometry motion scale stability metrics, status: planned, depends_on: [V2L18.3]}
