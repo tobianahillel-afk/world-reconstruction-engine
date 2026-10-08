@@ -22,7 +22,14 @@ from wre.domain.artifact_materialization import (
 )
 from wre.domain.artifacts import ArtifactRef
 from wre.domain.observations import ObservationId, Sha256Digest
-from wre.reconstruction.colmap_canonical_geometry import _verified_native_model_path
+from wre.reconstruction.colmap_canonical_geometry import (
+    CanonicalColmapSparseModel,
+    _verified_native_model_path,
+    canonicalize_colmap_sparse_model,
+    colmap_sparse_model_content_identity,
+)
+from wre.reconstruction.colmap_environment import ColmapEnvironmentIdentity
+from wre.reconstruction.colmap_features import ColmapFeatureExtractionResult
 from wre.reconstruction.colmap_geometry_refinement import (
     colmap_native_sparse_model_artifact_ref,
 )
@@ -306,6 +313,66 @@ def preflight_gsplat_static_appearance_inputs(
     )
 
 
+def verify_gsplat_static_appearance_native_geometry(
+    request: StaticAppearanceCandidateRequest,
+    source: GsplatStaticAppearancePreflightSource,
+    *,
+    features: ColmapFeatureExtractionResult,
+    expected_environment: ColmapEnvironmentIdentity,
+    module: object | None = None,
+) -> CanonicalColmapSparseModel:
+    """Require independently decoded native COLMAP geometry to equal WRE input.
+
+    This is a narrow first-baseline gate: only an unchanged canonical COLMAP
+    source model is accepted. Refined/learned geometry needs separate audited
+    native correspondence; the equality check must never coerce a frame or pose.
+    No gsplat or CUDA package is loaded.
+    """
+
+    preflight_gsplat_static_appearance_inputs(request, source)
+    if not isinstance(features, ColmapFeatureExtractionResult):
+        raise TypeError("gsplat native geometry features must be ColmapFeatureExtractionResult")
+    if not isinstance(expected_environment, ColmapEnvironmentIdentity):
+        raise TypeError(
+            "gsplat native geometry environment must be ColmapEnvironmentIdentity"
+        )
+
+    source_name_map = {
+        item.observation.observation_id: item.image_name for item in source.images
+    }
+    feature_name_map = {item.observation_id: item.image_name for item in features.images}
+    if source_name_map != feature_name_map:
+        raise GsplatStaticAppearancePreflightError(
+            "native COLMAP feature/image naming is not the exact source ObservationId mapping"
+        )
+
+    canonical = canonicalize_colmap_sparse_model(
+        output_path=source.native_model_root,
+        model_artifact=source.native_model_artifact,
+        features=features,
+        expected_environment=expected_environment,
+        module=module,
+    )
+    if canonical.source_model_identity_sha256 != colmap_sparse_model_content_identity(
+        source.native_model_artifact
+    ):
+        raise GsplatStaticAppearancePreflightError(
+            "native COLMAP result does not match the verified sparse model identity"
+        )
+    geometry = request.source_geometry
+    if (
+        geometry.geometry_solution != canonical.geometry_solution
+        or geometry.camera_solutions != canonical.camera_solutions
+        or geometry.depth_fields
+        or geometry.point_maps != (canonical.point_map,)
+    ):
+        raise GsplatStaticAppearancePreflightError(
+            "native COLMAP camera poses, calibration, points, frame or scale "
+            "do not match the exact source GeometrySolutionCandidate"
+        )
+    return canonical
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class GsplatStaticAppearanceTrainingProfile:
     """Audited single-GPU overrides for the exact upstream reference trainer.
@@ -556,4 +623,5 @@ __all__ = [
     "GsplatStaticAppearanceVerifiedImage",
     "materialize_verified_gsplat_ply",
     "preflight_gsplat_static_appearance_inputs",
+    "verify_gsplat_static_appearance_native_geometry",
 ]
