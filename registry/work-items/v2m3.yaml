@@ -221,7 +221,7 @@ work_items:
   - id: V2L17.4
     lot: V2L17
     title: Clipping saturation incompatible camera handling
-    status: ready
+    status: done
     objective: Define immutable source-endpoint clipping/saturation candidate masks, normalized-over-range evidence and fail-closed photometric camera compatibility assessments over the exact V2L17.2 and V2L17.3 lineage, without repairing pixels, inventing sensor clipping certainty or silently coercing incompatible observations into one appearance input.
     allowed_scope:
       - src/wre/domain/photometric_validity.py
@@ -286,7 +286,89 @@ work_items:
       - immutability and provenance regressions proving any source digest upstream plan normalization identity normalized content or mask-content change changes the derived identity
       - module-surface regression proving auto repair highlight recovery tone mapping clipping rescaling camera-response inference AppearanceModel geometry routing and QualityDecision behavior remain absent
       - full fast CI and CodeQL
-  - {id: V2L17.5, lot: V2L17, title: Photometric regression fixture, status: planned, depends_on: [V2L17.4]}
+  - id: V2L17.5
+    lot: V2L17
+    title: Photometric regression fixture and lot review
+    status: ready
+    objective: Compose the accepted V2L17.1 through V2L17.4 source-photometry color-conversion explicit-normalization validity-mask and compatibility contracts in one deterministic CPU-only controlled regression fixture, retain machine-readable evidence that fail-closed and no-repair semantics survive end to end, and close the V2L17 color-and-photometric-pipeline lot review without creating an AppearanceModel or promoting the bounded reference path into a universal camera pipeline.
+    allowed_scope:
+      - tests/fixtures/synthetic/photometric-pipeline-controlled/fixture.json
+      - scripts/run_photometric_pipeline_fixture.py
+      - tests/test_photometric_pipeline_fixture.py
+      - .github/workflows/photometric-pipeline-controlled.yml
+      - docs/reviews/V2L17-photometric-pipeline-review.md only after retained fixture evidence is green
+      - focused lifecycle updates to registry/components.yaml registry/reviews.yaml PROJECT_STATE.yaml this work-item registry and the V2L18.1 registry entry only after retained fixture and lot-review evidence are green so V2L18.1 can be activated without implementing it
+    out_of_scope:
+      - changing V2L17.1 source metadata V2L17.2 color conversion V2L17.3 normalization or V2L17.4 validity and compatibility production semantics identities buffers or status vocabularies
+      - adding a new camera model color-management backend exposure estimator white-balance estimator chromatic adaptation camera-response model HDR merge tone mapper clipping repair highlight recovery inpainting rescaling or generated color
+      - treating RGB8 zero or full-scale endpoints as proven sensor clipping or treating normalized values above one as invalid pixels that must be clipped
+      - deriving explicit normalization factors from metadata pixels neighboring observations geometry camera make or model
+      - choosing dropping rerouting ranking or repairing observations based on the controlled fixture or turning compatibility evidence into QualityDecision
+      - adding external image-processing learned-model GPU NPU network checkpoint solver or codec dependencies to the mandatory fixture
+      - creating an AppearanceModel Gaussian radiance representation material environment MasterScene RuntimeScene or V2L18 implementation
+      - passing the V2L17 lot review before the deterministic fixture and retained workflow evidence are green
+    depends_on: [V2L17.4]
+    read_before:
+      - docs/00_START_HERE.md
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md
+      - docs/reviews/V2L16-physical-surface-v2m2-review.md
+      - registry/components.yaml
+      - registry/reviews.yaml
+      - registry/work-items/v2m3.yaml
+      - PROJECT_STATE.yaml
+      - src/wre/domain/source_photometry.py
+      - src/wre/domain/color_conventions.py
+      - src/wre/domain/photometric_normalization.py
+      - src/wre/domain/photometric_validity.py
+      - src/wre/photometry/color_conventions.py
+      - src/wre/photometry/photometric_normalization.py
+      - src/wre/photometry/photometric_validity.py
+      - tests/test_source_photometry.py
+      - tests/test_color_conventions.py
+      - tests/test_color_convention_reference.py
+      - tests/test_photometric_normalization.py
+      - tests/test_photometric_normalization_reference.py
+      - tests/test_photometric_validity.py
+      - tests/test_photometric_validity_reference.py
+    reuse:
+      - SourcePhotometryMetadata and exact RawMetadataEntry evidence from V2L17.1 unchanged as the only capture-metadata interpretation source
+      - ColorConversionAssessment ColorConversionPlan ConvertedLinearRgbBuffer and convert_rgb8_to_linear_reference from V2L17.2 unchanged as the only bounded decoded-to-linear conversion path
+      - PhotometricNormalizationAssessment PhotometricNormalizationPlan NormalizedLinearRgbBuffer and normalize_linear_rgb_reference from V2L17.3 unchanged with only caller-supplied explicit factors
+      - PhotometricValidityRequest PhotometricValidityMasks PhotometricCompatibilityAssessment build_photometric_validity_masks and assess_photometric_compatibility from V2L17.4 unchanged as diagnostic evidence only
+      - existing Sha256Digest deterministic artifact identities and canonical JSON practices rather than inventing a parallel fixture identity vocabulary
+      - the normal locked WRE CPU environment only; the fixture must not require Pillow OpenCV colour-science LittleCMS NumPy torch or another image-processing runtime
+    acceptance:
+      - Add one checked-in deterministic synthetic fixture describing canonical RGB8 bytes exact raw source-photometry evidence explicit supported color declarations explicit normalization factors and expected V2L17.2 through V2L17.4 observable results. The fixture must be small enough for fast CPU CI and must have a stable checked-in SHA-256 asserted by tests.
+      - The fixture must include at least one fully ready observation with RGB8 low and high endpoint candidates interior channels a normalized value exactly one and at least one normalized value above one so all three V2L17.4 mask semantics are exercised without relabeling endpoint evidence as proven clipping.
+      - The fixture must include fail-closed cases proving absent explicit normalization factors remain unresolved and rejected or foreign evidence remains incompatible. Capture ISO shutter aperture exposure compensation white-balance hints or color temperature may be present only as descriptive provenance and must never synthesize factors.
+      - Add one deterministic standard-library fixture runner that constructs only the accepted V2L17 domain values and bounded reference buffers from the checked-in fixture then emits canonical JSON evidence. It must not alter production contracts read source image files decode arbitrary media access the network invoke subprocesses or use an accelerator.
+      - Retained evidence must include exact source observation and decoded-level identities source color and normalization statuses V2L17.2 plan and converted-content identities V2L17.3 plan and normalized-content identities three separate V2L17.4 mask identities and packed mask values plus compatibility status reasons and identity for every case where those stages are applicable.
+      - The retained JSON must preserve unresolved or incompatible stages explicitly and must contain no repaired pixel value recovered highlight inferred normalization factor winner score rank route default QualityDecision AppearanceModel or shipping-promotion field.
+      - Add one dedicated photometric-pipeline-controlled workflow on ubuntu-24.04 using the normal locked WRE environment. It must require no external model checkpoint network solver or accelerator and must retain the canonical JSON output as a workflow artifact.
+      - Add docs/reviews/V2L17-photometric-pipeline-review.md only after implementation tests and retained fixture evidence are green. The review must cover V2L17.1 through V2L17.5 and verify that source evidence decoded color normalization endpoint and over-range diagnostics plus compatibility remain separate immutable responsibilities with explicit provenance and fail-closed unsupported states.
+      - The V2L17 lot review must state explicit non-capabilities. V2L17 does not provide universal ICC or camera-response calibration scene-radiance truth automatic exposure or white balance HDR merge highlight recovery tone mapping clipping repair AppearanceModel material environment geometry routing or safety and quality decisions.
+      - Passing the lot review must not promote the bounded sRGB CPU path into a universal default for unknown or unsupported cameras and must not reinterpret RGB8 endpoints as sensor-clipping truth.
+      - On green retained fixture and lot-review evidence mark V2L17.5 done photometric_pipeline implemented and V2L17 passed in registry/reviews.yaml. Then expand and activate only V2L18.1 with a complete canonical AppearanceModel contract while keeping appearance distinct from SurfaceModel. Do not include V2L18 implementation in the same PR.
+    tests:
+      - fixture schema and stable fixture SHA-256 regression plus wrong missing extra or non-canonical case-field failures in the fixture runner
+      - deterministic ready-case regression proving the exact V2L17.2 converted values V2L17.3 explicit normalization values and separate V2L17.4 low-endpoint high-endpoint and above-one masks including exact-one not over-range
+      - fail-closed regression proving missing explicit factors remain unresolved and metadata never supplies unity gains exposure EV or another hidden default
+      - rejected and foreign compatibility regressions proving invalid unsupported or cross-observation evidence remains retained as incompatible with reasons and cannot be silently dropped repaired or rerouted
+      - identity regression proving repeated execution is byte-identical while any fixture source bytes raw evidence explicit factor source-plan normalization or mask-content change changes the relevant downstream identity
+      - immutability regression proving fixture execution does not modify source RGB8 converted buffers normalized buffers SourcePhotometryMetadata or upstream request and plan objects
+      - retained JSON schema regression proving separate statuses identities masks and reasons survive while repair recovered-color inferred-factor ranking routing QualityDecision AppearanceModel and promotion fields remain absent
+      - no-external-execution regression proving the fixture runner imports no Pillow OpenCV colour-science LittleCMS NumPy torch filesystem image decoder network subprocess model checkpoint or accelerator behavior beyond reading its checked-in JSON and writing the requested evidence JSON
+      - lot-review regression proving V2L17.1 through V2L17.5 are covered and photometric evidence remains distinct from physical surface static appearance materials environment and runtime representation
+      - lifecycle regression proving V2L17 cannot pass before the review document and retained fixture evidence exist and only V2L18.1 becomes ready afterward
+      - full fast CI CodeQL and the dedicated photometric-pipeline-controlled workflow plus existing qualification lanes where repository path triggers require them
   - {id: V2L18.1, lot: V2L18, title: Canonical AppearanceModel contract, status: planned, depends_on: [V2L17.5]}
   - {id: V2L18.2, lot: V2L18, title: Gaussian radiance adapter capability contract, status: planned, depends_on: [V2L18.1]}
   - {id: V2L18.3, lot: V2L18, title: First approved static appearance baseline, status: planned, depends_on: [V2L18.2]}
