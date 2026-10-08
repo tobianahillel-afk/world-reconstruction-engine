@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import struct
 from dataclasses import FrozenInstanceError, replace
 
 import pytest
@@ -8,8 +9,17 @@ import pytest
 import wre.photometry.color_conventions as reference_module
 from wre.domain import (
     LINEAR_SRGB_F64,
+    ArtifactId,
+    ArtifactInputFingerprint,
+    ArtifactKeyMaterial,
+    ArtifactKind,
     ArtifactMaterializationEntry,
+    ArtifactMaterializationMetadata,
+    ArtifactMetadata,
+    ArtifactProducerIdentity,
+    ArtifactRef,
     ColorConversionStatus,
+    ConfigurationIdentity,
     DecodedImageLevelDescriptor,
     DecodedImageOrientationPolicy,
     DecodedImagePixelLayout,
@@ -19,7 +29,10 @@ from wre.domain import (
     ObservationId,
     ObservationKind,
     ObservationMetadata,
+    ProducerRef,
+    ProvenanceClass,
     RawMetadataEntry,
+    SceneProjectId,
     Sha256Digest,
     SourceColorMetadata,
     SourceExposureMetadata,
@@ -27,6 +40,7 @@ from wre.domain import (
     SourcePhotometryMetadata,
     SourceWhiteBalanceMetadata,
     assess_color_conversion,
+    derive_artifact_key,
 )
 from wre.domain.color_conventions import ColorConversionRequest
 from wre.photometry import convert_rgb8_to_linear_reference
@@ -66,16 +80,49 @@ def _reference_case() -> tuple[ColorConversionRequest, bytes]:
             ),
         ),
     )
-    return (
-        ColorConversionRequest(
-            decoded_manifest=manifest,
-            source_photometry=photometry,
-            decoded_level_index=0,
-            decoded_level_entry=ArtifactMaterializationEntry(
+    artifact_ref = ArtifactRef(
+        artifact_id=ArtifactId("artifact:numeric-srgb-decoded"),
+        artifact_kind=ArtifactKind("media.decoded_image_pyramid"),
+    )
+    producer = ArtifactProducerIdentity(
+        producer=ProducerRef(implementation="test.decoded.numeric", version="1.0.0"),
+        configuration=ConfigurationIdentity(sha256=Sha256Digest("d" * 64)),
+    )
+    artifact = ArtifactMetadata(
+        project_id=SceneProjectId("project:numeric-srgb"),
+        artifact_ref=artifact_ref,
+        artifact_key=derive_artifact_key(
+            ArtifactKeyMaterial(
+                output_kind=artifact_ref.artifact_kind,
+                input_fingerprints=(
+                    ArtifactInputFingerprint(
+                        artifact_kind=ArtifactKind("image.observation"),
+                        sha256=manifest.source_asset_sha256,
+                    ),
+                ),
+                producer=producer,
+            )
+        ),
+        producer=producer,
+        provenance_class=ProvenanceClass.OBSERVED_RECONSTRUCTED,
+    )
+    materialization = ArtifactMaterializationMetadata(
+        artifact_ref=artifact_ref,
+        entries=(
+            ArtifactMaterializationEntry(
                 relative_path="levels/level-000000.rgb",
                 byte_length=len(pixels),
                 sha256=Sha256Digest(hashlib.sha256(pixels).hexdigest()),
             ),
+        ),
+    )
+    return (
+        ColorConversionRequest(
+            decoded_manifest=manifest,
+            decoded_artifact=artifact,
+            decoded_materialization=materialization,
+            source_photometry=photometry,
+            decoded_level_index=0,
             decoded_encoding=DecodedPixelColorEncoding.SRGB_FULL_RGB8,
             working_convention=LINEAR_SRGB_F64,
             output_convention=LINEAR_SRGB_F64,
@@ -101,7 +148,11 @@ def test_independent_fixed_iec_srgb_numeric_reference_fixture() -> None:
         0.05126945837404324,
         0.014443843596092545,
     )
-    assert result.channels == pytest.approx(expected, abs=1e-13)
+    decoded_channels = tuple(
+        value for (value,) in struct.iter_unpack("!d", result.packed_rgb_f64_be)
+    )
+    assert decoded_channels == pytest.approx(expected, abs=1e-13)
+    assert len(result.packed_rgb_f64_be) == len(pixels) * 8
     assert pixels == before
     assert request.decoded_level_entry.sha256.value == hashlib.sha256(before).hexdigest()
     assert result.derived_sha256 != request.decoded_level_entry.sha256
@@ -121,10 +172,13 @@ def test_reference_rejects_mismatched_bytes_and_does_not_write_source() -> None:
         convert_rgb8_to_linear_reference(plan, bytearray(pixels))  # type: ignore[arg-type]
 
     converted = convert_rgb8_to_linear_reference(plan, pixels)
+    assert type(converted.packed_rgb_f64_be) is bytes
     with pytest.raises(FrozenInstanceError):
-        converted.channels = ()  # type: ignore[misc]
+        converted.packed_rgb_f64_be = b""  # type: ignore[misc]
     with pytest.raises(ValueError, match="content digest"):
         replace(converted, content_sha256=Sha256Digest("0" * 64))
+    with pytest.raises(ValueError, match="decoded dimensions"):
+        replace(converted, packed_rgb_f64_be=converted.packed_rgb_f64_be[:-8])
 
 
 def test_backend_has_no_implicit_image_decode_or_photometry_normalization() -> None:
