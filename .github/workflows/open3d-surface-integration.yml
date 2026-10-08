@@ -160,7 +160,41 @@ jobs:
           rm -rf "$wheel_dir"
           mkdir -p "$wheel_dir"
 
-          .venv-open3d/bin/python -m pip install             --dry-run             --ignore-installed             --only-binary=:all:             --no-cache-dir             --report "$report"             "open3d==0.20.0"
+          # Resolve the exact already-reviewed wheel set instead of taking newer
+          # transitive releases from PyPI. The artifact URL/SHA/metadata diff below
+          # still fails closed if a pinned wheel is missing or has changed.
+          constraints="$RUNNER_TEMP/open3d-pinned-wheel-constraints.txt"
+          .venv-open3d/bin/python - "$LOCK_PATH" "$constraints" <<'PY'
+          import json
+          import re
+          import sys
+          from pathlib import Path
+
+          lock = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          assert lock["schema_version"] == 1
+          assert lock["requested"] == [{"name": "open3d", "version": "0.20.0"}]
+          artifacts = lock["artifacts"]
+          assert artifacts and all(isinstance(item, dict) for item in artifacts)
+          names = set()
+          pinned = []
+          for item in artifacts:
+              name = item["name"]
+              version = item["version"]
+              if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", name):
+                  raise SystemExit(f"unsafe reviewed package name: {name!r}")
+              if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.+!-]*", version):
+                  raise SystemExit(f"unsafe reviewed version: {version!r}")
+              normalized = re.sub(r"[-_.]+", "-", name).lower()
+              if normalized in names or not item.get("sha256"):
+                  raise SystemExit(f"duplicate or unhashed reviewed wheel: {name!r}")
+              names.add(normalized)
+              pinned.append(f"{name}=={version}")
+          if "open3d" not in names:
+              raise SystemExit("reviewed lock lacks Open3D")
+          Path(sys.argv[2]).write_text("\n".join(sorted(pinned)) + "\n", encoding="utf-8")
+          PY
+
+          .venv-open3d/bin/python -m pip install             --dry-run             --ignore-installed             --only-binary=:all:             --no-cache-dir             --constraint "$constraints"             --report "$report"             "open3d==0.20.0"
 
           REPORT="$report" WHEEL_DIR="$wheel_dir" GENERATED="$generated" SYSTEM_PACKAGES="$WRE_OPEN3D_SYSTEM_PACKAGES"           .venv-open3d/bin/python - <<'PY'
           from __future__ import annotations
