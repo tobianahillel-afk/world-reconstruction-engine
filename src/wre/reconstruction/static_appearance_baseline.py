@@ -333,13 +333,9 @@ def verify_gsplat_static_appearance_native_geometry(
     if not isinstance(features, ColmapFeatureExtractionResult):
         raise TypeError("gsplat native geometry features must be ColmapFeatureExtractionResult")
     if not isinstance(expected_environment, ColmapEnvironmentIdentity):
-        raise TypeError(
-            "gsplat native geometry environment must be ColmapEnvironmentIdentity"
-        )
+        raise TypeError("gsplat native geometry environment must be ColmapEnvironmentIdentity")
 
-    source_name_map = {
-        item.observation.observation_id: item.image_name for item in source.images
-    }
+    source_name_map = {item.observation.observation_id: item.image_name for item in source.images}
     feature_name_map = {item.observation_id: item.image_name for item in features.images}
     if source_name_map != feature_name_map:
         raise GsplatStaticAppearancePreflightError(
