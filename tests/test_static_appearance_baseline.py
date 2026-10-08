@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+import wre.reconstruction.static_appearance_baseline as baseline_module
 from wre.domain.appearance import APPEARANCE_MODEL_ARTIFACT_KIND, AppearanceRepresentationName
 from wre.domain.artifacts import ArtifactId, ArtifactKind, ArtifactRef
 from wre.domain.camera_solutions import (
@@ -36,6 +37,16 @@ from wre.domain.observations import (
 from wre.domain.point_maps import PointMap, PointMapId
 from wre.domain.producer_identity import ArtifactProducerIdentity, ConfigurationIdentity
 from wre.domain.runs import ProducerRef
+from wre.reconstruction.colmap_canonical_geometry import (
+    CanonicalColmapSparseModel,
+    colmap_sparse_model_content_identity,
+)
+from wre.reconstruction.colmap_environment import ColmapEnvironmentIdentity
+from wre.reconstruction.colmap_features import (
+    ColmapFeatureExtractionResult,
+    ColmapImageFeatureSummary,
+)
+from wre.domain.runs import DerivedArtifactProvenance, ReconstructionRunId
 from wre.reconstruction.colmap_geometry_refinement import (
     colmap_native_sparse_model_artifact_ref,
 )
@@ -53,6 +64,7 @@ from wre.reconstruction.static_appearance_baseline import (
     GsplatStaticAppearanceTrainingProfile,
     materialize_verified_gsplat_ply,
     preflight_gsplat_static_appearance_inputs,
+    verify_gsplat_static_appearance_native_geometry,
 )
 from wre.reconstruction.static_appearance_candidate import StaticAppearanceCandidateRequest
 
@@ -525,3 +537,174 @@ def test_gsplat_ply_materialization_has_no_optional_training_import() -> None:
         elif isinstance(node, ast.ImportFrom) and node.module:
             imported.add(node.module.split(".")[0])
     assert not {"torch", "gsplat", "numpy", "subprocess", "pycolmap", "PIL"} & imported
+
+
+
+def _native_feature_evidence(tmp_path: Path) -> tuple[
+    ColmapFeatureExtractionResult, ColmapEnvironmentIdentity
+]:
+    environment = ColmapEnvironmentIdentity(
+        pycolmap_version="4.2.0",
+        colmap_version="COLMAP 4.2.0",
+        colmap_build="fixture",
+        ceres_version="2.2.0",
+        upstream_has_cuda=False,
+    )
+    return (
+        ColmapFeatureExtractionResult(
+            provenance=DerivedArtifactProvenance(
+                producing_run_id=ReconstructionRunId("run:gsplat-features"),
+                source_observation_ids=(ObservationId("obs:frame"),),
+            ),
+            environment=environment,
+            configuration_sha256=_digest(b"features-config"),
+            database_path=tmp_path / "features.db",
+            database_sha256=_digest(b"features-db"),
+            database_byte_length=1,
+            images=(
+                ColmapImageFeatureSummary(
+                    observation_id=ObservationId("obs:frame"),
+                    image_name="frame.png",
+                    keypoint_rows=3,
+                    keypoint_cols=4,
+                    descriptor_rows=3,
+                    descriptor_cols=128,
+                ),
+            ),
+        ),
+        environment,
+    )
+
+
+def _native_canonical(
+    request: StaticAppearanceCandidateRequest,
+    source: GsplatStaticAppearancePreflightSource,
+) -> CanonicalColmapSparseModel:
+    geometry = request.source_geometry
+    return CanonicalColmapSparseModel(
+        source_model_index=source.native_model_artifact.model_index,
+        source_model_identity_sha256=colmap_sparse_model_content_identity(
+            source.native_model_artifact
+        ),
+        camera_solutions=geometry.camera_solutions,
+        point_map=geometry.point_maps[0],
+        geometry_solution=geometry.geometry_solution,
+    )
+
+
+def test_native_geometry_reuses_audited_pycolmap_reader_and_preserves_exact_input(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    request, source = _parts(tmp_path)
+    features, environment = _native_feature_evidence(tmp_path)
+    expected = _native_canonical(request, source)
+    calls: list[dict[str, object]] = []
+
+    def canonicalize(**kwargs: object) -> CanonicalColmapSparseModel:
+        calls.append(kwargs)
+        return expected
+
+    monkeypatch.setattr(baseline_module, "canonicalize_colmap_sparse_model", canonicalize)
+    result = verify_gsplat_static_appearance_native_geometry(
+        request,
+        source,
+        features=features,
+        expected_environment=environment,
+        module=None,
+    )
+    assert result is expected
+    assert len(calls) == 1
+    assert calls[0]["model_artifact"] is source.native_model_artifact
+    assert calls[0]["output_path"] == source.native_model_root
+    assert calls[0]["features"] is features
+    assert calls[0]["expected_environment"] is environment
+    assert calls[0]["module"] is None
+
+
+def test_native_geometry_rejects_foreign_camera_even_if_geometry_id_is_unchanged(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    request, source = _parts(tmp_path)
+    features, environment = _native_feature_evidence(tmp_path)
+    expected = _native_canonical(request, source)
+    monkeypatch.setattr(
+        baseline_module, "canonicalize_colmap_sparse_model", lambda **kwargs: expected
+    )
+    camera = request.source_geometry.camera_solutions[0]
+    different_camera = replace(camera, intrinsic_parameters=(3.0, 2.0, 1.0, 0.5))
+    different_geometry = replace(
+        request.source_geometry, camera_solutions=(different_camera,)
+    )
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="do not match"):
+        verify_gsplat_static_appearance_native_geometry(
+            replace(request, source_geometry=different_geometry),
+            source,
+            features=features,
+            expected_environment=environment,
+        )
+
+
+def test_native_geometry_rejects_foreign_point_map_or_scale(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    request, source = _parts(tmp_path)
+    features, environment = _native_feature_evidence(tmp_path)
+    expected = _native_canonical(request, source)
+    monkeypatch.setattr(
+        baseline_module, "canonicalize_colmap_sparse_model", lambda **kwargs: expected
+    )
+    other_point = replace(
+        request.source_geometry.point_maps[0], positions_xyz=((2.0, 2.0, 3.0),)
+    )
+    other_map = replace(request.source_geometry, point_maps=(other_point,))
+    metric = replace(
+        request.source_geometry.geometry_solution, scale_status=GeometryScaleStatus.METRIC
+    )
+    other_scale = replace(request.source_geometry, geometry_solution=metric)
+    for variant in (other_map, other_scale):
+        with pytest.raises(GsplatStaticAppearancePreflightError, match="do not match"):
+            verify_gsplat_static_appearance_native_geometry(
+                replace(request, source_geometry=variant),
+                source,
+                features=features,
+                expected_environment=environment,
+            )
+
+
+def test_native_geometry_fails_before_pycolmap_on_foreign_name_mapping(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    request, source = _parts(tmp_path)
+    features, environment = _native_feature_evidence(tmp_path)
+    wrong = replace(
+        features,
+        images=(replace(features.images[0], image_name="different.png"),),
+    )
+    def fail_if_called(**kwargs: object) -> None:
+        pytest.fail("native reader must not execute after a rejected image mapping")
+
+    monkeypatch.setattr(
+        baseline_module, "canonicalize_colmap_sparse_model", fail_if_called
+    )
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="naming"):
+        verify_gsplat_static_appearance_native_geometry(
+            request, source, features=wrong, expected_environment=environment
+        )
+
+
+def test_native_geometry_rejects_inconsistent_native_content_identity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    request, source = _parts(tmp_path)
+    features, environment = _native_feature_evidence(tmp_path)
+    canonical = replace(
+        _native_canonical(request, source),
+        source_model_identity_sha256=_digest(b"foreign-native-model"),
+    )
+    monkeypatch.setattr(
+        baseline_module, "canonicalize_colmap_sparse_model", lambda **kwargs: canonical
+    )
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="identity"):
+        verify_gsplat_static_appearance_native_geometry(
+            request, source, features=features, expected_environment=environment
+        )
