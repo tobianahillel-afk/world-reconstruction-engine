@@ -12,6 +12,44 @@ import pytest
 
 import wre.reconstruction.static_appearance_baseline as baseline_module
 from wre.domain.appearance import APPEARANCE_MODEL_ARTIFACT_KIND, AppearanceRepresentationName
+from wre.domain import (
+    LINEAR_SRGB_F64,
+    ArtifactInputFingerprint,
+    ArtifactKeyMaterial,
+    ArtifactMaterializationEntry,
+    ArtifactMaterializationMetadata,
+    ArtifactMetadata,
+    DecodedImageLevelDescriptor,
+    DecodedImageOrientationPolicy,
+    DecodedImagePixelLayout,
+    DecodedImagePyramidManifest,
+    DecodedImagePyramidSpec,
+    DecodedPixelColorEncoding,
+    ObservationKind,
+    ObservationMetadata,
+    PhotometricCompatibilityAssessment,
+    PhotometricCompatibilityInput,
+    PhotometricCompatibilityStatus,
+    PhotometricNormalizationFactors,
+    PhotometricNormalizationRequest,
+    ProvenanceClass,
+    RawMetadataEntry,
+    SceneProjectId,
+    SourceColorMetadata,
+    SourceExposureMetadata,
+    SourcePhotometryInterpretationStatus,
+    SourcePhotometryMetadata,
+    SourceWhiteBalanceMetadata,
+    ColorConversionRequest,
+    assess_color_conversion,
+    assess_photometric_compatibility,
+    assess_photometric_normalization,
+    derive_artifact_key,
+)
+from wre.photometry import (
+    convert_rgb8_to_linear_reference,
+    normalize_linear_rgb_reference,
+)
 from wre.domain.artifacts import ArtifactId, ArtifactKind, ArtifactRef
 from wre.domain.camera_solutions import (
     CameraProjectionModelName,
@@ -64,6 +102,7 @@ from wre.reconstruction.static_appearance_baseline import (
     materialize_verified_gsplat_ply,
     preflight_gsplat_static_appearance_inputs,
     verify_gsplat_static_appearance_native_geometry,
+    verify_gsplat_static_appearance_source_photometry,
 )
 from wre.reconstruction.static_appearance_candidate import StaticAppearanceCandidateRequest
 
@@ -700,4 +739,179 @@ def test_native_geometry_rejects_inconsistent_native_content_identity(
     with pytest.raises(GsplatStaticAppearancePreflightError, match="identity"):
         verify_gsplat_static_appearance_native_geometry(
             request, source, features=features, expected_environment=environment
+        )
+
+
+def _gsplat_photo_assessment(
+    source: GsplatStaticAppearancePreflightSource,
+    *,
+    observation_id: ObservationId | None = None,
+    asset_sha256: Sha256Digest | None = None,
+    exposure_ev: float = 0.0,
+) -> PhotometricCompatibilityAssessment:
+    """Real V2L17 plans bound to the same source asset, not mocked compatible labels."""
+
+    image = source.images[0]
+    observation = observation_id or image.observation.observation_id
+    source_digest = asset_sha256 or image.observation.asset.sha256
+    rgb = bytes((64, 128, 192, 64, 128, 192))
+    declaration = RawMetadataEntry("caller", "color", "sRGB")
+    photo = SourcePhotometryMetadata(
+        observation_id=observation,
+        source_metadata=ObservationMetadata(
+            observation_id=observation,
+            raw_entries=(declaration,),
+        ),
+        color=SourceColorMetadata(
+            status=SourcePhotometryInterpretationStatus.RESOLVED,
+            declared_color_space="sRGB",
+            declared_primaries="bt709_d65",
+            declared_transfer_characteristic="srgb",
+            declared_matrix_coefficients="identity",
+            declared_range="full",
+            evidence=(declaration,),
+        ),
+        exposure=SourceExposureMetadata(
+            status=SourcePhotometryInterpretationStatus.ABSENT
+        ),
+        white_balance=SourceWhiteBalanceMetadata(
+            status=SourcePhotometryInterpretationStatus.ABSENT
+        ),
+    )
+    manifest = DecodedImagePyramidManifest(
+        source_observation_id=observation,
+        source_kind=ObservationKind.IMAGE,
+        source_asset_sha256=source_digest,
+        pixel_layout=DecodedImagePixelLayout.RGB8_PACKED,
+        orientation_policy=DecodedImageOrientationPolicy.SOURCE_PIXELS,
+        spec=DecodedImagePyramidSpec(minimum_max_edge_px=2),
+        levels=(
+            DecodedImageLevelDescriptor(
+                level_index=0,
+                width_px=2,
+                height_px=1,
+                relative_path="levels/level-000000.rgb",
+            ),
+        ),
+    )
+    decoded_ref = ArtifactRef(
+        ArtifactId("artifact:gsplat-photometric-decoded"),
+        ArtifactKind("media.decoded_image_pyramid"),
+    )
+    producer = _producer()
+    decoded_artifact = ArtifactMetadata(
+        project_id=SceneProjectId("project:gsplat-photometric"),
+        artifact_ref=decoded_ref,
+        artifact_key=derive_artifact_key(
+            ArtifactKeyMaterial(
+                output_kind=decoded_ref.artifact_kind,
+                input_fingerprints=(
+                    ArtifactInputFingerprint(
+                        artifact_kind=ArtifactKind("image.observation"),
+                        sha256=source_digest,
+                    ),
+                ),
+                producer=producer,
+            )
+        ),
+        producer=producer,
+        provenance_class=ProvenanceClass.OBSERVED_RECONSTRUCTED,
+    )
+    materialization = ArtifactMaterializationMetadata(
+        artifact_ref=decoded_ref,
+        entries=(
+            ArtifactMaterializationEntry(
+                relative_path="levels/level-000000.rgb",
+                sha256=_digest(rgb),
+                byte_length=len(rgb),
+            ),
+        ),
+    )
+    color_request = ColorConversionRequest(
+        decoded_manifest=manifest,
+        decoded_artifact=decoded_artifact,
+        decoded_materialization=materialization,
+        source_photometry=photo,
+        decoded_level_index=0,
+        decoded_encoding=DecodedPixelColorEncoding.SRGB_FULL_RGB8,
+        working_convention=LINEAR_SRGB_F64,
+        output_convention=LINEAR_SRGB_F64,
+    )
+    color = assess_color_conversion(color_request)
+    assert color.plan is not None
+    converted = convert_rgb8_to_linear_reference(color.plan, rgb)
+    normalized_request = PhotometricNormalizationRequest(
+        source_plan=color.plan,
+        source_content_sha256=converted.content_sha256,
+        source_derived_sha256=converted.derived_sha256,
+        source_photometry=photo,
+        factors=PhotometricNormalizationFactors(
+            exposure_adjustment_ev=exposure_ev,
+            white_balance_rgb_gains=(1.0, 1.0, 1.0),
+        ),
+    )
+    normalization = assess_photometric_normalization(normalized_request)
+    assert normalization.plan is not None
+    normalized = normalize_linear_rgb_reference(normalization.plan, converted)
+    assessment = assess_photometric_compatibility(
+        PhotometricCompatibilityInput(
+            color_assessment=color,
+            normalization_assessment=normalization,
+            normalized_content_sha256=normalized.content_sha256,
+            normalized_derived_sha256=normalized.derived_sha256,
+        )
+    )
+    assert assessment.status is PhotometricCompatibilityStatus.COMPATIBLE
+    return assessment
+
+
+def test_gsplat_photo_gate_requires_exact_ready_identity_evidence(tmp_path: Path) -> None:
+    request, source = _parts(tmp_path)
+    assessment = _gsplat_photo_assessment(source)
+    assert verify_gsplat_static_appearance_source_photometry(
+        request, source, (assessment,)
+    ) == (assessment.identity,)
+    assert request.source_observation_ids == (ObservationId("obs:frame"),)
+
+
+def test_gsplat_photo_gate_fails_on_mismatched_source_image_hash(tmp_path: Path) -> None:
+    request, source = _parts(tmp_path)
+    other = _gsplat_photo_assessment(source, asset_sha256=_digest(b"other"))
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="exact source PNG"):
+        verify_gsplat_static_appearance_source_photometry(request, source, (other,))
+
+
+def test_gsplat_photo_gate_fails_on_foreign_observation(tmp_path: Path) -> None:
+    request, source = _parts(tmp_path)
+    foreign = _gsplat_photo_assessment(source, observation_id=ObservationId("obs:foreign"))
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="exact source PNG"):
+        verify_gsplat_static_appearance_source_photometry(request, source, (foreign,))
+
+
+def test_gsplat_photo_gate_fails_on_unapplied_exposure_correction(tmp_path: Path) -> None:
+    request, source = _parts(tmp_path)
+    assessment = _gsplat_photo_assessment(source, exposure_ev=1.0)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="raw PNG"):
+        verify_gsplat_static_appearance_source_photometry(request, source, (assessment,))
+
+
+def test_gsplat_photo_gate_requires_complete_immutable_evidence(tmp_path: Path) -> None:
+    request, source = _parts(tmp_path)
+    with pytest.raises(TypeError, match="immutable tuple"):
+        verify_gsplat_static_appearance_source_photometry(request, source, [])  # type: ignore[arg-type]
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="requires one"):
+        verify_gsplat_static_appearance_source_photometry(request, source, ())
+    with pytest.raises(TypeError, match="PhotometricCompatibilityAssessment"):
+        verify_gsplat_static_appearance_source_photometry(
+            request, source, ("compatible",)  # type: ignore[arg-type]
+        )
+    assessment = _gsplat_photo_assessment(source)
+    false_label = PhotometricCompatibilityAssessment(
+        status=PhotometricCompatibilityStatus.UNRESOLVED,
+        compatibility_input=assessment.compatibility_input,
+        reasons=("unverified",),
+    )
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="unresolved"):
+        verify_gsplat_static_appearance_source_photometry(
+            request, source, (false_label,)
         )
