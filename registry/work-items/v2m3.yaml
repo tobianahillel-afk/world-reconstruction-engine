@@ -536,7 +536,7 @@ work_items:
   - id: V2L18.3
     lot: V2L18
     title: First approved static appearance baseline
-    status: ready
+    status: in_progress
     objective: Select and integrate only one evidence-approved static appearance baseline behind the V2L18.2 StaticAppearanceCandidateAdapter boundary using explicit reviewed source GeometrySolutionCandidate and photometrically interpretable source observations. Materialize one complete AppearanceModel with exact output-file provenance, without making its particular Gaussian radiance or neural method a core WRE type or a default scene route.
     allowed_scope:
       - src/wre/reconstruction/static_appearance_baseline.py
