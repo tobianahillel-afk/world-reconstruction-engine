@@ -92,9 +92,7 @@ def _geometry(
         depth_fields=(),
         point_maps=(point_map,),
         producer=_producer(f"geometry:{token}"),
-        source_artifacts=(
-            ancestry if ancestry is not None else (_artifact(f"artifact:{token}"),)
-        ),
+        source_artifacts=(ancestry if ancestry is not None else (_artifact(f"artifact:{token}"),)),
     )
 
 
@@ -215,9 +213,7 @@ def test_representation_token_rejects_invalid_values(token: str) -> None:
         ("source_artifacts", cast(Any, []), "immutable tuple"),
     ],
 )
-def test_rejects_wrong_field_types(
-    field_name: str, replacement: Any, message: str
-) -> None:
+def test_rejects_wrong_field_types(field_name: str, replacement: Any, message: str) -> None:
     source = _geometry("types")
     model = _model("types", source_geometry=source)
     kwargs = {field.name: getattr(model, field.name) for field in fields(model)}
@@ -353,10 +349,12 @@ def test_metadata_only_surface_and_geometry_immutability_and_separation() -> Non
     geometry = _geometry("immutability")
     surface = _surface("immutability", geometry)
     observations = (ObservationId("obs:a"), ObservationId("obs:b"))
-    source_artifacts = tuple(sorted(
-        (*geometry.source_artifacts, surface.artifact_ref),
-        key=lambda item: (item.artifact_id.value, item.artifact_kind.value),
-    ))
+    source_artifacts = tuple(
+        sorted(
+            (*geometry.source_artifacts, surface.artifact_ref),
+            key=lambda item: (item.artifact_id.value, item.artifact_kind.value),
+        )
+    )
     model = _model(
         "immutability",
         source_geometry=geometry,
@@ -389,9 +387,21 @@ def test_module_has_no_solver_renderer_payload_runtime_or_generated_content() ->
 
     field_names = {field.name for field in fields(AppearanceModel)}
     for forbidden_field in (
-        "positions", "covariance", "spherical_harmonics", "weights", "pixels",
-        "material", "environment", "renderer", "training", "routing",
-        "quality", "completion", "runtime", "geometry_payload", "collision",
+        "positions",
+        "covariance",
+        "spherical_harmonics",
+        "weights",
+        "pixels",
+        "material",
+        "environment",
+        "renderer",
+        "training",
+        "routing",
+        "quality",
+        "completion",
+        "runtime",
+        "geometry_payload",
+        "collision",
     ):
         assert forbidden_field not in field_names
 
