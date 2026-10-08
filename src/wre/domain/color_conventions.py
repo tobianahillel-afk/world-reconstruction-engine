@@ -259,9 +259,9 @@ def assess_color_conversion(
         return rejected("unreviewed color backend or precision configuration")
     steps = (ColorConversionStep.SRGB_EOTF, ColorConversionStep.LINEAR_IDENTITY)
     plan = ColorConversionPlan(
-        request=request, backend=backend, steps=steps,
+        request=request,
+        backend=backend,
+        steps=steps,
         identity=_plan_identity(request, backend, steps),
     )
-    return ColorConversionAssessment(
-        status=ColorConversionStatus.READY, request=request, plan=plan
-    )
+    return ColorConversionAssessment(status=ColorConversionStatus.READY, request=request, plan=plan)
