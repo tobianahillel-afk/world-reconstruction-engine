@@ -399,7 +399,7 @@ def test_workflow_is_cpu_only_and_retains_canonical_fixture_evidence() -> None:
         assert forbidden not in lowered
 
 
-def test_lot_review_and_lifecycle_activate_only_v2l18_1() -> None:
+def test_v2l17_lot_review_remains_passed_after_later_work_items_advance() -> None:
     root = Path(__file__).parents[1]
     state = (root / "PROJECT_STATE.yaml").read_text(encoding="utf-8")
     reviews = (root / "registry" / "reviews.yaml").read_text(encoding="utf-8")
@@ -409,28 +409,23 @@ def test_lot_review_and_lifecycle_activate_only_v2l18_1() -> None:
         encoding="utf-8"
     )
 
-    assert "lot: V2L18" in state
-    assert "active_work_item: V2L18.1" in state
-    assert "V2L17.5]" in state
-    assert "last_merged_pr: 190" in state
-
+    # V2L17 is historical accepted evidence: subsequent V2L18 and later work
+    # must not invalidate this test just by advancing the active work item.
+    assert "V2L17.5" in state
     assert "V2L17:\n    status: passed" in reviews
     assert "docs/reviews/V2L17-photometric-pipeline-review.md" in reviews
 
     assert "id: V2L17.5" in work_items
     assert "title: Photometric regression fixture and lot review\n    status: done" in work_items
     assert "id: V2L18.1" in work_items
-    assert "title: Canonical AppearanceModel contract\n    status: ready" in work_items
-    assert "src/wre/domain/appearance.py" in work_items
     assert "V2L18.2" in work_items
 
-    assert "photometric_pipeline:" in components
-    assert "tests/test_photometric_pipeline_fixture.py" in components
-    assert "status: implemented" in components
-    assert (
-        "static_appearance: {owner_lot: V2L18, implementation: [], tests: [], status: planned}"
-        in components
-    )
+    photometric_component = components.split("  photometric_pipeline:\n", 1)[1].split(
+        "\n  static_appearance:", 1
+    )[0]
+    assert "owner_lot: V2L17" in photometric_component
+    assert "tests/test_photometric_pipeline_fixture.py" in photometric_component
+    assert "status: implemented" in photometric_component
 
     for item in ("V2L17.1", "V2L17.2", "V2L17.3", "V2L17.4", "V2L17.5"):
         assert item in review

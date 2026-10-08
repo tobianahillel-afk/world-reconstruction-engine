@@ -372,7 +372,7 @@ work_items:
   - id: V2L18.1
     lot: V2L18
     title: Canonical AppearanceModel contract
-    status: ready
+    status: done
     objective: Define one pure immutable solver-independent canonical AppearanceModel metadata and provenance contract for a retained static photorealistic appearance artifact so later Gaussian radiance neural or other renderable representations can share exact WRE identity ancestry local-frame and scale semantics without turning appearance into physical geometry materials environment runtime assets or a solver-specific payload.
     allowed_scope:
       - src/wre/domain/appearance.py
@@ -448,7 +448,91 @@ work_items:
       - separation regressions proving the module contains no Gaussian payload coefficients neural weights pixels MaterialModel EnvironmentModel MasterScene RuntimeScene renderer training optimization routing QualityDecision collision measurement or navigation implementation behavior
       - module-surface regression proving NumPy torch CUDA gsplat nerfstudio OpenSplat image decode filesystem network subprocess checkpoint download and accelerator behavior are absent
       - full fast CI and CodeQL
-  - {id: V2L18.2, lot: V2L18, title: Gaussian radiance adapter capability contract, status: planned, depends_on: [V2L18.1]}
+  - id: V2L18.2
+    lot: V2L18
+    title: Gaussian radiance adapter capability contract
+    status: ready
+    objective: Define one pure solver-independent static appearance candidate adapter capability boundary that binds a complete canonical source GeometrySolutionCandidate optional exact SurfaceModel and caller-declared source observations and supporting artifacts to one retained AppearanceModel plus exact materialization metadata. Keep Gaussian radiance and other rendering technologies replaceable and do not run or select a concrete specialist in this work item.
+    allowed_scope:
+      - src/wre/reconstruction/static_appearance_candidate.py
+      - focused exports in src/wre/reconstruction/__init__.py
+      - tests/test_static_appearance_candidate.py
+      - focused lifecycle updates to registry/components.yaml PROJECT_STATE.yaml and this work-item registry only after implementation evidence is green so V2L18.3 can be activated without implementing it
+    out_of_scope:
+      - implementing executing importing benchmarking or choosing 3DGS 2DGS Gaussian rasterization gsplat nerfstudio OpenSplat NeRF Mip-Splatting radiance-field neural-field texture baking or another concrete appearance solver
+      - downloading vendoring materializing loading or hashing model checkpoints weights datasets or pretrained appearance assets in this pure capability module
+      - adding torch NumPy CUDA GPU NPU native extension image decoding rendering training optimization pose refinement exposure estimation white balance estimation HDR tone mapping or photometric repair
+      - changing AppearanceModel SurfaceModel GeometrySolutionCandidate LocalFrameId GeometryScaleStatus SourcePhotometryMetadata or any reviewed V2L17 identity and color semantics
+      - treating appearance as collision measurement navigation watertightness metric surface geometry material environment or generated-completion truth
+      - synthesizing inferred or generated regions replacing unsupported pixels recovering highlights or relabeling generated appearance as observed reconstructed
+      - merging selecting ranking comparing scoring promoting or routing candidate appearance models or computing held-out view quality resource motion or geometry stability metrics
+      - building a preview renderer MasterScene RuntimeScene compression LOD streaming viewer or V2L18.3 through V2L18.6 implementation
+    depends_on: [V2L18.1]
+    read_before:
+      - docs/00_START_HERE.md
+      - docs/01_PRODUCT.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/15_PRODUCTION_RUNTIME.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md
+      - docs/27_RESEARCH_CANDIDATE_COVERAGE.md
+      - docs/reviews/V2L17-photometric-pipeline-review.md
+      - registry/components.yaml
+      - registry/work-items/v2m3.yaml
+      - PROJECT_STATE.yaml
+      - src/wre/domain/appearance.py
+      - src/wre/domain/artifact_materialization.py
+      - src/wre/domain/artifacts.py
+      - src/wre/domain/producer_identity.py
+      - src/wre/domain/observations.py
+      - src/wre/domain/geometry_solutions.py
+      - src/wre/domain/surfaces.py
+      - src/wre/reconstruction/geometry_solution_comparison.py
+      - src/wre/reconstruction/hybrid_surface_candidate.py
+      - src/wre/reconstruction/learned_depth_prior.py
+      - src/wre/reconstruction/__init__.py
+      - tests/test_appearance.py
+      - tests/test_hybrid_surface_candidate.py
+      - tests/test_learned_depth_prior.py
+    reuse:
+      - AppearanceModel AppearanceRepresentationName and APPEARANCE_MODEL_ARTIFACT_KIND unchanged from V2L18.1 as the only canonical retained static visual artifact envelope
+      - GeometrySolutionCandidate and optional SurfaceModel as the exact complete reconstruction and physical support values with no inferred alignment metric scale or surface geometry
+      - ObservationId and ArtifactRef immutable canonical tuple and ancestry rules without reinterpreting source photometry or image pixels
+      - ArtifactProducerIdentity as exact adapter-owned producer model and checkpoint provenance already retained by the resulting AppearanceModel
+      - ArtifactMaterializationMetadata as the canonical exact output payload file identity with no file reads or solver-private payload parsing in the pure boundary
+      - the frozen request result Protocol plus pure build helper pattern from V2L16.4 hybrid_surface_candidate.py without importing that optional specialist or its intended-use policy
+      - Gaussian and radiance are living future specialist families only and do not become a fixed representation enum or mandatory hardware stack here
+    acceptance:
+      - Add a single pure static_appearance_candidate module with frozen slots StaticAppearanceCandidateRequest and StaticAppearanceCandidateResult one StaticAppearanceCandidateAdapter Protocol and one build_static_appearance_candidate_result pure helper. Use only the standard library plus existing canonical WRE contracts.
+      - The request must retain one complete source_geometry GeometrySolutionCandidate one optional source_surface SurfaceModel one immutable non-empty canonical tuple of source_observation_ids ObservationId one output_representation AppearanceRepresentationName and one immutable supporting_artifacts tuple of ArtifactRef. Supporting artifacts may be empty but otherwise must be unique and canonically ordered by ArtifactId and ArtifactKind.
+      - Reject a foreign optional SurfaceModel whose complete source GeometrySolutionCandidate frame or scale differ from the request. Never coerce cross-frame cross-scale or candidate ancestry even if identifiers look similar.
+      - Define the adapter Protocol with one derive_candidate method accepting exactly the request and returning exactly the result. The boundary executes no concrete solver or model.
+      - The result must retain the exact request one AppearanceModel candidate and one ArtifactMaterializationMetadata bound to candidate.artifact_ref. The candidate must preserve request.source_geometry optional source_surface source_observation_ids output_representation LocalFrameId and GeometryScaleStatus exactly.
+      - The candidate source_artifacts must equal the canonical union of request.source_geometry.source_artifacts optional SurfaceModel artifact_ref and ancestry plus supporting_artifacts. Reject missing extra duplicate reordered or relabeled source identities. The candidate artifact_ref must be distinct from all source and supporting artifact identities.
+      - The candidate ArtifactProducerIdentity must remain exactly the producer carried by AppearanceModel and may not be fabricated by the capability boundary. The boundary does not insert an unverified model checkpoint or infer provenance from representation names.
+      - The materialization artifact_ref must exactly match the AppearanceModel artifact_ref. This pure module validates metadata only and must never read inspect hash normalize overwrite or execute its materialized payload bytes.
+      - Allow valid open lowercase static appearance representation tokens without hardcoding gsplat 3DGS NeRF or a renderer family as an architecture choice. The output remains appearance.static and never geometry.surface or runtime assets.
+      - No winner default route score rank quality status inferred exposure generated completion sensor clipping repair safety or physical suitability behavior may be exposed.
+      - Export only StaticAppearanceCandidateRequest StaticAppearanceCandidateResult StaticAppearanceCandidateAdapter and build_static_appearance_candidate_result from wre.reconstruction.
+      - On green implementation evidence mark V2L18.2 done retain static_appearance implementing and activate V2L18.3 with a complete technology refreshed executable contract for the first approved static appearance baseline. Do not implement V2L18.3 in the same PR.
+    tests:
+      - frozen slots request result exact field shapes and wrong-type invalid tuples regressions
+      - supporting-artifact empty unique canonical ordering and reject implicit sorting or mutation
+      - source observation non-empty immutable unique canonical order regressions
+      - exact GeometrySolutionCandidate preservation and optional same-geometry SurfaceModel compatibility regressions including foreign candidate producer ancestry frame and scale mismatches
+      - unresolved-scale and metric-scale regressions proving frame and scale are carried unchanged and no world alignment is inferred
+      - Protocol exact single derive_candidate method signature and result builder regressions
+      - candidate artifact distinctness and exact canonical ancestry-union regressions with missing extra duplicate or reordered ArtifactRef members rejected
+      - producer identity and materialization ArtifactRef binding regressions proving no inferred checkpoint and no output payload inspection
+      - representation openness and appearance-versus-surface separation regressions
+      - no renderer no training no quality selection no routing no generated-completion and no solver-private payload regressions
+      - immutability regression proving request result building does not rewrite sort align or modify geometry surface observation artifacts producer or materialization
+      - no external import file network subprocess CUDA Torch NumPy native solver or checkpoint behavior regression
+      - full fast CI and CodeQL
   - {id: V2L18.3, lot: V2L18, title: First approved static appearance baseline, status: planned, depends_on: [V2L18.2]}
   - {id: V2L18.4, lot: V2L18, title: Held out render geometry motion scale stability metrics, status: planned, depends_on: [V2L18.3]}
   - {id: V2L18.5, lot: V2L18, title: In the wild appearance specialist boundary, status: planned, depends_on: [V2L18.4]}

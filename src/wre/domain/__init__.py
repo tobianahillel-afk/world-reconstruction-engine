@@ -1,6 +1,11 @@
 """Core solver-independent domain models."""
 
 from wre.domain.adapter_capabilities import AdapterCapabilityDescriptor, AdapterCapabilityName
+from wre.domain.appearance import (
+    APPEARANCE_MODEL_ARTIFACT_KIND,
+    AppearanceModel,
+    AppearanceRepresentationName,
+)
 from wre.domain.artifact_graph import ArtifactDependencyEdge, ArtifactDependencyGraph
 from wre.domain.artifact_invalidation import (
     ArtifactInvalidationPlan,
@@ -208,6 +213,7 @@ from wre.domain.temporal_groups import (
 )
 
 __all__ = [
+    "APPEARANCE_MODEL_ARTIFACT_KIND",
     "ARTIFACT_KEY_SCHEMA_VERSION",
     "DECODED_IMAGE_PYRAMID_KIND",
     "LINEAR_SRGB_F64",
@@ -217,6 +223,8 @@ __all__ = [
     "SURFACE_SUPPORT_MAP_ARTIFACT_KIND",
     "AdapterCapabilityDescriptor",
     "AdapterCapabilityName",
+    "AppearanceModel",
+    "AppearanceRepresentationName",
     "ArtifactDependencyEdge",
     "ArtifactDependencyGraph",
     "ArtifactId",
