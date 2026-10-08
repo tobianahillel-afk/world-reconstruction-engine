@@ -40,8 +40,9 @@ from wre.photometry import (
 )
 
 
-def _source_case() -> tuple[ConvertedLinearRgbBuffer, SourcePhotometryMetadata]:
-    pixels = bytes((64, 128, 255))
+def _source_case(
+    pixels: bytes = bytes((64, 128, 255)),
+) -> tuple[ConvertedLinearRgbBuffer, SourcePhotometryMetadata]:
     obs = ObservationId("obs:photometric-reference")
     color_entry = RawMetadataEntry("caller", "color", "sRGB")
     iso_entry = RawMetadataEntry("exif", "iso", "100")
@@ -166,7 +167,7 @@ def test_reference_rejects_foreign_source_digests_and_plan() -> None:
     with pytest.raises(ValueError, match="derived digest"):
         normalize_linear_rgb_reference(wrong_derived_plan, source)
 
-    other_source, _ = _source_case()
+    other_source, _ = _source_case(bytes((32, 64, 128)))
     other_plan_request = replace(
         request,
         source_plan=other_source.plan,
@@ -175,9 +176,9 @@ def test_reference_rejects_foreign_source_digests_and_plan() -> None:
     )
     other_plan = assess_photometric_normalization(other_plan_request).plan
     assert other_plan is not None
-    if other_source.plan != source.plan:
-        with pytest.raises(ValueError, match="color-conversion plan"):
-            normalize_linear_rgb_reference(other_plan, source)
+    assert other_source.plan != source.plan
+    with pytest.raises(ValueError, match="color-conversion plan"):
+        normalize_linear_rgb_reference(other_plan, source)
 
 
 def test_normalized_result_is_immutable_and_digest_verified() -> None:
