@@ -122,9 +122,7 @@ class AppearanceModel:
         if self.source_surface is not None and not isinstance(self.source_surface, SurfaceModel):
             raise TypeError("appearance_model.source_surface must be SurfaceModel or None")
         if not isinstance(self.representation, AppearanceRepresentationName):
-            raise TypeError(
-                "appearance_model.representation must be AppearanceRepresentationName"
-            )
+            raise TypeError("appearance_model.representation must be AppearanceRepresentationName")
         if not isinstance(self.local_frame_id, LocalFrameId):
             raise TypeError("appearance_model.local_frame_id must be LocalFrameId")
         if not isinstance(self.scale_status, GeometryScaleStatus):
