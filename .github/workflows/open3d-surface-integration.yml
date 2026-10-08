@@ -82,6 +82,7 @@ jobs:
             "libgbm1=25.2.8-0ubuntu0.24.04.2" \
             "mesa-libgallium=25.2.8-0ubuntu0.24.04.2" \
             "libglx-mesa0=25.2.8-0ubuntu0.24.04.2" \
+            "libgl1-mesa-dri=25.2.8-0ubuntu0.24.04.2" \
             "libgl1=1.7.0-1build1" \
             "libgomp1=14.2.0-4ubuntu2~24.04.1"
 
