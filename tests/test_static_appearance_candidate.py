@@ -331,13 +331,12 @@ def test_result_rejects_missing_extra_and_reordered_ancestry() -> None:
     with pytest.raises(ValueError, match="canonical union"):
         build_static_appearance_candidate_result(request_with_support, candidate, manifest)
 
-    aliased_output = replace(
-        candidate, artifact_ref=ArtifactRef(
-            ArtifactId("support:ancestry"), APPEARANCE_MODEL_ARTIFACT_KIND
+    # The canonical AppearanceModel rejects output/source aliasing before this boundary.
+    with pytest.raises(ValueError, match="not reuse"):
+        replace(
+            candidate,
+            source_artifacts=_ordered(*candidate.source_artifacts, candidate.artifact_ref),
         )
-    )
-    with pytest.raises(ValueError, match="canonical union"):
-        build_static_appearance_candidate_result(request, aliased_output, manifest)
 
 
 def test_result_rejects_candidate_request_materialization_mismatches() -> None:
@@ -354,9 +353,19 @@ def test_result_rejects_candidate_request_materialization_mismatches() -> None:
         with pytest.raises(ValueError):
             build_static_appearance_candidate_result(request, bad, manifest)
 
+    foreign_optional_surface = _surface(request.source_geometry)
+    complete_with_surface = replace(
+        candidate,
+        source_surface=foreign_optional_surface,
+        source_artifacts=_ordered(
+            *candidate.source_artifacts,
+            *foreign_optional_surface.source_artifacts,
+            foreign_optional_surface.artifact_ref,
+        ),
+    )
     with pytest.raises(ValueError, match="optional SurfaceModel"):
         build_static_appearance_candidate_result(
-            request, replace(candidate, source_surface=_surface(request.source_geometry)), manifest
+            request, complete_with_surface, manifest
         )
     with pytest.raises(ValueError, match="ArtifactRef"):
         build_static_appearance_candidate_result(
