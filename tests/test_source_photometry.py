@@ -474,6 +474,31 @@ def test_evidence_must_be_immutable_unique_and_canonically_ordered() -> None:
         )
 
 
+def test_resolved_rejects_conflicting_raw_key_values_but_invalid_retains_them() -> None:
+    conflicting = (
+        _entry("EXIF ISOSpeedRatings", "100"),
+        _entry("EXIF ISOSpeedRatings", "200"),
+    )
+    with pytest.raises(ValueError, match="contradictory metadata keys"):
+        SourceExposureMetadata(
+            status=SourcePhotometryInterpretationStatus.RESOLVED,
+            iso_speed=100.0,
+            evidence=conflicting,
+        )
+
+    invalid = SourceExposureMetadata(
+        status=SourcePhotometryInterpretationStatus.INVALID,
+        evidence=conflicting,
+        issue="two contradictory ISO source declarations",
+    )
+    metadata = _metadata(raw_entries=conflicting)
+    photometry = _photometry(source_metadata=metadata, exposure=invalid)
+    assert photometry.exposure.status is SourcePhotometryInterpretationStatus.INVALID
+    assert photometry.exposure.iso_speed is None
+    assert photometry.exposure.evidence == conflicting
+    assert photometry.source_metadata is metadata
+
+
 def test_foreign_or_fabricated_evidence_fails_closed() -> None:
     foreign = _entry("EXIF ISO", "200")
     exposure = SourceExposureMetadata(
