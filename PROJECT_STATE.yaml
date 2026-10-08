@@ -14,14 +14,16 @@ current_goal: >-
   solver-independent static appearance candidate request result adapter Protocol and exact artifact-materialization boundary. Preserve exact
   geometry surface observation producer frame and scale identities as static appearance moves to the first experimental baseline integration.
 next_action: >-
-  Continue only V2L18.3. The existing CPU-only gsplat source/image and exact PLY publication preflights are now supplemented by an
-  explicit native sparse COLMAP geometry equality gate: the audited PyCOLMAP normalization must produce precisely the source candidate's
-  observation-image mapping, cameras, intrinsics, poses, point map, local frame and scale before training is permitted. This is input
-  qualification only and is not an executable static appearance adapter. Next complete the exact optional gsplat v1.5.3 trainer
-  and Python/Torch/CUDA dependency/license closure, photometric cross-observation evidence, private GPU training integration and
-  complete AppearanceModel/ArtifactMaterializationMetadata output behind StaticAppearanceCandidateAdapter. Preserve the original geometry,
-  avoid implicit world normalization/downsampling and keep unsupported hardware evidence DEFERRED/UNVERIFIED. No default route, held-out
-  scoring, router promotion or V2L18.4 implementation in this item.
+  Continue only V2L18.3. CPU-only gsplat preflights now cover exact source PNG hashes, native COLMAP geometry equality,
+  audited final PLY bytes, and PR #200's V2L17 photometric source-evidence gate. The new gate requires an exact READY/COMPATIBLE
+  V2L17 assessment for every original PNG, bound to the same ObservationId and asset SHA-256, source-oriented full-resolution
+  sRGB RGB8 pixels and identity-only exposure/white-balance normalization because the reference trainer reads the original PNG.
+  These are input qualifications, not proof of shared scene radiance or cross-camera exposure calibration, a complete
+  StaticAppearanceCandidateAdapter or any actual training run. Next close the exact gsplat v1.5.3 trainer and Python/Torch/CUDA
+  dependency/license environment, prove photometric cross-observation suitability, run a private supported-GPU fixture and
+  construct a complete AppearanceModel plus real ArtifactMaterializationMetadata behind the V2L18.2 adapter boundary.
+  Preserve the caller geometry, local frame, scale, original pixels and source lineage; never silently normalize or downsample.
+  Keep unsupported hardware DEFERRED/UNVERIFIED. No default route, held-out scoring, router promotion or V2L18.4 implementation.
 blockers: []
 architecture:
   product_blueprint: docs/01_PRODUCT.md
