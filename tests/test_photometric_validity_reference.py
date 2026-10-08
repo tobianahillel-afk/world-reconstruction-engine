@@ -197,14 +197,17 @@ def test_endpoint_and_normalized_range_masks_remain_separate_evidence() -> None:
     assert masks.source_low_endpoint_candidate.packed_mask == bytes((1, 0, 0, 0, 0, 0))
     assert masks.source_high_endpoint_candidate.packed_mask == bytes((0, 0, 0, 1, 0, 1))
     assert masks.normalized_above_one.packed_mask == bytes((0, 0, 1, 1, 0, 1))
-    assert len(
-        {
-            masks.source_low_endpoint_candidate.identity,
-            masks.source_high_endpoint_candidate.identity,
-            masks.normalized_above_one.identity,
-            masks.identity,
-        }
-    ) == 4
+    assert (
+        len(
+            {
+                masks.source_low_endpoint_candidate.identity,
+                masks.source_high_endpoint_candidate.identity,
+                masks.normalized_above_one.identity,
+                masks.identity,
+            }
+        )
+        == 4
+    )
 
     assert pixels == before_pixels
     assert converted.packed_rgb_f64_be == before_converted
