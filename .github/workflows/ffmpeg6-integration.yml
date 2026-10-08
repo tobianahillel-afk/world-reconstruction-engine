@@ -8,6 +8,11 @@ on:
       - "src/wre/ingestion/**"
       - "tests/test_ffmpeg_toolchain_compatibility.py"
       - "tests/test_video_ingestion.py"
+      - "tests/test_audio_sync.py"
+      - "tests/test_decoded_image_pyramids.py"
+      - "tests/test_frame_selection_extraction_regression.py"
+      - "tests/test_keyframe_extraction.py"
+      - "src/wre/synchronization/**"
       - "registry/dependencies.yaml"
       - "pyproject.toml"
       - "uv.lock"
@@ -19,6 +24,11 @@ on:
       - "src/wre/ingestion/**"
       - "tests/test_ffmpeg_toolchain_compatibility.py"
       - "tests/test_video_ingestion.py"
+      - "tests/test_audio_sync.py"
+      - "tests/test_decoded_image_pyramids.py"
+      - "tests/test_frame_selection_extraction_regression.py"
+      - "tests/test_keyframe_extraction.py"
+      - "src/wre/synchronization/**"
       - "registry/dependencies.yaml"
       - "pyproject.toml"
       - "uv.lock"
@@ -75,8 +85,12 @@ jobs:
           test "$(ffmpeg -version | head -n 1 | awk '{print $3}')" = "6.1.1-3ubuntu5"
           test "$(ffprobe -version | head -n 1 | awk '{print $3}')" = "6.1.1-3ubuntu5"
 
-      - name: Exercise pinned FFmpeg keyframe and video regression tests
+      - name: Exercise all pinned FFmpeg and ffprobe integration tests
         run: >-
           uv run pytest
           tests/test_ffmpeg_toolchain_compatibility.py
           tests/test_video_ingestion.py
+          tests/test_audio_sync.py
+          tests/test_decoded_image_pyramids.py
+          tests/test_frame_selection_extraction_regression.py
+          tests/test_keyframe_extraction.py
