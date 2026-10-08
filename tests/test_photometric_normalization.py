@@ -266,9 +266,7 @@ def test_request_rejects_foreign_photometry_lineage() -> None:
     request = _request()
     foreign_photometry = replace(
         request.source_photometry,
-        exposure=SourceExposureMetadata(
-            status=SourcePhotometryInterpretationStatus.ABSENT
-        ),
+        exposure=SourceExposureMetadata(status=SourcePhotometryInterpretationStatus.ABSENT),
     )
     with pytest.raises(ValueError, match="lineage"):
         replace(request, source_photometry=foreign_photometry)
