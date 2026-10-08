@@ -49,6 +49,7 @@ def _request(
     decoded_encoding: DecodedPixelColorEncoding = DecodedPixelColorEncoding.SRGB_FULL_RGB8,
     source_hash: Sha256Digest | None = None,
     observation: ObservationId = OBS,
+    raw_entries: tuple[RawMetadataEntry, ...] = (ENTRY,),
     working: ColorConvention = LINEAR_SRGB_F64,
     output: ColorConvention = LINEAR_SRGB_F64,
 ) -> ColorConversionRequest:
@@ -69,7 +70,7 @@ def _request(
             source_color = SourceColorMetadata(
                 status=status, issue="camera did not resolve this color tag", evidence=(ENTRY,)
             )
-    metadata = ObservationMetadata(observation_id=observation, raw_entries=(ENTRY,))
+    metadata = ObservationMetadata(observation_id=observation, raw_entries=raw_entries)
     photometry = SourcePhotometryMetadata(
         observation_id=observation,
         source_metadata=metadata,
@@ -143,6 +144,14 @@ def test_invalid_and_unsupported_color_declarations_fail_closed() -> None:
     incomplete = replace(ready_source, declared_range=None)
     result = assess_color_conversion(_request(source_color=incomplete))
     assert result.status is ColorConversionStatus.UNRESOLVED
+
+
+def test_hidden_conflicting_raw_color_declaration_is_rejected() -> None:
+    conflicting = RawMetadataEntry(namespace="camera", key="colorspace", value="Display P3")
+    result = assess_color_conversion(_request(raw_entries=(ENTRY, conflicting)))
+    assert result.status is ColorConversionStatus.REJECTED
+    assert result.plan is None
+    assert result.issue == "source color evidence conflicts with bound raw metadata"
 
 
 def test_rejects_unapproved_targets_backend_and_source_layout() -> None:
