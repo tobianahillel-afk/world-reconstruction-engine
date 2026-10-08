@@ -475,7 +475,7 @@ def test_gsplat_ply_materialization_rejects_symlink_and_wrong_artifact_kind(
     tmp_path: Path,
 ) -> None:
     root, profile, ref = _gsplat_output(tmp_path, _gsplat_ply())
-    with pytest.raises(GsplatStaticAppearancePreflightError, match="appearance.static"):
+    with pytest.raises(GsplatStaticAppearancePreflightError, match=r"appearance\.static"):
         materialize_verified_gsplat_ply(
             artifact_ref=ArtifactRef(ArtifactId("other"), ArtifactKind("geometry.input")),
             output_root=root,
@@ -495,7 +495,7 @@ def test_gsplat_ply_materialization_rejects_symlink_and_wrong_artifact_kind(
 def test_gsplat_ply_materialization_refuses_missing_final_step_file(
     tmp_path: Path,
 ) -> None:
-    root, profile, ref = _gsplat_output(tmp_path, _gsplat_ply(), steps=20)
+    root, _profile, ref = _gsplat_output(tmp_path, _gsplat_ply(), steps=20)
     with pytest.raises(GsplatStaticAppearancePreflightError, match="missing"):
         materialize_verified_gsplat_ply(
             artifact_ref=ref,
