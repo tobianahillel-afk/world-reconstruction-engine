@@ -36,7 +36,7 @@ from wre.domain.observations import (
 )
 from wre.domain.point_maps import PointMap, PointMapId
 from wre.domain.producer_identity import ArtifactProducerIdentity, ConfigurationIdentity
-from wre.domain.runs import ProducerRef
+from wre.domain.runs import DerivedArtifactProvenance, ProducerRef, ReconstructionRunId
 from wre.reconstruction.colmap_canonical_geometry import (
     CanonicalColmapSparseModel,
     colmap_sparse_model_content_identity,
@@ -46,7 +46,6 @@ from wre.reconstruction.colmap_features import (
     ColmapFeatureExtractionResult,
     ColmapImageFeatureSummary,
 )
-from wre.domain.runs import DerivedArtifactProvenance, ReconstructionRunId
 from wre.reconstruction.colmap_geometry_refinement import (
     colmap_native_sparse_model_artifact_ref,
 )
