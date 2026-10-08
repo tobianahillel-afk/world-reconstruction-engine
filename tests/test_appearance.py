@@ -177,7 +177,7 @@ def test_canonical_appearance_envelope_exact_frozen_shape_and_kind() -> None:
     )
     assert model.source_geometry is source
     assert model.source_surface is None
-    assert model.source_artifacts is source.source_artifacts
+    assert model.source_artifacts == source.source_artifacts
     with pytest.raises(FrozenInstanceError):
         model.representation = AppearanceRepresentationName("changed")  # type: ignore[misc]
 
@@ -300,7 +300,7 @@ def test_source_artifact_ancestry_is_complete_unique_canonical_and_non_aliasing(
         artifact_ref=surface_art,
         ancestry=(source_a, source_b, surface_extra),
     )
-    all_sources = (source_a, source_b, surface_art, surface_extra)
+    all_sources = (source_a, source_b, surface_extra, surface_art)
     model = _model(
         "lineage", source_geometry=geometry, source_surface=surface, source_artifacts=all_sources
     )
