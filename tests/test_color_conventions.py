@@ -9,7 +9,16 @@ import pytest
 from wre.domain import (
     LINEAR_SRGB_F64,
     REFERENCE_COLOR_BACKEND,
+    ArtifactId,
+    ArtifactInputFingerprint,
+    ArtifactKey,
+    ArtifactKeyMaterial,
+    ArtifactKind,
     ArtifactMaterializationEntry,
+    ArtifactMaterializationMetadata,
+    ArtifactMetadata,
+    ArtifactProducerIdentity,
+    ArtifactRef,
     ColorConvention,
     ColorConversionRequest,
     ColorConversionStatus,
@@ -17,6 +26,7 @@ from wre.domain import (
     ColorReferenceBackend,
     ColorSampleStorage,
     ColorTransfer,
+    ConfigurationIdentity,
     DecodedImageLevelDescriptor,
     DecodedImageOrientationPolicy,
     DecodedImagePixelLayout,
@@ -26,7 +36,10 @@ from wre.domain import (
     ObservationId,
     ObservationKind,
     ObservationMetadata,
+    ProducerRef,
+    ProvenanceClass,
     RawMetadataEntry,
+    SceneProjectId,
     Sha256Digest,
     SourceColorMetadata,
     SourceExposureMetadata,
@@ -34,6 +47,7 @@ from wre.domain import (
     SourcePhotometryMetadata,
     SourceWhiteBalanceMetadata,
     assess_color_conversion,
+    derive_artifact_key,
 )
 
 OBS = ObservationId("obs:color-reference")
@@ -49,6 +63,7 @@ def _request(
     decoded_encoding: DecodedPixelColorEncoding = DecodedPixelColorEncoding.SRGB_FULL_RGB8,
     source_hash: Sha256Digest | None = None,
     observation: ObservationId = OBS,
+    raw_entries: tuple[RawMetadataEntry, ...] = (ENTRY,),
     working: ColorConvention = LINEAR_SRGB_F64,
     output: ColorConvention = LINEAR_SRGB_F64,
 ) -> ColorConversionRequest:
@@ -69,7 +84,7 @@ def _request(
             source_color = SourceColorMetadata(
                 status=status, issue="camera did not resolve this color tag", evidence=(ENTRY,)
             )
-    metadata = ObservationMetadata(observation_id=observation, raw_entries=(ENTRY,))
+    metadata = ObservationMetadata(observation_id=observation, raw_entries=raw_entries)
     photometry = SourcePhotometryMetadata(
         observation_id=observation,
         source_metadata=metadata,
@@ -92,16 +107,49 @@ def _request(
             ),
         ),
     )
-    entry = ArtifactMaterializationEntry(
-        relative_path="levels/level-000000.rgb",
-        sha256=Sha256Digest(hashlib.sha256(pixels).hexdigest()),
-        byte_length=len(pixels),
+    artifact_ref = ArtifactRef(
+        artifact_id=ArtifactId("artifact:color-reference-decoded"),
+        artifact_kind=ArtifactKind("media.decoded_image_pyramid"),
+    )
+    producer = ArtifactProducerIdentity(
+        producer=ProducerRef(implementation="test.decoded.reference", version="1.0.0"),
+        configuration=ConfigurationIdentity(sha256=Sha256Digest("c" * 64)),
+    )
+    artifact_key = derive_artifact_key(
+        ArtifactKeyMaterial(
+            output_kind=artifact_ref.artifact_kind,
+            input_fingerprints=(
+                ArtifactInputFingerprint(
+                    artifact_kind=ArtifactKind("image.observation"),
+                    sha256=manifest.source_asset_sha256,
+                ),
+            ),
+            producer=producer,
+        )
+    )
+    materialization = ArtifactMaterializationMetadata(
+        artifact_ref=artifact_ref,
+        entries=(
+            ArtifactMaterializationEntry(
+                relative_path="levels/level-000000.rgb",
+                sha256=Sha256Digest(hashlib.sha256(pixels).hexdigest()),
+                byte_length=len(pixels),
+            ),
+        ),
+    )
+    artifact = ArtifactMetadata(
+        project_id=SceneProjectId("project:color-reference"),
+        artifact_ref=artifact_ref,
+        artifact_key=artifact_key,
+        producer=producer,
+        provenance_class=ProvenanceClass.OBSERVED_RECONSTRUCTED,
     )
     return ColorConversionRequest(
         decoded_manifest=manifest,
+        decoded_artifact=artifact,
+        decoded_materialization=materialization,
         source_photometry=photometry,
         decoded_level_index=0,
-        decoded_level_entry=entry,
         decoded_encoding=decoded_encoding,
         working_convention=working,
         output_convention=output,
@@ -145,6 +193,14 @@ def test_invalid_and_unsupported_color_declarations_fail_closed() -> None:
     assert result.status is ColorConversionStatus.UNRESOLVED
 
 
+def test_hidden_conflicting_raw_color_declaration_is_rejected() -> None:
+    conflicting = RawMetadataEntry(namespace="camera", key="colorspace", value="Display P3")
+    result = assess_color_conversion(_request(raw_entries=(ENTRY, conflicting)))
+    assert result.status is ColorConversionStatus.REJECTED
+    assert result.plan is None
+    assert result.issue == "source color evidence conflicts with bound raw metadata"
+
+
 def test_rejects_unapproved_targets_backend_and_source_layout() -> None:
     srgb_float = ColorConvention(
         primaries=ColorPrimaries.SRGB_BT709_D65,
@@ -172,11 +228,11 @@ def test_rejects_unapproved_targets_backend_and_source_layout() -> None:
     )
 
 
-def test_request_binds_raw_observation_identity_path_and_byte_size() -> None:
+def test_request_binds_raw_observation_and_decoded_artifact_ownership() -> None:
     req = _request()
     with pytest.raises(ValueError, match="observation identities"):
-        ColorConversionRequest(
-            decoded_manifest=req.decoded_manifest,
+        replace(
+            req,
             source_photometry=replace(
                 req.source_photometry,
                 observation_id=ObservationId("obs:foreign"),
@@ -184,19 +240,45 @@ def test_request_binds_raw_observation_identity_path_and_byte_size() -> None:
                     observation_id=ObservationId("obs:foreign"), raw_entries=(ENTRY,)
                 ),
             ),
-            decoded_level_index=0,
-            decoded_level_entry=req.decoded_level_entry,
-            decoded_encoding=req.decoded_encoding,
-            working_convention=req.working_convention,
-            output_convention=req.output_convention,
         )
-    with pytest.raises(ValueError, match="level path"):
+
+    foreign_ref = ArtifactRef(
+        artifact_id=ArtifactId("artifact:foreign-decoded"),
+        artifact_kind=req.decoded_artifact.artifact_ref.artifact_kind,
+    )
+    with pytest.raises(ValueError, match="refs disagree"):
         replace(
             req,
-            decoded_level_entry=replace(req.decoded_level_entry, relative_path="wrong.rgb"),
+            decoded_materialization=replace(req.decoded_materialization, artifact_ref=foreign_ref),
         )
-    with pytest.raises(ValueError, match="3 bytes per pixel"):
-        replace(req, decoded_level_entry=replace(req.decoded_level_entry, byte_length=5))
+
+    with pytest.raises(ValueError, match="artifact key"):
+        replace(
+            req,
+            decoded_artifact=replace(
+                req.decoded_artifact,
+                artifact_key=ArtifactKey(sha256=Sha256Digest("0" * 64)),
+            ),
+        )
+
+    with pytest.raises(ValueError, match="materialization path"):
+        replace(
+            req,
+            decoded_materialization=replace(
+                req.decoded_materialization,
+                entries=(
+                    replace(req.decoded_level_entry, relative_path="levels/level-999999.rgb"),
+                ),
+            ),
+        )
+    with pytest.raises(ValueError, match="materialization byte length"):
+        replace(
+            req,
+            decoded_materialization=replace(
+                req.decoded_materialization,
+                entries=(replace(req.decoded_level_entry, byte_length=5),),
+            ),
+        )
     with pytest.raises(TypeError, match="decoded_encoding"):
         replace(req, decoded_encoding=cast(Any, "srgb"))
     with pytest.raises(ValueError, match="outside"):
