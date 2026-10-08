@@ -561,6 +561,6 @@ __all__ = [
     "GsplatStaticAppearancePreflightSource",
     "GsplatStaticAppearanceTrainingProfile",
     "GsplatStaticAppearanceVerifiedImage",
-    "preflight_gsplat_static_appearance_inputs",
     "materialize_verified_gsplat_ply",
+    "preflight_gsplat_static_appearance_inputs",
 ]
