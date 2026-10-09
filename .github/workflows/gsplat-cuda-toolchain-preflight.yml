@@ -1,0 +1,129 @@
+name: gsplat-cuda-toolchain-preflight
+
+# Native toolchain evidence only. This job compiles a tiny CUDA object without
+# executing a kernel, loading PyTorch, training gsplat, or claiming GPU support.
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/gsplat-cuda-toolchain-preflight.yml"
+      - "registry/dependencies.yaml"
+      - "registry/work-items/v2m3.yaml"
+      - "PROJECT_STATE.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-nvcc-compiler:
+    name: pinned-cuda-12-4-1-offline-object-compile
+    runs-on: ubuntu-24.04
+    # NVIDIA CUDA 12.4.1 devel Ubuntu 22.04 official amd64/arm64 index digest.
+    # Pin to the immutable image digest, never a floating tag or container latest.
+    container:
+      image: nvidia/cuda@sha256:da6791294b0b04d7e65d87b7451d6f2390b4d36225ab0701ee7dfec5769829f5
+    timeout-minutes: 30
+    env:
+      REVIEWED_IMAGE_INDEX_SHA256: da6791294b0b04d7e65d87b7451d6f2390b4d36225ab0701ee7dfec5769829f5
+      CUDA_HOME: /usr/local/cuda
+      EXPECTED_CUDA_MAJOR_MINOR: "12.4"
+
+    steps:
+      - name: Prove native toolchain identity and host-compiler compatibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(uname -m)" = "x86_64"
+          command -v nvcc >/dev/null
+          command -v gcc >/dev/null
+          command -v g++ >/dev/null
+          command -v sha256sum >/dev/null
+          test -x "$CUDA_HOME/bin/nvcc"
+          test -f "$CUDA_HOME/include/cuda_runtime.h"
+          test -f "$CUDA_HOME/include/cuda.h"
+          nvcc_line="$(nvcc --version | grep '^Cuda compilation tools, release ')"
+          case "$nvcc_line" in
+            *"release 12.4,"*) ;;
+            *) echo "Unexpected CUDA NVCC version: $nvcc_line" >&2; exit 1 ;;
+          esac
+          gcc_version="$(gcc -dumpfullversion -dumpversion)"
+          gpp_version="$(g++ -dumpfullversion -dumpversion)"
+          test "$gcc_version" = "$gpp_version"
+          gcc_major="${gcc_version%%.*}"
+          test "$gcc_major" -ge 6
+          test "$gcc_major" -le 13
+          echo "CUDA: $nvcc_line"
+          echo "Host compiler: gcc/g++ $gcc_version"
+          nvcc --version
+          gcc --version | head -n 1
+          g++ --version | head -n 1
+          echo "NVCC_SHA256=$(sha256sum "$CUDA_HOME/bin/nvcc" | cut -d' ' -f1)" >> "$GITHUB_ENV"
+          echo "CUDA_RUNTIME_HEADER_SHA256=$(sha256sum "$CUDA_HOME/include/cuda_runtime.h" | cut -d' ' -f1)" >> "$GITHUB_ENV"
+          echo "CUDA_NVCC_LINE=$nvcc_line" >> "$GITHUB_ENV"
+          echo "HOST_COMPILER_VERSION=$gcc_version" >> "$GITHUB_ENV"
+
+      - name: Compile a CUDA C++17 object without a GPU or Python packages
+        shell: bash
+        run: |
+          set -euo pipefail
+          temp_dir="$(mktemp -d)"
+          trap 'rm -rf "$temp_dir"' EXIT
+          cat > "$temp_dir/wre_cuda_compile_probe.cu" <<'CU'
+          #include <cuda_runtime.h>
+          __global__ void wre_cuda_compile_probe(float* output) {
+              if (threadIdx.x == 0) output[0] = 1.0f;
+          }
+          CU
+          "$CUDA_HOME/bin/nvcc" \
+            -std=c++17 \
+            -arch=sm_75 \
+            -c "$temp_dir/wre_cuda_compile_probe.cu" \
+            -o "$temp_dir/wre_cuda_compile_probe.o"
+          test -s "$temp_dir/wre_cuda_compile_probe.o"
+          file "$temp_dir/wre_cuda_compile_probe.o" || true
+          echo "OBJECT_SHA256=$(sha256sum "$temp_dir/wre_cuda_compile_probe.o" | cut -d' ' -f1)" >> "$GITHUB_ENV"
+          echo "CUDA C++17 compile-only probe passed; no kernel was executed."
+
+      - name: Publish scoped evidence without GPU or trainer claims
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$NVCC_SHA256"
+          test -n "$CUDA_RUNTIME_HEADER_SHA256"
+          test -n "$OBJECT_SHA256"
+          mkdir -p "$GITHUB_WORKSPACE/gsplat-cuda-preflight-evidence"
+          cat > "$GITHUB_WORKSPACE/gsplat-cuda-preflight-evidence/toolchain.json" <<JSON
+          {
+            "schema_version": 1,
+            "evidence_kind": "cuda_toolchain_compile_only",
+            "reviewed_image_index_sha256": "$REVIEWED_IMAGE_INDEX_SHA256",
+            "architecture": "linux_amd64",
+            "cuda_major_minor": "$EXPECTED_CUDA_MAJOR_MINOR",
+            "nvcc_version_line": "$CUDA_NVCC_LINE",
+            "nvcc_sha256": "$NVCC_SHA256",
+            "cuda_runtime_header_sha256": "$CUDA_RUNTIME_HEADER_SHA256",
+            "gcc_gpp_version": "$HOST_COMPILER_VERSION",
+            "compile_arch": "sm_75",
+            "compile_language": "c++17",
+            "cuda_object_sha256": "$OBJECT_SHA256",
+            "gsplat_native_extension_build_evidence": false,
+            "fused_ssim_native_extension_build_evidence": false,
+            "torch_import_evidence": false,
+            "gpu_execution_evidence": false,
+            "training_execution_evidence": false,
+            "shipping_license_review": "pending"
+          }
+          JSON
+          cat "$GITHUB_WORKSPACE/gsplat-cuda-preflight-evidence/toolchain.json"
+
+      - name: Retain CUDA toolchain preflight evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v2l18-3-gsplat-cuda-toolchain-compile-only
+          path: gsplat-cuda-preflight-evidence/toolchain.json
+          if-no-files-found: error
+          retention-days: 30
