@@ -1118,11 +1118,11 @@ def materialize_verified_gsplat_ply(
 
 
 __all__ = [
+    "GSPLAT_REFERENCE_PYCOLMAP_REVISION",
     "GSPLAT_STATIC_APPEARANCE_REPRESENTATION",
     "GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION",
     "GSPLAT_STATIC_APPEARANCE_SOURCE_TREE",
     "GSPLAT_STATIC_APPEARANCE_TRAINER_GIT_BLOB",
-    "GSPLAT_REFERENCE_PYCOLMAP_REVISION",
     "GsplatStaticAppearancePreflightError",
     "GsplatStaticAppearancePreflightEvidence",
     "GsplatStaticAppearancePreflightSource",
@@ -1133,8 +1133,8 @@ __all__ = [
     "preflight_gsplat_static_appearance_inputs",
     "verify_gsplat_static_appearance_matching_capture_metadata",
     "verify_gsplat_static_appearance_native_geometry",
-    "verify_gsplat_static_appearance_reference_sources",
     "verify_gsplat_reference_pycolmap_sources",
+    "verify_gsplat_static_appearance_reference_sources",
     "verify_gsplat_static_appearance_shared_scene_tracks",
     "verify_gsplat_static_appearance_source_photometry",
 ]
