@@ -361,6 +361,7 @@ from wre.reconstruction.open3d_surface import (
 )
 from wre.reconstruction.static_appearance_baseline import (
     assemble_verified_gsplat_static_appearance_result,
+    verify_gsplat_fused_ssim_reference_sources,
 )
 from wre.reconstruction.static_appearance_candidate import (
     StaticAppearanceCandidateAdapter,
