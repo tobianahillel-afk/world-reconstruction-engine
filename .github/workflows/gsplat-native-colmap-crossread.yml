@@ -1,0 +1,230 @@
+name: gsplat-native-colmap-crossread
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/gsplat-native-colmap-crossread.yml"
+      - "PROJECT_STATE.yaml"
+      - "registry/dependencies.yaml"
+      - "registry/work-items/v2m3.yaml"
+      - "src/wre/reconstruction/static_appearance_baseline.py"
+      - "tests/test_static_appearance_baseline.py"
+      - "tests/test_colmap_end_to_end_fixture.py"
+      - "tests/fixtures/synthetic/colmap-l3-end-to-end/**"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-native-crossread:
+    name: audited-pycolmap-420-to-gsplat-scene-manager
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      WRE_COLMAP_INTEGRATION: "1"
+      GSPLAT_REFERENCE_PYCOLMAP_REVISION: cc7ea4b7301720ac29287dbe450952511b32125e
+
+    steps:
+      - name: Checkout WRE
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install locked WRE toolchain
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.13"
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Install WRE and exact isolated reader dependencies
+        run: |
+          set -euo pipefail
+          uv sync --frozen --group dev
+          uv pip install --python .venv/bin/python "numpy==2.5.3" "scipy==1.16.2" "pycolmap==4.2.0"
+          .venv/bin/python - <<'PY'
+          import numpy, scipy, pycolmap
+          assert numpy.__version__ == "2.5.3"
+          assert scipy.__version__ == "1.16.2"
+          assert pycolmap.__version__ == "4.2.0"
+          PY
+
+      - name: Fetch exact gsplat example SceneManager fork
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_root="${RUNNER_TEMP}/gsplat-reference-reader"
+          mkdir -p "$source_root"
+          git init -q "$source_root"
+          git -C "$source_root" remote add origin https://github.com/rmbrualla/pycolmap.git
+          git -C "$source_root" fetch --quiet --depth=1 origin "$GSPLAT_REFERENCE_PYCOLMAP_REVISION"
+          git -C "$source_root" checkout --quiet --detach FETCH_HEAD
+          test "$(git -C "$source_root" rev-parse HEAD)" = "$GSPLAT_REFERENCE_PYCOLMAP_REVISION"
+          GSPLAT_REFERENCE_READER_ROOT="$source_root" .venv/bin/python - <<'PY'
+          import os
+          from pathlib import Path
+          from wre.reconstruction.static_appearance_baseline import (
+              GSPLAT_REFERENCE_PYCOLMAP_REVISION,
+              verify_gsplat_reference_pycolmap_sources,
+          )
+
+          assert os.environ["GSPLAT_REFERENCE_PYCOLMAP_REVISION"] == (
+              GSPLAT_REFERENCE_PYCOLMAP_REVISION
+          )
+          entries = verify_gsplat_reference_pycolmap_sources(
+              Path(os.environ["GSPLAT_REFERENCE_READER_ROOT"])
+          )
+          assert len(entries) == 9
+          print(f"Verified {len(entries)} immutable upstream reader source files")
+          PY
+
+      - name: Produce an actual COLMAP 4.2.0 native sparse model
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The existing reviewed L3.7 fixture executes actual COLMAP feature extraction,
+          # matching, verification and incremental reconstruction. Its tmp_path contains
+          # the native model produced by PyCOLMAP 4.2.0, not fabricated binary files.
+          .venv/bin/python -m pytest -q \
+            --basetemp "${RUNNER_TEMP}/gsplat-native-crossread-pytest" \
+            tests/test_colmap_end_to_end_fixture.py::test_real_colmap_l3_end_to_end_fixture
+
+      - name: Cross-read exact registered cameras and reciprocal tracks
+        shell: bash
+        env:
+          GSPLAT_REFERENCE_READER_ROOT: ${{ runner.temp }}/gsplat-reference-reader
+          GSPLAT_NATIVE_FIXTURE_ROOT: ${{ runner.temp }}/gsplat-native-crossread-pytest
+        run: |
+          set -euo pipefail
+          .venv/bin/python - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import importlib.util
+          import os
+          import sys
+          from pathlib import Path
+
+          import numpy as np
+          import pycolmap
+
+          from wre.reconstruction.static_appearance_baseline import (
+              verify_gsplat_reference_pycolmap_sources,
+          )
+
+          source = Path(os.environ["GSPLAT_REFERENCE_READER_ROOT"])
+          assert len(verify_gsplat_reference_pycolmap_sources(source)) == 9
+
+          # Give the MIT SceneManager fork a separate module name. It must never
+          # shadow WRE's native PyCOLMAP 4.2.0 or enter mandatory WRE imports.
+          package_spec = importlib.util.spec_from_file_location(
+              "wre_gsplat_reference_reader",
+              source / "pycolmap" / "__init__.py",
+              submodule_search_locations=[str(source / "pycolmap")],
+          )
+          assert package_spec is not None and package_spec.loader is not None
+          reference = importlib.util.module_from_spec(package_spec)
+          sys.modules[package_spec.name] = reference
+          package_spec.loader.exec_module(reference)
+          assert sys.modules["pycolmap"] is pycolmap
+
+          # Only the real end-to-end L3.7 fixture can provide the tested model.
+          fixture_root = Path(os.environ["GSPLAT_NATIVE_FIXTURE_ROOT"])
+          models = sorted({
+              p.parent for p in fixture_root.glob(
+                  "test_real_colmap_l3_end_to_end_fixture*/sparse/*/cameras.bin"
+              )
+          })
+          assert len(models) == 1, f"expected exactly one real native model, found {models}"
+          model = models[0]
+          paths = tuple(model / name for name in ("cameras.bin", "images.bin", "points3D.bin"))
+          assert all(p.is_file() and p.stat().st_size > 0 for p in paths)
+          before = tuple(hashlib.sha256(path.read_bytes()).hexdigest() for path in paths)
+
+          native = pycolmap.Reconstruction(model)
+          assert native.is_valid()
+          legacy = reference.SceneManager(str(model))
+          legacy.load()
+
+          registered = tuple(sorted(int(v) for v in native.reg_image_ids()))
+          point_ids = tuple(sorted(int(v) for v in native.point3D_ids()))
+          assert len(registered) >= 2, "need a multi-observation COLMAP output"
+          assert len(point_ids) > 0, "need actual matched 3D points"
+          assert registered == tuple(sorted(int(v) for v in legacy.images))
+          assert point_ids == tuple(sorted(int(v) for v in legacy.point3D_ids))
+          assert len(legacy.cameras) > 0
+
+          for image_id in registered:
+              image = native.image(image_id)
+              older = legacy.images[image_id]
+              assert image.name == older.name
+              assert int(image.camera_id) == int(older.camera_id)
+              assert legacy.name_to_image_id[image.name] == image_id
+              camera = native.camera(int(image.camera_id))
+              older_camera = legacy.cameras[int(image.camera_id)]
+              assert camera.model_name == older_camera.GetNameFromType(
+                  older_camera.camera_type
+              )
+              assert int(camera.width) == int(older_camera.width)
+              assert int(camera.height) == int(older_camera.height)
+              np.testing.assert_allclose(
+                  camera.params, older_camera.get_params(), rtol=0, atol=1e-10
+              )
+              transform = image.cam_from_world()
+              np.testing.assert_allclose(
+                  transform.rotation.matrix(), older.R(), rtol=0, atol=1e-7
+              )
+              np.testing.assert_allclose(
+                  transform.translation, older.tvec, rtol=0, atol=1e-7
+              )
+              native_points2d = tuple(image.points2D)
+              assert len(native_points2d) == len(older.point3D_ids)
+              assert len(native_points2d) == len(older.points2D)
+              for index, point in enumerate(native_points2d):
+                  np.testing.assert_allclose(
+                      point.xy, older.points2D[index], rtol=0, atol=1e-8
+                  )
+                  assert int(point.point3D_id) == int(older.point3D_ids[index])
+
+          shared_track_count = 0
+          for point_id in point_ids:
+              point = native.point3D(point_id)
+              index = legacy.point3D_id_to_point3D_idx[point_id]
+              np.testing.assert_allclose(
+                  point.xyz, legacy.points3D[index], rtol=0, atol=1e-10
+              )
+              np.testing.assert_array_equal(point.color, legacy.point3D_colors[index])
+              np.testing.assert_allclose(
+                  point.error, legacy.point3D_errors[index], rtol=0, atol=1e-10
+              )
+              real_track = sorted(
+                  (int(t.image_id), int(t.point2D_idx)) for t in point.track.elements
+              )
+              fork_track = sorted(
+                  (int(t[0]), int(t[1]))
+                  for t in legacy.point3D_id_to_images[point_id]
+              )
+              assert real_track == fork_track
+              assert len(real_track) >= 2
+              for image_id, point2d_idx in real_track:
+                  assert image_id in legacy.images
+                  assert int(legacy.images[image_id].point3D_ids[point2d_idx]) == point_id
+              shared_track_count += 1
+
+          assert shared_track_count > 0
+          after = tuple(hashlib.sha256(path.read_bytes()).hexdigest() for path in paths)
+          assert before == after, "native model bytes changed during cross-read"
+          print(
+              f"Exact SceneManager fork cross-read: {len(registered)} registered images, "
+              f"{len(point_ids)} points and {shared_track_count} reciprocal tracks; "
+              "camera intrinsics/poses, source names, RGB and original native bytes agree."
+          )
+          PY
