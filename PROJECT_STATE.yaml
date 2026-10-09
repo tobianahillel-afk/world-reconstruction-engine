@@ -49,7 +49,13 @@ next_action: >-
   at common tracks and retains per-observation-pair raw sRGB-channel differences and exact
   PNG identities. This is descriptive observation evidence only, not a color/radiance
   calibration, threshold-based quality gate, camera-response solution or GPU training proof.
-  Next close the exact gsplat trainer
+  PR #210 adds a separate private staging gate: reverify exact original PNG hashes
+  and all three solver-native COLMAP binary files, copy the unmodified bytes into a
+  fresh gsplat-compatible images/ and sparse/0/ tree, verify SHA-256 and length of
+  every staged file, and publish only after a complete successful copy. Source
+  overlap, symlinks, missing native files, tampering and partial workspaces fail
+  closed without modifying caller data. This is CPU-only input staging, not a
+  trained appearance model or GPU/runtime approval. Next close the exact gsplat trainer
   Python/Torch/CUDA and isolated SceneManager dependency/license lock, prove actual
   cross-observation photometric suitability using independently supported shared-scene
   evidence beyond capture-setting metadata equality, execute a private supported-GPU
