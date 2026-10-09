@@ -1240,7 +1240,10 @@ def stage_verified_gsplat_static_appearance_dataset(
         source.native_model_root, source.native_model_artifact
     )
     expected_model_files = ("cameras.bin", "images.bin", "points3D.bin")
-    if tuple(item.relative_path for item in source.native_model_artifact.files) != expected_model_files:
+    if (
+        tuple(item.relative_path for item in source.native_model_artifact.files)
+        != expected_model_files
+    ):
         raise GsplatStaticAppearancePreflightError(
             "gsplat staging requires the exact COLMAP binary cameras/images/points model"
         )
