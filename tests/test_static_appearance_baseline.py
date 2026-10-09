@@ -8,6 +8,7 @@ from dataclasses import FrozenInstanceError, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 
@@ -1342,7 +1343,7 @@ def test_shared_scene_track_gate_rejects_invalid_or_unconnected_native_evidence(
             assessments,
             features=features,
             expected_environment=env,
-            module=_shared_track_fixture(**overrides),
+            module=_shared_track_fixture(**cast(Any, overrides)),
         )
 
 
