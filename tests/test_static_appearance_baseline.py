@@ -104,6 +104,7 @@ from wre.reconstruction.static_appearance_baseline import (
     GsplatStaticAppearancePreflightSource,
     GsplatStaticAppearanceTrainingProfile,
     materialize_verified_gsplat_ply,
+    inspect_gsplat_static_appearance_shared_track_pixels,
     preflight_gsplat_static_appearance_inputs,
     verify_gsplat_reference_pycolmap_sources,
     verify_gsplat_static_appearance_matching_capture_metadata,
@@ -1360,18 +1361,24 @@ def _shared_track_fixture(
     point2d_index: int = 0,
     reciprocal_point_id: int = 7,
     second_image_name: str = "second.png",
+    first_xy: tuple[float, float] = (0.5, 0.5),
+    second_xy: tuple[float, float] = (0.5, 0.5),
     valid: bool = True,
 ) -> object:
     images = {
         1: SimpleNamespace(
             name="frame.png",
             num_points2D=lambda: 1,
-            point2D=lambda _index: SimpleNamespace(point3D_id=reciprocal_point_id),
+            point2D=lambda _index: SimpleNamespace(
+                point3D_id=reciprocal_point_id, xy=first_xy
+            ),
         ),
         2: SimpleNamespace(
             name=second_image_name,
             num_points2D=lambda: 1,
-            point2D=lambda _index: SimpleNamespace(point3D_id=reciprocal_point_id),
+            point2D=lambda _index: SimpleNamespace(
+                point3D_id=reciprocal_point_id, xy=second_xy
+            ),
         ),
     }
     track = SimpleNamespace(
@@ -1493,5 +1500,161 @@ def test_shared_scene_track_gate_never_skips_source_capture_preflight(
             bad_assessments,
             features=features,
             expected_environment=env,
+            module=_shared_track_fixture(),
+        )
+
+
+def test_shared_track_pixel_evidence_samples_exact_identical_srgb_pngs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    request, source = _two_view_parts(tmp_path)
+    assessments = _matching_shared_track_photometry(source)
+    features, environment = _native_feature_evidence(tmp_path)
+    monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_native_geometry",
+        lambda *_args, **_kwargs: _native_canonical(request, source),
+    )
+    result = inspect_gsplat_static_appearance_shared_track_pixels(
+        request, source, assessments,
+        features=features, expected_environment=environment, module=_shared_track_fixture()
+    )
+    assert len(result) == 1
+    assert result[0].left_observation_id == ObservationId("obs:frame")
+    assert result[0].right_observation_id == ObservationId("obs:second")
+    assert result[0].left_png_sha256 == source.images[0].observation.asset.sha256
+    assert result[0].right_png_sha256 == source.images[1].observation.asset.sha256
+    assert result[0].shared_track_count == 1
+    assert result[0].mean_absolute_srgb_channel_delta == 0.0
+    assert inspect_gsplat_static_appearance_shared_track_pixels(
+        request, source, assessments,
+        features=features, expected_environment=environment, module=_shared_track_fixture()
+    ) == result
+
+
+def test_shared_track_pixel_evidence_reports_actual_color_difference_without_scoring(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    request, source = _two_view_parts(tmp_path)
+    first = source.images[1]
+    image_header = struct.pack(">IIBBBBB", 2, 1, 8, 2, 0, 0, 0)
+    second_png = (
+        b"\\x89PNG\\r\\n\\x1a\\n"
+        + _chunk(b"IHDR", image_header)
+        + _chunk(b"sRGB", b"\\x00")
+        + _chunk(b"IDAT", zlib.compress(b"\\x00\\x41\\x80\\xc0\\x40\\x80\\xc0"))
+        + _chunk(b"IEND", b"")
+    )
+    first.source_path.write_bytes(second_png)
+    modified = replace(
+        first,
+        observation=replace(
+            first.observation,
+            asset=replace(
+                first.observation.asset,
+                sha256=_digest(second_png),
+                byte_length=len(second_png),
+            ),
+        ),
+    )
+    source = replace(source, images=(source.images[0], modified))
+    assessments = _matching_shared_track_photometry(source)
+    features, environment = _native_feature_evidence(tmp_path)
+    monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_native_geometry",
+        lambda *_args, **_kwargs: _native_canonical(request, source),
+    )
+    result = inspect_gsplat_static_appearance_shared_track_pixels(
+        request, source, assessments,
+        features=features, expected_environment=environment, module=_shared_track_fixture()
+    )
+    assert result[0].shared_track_count == 1
+    assert result[0].mean_absolute_srgb_channel_delta == pytest.approx(1 / 765)
+    assert result[0].right_png_sha256 == _digest(second_png)
+    assert not hasattr(result[0], "suitable_for_training")
+
+
+@pytest.mark.parametrize(
+    ("filter_type", "second_encoded"),
+    [
+        (0, b"\\x40\\x80\\xc0"),
+        (1, b"\\x00\\x00\\x00"),
+        (2, b"\\x40\\x80\\xc0"),
+        (3, b"\\x20\\x40\\x60"),
+        (4, b"\\x00\\x00\\x00"),
+    ],
+)
+def test_shared_track_png_decoder_applies_all_five_png_filters(
+    filter_type: int, second_encoded: bytes
+) -> None:
+    pixel = b"\\x40\\x80\\xc0"
+    header = struct.pack(">IIBBBBB", 2, 1, 8, 2, 0, 0, 0)
+    # These reference residuals reconstruct the second pixel to pixel
+    # for every filter; the first sample for filters 1/3/4 must be its
+    # literal RGB value, since the previous scanline is zero.
+    if filter_type == 3:
+        first_encoded = pixel
+    else:
+        first_encoded = pixel
+    payload = bytes((filter_type,)) + first_encoded + second_encoded
+    png = (
+        b"\\x89PNG\\r\\n\\x1a\\n"
+        + _chunk(b"IHDR", header)
+        + _chunk(b"sRGB", b"\\x00")
+        + _chunk(b"IDAT", zlib.compress(payload))
+        + _chunk(b"IEND", b"")
+    )
+    width, height, raster = baseline_module._decode_audited_gsplat_png_rgb8(png)
+    assert (width, height) == (2, 1)
+    assert raster == pixel + pixel
+
+
+@pytest.mark.parametrize(
+    ("second_xy", "reason"),
+    [
+        ((2.0, 0.5), "outside"),
+        ((0.5, -0.1), "outside"),
+        ((float("nan"), 0.5), "non-finite"),
+        ((0.5, float("inf")), "non-finite"),
+    ],
+)
+def test_shared_track_pixel_evidence_rejects_invalid_feature_coordinates(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    second_xy: tuple[float, float],
+    reason: str,
+) -> None:
+    request, source = _two_view_parts(tmp_path)
+    features, environment = _native_feature_evidence(tmp_path)
+    monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_native_geometry",
+        lambda *_args, **_kwargs: _native_canonical(request, source),
+    )
+    with pytest.raises(GsplatStaticAppearancePreflightError, match=reason):
+        inspect_gsplat_static_appearance_shared_track_pixels(
+            request, source, _matching_shared_track_photometry(source),
+            features=features, expected_environment=environment,
+            module=_shared_track_fixture(second_xy=second_xy),
+        )
+
+
+def test_shared_track_pixel_evidence_rechecks_source_byte_integrity(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    request, source = _two_view_parts(tmp_path)
+    assessments = _matching_shared_track_photometry(source)
+    features, environment = _native_feature_evidence(tmp_path)
+    monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_native_geometry",
+        lambda *_args, **_kwargs: _native_canonical(request, source),
+    )
+    source.images[1].source_path.write_bytes(_png(width=2, height=1, srgb=False))
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="size or SHA-256"):
+        inspect_gsplat_static_appearance_shared_track_pixels(
+            request, source, assessments,
+            features=features, expected_environment=environment,
             module=_shared_track_fixture(),
         )
