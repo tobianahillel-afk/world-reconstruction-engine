@@ -7,6 +7,8 @@ import zlib
 from dataclasses import FrozenInstanceError, replace
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
+from typing import Any, cast
 
 import pytest
 
@@ -105,6 +107,7 @@ from wre.reconstruction.static_appearance_baseline import (
     verify_gsplat_static_appearance_matching_capture_metadata,
     verify_gsplat_static_appearance_native_geometry,
     verify_gsplat_static_appearance_reference_sources,
+    verify_gsplat_static_appearance_shared_scene_tracks,
     verify_gsplat_static_appearance_source_photometry,
 )
 from wre.reconstruction.static_appearance_candidate import StaticAppearanceCandidateRequest
@@ -455,6 +458,7 @@ def test_preflight_has_no_trainer_execution_or_optional_framework_import() -> No
         "math",
         "pathlib",
         "struct",
+        "typing",
         "wre",
         "zlib",
     }
@@ -1223,4 +1227,147 @@ def test_multiview_capture_gate_requires_two_exact_distinct_source_observations(
     with pytest.raises(GsplatStaticAppearancePreflightError, match="exact source PNG"):
         verify_gsplat_static_appearance_matching_capture_metadata(
             multi_request, multi_source, (one, foreign)
+        )
+
+
+def _shared_track_fixture(
+    *,
+    track_image_ids: tuple[int, ...] = (1, 2),
+    point2d_index: int = 0,
+    reciprocal_point_id: int = 7,
+    second_image_name: str = "second.png",
+    valid: bool = True,
+) -> object:
+    images = {
+        1: SimpleNamespace(
+            name="frame.png",
+            num_points2D=lambda: 1,
+            point2D=lambda _index: SimpleNamespace(point3D_id=reciprocal_point_id),
+        ),
+        2: SimpleNamespace(
+            name=second_image_name,
+            num_points2D=lambda: 1,
+            point2D=lambda _index: SimpleNamespace(point3D_id=reciprocal_point_id),
+        ),
+    }
+    track = SimpleNamespace(
+        elements=tuple(
+            SimpleNamespace(image_id=image_id, point2D_idx=point2d_index)
+            for image_id in track_image_ids
+        )
+    )
+    reconstruction = SimpleNamespace(
+        is_valid=lambda: valid,
+        reg_image_ids=lambda: (1, 2),
+        point3D_ids=lambda: (7,),
+        image=lambda image_id: images[image_id],
+        point3D=lambda _point_id: SimpleNamespace(track=track),
+    )
+    return SimpleNamespace(Reconstruction=lambda _path: reconstruction)
+
+
+def _matching_shared_track_photometry(
+    source: GsplatStaticAppearancePreflightSource,
+) -> tuple[PhotometricCompatibilityAssessment, ...]:
+    return (
+        _gsplat_photo_assessment(
+            source,
+            capture=(100.0, 0.01, 4.0, 0.0),
+            white_balance=("manual", 5600.0),
+        ),
+        _gsplat_photo_assessment(
+            source,
+            observation_id=ObservationId("obs:second"),
+            capture=(100.0, 0.01, 4.0, 0.0),
+            white_balance=("manual", 5600.0),
+        ),
+    )
+
+
+def test_shared_scene_tracks_retain_real_reciprocal_pair_support(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    request, source = _two_view_parts(tmp_path)
+    assessments = _matching_shared_track_photometry(source)
+    features, env = _native_feature_evidence(tmp_path)
+    monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_native_geometry",
+        lambda *_args, **_kwargs: _native_canonical(request, source),
+    )
+    result = verify_gsplat_static_appearance_shared_scene_tracks(
+        request,
+        source,
+        assessments,
+        features=features,
+        expected_environment=env,
+        module=_shared_track_fixture(),
+    )
+    assert len(result) == 1
+    pair = result[0]
+    assert pair.left_observation_id == ObservationId("obs:frame")
+    assert pair.right_observation_id == ObservationId("obs:second")
+    assert pair.shared_point_count == 1
+    assert request.source_geometry.geometry_solution.scale_status is GeometryScaleStatus.UNRESOLVED
+
+
+@pytest.mark.parametrize(
+    ("overrides", "reason"),
+    [
+        ({"track_image_ids": (1,)}, "do not connect"),
+        ({"track_image_ids": (1, 1)}, "duplicate registered"),
+        ({"track_image_ids": (1, 3)}, "foreign or duplicate"),
+        ({"point2d_index": 1}, "point2D index"),
+        ({"reciprocal_point_id": 999}, "not reciprocal"),
+        ({"second_image_name": "foreign.png"}, "names differ"),
+        ({"valid": False}, "invalid during track"),
+    ],
+)
+def test_shared_scene_track_gate_rejects_invalid_or_unconnected_native_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    overrides: dict[str, object],
+    reason: str,
+) -> None:
+    request, source = _two_view_parts(tmp_path)
+    assessments = _matching_shared_track_photometry(source)
+    features, env = _native_feature_evidence(tmp_path)
+    monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_native_geometry",
+        lambda *_args, **_kwargs: _native_canonical(request, source),
+    )
+    with pytest.raises(GsplatStaticAppearancePreflightError, match=reason):
+        verify_gsplat_static_appearance_shared_scene_tracks(
+            request,
+            source,
+            assessments,
+            features=features,
+            expected_environment=env,
+            module=_shared_track_fixture(**cast(Any, overrides)),
+        )
+
+
+def test_shared_scene_track_gate_never_skips_source_capture_preflight(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    request, source = _two_view_parts(tmp_path)
+    features, env = _native_feature_evidence(tmp_path)
+    monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_native_geometry",
+        lambda *_args, **_kwargs: _native_canonical(request, source),
+    )
+    bad_assessments = (
+        _matching_shared_track_photometry(source)[0],
+        _gsplat_photo_assessment(source, observation_id=ObservationId("obs:second")),
+    )
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="incomplete or unresolved"):
+        verify_gsplat_static_appearance_shared_scene_tracks(
+            request,
+            source,
+            bad_assessments,
+            features=features,
+            expected_environment=env,
+            module=_shared_track_fixture(),
         )
