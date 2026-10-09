@@ -33,13 +33,13 @@ from wre.domain.decoded_images import (
     DecodedImagePixelLayout,
 )
 from wre.domain.observations import ObservationId, ObservationKind, Sha256Digest
-from wre.domain.producer_identity import ArtifactProducerIdentity
 from wre.domain.photometric_normalization import PhotometricNormalizationStatus
 from wre.domain.photometric_validity import (
     PhotometricCompatibilityAssessment,
     PhotometricCompatibilityStatus,
     assess_photometric_compatibility,
 )
+from wre.domain.producer_identity import ArtifactProducerIdentity
 from wre.domain.source_photometry import SourcePhotometryInterpretationStatus
 from wre.reconstruction.colmap_canonical_geometry import (
     CanonicalColmapSparseModel,
@@ -1755,7 +1755,6 @@ def assemble_verified_gsplat_static_appearance_result(
 
 __all__ = [
     "GSPLAT_REFERENCE_PYCOLMAP_REVISION",
-    "assemble_verified_gsplat_static_appearance_result",
     "GSPLAT_STATIC_APPEARANCE_REPRESENTATION",
     "GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION",
     "GSPLAT_STATIC_APPEARANCE_SOURCE_TREE",
@@ -1768,6 +1767,7 @@ __all__ = [
     "GsplatStaticAppearanceStagedDataset",
     "GsplatStaticAppearanceTrainingProfile",
     "GsplatStaticAppearanceVerifiedImage",
+    "assemble_verified_gsplat_static_appearance_result",
     "inspect_gsplat_static_appearance_shared_track_pixels",
     "materialize_verified_gsplat_ply",
     "preflight_gsplat_static_appearance_inputs",
