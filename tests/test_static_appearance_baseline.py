@@ -1526,14 +1526,17 @@ def test_shared_track_pixel_evidence_samples_exact_identical_srgb_pngs(
     assert result[0].right_png_sha256 == source.images[1].observation.asset.sha256
     assert result[0].shared_track_count == 1
     assert result[0].mean_absolute_srgb_channel_delta == 0.0
-    assert inspect_gsplat_static_appearance_shared_track_pixels(
-        request,
-        source,
-        assessments,
-        features=features,
-        expected_environment=environment,
-        module=_shared_track_fixture(),
-    ) == result
+    assert (
+        inspect_gsplat_static_appearance_shared_track_pixels(
+            request,
+            source,
+            assessments,
+            features=features,
+            expected_environment=environment,
+            module=_shared_track_fixture(),
+        )
+        == result
+    )
 
 
 def test_shared_track_pixel_evidence_reports_actual_color_difference_without_scoring(
