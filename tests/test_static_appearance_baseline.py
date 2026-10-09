@@ -103,8 +103,8 @@ from wre.reconstruction.static_appearance_baseline import (
     GsplatStaticAppearancePreflightError,
     GsplatStaticAppearancePreflightSource,
     GsplatStaticAppearanceTrainingProfile,
-    materialize_verified_gsplat_ply,
     inspect_gsplat_static_appearance_shared_track_pixels,
+    materialize_verified_gsplat_ply,
     preflight_gsplat_static_appearance_inputs,
     verify_gsplat_reference_pycolmap_sources,
     verify_gsplat_static_appearance_matching_capture_metadata,
@@ -1593,11 +1593,7 @@ def test_shared_track_png_decoder_applies_all_five_png_filters(
     # These reference residuals reconstruct the second pixel to pixel
     # for every filter; the first sample for filters 1/3/4 must be its
     # literal RGB value, since the previous scanline is zero.
-    if filter_type == 3:
-        first_encoded = pixel
-    else:
-        first_encoded = pixel
-    payload = bytes((filter_type,)) + first_encoded + second_encoded
+    payload = bytes((filter_type,)) + pixel + second_encoded
     png = (
         b"\\x89PNG\\r\\n\\x1a\\n"
         + _chunk(b"IHDR", header)
