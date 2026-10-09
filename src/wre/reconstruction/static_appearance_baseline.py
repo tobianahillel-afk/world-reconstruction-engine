@@ -882,8 +882,6 @@ def verify_gsplat_static_appearance_shared_scene_tracks(
         )
     )
 
-
-
 @dataclass(frozen=True, slots=True)
 class GsplatStaticAppearanceSharedTrackPixelPair:
     """Observed sRGB8 pixel difference at reciprocal COLMAP tracks, not radiance truth.
@@ -1035,10 +1033,9 @@ def inspect_gsplat_static_appearance_shared_track_pixels(
             )
         image_ids = tuple(sorted(int(value) for value in native.reg_image_ids()))
         native_images = {image_id: native.image(image_id) for image_id in image_ids}
-        if (
-            len(image_ids) != len(images_by_name)
-            or {image.name for image in native_images.values()} != set(images_by_name)
-        ):
+        if len(image_ids) != len(images_by_name) or {
+            image.name for image in native_images.values()
+        } != set(images_by_name):
             raise GsplatStaticAppearancePreflightError(
                 "native COLMAP image identities differ during source-pixel inspection"
             )
@@ -1091,8 +1088,7 @@ def inspect_gsplat_static_appearance_shared_track_pixels(
             for position, left in enumerate(sorted_ids):
                 for right in sorted_ids[position + 1 :]:
                     delta = sum(
-                        abs(a - b)
-                        for a, b in zip(sampled[left], sampled[right], strict=True)
+                        abs(a - b) for a, b in zip(sampled[left], sampled[right], strict=True)
                     )
                     count, total = totals.get((left, right), (0, 0))
                     totals[(left, right)] = count + 1, total + delta
