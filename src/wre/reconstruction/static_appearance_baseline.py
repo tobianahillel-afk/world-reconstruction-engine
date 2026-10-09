@@ -640,6 +640,139 @@ def verify_gsplat_static_appearance_matching_capture_metadata(
     return identities
 
 
+@dataclass(frozen=True, slots=True)
+class GsplatStaticAppearanceSharedTrackPair:
+    """A verified COLMAP sparse-track overlap, NOT photometric calibration."""
+
+    left_observation_id: ObservationId
+    right_observation_id: ObservationId
+    shared_point_count: int
+
+
+def verify_gsplat_static_appearance_shared_scene_tracks(
+    request: StaticAppearanceCandidateRequest,
+    source: GsplatStaticAppearancePreflightSource,
+    assessments: tuple[PhotometricCompatibilityAssessment, ...],
+    *,
+    features: ColmapFeatureExtractionResult,
+    expected_environment: ColmapEnvironmentIdentity,
+    module: object,
+) -> tuple[GsplatStaticAppearanceSharedTrackPair, ...]:
+    """Require a connected graph of real multi-view COLMAP point tracks.
+
+    A point counts only when the audited native model links the same 3D point
+    to distinct registered source images through reciprocal Point2D IDs.
+    Counts are *structural overlap evidence*, not proof of matching exposure,
+    surface color, scene radiance, adequate baselines or training quality.
+    Caller must still perform a separate radiometric/shared-scene suitability
+    assessment and use an approved external runtime before executing gsplat.
+    """
+
+    verify_gsplat_static_appearance_matching_capture_metadata(request, source, assessments)
+    if module is None:
+        raise TypeError("shared-track verification requires an explicit PyCOLMAP module")
+    verify_gsplat_static_appearance_native_geometry(
+        request,
+        source,
+        features=features,
+        expected_environment=expected_environment,
+        module=module,
+    )
+    path = _verified_native_model_path(source.native_model_root, source.native_model_artifact)
+    try:
+        reconstruction = module.Reconstruction(path)
+        if not bool(reconstruction.is_valid()):
+            raise GsplatStaticAppearancePreflightError(
+                "native COLMAP model is invalid during track verification"
+            )
+        registered = tuple(sorted(int(value) for value in reconstruction.reg_image_ids()))
+        point_ids = tuple(sorted(int(value) for value in reconstruction.point3D_ids()))
+        if len(registered) != len(source.images) or len(point_ids) != source.native_model_artifact.num_points3d:
+            raise GsplatStaticAppearancePreflightError(
+                "native COLMAP registered-image or point count changed"
+            )
+        native_images = {image_id: reconstruction.image(image_id) for image_id in registered}
+        if len({image.name for image in native_images.values()}) != len(source.images):
+            raise GsplatStaticAppearancePreflightError("native COLMAP image names are not unique")
+        by_name = {item.image_name: item.observation.observation_id for item in source.images}
+        if set(image.name for image in native_images.values()) != set(by_name):
+            raise GsplatStaticAppearancePreflightError(
+                "native COLMAP registered-image names differ from exact source images"
+            )
+
+        pair_counts: dict[tuple[int, int], int] = {}
+        for point_id in point_ids:
+            point = reconstruction.point3D(point_id)
+            seen: set[int] = set()
+            for element in point.track.elements:
+                image_id = int(element.image_id)
+                point2d_index = int(element.point2D_idx)
+                if image_id not in native_images or image_id in seen:
+                    raise GsplatStaticAppearancePreflightError(
+                        "native COLMAP track references foreign or duplicate registered images"
+                    )
+                image = native_images[image_id]
+                if point2d_index < 0 or point2d_index >= int(image.num_points2D):
+                    raise GsplatStaticAppearancePreflightError(
+                        "native COLMAP track point2D index is invalid"
+                    )
+                point2d = image.point2D(point2d_index)
+                if int(point2d.point3D_id) != point_id:
+                    raise GsplatStaticAppearancePreflightError(
+                        "native COLMAP track/Point2D identity is not reciprocal"
+                    )
+                seen.add(image_id)
+            for left in sorted(seen):
+                for right in sorted(seen):
+                    if left < right:
+                        pair_counts[(left, right)] = pair_counts.get((left, right), 0) + 1
+    except GsplatStaticAppearancePreflightError:
+        raise
+    except (AttributeError, TypeError, ValueError, OverflowError, RuntimeError, OSError) as exc:
+        raise GsplatStaticAppearancePreflightError(
+            "native COLMAP point tracks cannot be audited"
+        ) from exc
+
+    # A connected graph is a *necessary* scene-overlap condition. Requiring
+    # every pair to overlap would incorrectly reject valid multi-view sequences.
+    neighbours: dict[int, set[int]] = {image_id: set() for image_id in registered}
+    pairs: list[GsplatStaticAppearanceSharedTrackPair] = []
+    for (left, right), count in pair_counts.items():
+        neighbours[left].add(right)
+        neighbours[right].add(left)
+        left_id, right_id = (
+            by_name[native_images[left].name],
+            by_name[native_images[right].name],
+        )
+        if left_id.value > right_id.value:
+            left_id, right_id = right_id, left_id
+        pairs.append(
+            GsplatStaticAppearanceSharedTrackPair(
+                left_observation_id=left_id,
+                right_observation_id=right_id,
+                shared_point_count=count,
+            )
+        )
+    visited = {registered[0]}
+    pending = [registered[0]]
+    while pending:
+        current = pending.pop()
+        for neighbour in neighbours[current] - visited:
+            visited.add(neighbour)
+            pending.append(neighbour)
+    if len(visited) != len(registered):
+        raise GsplatStaticAppearancePreflightError(
+            "native COLMAP sparse tracks do not connect all source observations"
+        )
+
+    return tuple(
+        sorted(
+            pairs,
+            key=lambda item: (item.left_observation_id.value, item.right_observation_id.value),
+        )
+    )
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class GsplatStaticAppearanceTrainingProfile:
     """Audited single-GPU overrides for the exact upstream reference trainer.
@@ -887,11 +1020,13 @@ __all__ = [
     "GsplatStaticAppearancePreflightError",
     "GsplatStaticAppearancePreflightEvidence",
     "GsplatStaticAppearancePreflightSource",
+    "GsplatStaticAppearanceSharedTrackPair",
     "GsplatStaticAppearanceTrainingProfile",
     "GsplatStaticAppearanceVerifiedImage",
     "materialize_verified_gsplat_ply",
     "preflight_gsplat_static_appearance_inputs",
     "verify_gsplat_static_appearance_matching_capture_metadata",
+    "verify_gsplat_static_appearance_shared_scene_tracks",
     "verify_gsplat_static_appearance_native_geometry",
     "verify_gsplat_static_appearance_reference_sources",
     "verify_gsplat_static_appearance_source_photometry",
