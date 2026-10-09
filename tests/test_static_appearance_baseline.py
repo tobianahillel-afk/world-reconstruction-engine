@@ -1726,9 +1726,7 @@ def test_gsplat_private_staging_preserves_exact_bytes_and_ancestry(
     expected_sources = {
         "images/frame.png": source.images[0].source_path,
         **{
-            f"sparse/0/{item.relative_path}": (
-                source.native_model_root / "0" / item.relative_path
-            )
+            f"sparse/0/{item.relative_path}": (source.native_model_root / "0" / item.relative_path)
             for item in source.native_model_artifact.files
         },
     }
@@ -1744,9 +1742,7 @@ def test_gsplat_private_staging_preserves_exact_bytes_and_ancestry(
         assert entry.byte_length == len(source_bytes)
         assert entry.sha256 == _digest(source_bytes)
     with pytest.raises(GsplatStaticAppearancePreflightError, match="already exist"):
-        stage_verified_gsplat_static_appearance_dataset(
-            request, source, dataset_root=destination
-        )
+        stage_verified_gsplat_static_appearance_dataset(request, source, dataset_root=destination)
 
 
 def test_gsplat_private_staging_rejects_incomplete_native_colmap_bundle(
@@ -1755,9 +1751,7 @@ def test_gsplat_private_staging_rejects_incomplete_native_colmap_bundle(
     request, source = _parts(tmp_path)
     destination = tmp_path / "never-published"
     with pytest.raises(GsplatStaticAppearancePreflightError, match="exact COLMAP binary"):
-        stage_verified_gsplat_static_appearance_dataset(
-            request, source, dataset_root=destination
-        )
+        stage_verified_gsplat_static_appearance_dataset(request, source, dataset_root=destination)
     assert not destination.exists()
     assert not tuple(tmp_path.glob(".wre-gsplat-dataset-*"))
 
@@ -1769,9 +1763,7 @@ def test_gsplat_private_staging_fails_closed_on_changed_original_png(
     source.images[0].source_path.write_bytes(b"tampered")
     destination = tmp_path / "never-published"
     with pytest.raises(GsplatStaticAppearancePreflightError, match="size or SHA-256"):
-        stage_verified_gsplat_static_appearance_dataset(
-            request, source, dataset_root=destination
-        )
+        stage_verified_gsplat_static_appearance_dataset(request, source, dataset_root=destination)
     assert not destination.exists()
 
 
@@ -1786,9 +1778,7 @@ def test_gsplat_private_staging_rejects_source_overlap_or_destination_symlink(
     alias = tmp_path / "linked-dataset"
     alias.symlink_to(source.image_root, target_is_directory=True)
     with pytest.raises(GsplatStaticAppearancePreflightError, match="already exist"):
-        stage_verified_gsplat_static_appearance_dataset(
-            request, source, dataset_root=alias
-        )
+        stage_verified_gsplat_static_appearance_dataset(request, source, dataset_root=alias)
 
 
 def test_gsplat_private_staging_cleans_unpublished_partial_files(
@@ -1808,9 +1798,7 @@ def test_gsplat_private_staging_cleans_unpublished_partial_files(
     monkeypatch.setattr(baseline_module, "_copy_gsplat_source_exact", failing_copy)
     destination = tmp_path / "never-published"
     with pytest.raises(OSError, match="injected copy"):
-        stage_verified_gsplat_static_appearance_dataset(
-            request, source, dataset_root=destination
-        )
+        stage_verified_gsplat_static_appearance_dataset(request, source, dataset_root=destination)
     assert not destination.exists()
     assert not tuple(tmp_path.glob(".wre-gsplat-dataset-*"))
     assert source.images[0].source_path.is_file()
