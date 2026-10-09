@@ -573,6 +573,7 @@ def test_safe_training_profile_disables_unsafe_upstream_defaults() -> None:
     assert overrides["disable_video"] is True
     assert overrides["ckpt"] is None
     assert overrides["init_type"] == "sfm"
+    assert overrides["sh_degree"] == 3
     assert overrides["save_ply"] is True
     assert overrides["ply_steps"] == [30_000]
     assert overrides["eval_steps"] == []
@@ -648,9 +649,7 @@ def _gsplat_ply(*, properties: tuple[str, ...] | None = None, vertices: int = 1)
         "f_dc_0",
         "f_dc_1",
         "f_dc_2",
-        "f_rest_0",
-        "f_rest_1",
-        "f_rest_2",
+        *(f"f_rest_{index}" for index in range(45)),
         "opacity",
         "scale_0",
         "scale_1",
@@ -696,6 +695,37 @@ def test_gsplat_ply_materialization_hashes_real_output_and_retains_path(tmp_path
         materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
         == result
     )
+
+
+@pytest.mark.parametrize("rest_count", (0, 3, 42, 48))
+def test_gsplat_ply_rejects_wrong_degree_or_partial_harmonics(
+    tmp_path: Path, rest_count: int
+) -> None:
+    """Even well-ordered RGB SH values cannot masquerade as the pinned degree-3 payload."""
+    properties = (
+        "x",
+        "y",
+        "z",
+        "f_dc_0",
+        "f_dc_1",
+        "f_dc_2",
+        *(f"f_rest_{index}" for index in range(rest_count)),
+        "opacity",
+        "scale_0",
+        "scale_1",
+        "scale_2",
+        "rot_0",
+        "rot_1",
+        "rot_2",
+        "rot_3",
+    )
+    root, profile, ref = _gsplat_output(tmp_path, _gsplat_ply(properties=properties), steps=20)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="property schema"):
+        materialize_verified_gsplat_ply(
+            artifact_ref=ref,
+            output_root=root,
+            profile=profile,
+        )
 
 
 @pytest.mark.parametrize(
