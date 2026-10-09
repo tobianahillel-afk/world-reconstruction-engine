@@ -1090,12 +1090,24 @@ def inspect_gsplat_static_appearance_shared_track_pixels(
             sorted_ids = sorted(sampled)
             for position, left in enumerate(sorted_ids):
                 for right in sorted_ids[position + 1 :]:
-                    delta = sum(abs(a - b) for a, b in zip(sampled[left], sampled[right], strict=True))
+                    delta = sum(
+                        abs(a - b)
+                        for a, b in zip(sampled[left], sampled[right], strict=True)
+                    )
                     count, total = totals.get((left, right), (0, 0))
                     totals[(left, right)] = count + 1, total + delta
     except GsplatStaticAppearancePreflightError:
         raise
-    except (AttributeError, TypeError, IndexError, KeyError, ValueError, OverflowError, RuntimeError, OSError) as exc:
+    except (
+        AttributeError,
+        TypeError,
+        IndexError,
+        KeyError,
+        ValueError,
+        OverflowError,
+        RuntimeError,
+        OSError,
+    ) as exc:
         raise GsplatStaticAppearancePreflightError(
             "native COLMAP source-pixel track evidence cannot be audited"
         ) from exc
@@ -1380,8 +1392,8 @@ __all__ = [
     "GsplatStaticAppearanceSharedTrackPixelPair",
     "GsplatStaticAppearanceTrainingProfile",
     "GsplatStaticAppearanceVerifiedImage",
-    "materialize_verified_gsplat_ply",
     "inspect_gsplat_static_appearance_shared_track_pixels",
+    "materialize_verified_gsplat_ply",
     "preflight_gsplat_static_appearance_inputs",
     "verify_gsplat_reference_pycolmap_sources",
     "verify_gsplat_static_appearance_matching_capture_metadata",
