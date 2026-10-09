@@ -878,6 +878,18 @@ dependencies:
     reference_requirements_git_blob_sha1: ea0a940ea796e486aa68e8fc284ee01cb5a27662
     reference_colmap_parser_git_blob_sha1: 6c21f2c663b60d9dc38471a9963a3b5d092e5ed2
     reference_requirements_numpy: '<2.0.0'
+    reference_nerfview_source_revision: 4538024fe0d15fd1a0e4d760f3695fc44ca72787
+    reference_nerfview_source_tree_sha1: e333400e39605978a3d1f9cf6d73ddf577a8c8e3
+    reference_nerfview_pyproject_git_blob_sha1: 4fa1b90b2b1d38e17d464bb7d12cec839e1aa023
+    reference_nerfview_declared_license: MIT
+    reference_fused_ssim_source_revision: 328dc9836f513d00c4b5bc38fe30478b4435cbb5
+    reference_fused_ssim_source_tree_sha1: ac5f1d8fe5d519f9c44b220d235bf1f198463da7
+    reference_fused_ssim_license_git_blob_sha1: 541f73944912fde14ffb971f22ba516042b95ab7
+    reference_fused_ssim_license: MIT
+    reference_fused_bilagrid_source_revision: 90f9788e57d3545e3a033c1038bb9986549632fe
+    reference_fused_bilagrid_source_tree_sha1: ee863004a76eb54b44c7761eb6178069bc794752
+    reference_fused_bilagrid_license_git_blob_sha1: 139a05b81af1c7dd1bc15adbc8f5834ac88ac8c9
+    reference_fused_bilagrid_import_policy: conditional_not_used_by_selected_profile
     reference_requirements_pycolmap_fork: rmbrualla/pycolmap@cc7ea4b7301720ac29287dbe450952511b32125e
     reference_pycolmap_source_revision: cc7ea4b7301720ac29287dbe450952511b32125e
     reference_pycolmap_package_version: 0.0.1
@@ -901,7 +913,22 @@ dependencies:
       an approved execution profile or the standalone gsplat rasterizer alone.
       The official trainer uses external Torch/CUDA and example dataset, viewer,
       rendering and metrics imports that still need a complete exact wheel/source
-      and transitive license lock. V2L18.3 now audits ten exact reviewed upstream
+      and transitive license lock. Exact-source audit of the trainer's referenced
+      Git VCS packages identified nerfview commit
+      4538024fe0d15fd1a0e4d760f3695fc44ca72787 (project metadata declares MIT),
+      fused-ssim commit 328dc9836f513d00c4b5bc38fe30478b4435cbb5 (MIT source
+      LICENSE), and fused-bilagrid commit 90f9788e57d3545e3a033c1038bb9986549632fe
+      (MIT source LICENSE). The upstream trainer imports fused_ssim eagerly and
+      uses its fused CUDA loss during training. The trainer only imports fused_bilagrid
+      conditionally when use_fused_bilagrid is enabled; the reviewed WRE profile
+      explicitly disables it and both bilateral-grid variants. Accordingly the
+      future bounded environment must include and verify the exact fused-ssim
+      native CUDA extension, but must not add fused-bilagrid as a mandatory runtime
+      dependency. Importing simple_trainer still eagerly requires nerfview, viser,
+      torchmetrics image metrics and torch.utils.tensorboard even with viewer/video/
+      TensorBoard use disabled. These are import-closure observations only; exact
+      Python package/build hashes, CUDA ABI, native wheel licenses, runtime import
+      proof and supported GPU training are still unresolved. V2L18.3 now audits ten exact reviewed upstream
       trainer-entrypoint/source files offline using their Git blob identities and
       byte lengths, without importing packages or executing the trainer. This is
       only a partial source-byte gate, not a full upstream tree, CUDA or license
