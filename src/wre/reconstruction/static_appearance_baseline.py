@@ -67,6 +67,22 @@ from wre.reconstruction.static_appearance_candidate import (
 # CUDA loss is mandatory for the selected upstream trainer. These are the
 # executable/build source files plus license and README, not the full Git tree
 # or proof of an installed CUDA extension or its binary/toolchain license.
+# Reviewed nerfview v0.1.2 at nerfstudio-project/nerfview commit
+# 4538024fe0d15fd1a0e4d760f3695fc44ca72787. These are the eager Python
+# package/import and distribution metadata files, not a full Git/source-tree
+# lock or approval of viser, numpy, jaxtyping or their transitive dependencies.
+_GSPLAT_NERFVIEW_REVISION = "4538024fe0d15fd1a0e4d760f3695fc44ca72787"
+_GSPLAT_NERFVIEW_SOURCE_FILES: tuple[tuple[str, int, str], ...] = (
+    ("README.md", 5579, "44c91608517a0e87e3c13c52d09305f22f665273"),
+    ("nerfview/__init__.py", 504, "619c0513faf897bf58ed1c4698f6b5fdde0cac14"),
+    ("nerfview/_renderer.py", 6454, "ad17ca39fc00bf41b0b99b7b7b621ac9f7df805a"),
+    ("nerfview/render_panel.py", 54931, "a81fa3ea9a468a94ebea6a8de931fbbce5d4"),
+    ("nerfview/version.py", 22, "b3f4756216d06217d275110297a69bbb7ea74a59"),
+    ("nerfview/viewer.py", 10564, "8cf32290872a670a351cf328249782c5cec4b550"),
+    ("pyproject.toml", 849, "4fa1b90b2b1d38e17d464bb7d12cec839e1aa023"),
+)
+
+
 _GSPLAT_FUSED_SSIM_REVISION = "328dc9836f513d00c4b5bc38fe30478b4435cbb5"
 _GSPLAT_FUSED_SSIM_SOURCE_FILES: tuple[tuple[str, int, str], ...] = (
     ("LICENSE", 1067, "541f73944912fde14ffb971f22ba516042b95ab7"),
@@ -447,6 +463,84 @@ def verify_gsplat_fused_ssim_reference_sources(
         if resolved.stat().st_size != expected_size:
             raise GsplatStaticAppearancePreflightError(
                 f"fused-ssim source changed during verification: {relative}"
+            )
+        entries.append(
+            ArtifactMaterializationEntry(
+                relative_path=relative,
+                sha256=Sha256Digest(hashlib.sha256(data).hexdigest()),
+                byte_length=len(data),
+            )
+        )
+    return tuple(entries)
+
+
+def verify_gsplat_nerfview_reference_sources(
+    source_root: Path,
+) -> tuple[ArtifactMaterializationEntry, ...]:
+    """Verify pinned viewer import-source and packaging bytes without importing them.
+
+    This is source-only evidence. It does not approve viewer execution, a
+    dependency resolver, web server exposure or a trainer/GPU execution runtime.
+    """
+
+    if not isinstance(source_root, Path):
+        raise TypeError("gsplat nerfview source_root must be pathlib.Path")
+    root = _safe_root(source_root, "gsplat nerfview source_root")
+    package = root / "nerfview"
+    if package.is_symlink() or not package.is_dir():
+        raise GsplatStaticAppearancePreflightError("nerfview package must be a real directory")
+    expected = {
+        relative
+        for relative, _size, _blob in _GSPLAT_NERFVIEW_SOURCE_FILES
+        if relative.startswith("nerfview/")
+    }
+    actual: set[str] = set()
+    for path in package.rglob("*"):
+        if path.is_symlink() or not path.is_file():
+            raise GsplatStaticAppearancePreflightError(
+                "nerfview contains an unexpected package path or symlink"
+            )
+        actual.add(path.relative_to(root).as_posix())
+    if actual != expected:
+        raise GsplatStaticAppearancePreflightError(
+            "nerfview import package differs from the reviewed source"
+        )
+
+    for path in root.iterdir():
+        if path.is_symlink():
+            raise GsplatStaticAppearancePreflightError("nerfview source root contains a symlink")
+
+    entries: list[ArtifactMaterializationEntry] = []
+    for relative, expected_size, expected_blob in _GSPLAT_NERFVIEW_SOURCE_FILES:
+        candidate = root
+        for part in PurePosixPath(relative).parts:
+            candidate /= part
+            if candidate.is_symlink():
+                raise GsplatStaticAppearancePreflightError(
+                    f"nerfview source path contains symlink: {relative}"
+                )
+        try:
+            resolved = candidate.resolve(strict=True)
+        except (OSError, RuntimeError) as exc:
+            raise GsplatStaticAppearancePreflightError(
+                f"nerfview source file missing: {relative}"
+            ) from exc
+        if not resolved.is_file() or not resolved.is_relative_to(root):
+            raise GsplatStaticAppearancePreflightError(
+                f"nerfview source file invalid: {relative}"
+            )
+        if resolved.stat().st_size != expected_size:
+            raise GsplatStaticAppearancePreflightError(
+                f"nerfview source byte length differs: {relative}"
+            )
+        data = resolved.read_bytes()
+        if len(data) != expected_size or _git_blob_sha1(data) != expected_blob:
+            raise GsplatStaticAppearancePreflightError(
+                f"nerfview source Git blob differs: {relative}"
+            )
+        if resolved.stat().st_size != expected_size:
+            raise GsplatStaticAppearancePreflightError(
+                f"nerfview source changed during verification: {relative}"
             )
         entries.append(
             ArtifactMaterializationEntry(
