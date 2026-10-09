@@ -1371,9 +1371,7 @@ def verify_gsplat_static_appearance_staged_dataset(
         ArtifactMaterializationEntry(
             relative_path=relative_path, sha256=digest, byte_length=byte_length
         )
-        for relative_path, (_source, digest, byte_length) in sorted(
-            expected_files.items()
-        )
+        for relative_path, (_source, digest, byte_length) in sorted(expected_files.items())
     )
     if staged.entries != expected_entries:
         raise GsplatStaticAppearancePreflightError(
@@ -1385,9 +1383,7 @@ def verify_gsplat_static_appearance_staged_dataset(
     for path in root.rglob("*"):
         relative_path = path.relative_to(root).as_posix()
         if path.is_symlink():
-            raise GsplatStaticAppearancePreflightError(
-                "gsplat staged dataset contains a symlink"
-            )
+            raise GsplatStaticAppearancePreflightError("gsplat staged dataset contains a symlink")
         if path.is_dir():
             if relative_path not in allowed_directories:
                 raise GsplatStaticAppearancePreflightError(
@@ -1408,9 +1404,7 @@ def verify_gsplat_static_appearance_staged_dataset(
             "gsplat staged dataset is missing an audited input file"
         )
 
-    for relative_path, (original, expected_digest, expected_size) in sorted(
-        expected_files.items()
-    ):
+    for relative_path, (original, expected_digest, expected_size) in sorted(expected_files.items()):
         for path in (original, root / relative_path):
             if path.is_symlink() or not path.is_file():
                 raise GsplatStaticAppearancePreflightError(
