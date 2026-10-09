@@ -680,7 +680,7 @@ def verify_gsplat_static_appearance_shared_scene_tracks(
     )
     path = _verified_native_model_path(source.native_model_root, source.native_model_artifact)
     try:
-        reconstruction = module.Reconstruction(path)
+        reconstruction = getattr(module, "Reconstruction")(path)
         if not bool(reconstruction.is_valid()):
             raise GsplatStaticAppearancePreflightError(
                 "native COLMAP model is invalid during track verification"
