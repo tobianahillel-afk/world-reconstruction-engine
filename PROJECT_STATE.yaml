@@ -16,15 +16,22 @@ current_goal: >-
 next_action: >-
   Continue only V2L18.3. CPU-only gsplat preflights now verify source PNG byte/pixel identities,
   native COLMAP geometry equivalence, audited final PLY bytes and exact per-PNG V2L17 READY/COMPATIBLE
-  photometric evidence without silently applying normalization. The additional exact-source gate
-  verifies ten reviewed gsplat v1.5.3 trainer entrypoint/requirements/parser/helper files against
+  photometric evidence without silently applying normalization. PR #203 adds a CPU-only
+  multi-observation necessary-evidence check: after revalidating each exact source PNG and
+  V2L17 assessment, fully resolved ISO, shutter time, aperture, exposure compensation,
+  white-balance mode and color temperature must match across two or more observations.
+  Missing or differing metadata fail closed; equal capture declarations do not prove
+  equal scene radiance, tone mapping, actual overlap or camera-response calibration.
+  The additional exact-source gate verifies ten reviewed gsplat v1.5.3 trainer
+  entrypoint/requirements/parser/helper files against
   immutable upstream Git blob SHA-1 identities and byte lengths before any future external import.
   This is a partial local source-byte proof only, not full source-tree, wheel, native ABI, GPU or
   transitive-license approval. Official gsplat examples/requirements.txt requests numpy<2.0.0
   and a pinned old rmbrualla/pycolmap fork; never silently install it in WRE or assume it is
   interchangeable with WRE's PyCOLMAP 4.2.0 environment. Next close an isolated exact gsplat trainer
-  Python/Torch/CUDA/pycolmap reference dependency/license lock, prove cross-observation photometric
-  suitability beyond individual source-image readiness, execute a private supported-GPU fixture, and
+  Python/Torch/CUDA/pycolmap reference dependency/license lock, prove actual cross-observation
+  photometric suitability using independently supported shared-scene evidence beyond capture-setting
+  metadata equality, execute a private supported-GPU fixture, and
   construct a complete AppearanceModel plus actual ArtifactMaterializationMetadata behind V2L18.2.
   Preserve caller geometry, local frame, scale, original pixel bytes and source lineage. Keep
   unsupported hardware DEFERRED/UNVERIFIED. No default route, held-out scoring, router promotion
