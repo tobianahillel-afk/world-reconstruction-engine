@@ -4,10 +4,10 @@ import ast
 import hashlib
 import struct
 import zlib
-from types import SimpleNamespace
 from dataclasses import FrozenInstanceError, replace
 from datetime import UTC, datetime
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
