@@ -157,11 +157,13 @@ jobs:
           "$RESOLVER_PYTHON" - <<'PY'
           from __future__ import annotations
 
+          import hashlib
           import json
           import os
           import platform
           import re
           import subprocess
+          import urllib.request
           from pathlib import Path
           from urllib.parse import unquote, urlparse
 
@@ -217,9 +219,6 @@ jobs:
               if canonical in seen:
                   raise SystemExit(f"duplicate resolved package: {name}")
               seen.add(canonical)
-              sha256 = str(hashes.get("sha256") or "").strip()
-              if not re.fullmatch(r"[0-9a-f]{64}", sha256):
-                  raise SystemExit(f"{name}=={version}: missing exact SHA-256")
               url = str(download["url"])
               parsed = urlparse(url)
               if parsed.scheme != "https":
@@ -227,6 +226,29 @@ jobs:
               filename = unquote(parsed.path.rsplit("/", 1)[-1])
               if not filename:
                   raise SystemExit(f"{name}=={version}: artifact filename is empty")
+
+              sha256 = str(hashes.get("sha256") or "").strip()
+              hash_source = "pip_report"
+              if not re.fullmatch(r"[0-9a-f]{64}", sha256):
+                  legacy_hash = str(archive.get("hash") or "").strip()
+                  if legacy_hash.startswith("sha256=") and re.fullmatch(
+                      r"[0-9a-f]{64}", legacy_hash.removeprefix("sha256=")
+                  ):
+                      sha256 = legacy_hash.removeprefix("sha256=")
+                      hash_source = "pip_report_legacy_hash"
+                  else:
+                      digest = hashlib.sha256()
+                      request = urllib.request.Request(
+                          url,
+                          headers={"User-Agent": "WRE-V2L18.3-runtime-lock/1"},
+                      )
+                      with urllib.request.urlopen(request, timeout=180) as response:
+                          while chunk := response.read(1024 * 1024):
+                              digest.update(chunk)
+                      sha256 = digest.hexdigest()
+                      hash_source = "direct_https_bytes"
+              if not re.fullmatch(r"[0-9a-f]{64}", sha256):
+                  raise SystemExit(f"{name}=={version}: missing exact SHA-256")
 
               classifiers = sorted(
                   str(value)
@@ -243,6 +265,7 @@ jobs:
                       "filename": filename,
                       "url": url,
                       "sha256": sha256,
+                      "sha256_source": hash_source,
                       "requires_python": metadata.get("requires_python"),
                       "requires_dist": requires_dist,
                       "license": metadata.get("license"),
