@@ -31,12 +31,12 @@ from wre.domain.decoded_images import (
 )
 from wre.domain.observations import ObservationId, ObservationKind, Sha256Digest
 from wre.domain.photometric_normalization import PhotometricNormalizationStatus
-from wre.domain.source_photometry import SourcePhotometryInterpretationStatus
 from wre.domain.photometric_validity import (
     PhotometricCompatibilityAssessment,
     PhotometricCompatibilityStatus,
     assess_photometric_compatibility,
 )
+from wre.domain.source_photometry import SourcePhotometryInterpretationStatus
 from wre.reconstruction.colmap_canonical_geometry import (
     CanonicalColmapSparseModel,
     _verified_native_model_path,
@@ -893,8 +893,8 @@ __all__ = [
     "GsplatStaticAppearanceVerifiedImage",
     "materialize_verified_gsplat_ply",
     "preflight_gsplat_static_appearance_inputs",
+    "verify_gsplat_static_appearance_matching_capture_metadata",
     "verify_gsplat_static_appearance_native_geometry",
     "verify_gsplat_static_appearance_reference_sources",
-    "verify_gsplat_static_appearance_matching_capture_metadata",
     "verify_gsplat_static_appearance_source_photometry",
 ]
