@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import ast
 import hashlib
-from types import SimpleNamespace
 import struct
 import zlib
+from types import SimpleNamespace
 from dataclasses import FrozenInstanceError, replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -1229,8 +1229,6 @@ def test_multiview_capture_gate_requires_two_exact_distinct_source_observations(
 
 
 def _shared_track_fixture(
-    request: StaticAppearanceCandidateRequest,
-    source: GsplatStaticAppearancePreflightSource,
     *,
     track_image_ids: tuple[int, ...] = (1, 2),
     point2d_index: int = 0,
@@ -1301,7 +1299,7 @@ def test_shared_scene_tracks_retain_real_reciprocal_pair_support(
         assessments,
         features=features,
         expected_environment=env,
-        module=_shared_track_fixture(request, source),
+        module=_shared_track_fixture(),
     )
     assert len(result) == 1
     pair = result[0]
@@ -1344,7 +1342,7 @@ def test_shared_scene_track_gate_rejects_invalid_or_unconnected_native_evidence(
             assessments,
             features=features,
             expected_environment=env,
-            module=_shared_track_fixture(request, source, **overrides),
+            module=_shared_track_fixture(**overrides),
         )
 
 
@@ -1369,5 +1367,5 @@ def test_shared_scene_track_gate_never_skips_source_capture_preflight(
             bad_assessments,
             features=features,
             expected_environment=env,
-            module=_shared_track_fixture(request, source),
+            module=_shared_track_fixture(),
         )
