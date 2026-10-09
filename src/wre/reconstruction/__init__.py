@@ -359,6 +359,9 @@ from wre.reconstruction.open3d_surface import (
     Open3dTsdfSurfaceConfig,
     inspect_open3d_surface_environment,
 )
+from wre.reconstruction.static_appearance_baseline import (
+    assemble_verified_gsplat_static_appearance_result,
+)
 from wre.reconstruction.static_appearance_candidate import (
     StaticAppearanceCandidateAdapter,
     StaticAppearanceCandidateRequest,
@@ -669,6 +672,7 @@ __all__ = [
     "SurfaceMeshInspection",
     "SurfaceSuitabilityReport",
     "SurfaceSupportAnnotationState",
+    "assemble_verified_gsplat_static_appearance_result",
     "benchmark_da3_execution",
     "benchmark_dense_depth_candidates",
     "benchmark_surface_candidates",
