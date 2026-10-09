@@ -106,6 +106,7 @@ from wre.reconstruction.static_appearance_baseline import (
     inspect_gsplat_static_appearance_shared_track_pixels,
     materialize_verified_gsplat_ply,
     preflight_gsplat_static_appearance_inputs,
+    stage_verified_gsplat_static_appearance_dataset,
     verify_gsplat_reference_pycolmap_sources,
     verify_gsplat_static_appearance_matching_capture_metadata,
     verify_gsplat_static_appearance_native_geometry,
@@ -552,7 +553,9 @@ def test_preflight_has_no_trainer_execution_or_optional_framework_import() -> No
         "json",
         "math",
         "pathlib",
+        "shutil",
         "struct",
+        "tempfile",
         "typing",
         "wre",
         "zlib",
@@ -1676,3 +1679,129 @@ def test_shared_track_pixel_evidence_rechecks_source_byte_integrity(
             expected_environment=environment,
             module=_shared_track_fixture(),
         )
+
+
+def _stageable_dataset_fixture(
+    tmp_path: Path,
+) -> tuple[StaticAppearanceCandidateRequest, GsplatStaticAppearancePreflightSource]:
+    """Extend the small accepted source fixture with the mandatory native images.bin."""
+
+    request, source = _parts(tmp_path)
+    images_file = source.native_model_root / "0" / "images.bin"
+    images_bytes = b"native-registered-image-index"
+    images_file.write_bytes(images_bytes)
+    old = source.native_model_artifact
+    manifests = tuple(
+        sorted(
+            (
+                *old.files,
+                ColmapModelFileArtifact("images.bin", _digest(images_bytes), len(images_bytes)),
+            ),
+            key=lambda item: item.relative_path,
+        )
+    )
+    native = replace(old, files=manifests)
+    native_ref = colmap_native_sparse_model_artifact_ref(native)
+    return (
+        replace(request, supporting_artifacts=(native_ref,)),
+        replace(source, native_model_artifact=native, native_model_ref=native_ref),
+    )
+
+
+def test_gsplat_private_staging_preserves_exact_bytes_and_ancestry(
+    tmp_path: Path,
+) -> None:
+    request, source = _stageable_dataset_fixture(tmp_path)
+    destination = tmp_path / "trainer-data"
+    result = stage_verified_gsplat_static_appearance_dataset(
+        request, source, dataset_root=destination
+    )
+    assert result.dataset_root == destination
+    assert result.source_geometry_id == request.source_geometry.geometry_solution_id.value
+    assert result.native_model_ref == source.native_model_ref
+    assert tuple(item.relative_path for item in result.entries) == (
+        "images/frame.png",
+        "sparse/0/cameras.bin",
+        "sparse/0/images.bin",
+        "sparse/0/points3D.bin",
+    )
+    expected_sources = {
+        "images/frame.png": source.images[0].source_path,
+        **{
+            f"sparse/0/{item.relative_path}": (source.native_model_root / "0" / item.relative_path)
+            for item in source.native_model_artifact.files
+        },
+    }
+    staged_paths = sorted(
+        path.relative_to(destination).as_posix()
+        for path in destination.rglob("*")
+        if path.is_file()
+    )
+    assert staged_paths == [item.relative_path for item in result.entries]
+    for entry in result.entries:
+        source_bytes = expected_sources[entry.relative_path].read_bytes()
+        assert (destination / entry.relative_path).read_bytes() == source_bytes
+        assert entry.byte_length == len(source_bytes)
+        assert entry.sha256 == _digest(source_bytes)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="already exist"):
+        stage_verified_gsplat_static_appearance_dataset(request, source, dataset_root=destination)
+
+
+def test_gsplat_private_staging_rejects_incomplete_native_colmap_bundle(
+    tmp_path: Path,
+) -> None:
+    request, source = _parts(tmp_path)
+    destination = tmp_path / "never-published"
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="exact COLMAP binary"):
+        stage_verified_gsplat_static_appearance_dataset(request, source, dataset_root=destination)
+    assert not destination.exists()
+    assert not tuple(tmp_path.glob(".wre-gsplat-dataset-*"))
+
+
+def test_gsplat_private_staging_fails_closed_on_changed_original_png(
+    tmp_path: Path,
+) -> None:
+    request, source = _stageable_dataset_fixture(tmp_path)
+    source.images[0].source_path.write_bytes(b"tampered")
+    destination = tmp_path / "never-published"
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="size or SHA-256"):
+        stage_verified_gsplat_static_appearance_dataset(request, source, dataset_root=destination)
+    assert not destination.exists()
+
+
+def test_gsplat_private_staging_rejects_source_overlap_or_destination_symlink(
+    tmp_path: Path,
+) -> None:
+    request, source = _stageable_dataset_fixture(tmp_path)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="overlap"):
+        stage_verified_gsplat_static_appearance_dataset(
+            request, source, dataset_root=source.image_root / "dataset"
+        )
+    alias = tmp_path / "linked-dataset"
+    alias.symlink_to(source.image_root, target_is_directory=True)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="already exist"):
+        stage_verified_gsplat_static_appearance_dataset(request, source, dataset_root=alias)
+
+
+def test_gsplat_private_staging_cleans_unpublished_partial_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    request, source = _stageable_dataset_fixture(tmp_path)
+    original = baseline_module._copy_gsplat_source_exact
+    copies = 0
+
+    def failing_copy(*args: Any, **kwargs: Any) -> Any:
+        nonlocal copies
+        copies += 1
+        if copies == 2:
+            raise OSError("injected copy failure")
+        return original(*args, **kwargs)
+
+    monkeypatch.setattr(baseline_module, "_copy_gsplat_source_exact", failing_copy)
+    destination = tmp_path / "never-published"
+    with pytest.raises(OSError, match="injected copy"):
+        stage_verified_gsplat_static_appearance_dataset(request, source, dataset_root=destination)
+    assert not destination.exists()
+    assert not tuple(tmp_path.glob(".wre-gsplat-dataset-*"))
+    assert source.images[0].source_path.is_file()
+    assert (source.native_model_root / "0" / "images.bin").is_file()
