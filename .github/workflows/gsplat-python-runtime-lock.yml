@@ -54,10 +54,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python -m ensurepip --upgrade
-          python -m pip install --disable-pip-version-check --no-deps --upgrade "pip==$PIP_VERSION"
-          test "$(python -m pip --version | awk '{print $2}')" = "$PIP_VERSION"
-          python --version
+          resolver_venv="$RUNNER_TEMP/gsplat-resolver-venv"
+          uv venv --seed --python "$TARGET_PYTHON_REQUEST" "$resolver_venv"
+          resolver_python="$resolver_venv/bin/python"
+          "$resolver_python" -m pip install --disable-pip-version-check --no-deps --upgrade "pip==$PIP_VERSION"
+          test "$("$resolver_python" -m pip --version | awk '{print $2}')" = "$PIP_VERSION"
+          echo "RESOLVER_PYTHON=$resolver_python" >> "$GITHUB_ENV"
+          "$resolver_python" --version
           ldd --version | head -n 1
 
       - name: Build optional exact constraints from reviewed registry lock
@@ -145,13 +148,13 @@ jobs:
           if test -s "$constraints"; then
             args+=(--constraint "$constraints")
           fi
-          python -m pip install "${args[@]}"
+          "$RESOLVER_PYTHON" -m pip install "${args[@]}"
 
       - name: Canonicalize and validate exact resolver evidence
         shell: bash
         run: |
           set -euo pipefail
-          python - <<'PY'
+          "$RESOLVER_PYTHON" - <<'PY'
           from __future__ import annotations
 
           import json
