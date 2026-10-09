@@ -1080,9 +1080,7 @@ def materialize_verified_gsplat_ply(
             properties[: len(prefix)] != prefix
             or properties[-len(suffix) :] != suffix
             or len(remainder) != _GSPLAT_REFERENCE_SH_REST_FLOATS
-            or remainder != [
-                f"f_rest_{index}" for index in range(_GSPLAT_REFERENCE_SH_REST_FLOATS)
-            ]
+            or remainder != [f"f_rest_{index}" for index in range(_GSPLAT_REFERENCE_SH_REST_FLOATS)]
         ):
             raise GsplatStaticAppearancePreflightError(
                 "gsplat PLY property schema differs from the exact exporter"
