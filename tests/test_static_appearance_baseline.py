@@ -2184,3 +2184,92 @@ def test_gsplat_fused_ssim_source_gate_rejects_symlink_and_wrong_input_type(
     (root / "fused_ssim" / "unexpected_link.py").symlink_to(target)
     with pytest.raises(baseline_module.GsplatStaticAppearancePreflightError):
         baseline_module.verify_gsplat_fused_ssim_reference_sources(root)
+
+
+def _nerfview_source_fixture(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[Path, dict[str, bytes]]:
+    root = tmp_path / "nerfview-source"
+    data = {
+        "README.md": b"synthetic readme",
+        "nerfview/__init__.py": b"from .viewer import Viewer\n",
+        "nerfview/viewer.py": b"class Viewer: pass\n",
+        "pyproject.toml": b"[project]\nlicense = { text = 'MIT' }\n",
+    }
+    for relative, payload in data.items():
+        file = root / relative
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_bytes(payload)
+    monkeypatch.setattr(
+        baseline_module,
+        "_GSPLAT_NERFVIEW_SOURCE_FILES",
+        tuple(
+            (relative, len(payload), baseline_module._git_blob_sha1(payload))
+            for relative, payload in sorted(data.items())
+        ),
+    )
+    return root, data
+
+
+def test_gsplat_nerfview_source_pins_identify_upstream_import_package() -> None:
+    assert baseline_module._GSPLAT_NERFVIEW_REVISION == (
+        "4538024fe0d15fd1a0e4d760f3695fc44ca72787"
+    )
+    pins = baseline_module._GSPLAT_NERFVIEW_SOURCE_FILES
+    assert len(pins) == 7
+    assert tuple(path for path, _size, _sha in pins) == tuple(
+        sorted(path for path, _size, _sha in pins)
+    )
+    assert (
+        "pyproject.toml",
+        849,
+        "4fa1b90b2b1d38e17d464bb7d12cec839e1aa023",
+    ) in pins
+    assert ("nerfview/viewer.py", 10564, "8cf32290872a670a351cf328249782c5cec4b550") in pins
+
+
+def test_gsplat_nerfview_gate_checks_local_bytes_without_import(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, data = _nerfview_source_fixture(tmp_path, monkeypatch)
+    entries = baseline_module.verify_gsplat_nerfview_reference_sources(root)
+    assert tuple(item.relative_path for item in entries) == tuple(sorted(data))
+    assert entries == baseline_module.verify_gsplat_nerfview_reference_sources(root)
+    assert all(
+        item.sha256 == _digest(data[item.relative_path])
+        and item.byte_length == len(data[item.relative_path])
+        for item in entries
+    )
+
+
+def test_gsplat_nerfview_gate_rejects_tampered_and_unreviewed_imports(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, _ = _nerfview_source_fixture(tmp_path, monkeypatch)
+    path = root / "nerfview" / "viewer.py"
+    original = path.read_bytes()
+    path.write_bytes(b"X" + original[1:])
+    with pytest.raises(baseline_module.GsplatStaticAppearancePreflightError):
+        baseline_module.verify_gsplat_nerfview_reference_sources(root)
+    path.write_bytes(original)
+
+    extra = root / "nerfview" / "unreviewed.py"
+    extra.write_text("print('unreviewed')\n")
+    with pytest.raises(baseline_module.GsplatStaticAppearancePreflightError):
+        baseline_module.verify_gsplat_nerfview_reference_sources(root)
+    extra.unlink()
+
+    (root / "pyproject.toml").unlink()
+    with pytest.raises(baseline_module.GsplatStaticAppearancePreflightError):
+        baseline_module.verify_gsplat_nerfview_reference_sources(root)
+
+
+def test_gsplat_nerfview_gate_rejects_symlinks_and_non_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, _ = _nerfview_source_fixture(tmp_path, monkeypatch)
+    with pytest.raises(TypeError):
+        baseline_module.verify_gsplat_nerfview_reference_sources(cast(Path, None))
+    (root / "nerfview" / "unreviewed_link.py").symlink_to(root / "nerfview" / "viewer.py")
+    with pytest.raises(baseline_module.GsplatStaticAppearancePreflightError):
+        baseline_module.verify_gsplat_nerfview_reference_sources(root)
