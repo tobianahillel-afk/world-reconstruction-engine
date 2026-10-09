@@ -107,6 +107,7 @@ from wre.reconstruction.static_appearance_baseline import (
     materialize_verified_gsplat_ply,
     preflight_gsplat_static_appearance_inputs,
     stage_verified_gsplat_static_appearance_dataset,
+    verify_gsplat_static_appearance_staged_dataset,
     verify_gsplat_reference_pycolmap_sources,
     verify_gsplat_static_appearance_matching_capture_metadata,
     verify_gsplat_static_appearance_native_geometry,
@@ -1805,3 +1806,104 @@ def test_gsplat_private_staging_cleans_unpublished_partial_files(
     assert not tuple(tmp_path.glob(".wre-gsplat-dataset-*"))
     assert source.images[0].source_path.is_file()
     assert (source.native_model_root / "0" / "images.bin").is_file()
+
+
+def test_gsplat_staged_dataset_revalidation_matches_exact_source_identity(
+    tmp_path: Path,
+) -> None:
+    request, source = _stageable_dataset_fixture(tmp_path)
+    staged = stage_verified_gsplat_static_appearance_dataset(
+        request, source, dataset_root=tmp_path / "trainer-ready"
+    )
+    assert verify_gsplat_static_appearance_staged_dataset(request, source, staged) == (
+        staged.entries
+    )
+    assert staged.source_geometry_id == request.source_geometry.geometry_solution_id.value
+
+
+@pytest.mark.parametrize(
+    ("relative_path", "reason"),
+    [
+        ("images/frame.png", "audited SHA-256"),
+        ("sparse/0/points3D.bin", "audited SHA-256"),
+    ],
+)
+def test_gsplat_staged_dataset_revalidation_rejects_changed_payload(
+    tmp_path: Path, relative_path: str, reason: str
+) -> None:
+    request, source = _stageable_dataset_fixture(tmp_path)
+    staged = stage_verified_gsplat_static_appearance_dataset(
+        request, source, dataset_root=tmp_path / "trainer-ready"
+    )
+    (staged.dataset_root / relative_path).write_bytes(b"tampered!")
+    with pytest.raises(GsplatStaticAppearancePreflightError, match=reason):
+        verify_gsplat_static_appearance_staged_dataset(request, source, staged)
+
+
+def test_gsplat_staged_dataset_revalidation_rejects_extra_and_missing_files(
+    tmp_path: Path,
+) -> None:
+    request, source = _stageable_dataset_fixture(tmp_path)
+    staged = stage_verified_gsplat_static_appearance_dataset(
+        request, source, dataset_root=tmp_path / "trainer-ready"
+    )
+    extra = staged.dataset_root / "images" / "unexpected.png"
+    extra.write_bytes(b"unexpected")
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="unexpected file"):
+        verify_gsplat_static_appearance_staged_dataset(request, source, staged)
+    extra.unlink()
+    (staged.dataset_root / "sparse" / "0" / "images.bin").unlink()
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="missing"):
+        verify_gsplat_static_appearance_staged_dataset(request, source, staged)
+
+
+def test_gsplat_staged_dataset_revalidation_rejects_symlink_and_extra_directory(
+    tmp_path: Path,
+) -> None:
+    request, source = _stageable_dataset_fixture(tmp_path)
+    staged = stage_verified_gsplat_static_appearance_dataset(
+        request, source, dataset_root=tmp_path / "trainer-ready"
+    )
+    linked = staged.dataset_root / "images" / "foreign.png"
+    linked.symlink_to(source.images[0].source_path)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="symlink"):
+        verify_gsplat_static_appearance_staged_dataset(request, source, staged)
+    linked.unlink()
+    (staged.dataset_root / "unexpected").mkdir()
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="unexpected directory"):
+        verify_gsplat_static_appearance_staged_dataset(request, source, staged)
+
+
+def test_gsplat_staged_dataset_revalidation_rejects_source_and_manifest_drift(
+    tmp_path: Path,
+) -> None:
+    request, source = _stageable_dataset_fixture(tmp_path)
+    staged = stage_verified_gsplat_static_appearance_dataset(
+        request, source, dataset_root=tmp_path / "trainer-ready"
+    )
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="manifest differs"):
+        verify_gsplat_static_appearance_staged_dataset(
+            request, source, replace(staged, entries=staged.entries[:-1])
+        )
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="different source geometry"):
+        verify_gsplat_static_appearance_staged_dataset(
+            request, source, replace(staged, source_geometry_id="foreign")
+        )
+    source.images[0].source_path.write_bytes(b"changed original input")
+    with pytest.raises(GsplatStaticAppearancePreflightError):
+        verify_gsplat_static_appearance_staged_dataset(request, source, staged)
+
+
+def test_gsplat_staged_dataset_revalidation_rejects_root_symlink(
+    tmp_path: Path,
+) -> None:
+    request, source = _stageable_dataset_fixture(tmp_path)
+    staged = stage_verified_gsplat_static_appearance_dataset(
+        request, source, dataset_root=tmp_path / "trainer-ready"
+    )
+    alias = tmp_path / "alias"
+    alias.symlink_to(staged.dataset_root, target_is_directory=True)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="root must not be a symlink"):
+        verify_gsplat_static_appearance_staged_dataset(
+            request, source, replace(staged, dataset_root=alias)
+        )
