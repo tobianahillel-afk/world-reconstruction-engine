@@ -132,11 +132,13 @@ jobs:
           mode = os.environ["WRE_GSPLAT_CROSSREAD_MODE"]
           assert mode in {"native", "legacy"}
           fixture_root = Path(os.environ["GSPLAT_NATIVE_FIXTURE_ROOT"])
+          # pytest abbreviates tmp_path directory names. Search only inside
+          # the unique basetemp for this dedicated real-model fixture.
           models = sorted({
               item.parent
-              for item in fixture_root.glob(
-                  "test_real_colmap_l3_end_to_end_fixture*/sparse/*/cameras.bin"
-              )
+              for item in fixture_root.glob("**/cameras.bin")
+              if (item.parent / "images.bin").is_file()
+              and (item.parent / "points3D.bin").is_file()
           })
           assert len(models) == 1, f"expected one real COLMAP model, got: {models}"
           model = models[0]
