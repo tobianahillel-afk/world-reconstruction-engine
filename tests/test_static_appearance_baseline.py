@@ -877,9 +877,7 @@ def _gsplat_photo_assessment(
         else None
     )
     raw_entries = tuple(
-        item
-        for item in (declaration, exposure_entry, balance_entry)
-        if item is not None
+        item for item in (declaration, exposure_entry, balance_entry) if item is not None
     )
     photo = SourcePhotometryMetadata(
         observation_id=observation,
@@ -1128,15 +1126,18 @@ def test_multiview_capture_gate_accepts_only_matching_resolved_declarations(
     assessments = (
         _gsplat_photo_assessment(source, capture=capture, white_balance=balance),
         _gsplat_photo_assessment(
-            source, observation_id=ObservationId("obs:second"),
-            capture=capture, white_balance=balance,
+            source,
+            observation_id=ObservationId("obs:second"),
+            capture=capture,
+            white_balance=balance,
         ),
     )
     assert verify_gsplat_static_appearance_matching_capture_metadata(
         request, source, assessments
     ) == tuple(item.identity for item in assessments)
     assert request.source_observation_ids == (
-        ObservationId("obs:frame"), ObservationId("obs:second")
+        ObservationId("obs:frame"),
+        ObservationId("obs:second"),
     )
 
 
@@ -1145,18 +1146,18 @@ def test_multiview_capture_gate_rejects_missing_or_partial_declarations(
 ) -> None:
     request, source = _two_view_parts(tmp_path)
     complete = _gsplat_photo_assessment(
-        source, capture=(100.0, 0.01, 4.0, 0.0),
+        source,
+        capture=(100.0, 0.01, 4.0, 0.0),
         white_balance=("manual", 5600.0),
     )
-    missing = _gsplat_photo_assessment(
-        source, observation_id=ObservationId("obs:second")
-    )
+    missing = _gsplat_photo_assessment(source, observation_id=ObservationId("obs:second"))
     with pytest.raises(GsplatStaticAppearancePreflightError, match="incomplete or unresolved"):
         verify_gsplat_static_appearance_matching_capture_metadata(
             request, source, (complete, missing)
         )
     partial = _gsplat_photo_assessment(
-        source, observation_id=ObservationId("obs:second"),
+        source,
+        observation_id=ObservationId("obs:second"),
         capture=(100.0, 0.01, 4.0, 0.0),
     )
     with pytest.raises(GsplatStaticAppearancePreflightError, match="incomplete or unresolved"):
@@ -1184,18 +1185,18 @@ def test_multiview_capture_gate_rejects_any_declared_capture_drift(
     request, source = _two_view_parts(tmp_path)
     assessments = (
         _gsplat_photo_assessment(
-            source, capture=(100.0, 0.01, 4.0, 0.0),
+            source,
+        capture=(100.0, 0.01, 4.0, 0.0),
             white_balance=("manual", 5600.0),
         ),
         _gsplat_photo_assessment(
-            source, observation_id=ObservationId("obs:second"),
+            source,
+        observation_id=ObservationId("obs:second"),
             capture=second_capture, white_balance=second_balance,
         ),
     )
     with pytest.raises(GsplatStaticAppearancePreflightError, match="settings differ"):
-        verify_gsplat_static_appearance_matching_capture_metadata(
-            request, source, assessments
-        )
+        verify_gsplat_static_appearance_matching_capture_metadata(request, source, assessments)
 
 
 def test_multiview_capture_gate_requires_two_exact_distinct_source_observations(
@@ -1203,18 +1204,18 @@ def test_multiview_capture_gate_requires_two_exact_distinct_source_observations(
 ) -> None:
     request, source = _parts(tmp_path)
     one = _gsplat_photo_assessment(
-        source, capture=(100.0, 0.01, 4.0, 0.0),
+        source,
+        capture=(100.0, 0.01, 4.0, 0.0),
         white_balance=("manual", 5600.0),
     )
     with pytest.raises(GsplatStaticAppearancePreflightError, match="at least two"):
-        verify_gsplat_static_appearance_matching_capture_metadata(
-            request, source, (one,)
-        )
+        verify_gsplat_static_appearance_matching_capture_metadata(request, source, (one,))
     second_root = tmp_path / "other"
     second_root.mkdir()
     multi_request, multi_source = _two_view_parts(second_root)
     foreign = _gsplat_photo_assessment(
-        multi_source, observation_id=ObservationId("obs:foreign"),
+        multi_source,
+        observation_id=ObservationId("obs:foreign"),
         capture=(100.0, 0.01, 4.0, 0.0),
         white_balance=("manual", 5600.0),
     )
