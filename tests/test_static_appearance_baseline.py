@@ -1186,13 +1186,14 @@ def test_multiview_capture_gate_rejects_any_declared_capture_drift(
     assessments = (
         _gsplat_photo_assessment(
             source,
-        capture=(100.0, 0.01, 4.0, 0.0),
+            capture=(100.0, 0.01, 4.0, 0.0),
             white_balance=("manual", 5600.0),
         ),
         _gsplat_photo_assessment(
             source,
-        observation_id=ObservationId("obs:second"),
-            capture=second_capture, white_balance=second_balance,
+            observation_id=ObservationId("obs:second"),
+            capture=second_capture,
+            white_balance=second_balance,
         ),
     )
     with pytest.raises(GsplatStaticAppearancePreflightError, match="settings differ"):
