@@ -59,6 +59,11 @@ GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION = "937e29912570c372bed6747a5c9bf85fed87
 GSPLAT_STATIC_APPEARANCE_TRAINER_GIT_BLOB = "6a30be737b5c9af53a140f64faf499d8d4d0933f"
 GSPLAT_STATIC_APPEARANCE_SOURCE_TREE = "90c3f0b2352e6d2725bcba1ef0407168f922c0fa"
 GSPLAT_STATIC_APPEARANCE_REPRESENTATION = "gaussian.splat.ply"
+# The exact simple_trainer initializes SH of degree 3 by default:
+# shN has ((degree + 1) ** 2 - 1) basis terms, each with 3 RGB coefficients.
+# This is a payload-layout invariant, not evidence of appearance quality.
+_GSPLAT_REFERENCE_SH_DEGREE = 3
+_GSPLAT_REFERENCE_SH_REST_FLOATS = ((_GSPLAT_REFERENCE_SH_DEGREE + 1) ** 2 - 1) * 3
 GSPLAT_REFERENCE_PYCOLMAP_REVISION = "cc7ea4b7301720ac29287dbe450952511b32125e"
 
 # This is the pure-Python SceneManager reader pinned by the exact upstream
@@ -921,6 +926,7 @@ class GsplatStaticAppearanceTrainingProfile:
             "pose_noise": 0.0,
             "pose_opt": False,
             "random_bkgd": False,
+            "sh_degree": _GSPLAT_REFERENCE_SH_DEGREE,
             "save_ply": True,
             "save_steps": [],
             "steps_scaler": 1.0,
@@ -975,6 +981,8 @@ def materialize_verified_gsplat_ply(
 
     The input is a private, already-produced training workspace. This function
     cannot claim a training run, check native cameras, or approve radiometry.
+    The reviewed trainer has SH degree 3 (45 f_rest values); truncated or
+    differently configured SH payloads are not accepted as this profile.
     It only validates the exact upstream PLY layout and binds its real bytes to
     the canonical WRE appearance artifact materialization contract.
     """
@@ -1071,8 +1079,10 @@ def materialize_verified_gsplat_ply(
         if (
             properties[: len(prefix)] != prefix
             or properties[-len(suffix) :] != suffix
-            or len(remainder) % 3 != 0
-            or remainder != [f"f_rest_{index}" for index in range(len(remainder))]
+            or len(remainder) != _GSPLAT_REFERENCE_SH_REST_FLOATS
+            or remainder != [
+                f"f_rest_{index}" for index in range(_GSPLAT_REFERENCE_SH_REST_FLOATS)
+            ]
         ):
             raise GsplatStaticAppearancePreflightError(
                 "gsplat PLY property schema differs from the exact exporter"
