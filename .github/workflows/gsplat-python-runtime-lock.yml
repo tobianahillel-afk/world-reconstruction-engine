@@ -4,13 +4,6 @@ name: gsplat-python-runtime-lock
 # create a training environment, or claim GPU execution support.
 
 on:
-  # Bootstrap only: remove after the first reviewed exact package closure is captured.
-  push:
-    branches:
-      - "feature/v2l18-3-gsplat-python-runtime-lock"
-    paths:
-      - ".github/workflows/gsplat-python-runtime-lock.yml"
-      - "registry/dependencies.yaml"
   pull_request:
     paths:
       - ".github/workflows/gsplat-python-runtime-lock.yml"
