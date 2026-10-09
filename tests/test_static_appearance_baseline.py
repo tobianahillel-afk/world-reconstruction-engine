@@ -99,6 +99,7 @@ from wre.reconstruction.static_appearance_baseline import (
     GSPLAT_STATIC_APPEARANCE_REPRESENTATION,
     GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION,
     GSPLAT_STATIC_APPEARANCE_SOURCE_TREE,
+    GSPLAT_REFERENCE_PYCOLMAP_REVISION,
     GsplatStaticAppearancePreflightError,
     GsplatStaticAppearancePreflightSource,
     GsplatStaticAppearanceTrainingProfile,
@@ -107,6 +108,7 @@ from wre.reconstruction.static_appearance_baseline import (
     verify_gsplat_static_appearance_matching_capture_metadata,
     verify_gsplat_static_appearance_native_geometry,
     verify_gsplat_static_appearance_reference_sources,
+    verify_gsplat_reference_pycolmap_sources,
     verify_gsplat_static_appearance_shared_scene_tracks,
     verify_gsplat_static_appearance_source_photometry,
 )
@@ -222,6 +224,100 @@ def test_gsplat_reference_source_gate_rejects_symlink_directory_and_file(
     (root / "examples").symlink_to(root / "real-examples", target_is_directory=True)
     with pytest.raises(GsplatStaticAppearancePreflightError, match="symlink"):
         verify_gsplat_static_appearance_reference_sources(root)
+
+
+def _reference_pycolmap_fixture(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[Path, dict[str, bytes]]:
+    root = tmp_path / "reader-fork"
+    data = {
+        "LICENSE.txt": b"MIT synthetic fixture",
+        "pyproject.toml": b"[project]\\nname = 'pycolmap'\\n",
+        "pycolmap/__init__.py": b"from .scene_manager import SceneManager\\n",
+        "pycolmap/scene_manager.py": b"class SceneManager:\\n    pass\\n",
+    }
+    for relative, payload in data.items():
+        file = root / relative
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_bytes(payload)
+    monkeypatch.setattr(
+        baseline_module,
+        "_GSPLAT_REFERENCE_PYCOLMAP_FILES",
+        tuple(
+            (path, len(data[path]), baseline_module._git_blob_sha1(data[path]))
+            for path in sorted(data)
+        ),
+    )
+    return root, data
+
+
+def test_gsplat_reference_reader_has_exact_pinned_source_identity() -> None:
+    assert GSPLAT_REFERENCE_PYCOLMAP_REVISION == (
+        "cc7ea4b7301720ac29287dbe450952511b32125e"
+    )
+    pins = baseline_module._GSPLAT_REFERENCE_PYCOLMAP_FILES
+    assert len(pins) == 9
+    assert tuple(path for path, _size, _sha in pins) == tuple(
+        sorted(path for path, _size, _sha in pins)
+    )
+    assert (
+        "LICENSE.txt",
+        1084,
+        "5156d3d49e0c312561c59680658b6261f635abe3",
+    ) in pins
+    assert (
+        "pycolmap/scene_manager.py",
+        26996,
+        "352f051f71aad8bbad70c0b6cc63b83d3ab90ce5",
+    ) in pins
+
+
+def test_gsplat_reference_reader_checks_exact_files_without_import(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, data = _reference_pycolmap_fixture(tmp_path, monkeypatch)
+    entries = verify_gsplat_reference_pycolmap_sources(root)
+    assert tuple(item.relative_path for item in entries) == tuple(sorted(data))
+    for item in entries:
+        assert item.byte_length == len(data[item.relative_path])
+        assert item.sha256 == _digest(data[item.relative_path])
+    assert verify_gsplat_reference_pycolmap_sources(root) == entries
+
+
+def test_gsplat_reference_reader_rejects_tampered_and_missing_source(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, original = _reference_pycolmap_fixture(tmp_path, monkeypatch)
+    path = root / "pycolmap/scene_manager.py"
+    path.write_bytes(b"X" + original["pycolmap/scene_manager.py"][1:])
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="Git blob differs"):
+        verify_gsplat_reference_pycolmap_sources(root)
+    path.write_bytes(original["pycolmap/scene_manager.py"])
+    (root / "LICENSE.txt").unlink()
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="missing"):
+        verify_gsplat_reference_pycolmap_sources(root)
+
+
+def test_gsplat_reference_reader_rejects_foreign_python_and_symlinks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, data = _reference_pycolmap_fixture(tmp_path, monkeypatch)
+    extra = root / "pycolmap/foreign.py"
+    extra.write_text("def unreviewed(): pass\\n")
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="closure differs"):
+        verify_gsplat_reference_pycolmap_sources(root)
+    extra.unlink()
+    path = root / "pycolmap/scene_manager.py"
+    path.unlink()
+    path.symlink_to(root / "pycolmap/__init__.py")
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="symlink"):
+        verify_gsplat_reference_pycolmap_sources(root)
+    path.unlink()
+    path.write_bytes(data["pycolmap/scene_manager.py"])
+    alias = tmp_path / "reader-symlink"
+    alias.symlink_to(root, target_is_directory=True)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="symlink"):
+        verify_gsplat_reference_pycolmap_sources(alias)
 
 
 def _chunk(kind: bytes, payload: bytes) -> bytes:
