@@ -4,6 +4,14 @@ name: gsplat-python-runtime-lock
 # create a training environment, or claim GPU execution support.
 
 on:
+  # Bootstrap only for the native-build qualification branch; remove after the reviewed
+  # toolchain/build evidence is recorded.
+  push:
+    branches:
+      - "feature/v2l18-3-gsplat-native-build-preflight"
+    paths:
+      - ".github/workflows/gsplat-python-runtime-lock.yml"
+      - "registry/dependencies.yaml"
   pull_request:
     paths:
       - ".github/workflows/gsplat-python-runtime-lock.yml"
@@ -171,24 +179,24 @@ jobs:
               "torch==2.4.0+cu124",
               "torchvision==0.19.0+cu124",
               "numpy==1.26.4",
-              "scipy",
-              "opencv-python",
-              "Pillow",
-              "imageio",
-              "scikit-learn",
-              "tqdm",
-              "tyro>=0.8.8",
-              "viser>=0.2.1",
-              "PyYAML",
-              "matplotlib",
-              "tensorboard",
-              "torchmetrics[image]",
-              "ninja",
-              "jaxtyping",
-              "rich>=12",
-              "typing-extensions",
-              "setuptools>=68.0.0",
-              "wheel",
+              "scipy==1.15.3",
+              "opencv-python==4.11.0.86",
+              "Pillow==12.3.0",
+              "imageio==2.38.0",
+              "scikit-learn==1.7.2",
+              "tqdm==4.70.1",
+              "tyro==1.0.16",
+              "viser==1.1.1",
+              "PyYAML==6.0.3",
+              "matplotlib==3.10.9",
+              "tensorboard==2.21.0",
+              "torchmetrics[image]==1.9.0",
+              "ninja==1.13.2",
+              "jaxtyping==0.3.7",
+              "rich==14.3.4",
+              "typing-extensions==4.16.0",
+              "setuptools==84.0.0",
+              "wheel==0.48.0",
           ]
           forbidden = {
               "fused-bilagrid",
@@ -386,5 +394,355 @@ jobs:
         with:
           name: v2l18-3-gsplat-python-runtime-lock
           path: ${{ runner.temp }}/gsplat-python-runtime-lock.json
+          if-no-files-found: error
+          retention-days: 30
+
+  native-build-preflight:
+    name: ubuntu22-py310-torch24-cu124-native-build-no-gpu
+    needs: resolve
+    runs-on: ubuntu-22.04
+    timeout-minutes: 45
+    env:
+      TARGET_PYTHON_REQUEST: "3.10.21"
+      PIP_VERSION: "25.3"
+      PYTORCH_INDEX: https://download.pytorch.org/whl/cu124
+      GSPLAT_REPOSITORY: https://github.com/nerfstudio-project/gsplat.git
+      GSPLAT_REVISION: 937e29912570c372bed6747a5c9bf85fed877bae
+      GSPLAT_TREE: 90c3f0b2352e6d2725bcba1ef0407168f922c0fa
+      GSPLAT_GITMODULES_BLOB: faa3f17a4f65476094fa1551a48530564dfb12d1
+      GLM_REVISION: 33b4a621a697a305bc3a7610d290677b96beb181
+      GLM_LICENSE_BLOB: 779c32fb9afef1180798d46f08b4373e427ac693
+      FUSED_SSIM_REPOSITORY: https://github.com/rahul-goel/fused-ssim.git
+      FUSED_SSIM_REVISION: 328dc9836f513d00c4b5bc38fe30478b4435cbb5
+      FUSED_SSIM_TREE: ac5f1d8fe5d519f9c44b220d235bf1f198463da7
+      CUDA_NVCC_PACKAGE: nvidia-cuda-nvcc-cu12
+      CUDA_NVCC_VERSION: "12.4.99"
+      CUDA_CCCL_PACKAGE: nvidia-cuda-cccl-cu12
+      CUDA_CCCL_VERSION: "12.4.99"
+      TORCH_CUDA_ARCH_LIST: "7.5;8.0;8.9"
+      MAX_JOBS: "2"
+
+    steps:
+      - name: Checkout WRE
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install exact uv and Python
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.13"
+          python-version: "3.10.21"
+          enable-cache: false
+
+      - name: Prepare exact locked external build environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          venv="$RUNNER_TEMP/gsplat-native-build-venv"
+          uv venv --seed --python "$TARGET_PYTHON_REQUEST" "$venv"
+          python_bin="$venv/bin/python"
+          "$python_bin" -m pip install --disable-pip-version-check --no-deps --upgrade "pip==$PIP_VERSION"
+          test "$("$python_bin" -m pip --version | awk '{print $2}')" = "$PIP_VERSION"
+
+          constraints="$RUNNER_TEMP/gsplat-runtime-constraints.txt"
+          uv run --no-project --with "pyyaml==6.0.2" python - <<'PY' > "$constraints"
+          from __future__ import annotations
+
+          from pathlib import Path
+          import yaml
+
+          root = yaml.safe_load(Path("registry/dependencies.yaml").read_text(encoding="utf-8"))
+          packages = root["dependencies"]["gsplat_static_appearance"]["runtime_python_lock"]["packages"]
+          seen = set()
+          for package in sorted(packages, key=lambda value: value["name"].lower()):
+              name = str(package["name"])
+              canonical = name.lower().replace("_", "-")
+              if canonical in seen:
+                  raise SystemExit(f"duplicate runtime package {name}")
+              seen.add(canonical)
+              print(f"{name}=={package['version']}")
+          PY
+          test "$(wc -l < "$constraints")" -eq 75
+
+          "$python_bin" -m pip install             --disable-pip-version-check             --extra-index-url "$PYTORCH_INDEX"             --constraint "$constraints"             "torch==2.4.0+cu124"             "torchvision==0.19.0+cu124"             "numpy==1.26.4"             "scipy==1.15.3"             "opencv-python==4.11.0.86"             "Pillow==12.3.0"             "imageio==2.38.0"             "scikit-learn==1.7.2"             "tqdm==4.70.1"             "tyro==1.0.16"             "viser==1.1.1"             "PyYAML==6.0.3"             "matplotlib==3.10.9"             "tensorboard==2.21.0"             "torchmetrics[image]==1.9.0"             "ninja==1.13.2"             "jaxtyping==0.3.7"             "rich==14.3.4"             "typing-extensions==4.16.0"             "setuptools==84.0.0"             "wheel==0.48.0"
+
+          toolchain_report="$RUNNER_TEMP/gsplat-cuda-toolchain-pip-report.json"
+          "$python_bin" -m pip install             --disable-pip-version-check             --report "$toolchain_report"             "$CUDA_NVCC_PACKAGE==$CUDA_NVCC_VERSION"             "$CUDA_CCCL_PACKAGE==$CUDA_CCCL_VERSION"
+
+          {
+            echo "GSPLAT_BUILD_PYTHON=$python_bin"
+            echo "GSPLAT_RUNTIME_CONSTRAINTS=$constraints"
+            echo "GSPLAT_TOOLCHAIN_REPORT=$toolchain_report"
+          } >> "$GITHUB_ENV"
+
+      - name: Build synthetic exact CUDA 12.4 toolkit root
+        shell: bash
+        run: |
+          set -euo pipefail
+          cuda_home="$RUNNER_TEMP/cuda-12.4.99"
+          site_root="$("$GSPLAT_BUILD_PYTHON" - <<'PY'
+          import site
+          roots = site.getsitepackages()
+          if len(roots) != 1:
+              raise SystemExit(f"unexpected site-packages roots: {roots}")
+          print(roots[0])
+          PY
+          )"
+
+          nvcc_root="$site_root/nvidia/cuda_nvcc"
+          runtime_root="$site_root/nvidia/cuda_runtime"
+          cccl_root="$site_root/nvidia/cuda_cccl"
+
+          echo "site_root=$site_root"
+          find "$site_root/nvidia" -maxdepth 3 -type d -print | sort
+
+          test -x "$nvcc_root/bin/nvcc"
+          test -d "$runtime_root/include"
+          test -d "$runtime_root/lib"
+          test -d "$cccl_root/include"
+
+          rm -rf "$cuda_home"
+          mkdir -p "$cuda_home/bin" "$cuda_home/include" "$cuda_home/lib64"
+
+          cp -a "$nvcc_root/bin/." "$cuda_home/bin/"
+          if test -d "$nvcc_root/nvvm"; then
+            cp -a "$nvcc_root/nvvm" "$cuda_home/"
+          fi
+          if test -d "$nvcc_root/include"; then
+            cp -a "$nvcc_root/include/." "$cuda_home/include/"
+          fi
+          cp -a "$runtime_root/include/." "$cuda_home/include/"
+          cp -a "$cccl_root/include/." "$cuda_home/include/"
+          cp -a "$runtime_root/lib/." "$cuda_home/lib64/"
+
+          printf 'CUDA Version 12.4.99\n' > "$cuda_home/version.txt"
+          test -x "$cuda_home/bin/nvcc"
+          test -f "$cuda_home/include/cuda_runtime.h"
+          test -e "$cuda_home/lib64/libcudart.so" -o -e "$cuda_home/lib64/libcudart.so.12"
+
+          {
+            echo "CUDA_HOME=$cuda_home"
+            echo "CC=/usr/bin/gcc-11"
+            echo "CXX=/usr/bin/g++-11"
+            echo "PATH=$cuda_home/bin:$PATH"
+            echo "LD_LIBRARY_PATH=$cuda_home/lib64:$site_root/torch/lib:${LD_LIBRARY_PATH:-}"
+          } >> "$GITHUB_ENV"
+
+          "$cuda_home/bin/nvcc" --version
+          /usr/bin/gcc-11 --version | head -n 1
+          /usr/bin/g++-11 --version | head -n 1
+          dpkg-query -W -f='gcc-11=${Version}\ng++-11=${Version}\n' gcc-11 g++-11
+
+      - name: Fetch exact native build sources and gsplat GLM submodule
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_root="$RUNNER_TEMP/gsplat-native-sources"
+          rm -rf "$source_root"
+          mkdir -p "$source_root"
+
+          git init -q "$source_root/gsplat"
+          git -C "$source_root/gsplat" remote add origin "$GSPLAT_REPOSITORY"
+          git -C "$source_root/gsplat" fetch --quiet --depth=1 origin "$GSPLAT_REVISION"
+          git -C "$source_root/gsplat" checkout --quiet --detach FETCH_HEAD
+          test "$(git -C "$source_root/gsplat" rev-parse HEAD)" = "$GSPLAT_REVISION"
+          test "$(git -C "$source_root/gsplat" rev-parse HEAD^{tree})" = "$GSPLAT_TREE"
+          test "$(git -C "$source_root/gsplat" rev-parse HEAD:.gitmodules)" = "$GSPLAT_GITMODULES_BLOB"
+          git -C "$source_root/gsplat" submodule update --init --depth=1 --recursive
+          glm="$source_root/gsplat/gsplat/cuda/csrc/third_party/glm"
+          test "$(git -C "$glm" rev-parse HEAD)" = "$GLM_REVISION"
+          test "$(git -C "$glm" rev-parse HEAD:copying.txt)" = "$GLM_LICENSE_BLOB"
+
+          git init -q "$source_root/fused-ssim"
+          git -C "$source_root/fused-ssim" remote add origin "$FUSED_SSIM_REPOSITORY"
+          git -C "$source_root/fused-ssim" fetch --quiet --depth=1 origin "$FUSED_SSIM_REVISION"
+          git -C "$source_root/fused-ssim" checkout --quiet --detach FETCH_HEAD
+          test "$(git -C "$source_root/fused-ssim" rev-parse HEAD)" = "$FUSED_SSIM_REVISION"
+          test "$(git -C "$source_root/fused-ssim" rev-parse HEAD^{tree})" = "$FUSED_SSIM_TREE"
+
+          echo "GSPLAT_SOURCE_ROOT=$source_root/gsplat" >> "$GITHUB_ENV"
+          echo "FUSED_SSIM_SOURCE_ROOT=$source_root/fused-ssim" >> "$GITHUB_ENV"
+
+      - name: Verify build environment before native compilation
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$GSPLAT_BUILD_PYTHON" - <<'PY'
+          import json
+          import os
+          import torch
+
+          evidence = {
+              "python": os.sys.version.split()[0],
+              "torch": torch.__version__,
+              "torch_cuda": torch.version.cuda,
+              "cuda_available": torch.cuda.is_available(),
+              "cxx11_abi": bool(torch._C._GLIBCXX_USE_CXX11_ABI),
+              "torch_cuda_arch_list": os.environ["TORCH_CUDA_ARCH_LIST"],
+          }
+          assert evidence["python"] == "3.10.21", evidence
+          assert evidence["torch"] == "2.4.0+cu124", evidence
+          assert evidence["torch_cuda"] == "12.4", evidence
+          assert evidence["cuda_available"] is False, evidence
+          print(json.dumps(evidence, sort_keys=True))
+          PY
+
+      - name: Build and install exact gsplat and fused-ssim CUDA extensions without GPU
+        shell: bash
+        run: |
+          set -euo pipefail
+          export CUDA_HOME CC CXX TORCH_CUDA_ARCH_LIST MAX_JOBS
+          export PATH="$CUDA_HOME/bin:$PATH"
+          export LD_LIBRARY_PATH="$CUDA_HOME/lib64:$(dirname "$("$GSPLAT_BUILD_PYTHON" - <<'PY'
+          import torch
+          print(torch.__file__)
+          PY
+          )")/lib:${LD_LIBRARY_PATH:-}"
+
+          "$GSPLAT_BUILD_PYTHON" -m pip install             --disable-pip-version-check             --no-deps             --no-build-isolation             --verbose             "$GSPLAT_SOURCE_ROOT"
+
+          "$GSPLAT_BUILD_PYTHON" -m pip install             --disable-pip-version-check             --no-deps             --no-build-isolation             --verbose             "$FUSED_SSIM_SOURCE_ROOT"
+
+      - name: Import compiled extensions and retain exact native-build evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$RUNNER_TEMP/gsplat-native-build-preflight.json"
+          EVIDENCE="$evidence" "$GSPLAT_BUILD_PYTHON" - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import os
+          import platform
+          import subprocess
+          from pathlib import Path
+
+          import torch
+          import gsplat
+          import gsplat.csrc as gsplat_csrc
+          import fused_ssim
+          import fused_ssim_cuda
+
+          def sha(path: Path) -> str:
+              digest = hashlib.sha256()
+              with path.open("rb") as stream:
+                  while chunk := stream.read(1024 * 1024):
+                      digest.update(chunk)
+              return digest.hexdigest()
+
+          def output(*args: str) -> str:
+              return subprocess.check_output(args, text=True).strip()
+
+          gsplat_so = Path(gsplat_csrc.__file__).resolve()
+          fused_so = Path(fused_ssim_cuda.__file__).resolve()
+          for path in (gsplat_so, fused_so):
+              if not path.is_file() or path.suffix != ".so":
+                  raise SystemExit(f"compiled extension missing: {path}")
+
+          nvcc = output(str(Path(os.environ["CUDA_HOME"]) / "bin" / "nvcc"), "--version")
+          gcc_version = output("/usr/bin/gcc-11", "-dumpfullversion", "-dumpversion")
+          gxx_version = output("/usr/bin/g++-11", "-dumpfullversion", "-dumpversion")
+          dpkg = output(
+              "dpkg-query",
+              "-W",
+              "-f=gcc-11=${Version}\ng++-11=${Version}\n",
+              "gcc-11",
+              "g++-11",
+          )
+
+          report = json.loads(Path(os.environ["GSPLAT_TOOLCHAIN_REPORT"]).read_text(encoding="utf-8"))
+          toolchain_packages = []
+          for item in report.get("install", []):
+              metadata = item["metadata"]
+              download = item["download_info"]
+              hashes = (download.get("archive_info") or {}).get("hashes") or {}
+              sha256 = str(hashes.get("sha256") or "")
+              if len(sha256) != 64:
+                  raise SystemExit(f"toolchain package lacks SHA-256: {metadata.get('name')}")
+              toolchain_packages.append(
+                  {
+                      "name": metadata["name"],
+                      "version": metadata["version"],
+                      "url": download["url"],
+                      "sha256": sha256,
+                      "license": metadata.get("license"),
+                      "license_expression": metadata.get("license_expression"),
+                      "license_classifiers": sorted(
+                          value
+                          for value in metadata.get("classifier", [])
+                          if str(value).startswith("License ::")
+                      ),
+                  }
+              )
+          toolchain_packages.sort(key=lambda item: (item["name"].lower(), item["version"]))
+
+          document = {
+              "schema_version": 1,
+              "evidence_kind": "gsplat_native_extension_cpu_hosted_build_preflight",
+              "runtime_execution_evidence": True,
+              "native_extension_build_evidence": True,
+              "native_extension_import_evidence": True,
+              "gpu_execution_evidence": False,
+              "training_execution_evidence": False,
+              "hardware_gpu_present": False,
+              "environment": {
+                  "runner": "ubuntu-22.04",
+                  "machine": platform.machine(),
+                  "python": platform.python_version(),
+                  "torch": torch.__version__,
+                  "torch_cuda": torch.version.cuda,
+                  "torch_cuda_available": torch.cuda.is_available(),
+                  "torch_cxx11_abi": bool(torch._C._GLIBCXX_USE_CXX11_ABI),
+                  "cuda_home": os.environ["CUDA_HOME"],
+                  "nvcc_version_output": nvcc,
+                  "gcc_version": gcc_version,
+                  "gxx_version": gxx_version,
+                  "dpkg_compiler_versions": dpkg.splitlines(),
+                  "torch_cuda_arch_list": os.environ["TORCH_CUDA_ARCH_LIST"],
+                  "max_jobs": int(os.environ["MAX_JOBS"]),
+              },
+              "sources": {
+                  "gsplat_revision": os.environ["GSPLAT_REVISION"],
+                  "gsplat_tree": os.environ["GSPLAT_TREE"],
+                  "glm_revision": os.environ["GLM_REVISION"],
+                  "glm_license_blob": os.environ["GLM_LICENSE_BLOB"],
+                  "fused_ssim_revision": os.environ["FUSED_SSIM_REVISION"],
+                  "fused_ssim_tree": os.environ["FUSED_SSIM_TREE"],
+              },
+              "build_toolchain_packages": toolchain_packages,
+              "extensions": [
+                  {
+                      "name": "gsplat.csrc",
+                      "filename": gsplat_so.name,
+                      "sha256": sha(gsplat_so),
+                      "byte_length": gsplat_so.stat().st_size,
+                  },
+                  {
+                      "name": "fused_ssim_cuda",
+                      "filename": fused_so.name,
+                      "sha256": sha(fused_so),
+                      "byte_length": fused_so.stat().st_size,
+                  },
+              ],
+          }
+          assert document["environment"]["python"] == "3.10.21"
+          assert document["environment"]["torch"] == "2.4.0+cu124"
+          assert document["environment"]["torch_cuda"] == "12.4"
+          assert document["environment"]["torch_cuda_available"] is False
+          Path(os.environ["EVIDENCE"]).write_text(
+              json.dumps(document, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print(json.dumps(document, sort_keys=True))
+          PY
+          echo "GSPLAT_NATIVE_BUILD_EVIDENCE=$evidence" >> "$GITHUB_ENV"
+
+      - name: Retain exact native-build preflight evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v2l18-3-gsplat-native-build-preflight
+          path: ${{ env.GSPLAT_NATIVE_BUILD_EVIDENCE }}
           if-no-files-found: error
           retention-days: 30
