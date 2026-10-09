@@ -1,0 +1,358 @@
+name: gsplat-python-runtime-lock
+
+# Resolution evidence only. This workflow does not import gsplat, build CUDA extensions,
+# create a training environment, or claim GPU execution support.
+
+on:
+  # Bootstrap only: remove after the first reviewed exact package closure is captured.
+  push:
+    branches:
+      - "feature/v2l18-3-gsplat-python-runtime-lock"
+    paths:
+      - ".github/workflows/gsplat-python-runtime-lock.yml"
+      - "registry/dependencies.yaml"
+  pull_request:
+    paths:
+      - ".github/workflows/gsplat-python-runtime-lock.yml"
+      - "registry/dependencies.yaml"
+      - "registry/work-items/v2m3.yaml"
+      - "PROJECT_STATE.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  resolve:
+    name: linux-x86_64-py310-torch24-cu124-resolution-only
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      LOCK_KEY: runtime_python_lock
+      TARGET_PYTHON_REQUEST: "3.10"
+      PIP_VERSION: "25.3"
+      PYTORCH_INDEX: https://download.pytorch.org/whl/cu124
+
+    steps:
+      - name: Checkout WRE
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install exact uv resolver bootstrap
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.13"
+          python-version: "3.10"
+          enable-cache: false
+
+      - name: Prepare exact pip resolver
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m ensurepip --upgrade
+          python -m pip install --disable-pip-version-check --no-deps --upgrade "pip==$PIP_VERSION"
+          test "$(python -m pip --version | awk '{print $2}')" = "$PIP_VERSION"
+          python --version
+          ldd --version | head -n 1
+
+      - name: Build optional exact constraints from reviewed registry lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          constraints="$RUNNER_TEMP/gsplat-exact-constraints.txt"
+          : > "$constraints"
+          uv run --no-project --with "pyyaml==6.0.2" python - <<'PY'
+          from __future__ import annotations
+
+          import os
+          import re
+          from pathlib import Path
+
+          import yaml
+
+          path = Path("registry/dependencies.yaml")
+          root = yaml.safe_load(path.read_text(encoding="utf-8"))
+          entry = root["dependencies"]["gsplat_static_appearance"]
+          lock = entry.get(os.environ["LOCK_KEY"])
+          if lock is None:
+              print("No committed gsplat runtime Python lock yet; bootstrap resolution is allowed.")
+              raise SystemExit(0)
+
+          packages = lock.get("packages")
+          if not isinstance(packages, list) or not packages:
+              raise SystemExit("committed gsplat runtime lock has no package list")
+          rows = []
+          seen = set()
+          for package in packages:
+              name = package["name"]
+              version = package["version"]
+              if not re.fullmatch(r"[A-Za-z0-9_.-]+", name):
+                  raise SystemExit(f"unsafe package name in runtime lock: {name!r}")
+              if not isinstance(version, str) or not version or any(ch.isspace() for ch in version):
+                  raise SystemExit(f"unsafe package version in runtime lock: {name}={version!r}")
+              canonical = name.lower().replace("_", "-")
+              if canonical in seen:
+                  raise SystemExit(f"duplicate package in runtime lock: {name}")
+              seen.add(canonical)
+              rows.append(f"{name}=={version}")
+          Path(os.environ["RUNNER_TEMP"], "gsplat-exact-constraints.txt").write_text(
+              "\n".join(sorted(rows, key=str.lower)) + "\n",
+              encoding="utf-8",
+          )
+          print(f"Loaded {len(rows)} exact reviewed package constraints.")
+          PY
+          cat "$constraints"
+
+      - name: Resolve external trainer Python wheel closure without installing
+        shell: bash
+        run: |
+          set -euo pipefail
+          report="$RUNNER_TEMP/gsplat-pip-report.json"
+          constraints="$RUNNER_TEMP/gsplat-exact-constraints.txt"
+          args=(
+            --dry-run
+            --ignore-installed
+            --only-binary=:all:
+            --report "$report"
+            --extra-index-url "$PYTORCH_INDEX"
+            "torch==2.4.0+cu124"
+            "torchvision==0.19.0+cu124"
+            "numpy==1.26.4"
+            "scipy"
+            "opencv-python"
+            "Pillow"
+            "imageio"
+            "scikit-learn"
+            "tqdm"
+            "tyro>=0.8.8"
+            "viser>=0.2.1"
+            "PyYAML"
+            "matplotlib"
+            "tensorboard"
+            "torchmetrics[image]"
+            "ninja"
+            "jaxtyping"
+            "rich>=12"
+            "typing-extensions"
+            "setuptools>=68.0.0"
+            "wheel"
+          )
+          if test -s "$constraints"; then
+            args+=(--constraint "$constraints")
+          fi
+          python -m pip install "${args[@]}"
+
+      - name: Canonicalize and validate exact resolver evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          import platform
+          import re
+          import subprocess
+          from pathlib import Path
+          from urllib.parse import unquote, urlparse
+
+          report = json.loads(
+              (Path(os.environ["RUNNER_TEMP"]) / "gsplat-pip-report.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          generated = Path(os.environ["RUNNER_TEMP"]) / "gsplat-python-runtime-lock.json"
+
+          requested_specs = [
+              "torch==2.4.0+cu124",
+              "torchvision==0.19.0+cu124",
+              "numpy==1.26.4",
+              "scipy",
+              "opencv-python",
+              "Pillow",
+              "imageio",
+              "scikit-learn",
+              "tqdm",
+              "tyro>=0.8.8",
+              "viser>=0.2.1",
+              "PyYAML",
+              "matplotlib",
+              "tensorboard",
+              "torchmetrics[image]",
+              "ninja",
+              "jaxtyping",
+              "rich>=12",
+              "typing-extensions",
+              "setuptools>=68.0.0",
+              "wheel",
+          ]
+          forbidden = {
+              "fused-bilagrid",
+              "imageio-ffmpeg",
+              "plas",
+              "splines",
+              "tensorly",
+              "torchpq",
+          }
+
+          packages = []
+          seen = set()
+          for item in report["install"]:
+              metadata = item["metadata"]
+              download = item["download_info"]
+              archive = download.get("archive_info") or {}
+              hashes = archive.get("hashes") or {}
+              name = str(metadata["name"]).strip()
+              version = str(metadata["version"]).strip()
+              canonical = name.lower().replace("_", "-")
+              if canonical in seen:
+                  raise SystemExit(f"duplicate resolved package: {name}")
+              seen.add(canonical)
+              sha256 = str(hashes.get("sha256") or "").strip()
+              if not re.fullmatch(r"[0-9a-f]{64}", sha256):
+                  raise SystemExit(f"{name}=={version}: missing exact SHA-256")
+              url = str(download["url"])
+              parsed = urlparse(url)
+              if parsed.scheme != "https":
+                  raise SystemExit(f"{name}=={version}: non-HTTPS artifact URL")
+              filename = unquote(parsed.path.rsplit("/", 1)[-1])
+              if not filename:
+                  raise SystemExit(f"{name}=={version}: artifact filename is empty")
+
+              classifiers = sorted(
+                  str(value)
+                  for value in metadata.get("classifier", [])
+                  if str(value).startswith("License ::")
+              )
+              requires_dist = sorted(str(value) for value in metadata.get("requires_dist", []))
+              packages.append(
+                  {
+                      "name": name,
+                      "version": version,
+                      "direct": bool(item.get("is_direct")),
+                      "requested": bool(item.get("requested")),
+                      "filename": filename,
+                      "url": url,
+                      "sha256": sha256,
+                      "requires_python": metadata.get("requires_python"),
+                      "requires_dist": requires_dist,
+                      "license": metadata.get("license"),
+                      "license_expression": metadata.get("license_expression"),
+                      "license_classifiers": classifiers,
+                  }
+              )
+
+          packages.sort(key=lambda value: (value["name"].lower(), value["version"], value["filename"]))
+          by_name = {item["name"].lower().replace("_", "-"): item for item in packages}
+          if len(by_name) != len(packages):
+              raise SystemExit("resolved package names are not unique")
+          if forbidden & set(by_name):
+              raise SystemExit(f"forbidden unused runtime packages resolved: {sorted(forbidden & set(by_name))}")
+
+          assert by_name["torch"]["version"] == "2.4.0+cu124", by_name["torch"]
+          assert by_name["torchvision"]["version"] == "0.19.0+cu124", by_name["torchvision"]
+          assert by_name["numpy"]["version"] == "1.26.4", by_name["numpy"]
+          assert "scipy" in by_name
+          assert "opencv-python" in by_name
+          assert "scikit-learn" in by_name
+          assert "torchmetrics" in by_name
+          assert "tensorboard" in by_name
+          assert "viser" in by_name
+          assert "jaxtyping" in by_name
+          assert "nvidia-cuda-runtime-cu12" in by_name
+          assert "nvidia-cudnn-cu12" in by_name
+          assert "triton" in by_name
+
+          python_version = platform.python_version()
+          pip_version = subprocess.check_output(
+              [os.sys.executable, "-m", "pip", "--version"], text=True
+          ).split()[1]
+
+          lock = {
+              "schema_version": 1,
+              "evidence_kind": "pip_dependency_resolution_only",
+              "runtime_execution_evidence": False,
+              "gpu_execution_evidence": False,
+              "native_extension_build_evidence": False,
+              "target": {
+                  "runner": "ubuntu-24.04",
+                  "python": python_version,
+                  "implementation": "CPython",
+                  "platform": "linux_x86_64",
+                  "torch_cuda": "12.4",
+              },
+              "resolver": {
+                  "uv": "0.12.13",
+                  "pip": pip_version,
+                  "pytorch_index": os.environ["PYTORCH_INDEX"],
+              },
+              "source_packages_installed_separately_with_no_deps": {
+                  "gsplat": "nerfstudio-project/gsplat@937e29912570c372bed6747a5c9bf85fed877bae",
+                  "fused-ssim": "rahul-goel/fused-ssim@328dc9836f513d00c4b5bc38fe30478b4435cbb5",
+                  "nerfview": "nerfstudio-project/nerfview@4538024fe0d15fd1a0e4d760f3695fc44ca72787",
+                  "pycolmap": "rmbrualla/pycolmap@cc7ea4b7301720ac29287dbe450952511b32125e",
+              },
+              "requested_specs": requested_specs,
+              "packages": packages,
+          }
+          generated.write_text(
+              json.dumps(lock, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print(
+              f"Resolved {len(packages)} wheel artifacts for Python {python_version}; "
+              f"no package was installed."
+          )
+          PY
+
+      - name: Verify committed registry lock or expose bootstrap result
+        shell: bash
+        run: |
+          set -euo pipefail
+          generated="$RUNNER_TEMP/gsplat-python-runtime-lock.json"
+          committed="$RUNNER_TEMP/gsplat-python-runtime-lock-committed.json"
+          set +e
+          uv run --no-project --with "pyyaml==6.0.2" python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          from pathlib import Path
+
+          import yaml
+
+          root = yaml.safe_load(Path("registry/dependencies.yaml").read_text(encoding="utf-8"))
+          lock = root["dependencies"]["gsplat_static_appearance"].get(os.environ["LOCK_KEY"])
+          if lock is None:
+              raise SystemExit(2)
+          Path(os.environ["RUNNER_TEMP"], "gsplat-python-runtime-lock-committed.json").write_text(
+              json.dumps(lock, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+          status=$?
+          set -e
+          if test "$status" -eq 2; then
+            echo "No committed gsplat runtime Python lock exists yet; bootstrap evidence follows."
+            echo "----- BEGIN GENERATED GSPLAT PYTHON RUNTIME LOCK -----"
+            cat "$generated"
+            echo "----- END GENERATED GSPLAT PYTHON RUNTIME LOCK -----"
+            exit 0
+          fi
+          test "$status" -eq 0
+          diff -u "$committed" "$generated"
+          echo "Committed gsplat Python runtime lock matches exact regeneration."
+
+      - name: Retain machine-readable resolver evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v2l18-3-gsplat-python-runtime-lock
+          path: ${{ runner.temp }}/gsplat-python-runtime-lock.json
+          if-no-files-found: error
+          retention-days: 30
