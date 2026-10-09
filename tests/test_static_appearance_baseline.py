@@ -102,6 +102,7 @@ from wre.reconstruction.static_appearance_baseline import (
     GsplatStaticAppearanceTrainingProfile,
     materialize_verified_gsplat_ply,
     preflight_gsplat_static_appearance_inputs,
+    verify_gsplat_static_appearance_matching_capture_metadata,
     verify_gsplat_static_appearance_native_geometry,
     verify_gsplat_static_appearance_reference_sources,
     verify_gsplat_static_appearance_source_photometry,
@@ -857,6 +858,8 @@ def _gsplat_photo_assessment(
     observation_id: ObservationId | None = None,
     asset_sha256: Sha256Digest | None = None,
     exposure_ev: float = 0.0,
+    capture: tuple[float, float, float, float] | None = None,
+    white_balance: tuple[str, float] | None = None,
 ) -> PhotometricCompatibilityAssessment:
     """Real V2L17 plans bound to the same source asset, not mocked compatible labels."""
 
@@ -865,11 +868,22 @@ def _gsplat_photo_assessment(
     source_digest = asset_sha256 or image.observation.asset.sha256
     rgb = bytes((64, 128, 192, 64, 128, 192))
     declaration = RawMetadataEntry("caller", "color", "sRGB")
+    exposure_entry = (
+        RawMetadataEntry("caller", "exposure", repr(capture)) if capture is not None else None
+    )
+    balance_entry = (
+        RawMetadataEntry("caller", "white_balance", repr(white_balance))
+        if white_balance is not None
+        else None
+    )
+    raw_entries = tuple(
+        item for item in (declaration, exposure_entry, balance_entry) if item is not None
+    )
     photo = SourcePhotometryMetadata(
         observation_id=observation,
         source_metadata=ObservationMetadata(
             observation_id=observation,
-            raw_entries=(declaration,),
+            raw_entries=raw_entries,
         ),
         color=SourceColorMetadata(
             status=SourcePhotometryInterpretationStatus.RESOLVED,
@@ -880,9 +894,27 @@ def _gsplat_photo_assessment(
             declared_range="full",
             evidence=(declaration,),
         ),
-        exposure=SourceExposureMetadata(status=SourcePhotometryInterpretationStatus.ABSENT),
-        white_balance=SourceWhiteBalanceMetadata(
-            status=SourcePhotometryInterpretationStatus.ABSENT
+        exposure=(
+            SourceExposureMetadata(
+                status=SourcePhotometryInterpretationStatus.RESOLVED,
+                iso_speed=capture[0],
+                exposure_time_seconds=capture[1],
+                f_number=capture[2],
+                exposure_compensation_ev=capture[3],
+                evidence=(exposure_entry,),
+            )
+            if capture is not None and exposure_entry is not None
+            else SourceExposureMetadata(status=SourcePhotometryInterpretationStatus.ABSENT)
+        ),
+        white_balance=(
+            SourceWhiteBalanceMetadata(
+                status=SourcePhotometryInterpretationStatus.RESOLVED,
+                mode=white_balance[0],
+                color_temperature_kelvin=white_balance[1],
+                evidence=(balance_entry,),
+            )
+            if white_balance is not None and balance_entry is not None
+            else SourceWhiteBalanceMetadata(status=SourcePhotometryInterpretationStatus.ABSENT)
         ),
     )
     manifest = DecodedImagePyramidManifest(
@@ -1022,3 +1054,173 @@ def test_gsplat_photo_gate_requires_complete_immutable_evidence(tmp_path: Path) 
     )
     with pytest.raises(GsplatStaticAppearancePreflightError, match="unresolved"):
         verify_gsplat_static_appearance_source_photometry(request, source, (false_label,))
+
+
+def _two_view_parts(
+    tmp_path: Path,
+) -> tuple[StaticAppearanceCandidateRequest, GsplatStaticAppearancePreflightSource]:
+    request, source = _parts(tmp_path)
+    first = source.images[0]
+    second_id = ObservationId("obs:second")
+    second_path = source.image_root / "second.png"
+    second_path.write_bytes(first.source_path.read_bytes())
+    second_observation = replace(
+        first.observation,
+        observation_id=second_id,
+        asset=replace(first.observation.asset, uri="file:///supplied/second.png"),
+        source=SourceRef(SourceId("source:second")),
+    )
+    second_image = replace(
+        first,
+        observation=second_observation,
+        source_path=second_path,
+        image_name="second.png",
+    )
+    native = replace(source.native_model_artifact, num_registered_images=2)
+    native_ref = colmap_native_sparse_model_artifact_ref(native)
+    geometry = request.source_geometry
+    second_camera = replace(
+        geometry.camera_solutions[0],
+        observation_id=second_id,
+        solution_id=CameraSolutionId("cam:second"),
+        translation_xyz=(1.0, 0.0, 0.0),
+    )
+    point_map = replace(
+        geometry.point_maps[0],
+        source_observation_ids=(ObservationId("obs:frame"), second_id),
+    )
+    source_geometry = replace(
+        geometry,
+        camera_solutions=(*geometry.camera_solutions, second_camera),
+        point_maps=(point_map,),
+        geometry_solution=replace(
+            geometry.geometry_solution,
+            camera_solution_ids=(
+                geometry.camera_solutions[0].solution_id,
+                second_camera.solution_id,
+            ),
+        ),
+    )
+    return (
+        replace(
+            request,
+            source_geometry=source_geometry,
+            source_observation_ids=(ObservationId("obs:frame"), second_id),
+            supporting_artifacts=(native_ref,),
+        ),
+        replace(
+            source,
+            images=(first, second_image),
+            native_model_artifact=native,
+            native_model_ref=native_ref,
+        ),
+    )
+
+
+def test_multiview_capture_gate_accepts_only_matching_resolved_declarations(
+    tmp_path: Path,
+) -> None:
+    request, source = _two_view_parts(tmp_path)
+    capture = (100.0, 0.01, 4.0, 0.0)
+    balance = ("manual", 5600.0)
+    assessments = (
+        _gsplat_photo_assessment(source, capture=capture, white_balance=balance),
+        _gsplat_photo_assessment(
+            source,
+            observation_id=ObservationId("obs:second"),
+            capture=capture,
+            white_balance=balance,
+        ),
+    )
+    assert verify_gsplat_static_appearance_matching_capture_metadata(
+        request, source, assessments
+    ) == tuple(item.identity for item in assessments)
+    assert request.source_observation_ids == (
+        ObservationId("obs:frame"),
+        ObservationId("obs:second"),
+    )
+
+
+def test_multiview_capture_gate_rejects_missing_or_partial_declarations(
+    tmp_path: Path,
+) -> None:
+    request, source = _two_view_parts(tmp_path)
+    complete = _gsplat_photo_assessment(
+        source,
+        capture=(100.0, 0.01, 4.0, 0.0),
+        white_balance=("manual", 5600.0),
+    )
+    missing = _gsplat_photo_assessment(source, observation_id=ObservationId("obs:second"))
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="incomplete or unresolved"):
+        verify_gsplat_static_appearance_matching_capture_metadata(
+            request, source, (complete, missing)
+        )
+    partial = _gsplat_photo_assessment(
+        source,
+        observation_id=ObservationId("obs:second"),
+        capture=(100.0, 0.01, 4.0, 0.0),
+    )
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="incomplete or unresolved"):
+        verify_gsplat_static_appearance_matching_capture_metadata(
+            request, source, (complete, partial)
+        )
+
+
+@pytest.mark.parametrize(
+    ("second_capture", "second_balance"),
+    [
+        ((200.0, 0.01, 4.0, 0.0), ("manual", 5600.0)),
+        ((100.0, 0.02, 4.0, 0.0), ("manual", 5600.0)),
+        ((100.0, 0.01, 5.6, 0.0), ("manual", 5600.0)),
+        ((100.0, 0.01, 4.0, 1.0), ("manual", 5600.0)),
+        ((100.0, 0.01, 4.0, 0.0), ("manual", 6500.0)),
+        ((100.0, 0.01, 4.0, 0.0), ("auto", 5600.0)),
+    ],
+)
+def test_multiview_capture_gate_rejects_any_declared_capture_drift(
+    tmp_path: Path,
+    second_capture: tuple[float, float, float, float],
+    second_balance: tuple[str, float],
+) -> None:
+    request, source = _two_view_parts(tmp_path)
+    assessments = (
+        _gsplat_photo_assessment(
+            source,
+            capture=(100.0, 0.01, 4.0, 0.0),
+            white_balance=("manual", 5600.0),
+        ),
+        _gsplat_photo_assessment(
+            source,
+            observation_id=ObservationId("obs:second"),
+            capture=second_capture,
+            white_balance=second_balance,
+        ),
+    )
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="settings differ"):
+        verify_gsplat_static_appearance_matching_capture_metadata(request, source, assessments)
+
+
+def test_multiview_capture_gate_requires_two_exact_distinct_source_observations(
+    tmp_path: Path,
+) -> None:
+    request, source = _parts(tmp_path)
+    one = _gsplat_photo_assessment(
+        source,
+        capture=(100.0, 0.01, 4.0, 0.0),
+        white_balance=("manual", 5600.0),
+    )
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="at least two"):
+        verify_gsplat_static_appearance_matching_capture_metadata(request, source, (one,))
+    second_root = tmp_path / "other"
+    second_root.mkdir()
+    multi_request, multi_source = _two_view_parts(second_root)
+    foreign = _gsplat_photo_assessment(
+        multi_source,
+        observation_id=ObservationId("obs:foreign"),
+        capture=(100.0, 0.01, 4.0, 0.0),
+        white_balance=("manual", 5600.0),
+    )
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="exact source PNG"):
+        verify_gsplat_static_appearance_matching_capture_metadata(
+            multi_request, multi_source, (one, foreign)
+        )

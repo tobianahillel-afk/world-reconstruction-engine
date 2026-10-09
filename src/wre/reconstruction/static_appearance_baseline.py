@@ -36,6 +36,7 @@ from wre.domain.photometric_validity import (
     PhotometricCompatibilityStatus,
     assess_photometric_compatibility,
 )
+from wre.domain.source_photometry import SourcePhotometryInterpretationStatus
 from wre.reconstruction.colmap_canonical_geometry import (
     CanonicalColmapSparseModel,
     _verified_native_model_path,
@@ -578,6 +579,67 @@ def verify_gsplat_static_appearance_source_photometry(
     return tuple(identities)
 
 
+def verify_gsplat_static_appearance_matching_capture_metadata(
+    request: StaticAppearanceCandidateRequest,
+    source: GsplatStaticAppearancePreflightSource,
+    assessments: tuple[PhotometricCompatibilityAssessment, ...],
+) -> tuple[Sha256Digest, ...]:
+    """Verify only matching, *declared* multi-view capture settings.
+
+    This is a conservative necessary-evidence check before a separate
+    scene-overlap/radiometric assessment. Matching EXIF-like capture settings
+    cannot prove equal radiance, equal tone curves, static scene content, or
+    suitable cross-view photometry. Missing/unknown values remain unresolved.
+    The gsplat reference trainer still reads the original PNG pixels.
+    """
+
+    identities = verify_gsplat_static_appearance_source_photometry(request, source, assessments)
+    if len(assessments) < 2:
+        raise GsplatStaticAppearancePreflightError(
+            "multi-view capture comparison requires at least two real observations"
+        )
+
+    declared_settings: set[tuple[float, float, float, float, str, float]] = set()
+    for assessment in assessments:
+        photometry = (
+            assessment.compatibility_input.normalization_assessment.request.source_photometry
+        )
+        exposure = photometry.exposure
+        white_balance = photometry.white_balance
+        if (
+            exposure.status is not SourcePhotometryInterpretationStatus.RESOLVED
+            or white_balance.status is not SourcePhotometryInterpretationStatus.RESOLVED
+            or exposure.iso_speed is None
+            or exposure.exposure_time_seconds is None
+            or exposure.f_number is None
+            or exposure.exposure_compensation_ev is None
+            or white_balance.mode is None
+            or white_balance.color_temperature_kelvin is None
+        ):
+            raise GsplatStaticAppearancePreflightError(
+                "multi-view capture exposure and white-balance metadata are incomplete "
+                "or unresolved; no cross-observation equivalence may be inferred"
+            )
+        declared_settings.add(
+            (
+                exposure.iso_speed,
+                exposure.exposure_time_seconds,
+                exposure.f_number,
+                exposure.exposure_compensation_ev,
+                white_balance.mode,
+                white_balance.color_temperature_kelvin,
+            )
+        )
+
+    if len(declared_settings) != 1:
+        raise GsplatStaticAppearancePreflightError(
+            "multi-view capture settings differ; gsplat raw-PNG input cannot silently "
+            "equalize exposure or white balance"
+        )
+
+    return identities
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class GsplatStaticAppearanceTrainingProfile:
     """Audited single-GPU overrides for the exact upstream reference trainer.
@@ -829,6 +891,7 @@ __all__ = [
     "GsplatStaticAppearanceVerifiedImage",
     "materialize_verified_gsplat_ply",
     "preflight_gsplat_static_appearance_inputs",
+    "verify_gsplat_static_appearance_matching_capture_metadata",
     "verify_gsplat_static_appearance_native_geometry",
     "verify_gsplat_static_appearance_reference_sources",
     "verify_gsplat_static_appearance_source_photometry",
