@@ -882,6 +882,8 @@ dependencies:
     reference_nerfview_source_tree_sha1: e333400e39605978a3d1f9cf6d73ddf577a8c8e3
     reference_nerfview_pyproject_git_blob_sha1: 4fa1b90b2b1d38e17d464bb7d12cec839e1aa023
     reference_nerfview_declared_license: MIT
+    reference_nerfview_verified_import_source_files: 7
+    reference_nerfview_source_verification: local_exact_git_blob_preflight_only
     reference_fused_ssim_source_revision: 328dc9836f513d00c4b5bc38fe30478b4435cbb5
     reference_fused_ssim_source_tree_sha1: ac5f1d8fe5d519f9c44b220d235bf1f198463da7
     reference_fused_ssim_license_git_blob_sha1: 541f73944912fde14ffb971f22ba516042b95ab7
@@ -933,7 +935,13 @@ dependencies:
       transitive-license or actual training proof. Do not add fused-bilagrid as
       a mandatory runtime dependency. Importing simple_trainer still eagerly requires nerfview, viser,
       torchmetrics image metrics and torch.utils.tensorboard even with viewer/video/
-      TensorBoard use disabled. These are import-closure observations only; exact
+      TensorBoard use disabled. The reviewed nerfview v0.1.2 source import
+      package, README and MIT-declaring pyproject are now covered by a pure
+      seven-file Git-blob and length preflight without importing viewer code.
+      nerfview's reviewed pyproject directly declares only viser>=0.2.1,
+      whereas its eagerly imported viewer.py also imports numpy and jaxtyping;
+      those need explicit exact Python runtime closure rather than an assumed
+      transitive dependency. These are import-closure observations only; exact
       Python package/build hashes, CUDA ABI, native wheel licenses, runtime import
       proof and supported GPU training are still unresolved. V2L18.3 now audits ten exact reviewed upstream
       trainer-entrypoint/source files offline using their Git blob identities and
