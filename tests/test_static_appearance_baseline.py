@@ -1931,7 +1931,11 @@ def _retained_gsplat_fixture(
     )
     output_root, profile, ref = _gsplat_output(tmp_path, _gsplat_ply(vertices=2))
     producer = ArtifactProducerIdentity(
-        producer=ProducerRef(implementation="gsplat.examples.simple_trainer", version="1.5.3"),
+        producer=ProducerRef(
+            implementation="gsplat.examples.simple_trainer",
+            version="1.5.3",
+            revision=GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION,
+        ),
         configuration=ConfigurationIdentity(sha256=profile.configuration_sha256),
         model=ModelIdentity(
             name="gsplat",
@@ -1998,6 +2002,7 @@ def test_exact_ply_output_assembles_complete_appearance_result_without_mutating_
         ("configuration", "configuration differs"),
         ("model", "exact checkpoint-free reference trainer"),
         ("revision", "exact checkpoint-free reference trainer"),
+        ("producer_revision", "exact checkpoint-free reference trainer"),
         ("implementation", "exact checkpoint-free reference trainer"),
     ],
 )
@@ -2016,9 +2021,23 @@ def test_exact_ply_assembly_rejects_false_producer_identity(
             producer,
             model=ModelIdentity(name="gsplat", version="1.5.3", revision="wrong"),
         )
+    elif mutation == "producer_revision":
+        producer = replace(
+            producer,
+            producer=ProducerRef(
+                implementation="gsplat.examples.simple_trainer",
+                version="1.5.3",
+                revision="wrong",
+            ),
+        )
     else:
         producer = replace(
-            producer, producer=ProducerRef(implementation="unknown", version="1.5.3")
+            producer,
+            producer=ProducerRef(
+                implementation="unknown",
+                version="1.5.3",
+                revision=GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION,
+            ),
         )
     with pytest.raises(GsplatStaticAppearancePreflightError, match=reason):
         assemble_verified_gsplat_static_appearance_result(

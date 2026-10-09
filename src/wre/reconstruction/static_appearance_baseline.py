@@ -1899,6 +1899,10 @@ def assemble_verified_gsplat_static_appearance_result(
     if (
         producer.producer.implementation != "gsplat.examples.simple_trainer"
         or producer.producer.version != "1.5.3"
+        or (
+            producer.producer.revision is not None
+            and producer.producer.revision != GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION
+        )
         or producer.model is None
         or producer.model.name != "gsplat"
         or producer.model.version != "1.5.3"
