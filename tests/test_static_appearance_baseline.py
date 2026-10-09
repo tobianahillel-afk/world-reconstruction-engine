@@ -1964,7 +1964,10 @@ def test_exact_ply_output_assembles_complete_appearance_result_without_mutating_
     assert result.candidate.artifact_ref == ref
     assert result.candidate.producer is producer
     assert result.candidate.representation == request.output_representation
-    assert result.candidate.local_frame_id == request.source_geometry.geometry_solution.local_frame_id
+    assert (
+        result.candidate.local_frame_id
+        == request.source_geometry.geometry_solution.local_frame_id
+    )
     assert result.candidate.scale_status is GeometryScaleStatus.UNRESOLVED
     assert result.candidate.source_artifacts == tuple(
         sorted(
@@ -2061,7 +2064,7 @@ def test_exact_ply_assembly_rejects_output_identity_reused_as_input(
         tmp_path
     )
     existing = request.source_geometry.source_artifacts[0]
-    with pytest.raises(GsplatStaticAppearancePreflightError, match="appearance.static"):
+    with pytest.raises(GsplatStaticAppearancePreflightError, match=r"appearance\\.static"):
         assemble_verified_gsplat_static_appearance_result(
             request=request, source=source, staged=staged,
             artifact_ref=existing, output_root=output, profile=profile, producer=producer
