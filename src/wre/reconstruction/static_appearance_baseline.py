@@ -14,6 +14,7 @@ import struct
 import zlib
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
+from typing import Any, cast
 
 from wre.domain.appearance import APPEARANCE_MODEL_ARTIFACT_KIND
 from wre.domain.artifact_materialization import (
@@ -680,14 +681,18 @@ def verify_gsplat_static_appearance_shared_scene_tracks(
     )
     path = _verified_native_model_path(source.native_model_root, source.native_model_artifact)
     try:
-        reconstruction = getattr(module, "Reconstruction")(path)
+        pycolmap = cast(Any, module)
+        reconstruction = pycolmap.Reconstruction(path)
         if not bool(reconstruction.is_valid()):
             raise GsplatStaticAppearancePreflightError(
                 "native COLMAP model is invalid during track verification"
             )
         registered = tuple(sorted(int(value) for value in reconstruction.reg_image_ids()))
         point_ids = tuple(sorted(int(value) for value in reconstruction.point3D_ids()))
-        if len(registered) != len(source.images) or len(point_ids) != source.native_model_artifact.num_points3d:
+        if (
+            len(registered) != len(source.images)
+            or len(point_ids) != source.native_model_artifact.num_points3d
+        ):
             raise GsplatStaticAppearancePreflightError(
                 "native COLMAP registered-image or point count changed"
             )
@@ -1026,8 +1031,8 @@ __all__ = [
     "materialize_verified_gsplat_ply",
     "preflight_gsplat_static_appearance_inputs",
     "verify_gsplat_static_appearance_matching_capture_metadata",
-    "verify_gsplat_static_appearance_shared_scene_tracks",
     "verify_gsplat_static_appearance_native_geometry",
     "verify_gsplat_static_appearance_reference_sources",
+    "verify_gsplat_static_appearance_shared_scene_tracks",
     "verify_gsplat_static_appearance_source_photometry",
 ]
