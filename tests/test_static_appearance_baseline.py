@@ -987,6 +987,7 @@ def _gsplat_photo_assessment(
     observation_id: ObservationId | None = None,
     asset_sha256: Sha256Digest | None = None,
     exposure_ev: float = 0.0,
+    decoded_rgb: bytes | None = None,
     capture: tuple[float, float, float, float] | None = None,
     white_balance: tuple[str, float] | None = None,
 ) -> PhotometricCompatibilityAssessment:
@@ -995,7 +996,7 @@ def _gsplat_photo_assessment(
     image = source.images[0]
     observation = observation_id or image.observation.observation_id
     source_digest = asset_sha256 or image.observation.asset.sha256
-    rgb = bytes((64, 128, 192, 64, 128, 192))
+    rgb = decoded_rgb if decoded_rgb is not None else bytes((64, 128, 192, 64, 128, 192))
     declaration = RawMetadataEntry("caller", "color", "sRGB")
     exposure_entry = (
         RawMetadataEntry("caller", "exposure", repr(capture)) if capture is not None else None
@@ -1405,6 +1406,10 @@ def _matching_shared_track_photometry(
         _gsplat_photo_assessment(
             source,
             observation_id=ObservationId("obs:second"),
+            asset_sha256=source.images[1].observation.asset.sha256,
+            decoded_rgb=baseline_module._decode_audited_gsplat_png_rgb8(
+                source.images[1].source_path.read_bytes()
+            )[2],
             capture=(100.0, 0.01, 4.0, 0.0),
             white_balance=("manual", 5600.0),
         ),
