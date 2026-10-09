@@ -2179,9 +2179,7 @@ def test_gsplat_fused_ssim_source_gate_rejects_symlink_and_wrong_input_type(
 ) -> None:
     root, _data = _fused_ssim_source_fixture(tmp_path, monkeypatch)
     with pytest.raises(TypeError):
-        baseline_module.verify_gsplat_fused_ssim_reference_sources(
-            cast(Path, "not-a-path")
-        )
+        baseline_module.verify_gsplat_fused_ssim_reference_sources(cast(Path, "not-a-path"))
     target = root / "ssim.h"
     (root / "fused_ssim" / "unexpected_link.py").symlink_to(target)
     with pytest.raises(baseline_module.GsplatStaticAppearancePreflightError):
