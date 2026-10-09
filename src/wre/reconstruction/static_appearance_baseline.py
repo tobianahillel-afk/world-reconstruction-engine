@@ -374,7 +374,6 @@ def verify_gsplat_reference_pycolmap_sources(
     return tuple(entries)
 
 
-
 def verify_gsplat_fused_ssim_reference_sources(
     source_root: Path,
 ) -> tuple[ArtifactMaterializationEntry, ...]:
