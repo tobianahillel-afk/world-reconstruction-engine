@@ -717,7 +717,7 @@ def verify_gsplat_static_appearance_shared_scene_tracks(
                         "native COLMAP track references foreign or duplicate registered images"
                     )
                 image = native_images[image_id]
-                if point2d_index < 0 or point2d_index >= int(image.num_points2D):
+                if point2d_index < 0 or point2d_index >= int(image.num_points2D()):
                     raise GsplatStaticAppearancePreflightError(
                         "native COLMAP track point2D index is invalid"
                     )
