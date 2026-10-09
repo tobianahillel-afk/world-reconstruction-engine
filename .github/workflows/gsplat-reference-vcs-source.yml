@@ -1,0 +1,130 @@
+name: gsplat-reference-vcs-source
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/gsplat-reference-vcs-source.yml"
+      - "src/wre/reconstruction/static_appearance_baseline.py"
+      - "src/wre/reconstruction/__init__.py"
+      - "tests/test_static_appearance_baseline.py"
+      - "registry/dependencies.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  exact-reviewed-source:
+    name: audited-nerfview-and-fused-ssim-source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      NERFVIEW_REVISION: 4538024fe0d15fd1a0e4d760f3695fc44ca72787
+      NERFVIEW_TREE: e333400e39605978a3d1f9cf6d73ddf577a8c8e3
+      FUSED_SSIM_REVISION: 328dc9836f513d00c4b5bc38fe30478b4435cbb5
+      FUSED_SSIM_TREE: ac5f1d8fe5d519f9c44b220d235bf1f198463da7
+
+    steps:
+      - name: Checkout WRE
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install locked CPU-only WRE toolchain
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.13"
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+
+      - name: Install WRE without any external viewer or CUDA package
+        run: |
+          set -euo pipefail
+          uv sync --frozen --group dev
+
+      - name: Fetch exact reviewed upstream VCS source
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_root="${RUNNER_TEMP}/gsplat-reviewed-vcs"
+          rm -rf "$source_root"
+          mkdir -p "$source_root"
+          git init -q "$source_root/nerfview"
+          git -C "$source_root/nerfview" remote add origin https://github.com/nerfstudio-project/nerfview.git
+          git -C "$source_root/nerfview" fetch --quiet --depth=1 origin "$NERFVIEW_REVISION"
+          git -C "$source_root/nerfview" checkout --quiet --detach FETCH_HEAD
+          test "$(git -C "$source_root/nerfview" rev-parse HEAD)" = "$NERFVIEW_REVISION"
+          test "$(git -C "$source_root/nerfview" rev-parse HEAD^{tree})" = "$NERFVIEW_TREE"
+          git init -q "$source_root/fused-ssim"
+          git -C "$source_root/fused-ssim" remote add origin https://github.com/rahul-goel/fused-ssim.git
+          git -C "$source_root/fused-ssim" fetch --quiet --depth=1 origin "$FUSED_SSIM_REVISION"
+          git -C "$source_root/fused-ssim" checkout --quiet --detach FETCH_HEAD
+          test "$(git -C "$source_root/fused-ssim" rev-parse HEAD)" = "$FUSED_SSIM_REVISION"
+          test "$(git -C "$source_root/fused-ssim" rev-parse HEAD^{tree})" = "$FUSED_SSIM_TREE"
+
+      - name: Verify source bytes without installing or importing third-party modules
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv/bin/python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          from wre.reconstruction import (
+              verify_gsplat_fused_ssim_reference_sources,
+              verify_gsplat_nerfview_reference_sources,
+          )
+
+          root = Path(os.environ["RUNNER_TEMP"]) / "gsplat-reviewed-vcs"
+          sources = (
+              ("fused-ssim", verify_gsplat_fused_ssim_reference_sources(root / "fused-ssim")),
+              ("nerfview", verify_gsplat_nerfview_reference_sources(root / "nerfview")),
+          )
+          assert all(len(entries) == 7 for _name, entries in sources)
+          evidence = {
+              "schema_version": 1,
+              "evidence_kind": "exact_upstream_source_bytes_only",
+              "runtime_execution_evidence": False,
+              "gpu_execution_evidence": False,
+              "sources": {
+                  "nerfview": {
+                      "revision": os.environ["NERFVIEW_REVISION"],
+                      "tree": os.environ["NERFVIEW_TREE"],
+                  },
+                  "fused-ssim": {
+                      "revision": os.environ["FUSED_SSIM_REVISION"],
+                      "tree": os.environ["FUSED_SSIM_TREE"],
+                  },
+              },
+              "verified_files": {
+                  name: [
+                      {
+                          "relative_path": item.relative_path,
+                          "byte_length": item.byte_length,
+                          "sha256": item.sha256.value,
+                      }
+                      for item in entries
+                  ]
+                  for name, entries in sources
+              },
+          }
+          path = Path(os.environ["RUNNER_TEMP"]) / "gsplat-reviewed-vcs.json"
+          path.write_text(json.dumps(evidence, sort_keys=True, indent=2) + "\n")
+          print("Verified 7 fused-ssim and 7 nerfview exact source files, no GPU execution")
+          PY
+
+      - name: Retain exact source-only qualification evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v2l18-3-gsplat-reviewed-vcs-source
+          path: ${{ runner.temp }}/gsplat-reviewed-vcs.json
+          if-no-files-found: error
+          retention-days: 30

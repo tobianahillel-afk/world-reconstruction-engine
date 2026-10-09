@@ -2215,6 +2215,8 @@ def test_gsplat_nerfview_source_pins_identify_upstream_import_package() -> None:
     assert baseline_module._GSPLAT_NERFVIEW_REVISION == ("4538024fe0d15fd1a0e4d760f3695fc44ca72787")
     pins = baseline_module._GSPLAT_NERFVIEW_SOURCE_FILES
     assert len(pins) == 7
+    assert all(len(sha) == 40 for _path, _size, sha in pins)
+    assert ("nerfview/render_panel.py", 54931, "a81fa3ea9a468a94ebea6a8de4da9312ef5185d4") in pins
     assert tuple(path for path, _size, _sha in pins) == tuple(
         sorted(path for path, _size, _sha in pins)
     )

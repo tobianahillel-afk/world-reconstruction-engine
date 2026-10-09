@@ -76,7 +76,7 @@ _GSPLAT_NERFVIEW_SOURCE_FILES: tuple[tuple[str, int, str], ...] = (
     ("README.md", 5579, "44c91608517a0e87e3c13c52d09305f22f665273"),
     ("nerfview/__init__.py", 504, "619c0513faf897bf58ed1c4698f6b5fdde0cac14"),
     ("nerfview/_renderer.py", 6454, "ad17ca39fc00bf41b0b99b7b7b621ac9f7df805a"),
-    ("nerfview/render_panel.py", 54931, "a81fa3ea9a468a94ebea6a8de931fbbce5d4"),
+    ("nerfview/render_panel.py", 54931, "a81fa3ea9a468a94ebea6a8de4da9312ef5185d4"),
     ("nerfview/version.py", 22, "b3f4756216d06217d275110297a69bbb7ea74a59"),
     ("nerfview/viewer.py", 10564, "8cf32290872a670a351cf328249782c5cec4b550"),
     ("pyproject.toml", 849, "4fa1b90b2b1d38e17d464bb7d12cec839e1aa023"),
