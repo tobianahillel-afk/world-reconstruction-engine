@@ -1369,16 +1369,12 @@ def _shared_track_fixture(
         1: SimpleNamespace(
             name="frame.png",
             num_points2D=lambda: 1,
-            point2D=lambda _index: SimpleNamespace(
-                point3D_id=reciprocal_point_id, xy=first_xy
-            ),
+            point2D=lambda _index: SimpleNamespace(point3D_id=reciprocal_point_id, xy=first_xy),
         ),
         2: SimpleNamespace(
             name=second_image_name,
             num_points2D=lambda: 1,
-            point2D=lambda _index: SimpleNamespace(
-                point3D_id=reciprocal_point_id, xy=second_xy
-            ),
+            point2D=lambda _index: SimpleNamespace(point3D_id=reciprocal_point_id, xy=second_xy),
         ),
     }
     track = SimpleNamespace(
@@ -1516,8 +1512,12 @@ def test_shared_track_pixel_evidence_samples_exact_identical_srgb_pngs(
         lambda *_args, **_kwargs: _native_canonical(request, source),
     )
     result = inspect_gsplat_static_appearance_shared_track_pixels(
-        request, source, assessments,
-        features=features, expected_environment=environment, module=_shared_track_fixture()
+        request,
+        source,
+        assessments,
+        features=features,
+        expected_environment=environment,
+        module=_shared_track_fixture(),
     )
     assert len(result) == 1
     assert result[0].left_observation_id == ObservationId("obs:frame")
@@ -1527,8 +1527,12 @@ def test_shared_track_pixel_evidence_samples_exact_identical_srgb_pngs(
     assert result[0].shared_track_count == 1
     assert result[0].mean_absolute_srgb_channel_delta == 0.0
     assert inspect_gsplat_static_appearance_shared_track_pixels(
-        request, source, assessments,
-        features=features, expected_environment=environment, module=_shared_track_fixture()
+        request,
+        source,
+        assessments,
+        features=features,
+        expected_environment=environment,
+        module=_shared_track_fixture(),
     ) == result
 
 
@@ -1566,8 +1570,12 @@ def test_shared_track_pixel_evidence_reports_actual_color_difference_without_sco
         lambda *_args, **_kwargs: _native_canonical(request, source),
     )
     result = inspect_gsplat_static_appearance_shared_track_pixels(
-        request, source, assessments,
-        features=features, expected_environment=environment, module=_shared_track_fixture()
+        request,
+        source,
+        assessments,
+        features=features,
+        expected_environment=environment,
+        module=_shared_track_fixture(),
     )
     assert result[0].shared_track_count == 1
     assert result[0].mean_absolute_srgb_channel_delta == pytest.approx(1 / 765)
@@ -1630,8 +1638,11 @@ def test_shared_track_pixel_evidence_rejects_invalid_feature_coordinates(
     )
     with pytest.raises(GsplatStaticAppearancePreflightError, match=reason):
         inspect_gsplat_static_appearance_shared_track_pixels(
-            request, source, _matching_shared_track_photometry(source),
-            features=features, expected_environment=environment,
+            request,
+            source,
+            _matching_shared_track_photometry(source),
+            features=features,
+            expected_environment=environment,
             module=_shared_track_fixture(second_xy=second_xy),
         )
 
@@ -1650,7 +1661,10 @@ def test_shared_track_pixel_evidence_rechecks_source_byte_integrity(
     source.images[1].source_path.write_bytes(_png(width=2, height=1, srgb=False))
     with pytest.raises(GsplatStaticAppearancePreflightError, match="size or SHA-256"):
         inspect_gsplat_static_appearance_shared_track_pixels(
-            request, source, assessments,
-            features=features, expected_environment=environment,
+            request,
+            source,
+            assessments,
+            features=features,
+            expected_environment=environment,
             module=_shared_track_fixture(),
         )
