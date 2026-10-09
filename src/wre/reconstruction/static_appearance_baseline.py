@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, cast
 
-from wre.domain.appearance import APPEARANCE_MODEL_ARTIFACT_KIND
+from wre.domain.appearance import APPEARANCE_MODEL_ARTIFACT_KIND, AppearanceModel
 from wre.domain.artifact_materialization import (
     ArtifactMaterializationEntry,
     ArtifactMaterializationMetadata,
@@ -39,6 +39,7 @@ from wre.domain.photometric_validity import (
     PhotometricCompatibilityStatus,
     assess_photometric_compatibility,
 )
+from wre.domain.producer_identity import ArtifactProducerIdentity
 from wre.domain.source_photometry import SourcePhotometryInterpretationStatus
 from wre.reconstruction.colmap_canonical_geometry import (
     CanonicalColmapSparseModel,
@@ -55,7 +56,11 @@ from wre.reconstruction.colmap_reconstruction import (
     ColmapReconstructionInput,
     ColmapSparseModelArtifact,
 )
-from wre.reconstruction.static_appearance_candidate import StaticAppearanceCandidateRequest
+from wre.reconstruction.static_appearance_candidate import (
+    StaticAppearanceCandidateRequest,
+    StaticAppearanceCandidateResult,
+    build_static_appearance_candidate_result,
+)
 
 GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION = "937e29912570c372bed6747a5c9bf85fed877bae"
 GSPLAT_STATIC_APPEARANCE_TRAINER_GIT_BLOB = "6a30be737b5c9af53a140f64faf499d8d4d0933f"
@@ -1669,6 +1674,82 @@ def materialize_verified_gsplat_ply(
     )
 
 
+def assemble_verified_gsplat_static_appearance_result(
+    *,
+    request: StaticAppearanceCandidateRequest,
+    source: GsplatStaticAppearancePreflightSource,
+    staged: GsplatStaticAppearanceStagedDataset,
+    artifact_ref: ArtifactRef,
+    output_root: Path,
+    profile: GsplatStaticAppearanceTrainingProfile,
+    producer: ArtifactProducerIdentity,
+) -> StaticAppearanceCandidateResult:
+    """Retain already-produced exact gsplat PLY bytes under the WRE appearance contract.
+
+    This is *output assembly*, not a trainer or a claim that a GPU execution,
+    shared radiance calibration, or generalization benchmark passed. The optional
+    external runner must independently establish those facts. Revalidating the
+    private dataset and output here prevents a stale staging tree or a malformed
+    export from masquerading as a canonically materialized AppearanceModel.
+    """
+
+    if not isinstance(request, StaticAppearanceCandidateRequest):
+        raise TypeError("gsplat result request must be StaticAppearanceCandidateRequest")
+    if not isinstance(profile, GsplatStaticAppearanceTrainingProfile):
+        raise TypeError("gsplat result profile must be GsplatStaticAppearanceTrainingProfile")
+    if not isinstance(producer, ArtifactProducerIdentity):
+        raise TypeError("gsplat result producer must be ArtifactProducerIdentity")
+    if producer.configuration.sha256 != profile.configuration_sha256:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat output producer configuration differs from the reviewed training profile"
+        )
+    if (
+        producer.producer.implementation != "gsplat.examples.simple_trainer"
+        or producer.producer.version != "1.5.3"
+        or producer.model is None
+        or producer.model.name != "gsplat"
+        or producer.model.version != "1.5.3"
+        or producer.model.revision != GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION
+        or producer.checkpoint is not None
+    ):
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat output producer does not identify the exact checkpoint-free reference trainer"
+        )
+    if request.output_representation.value != GSPLAT_STATIC_APPEARANCE_REPRESENTATION:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat output representation differs from the reviewed PLY payload"
+        )
+
+    # Both checks inspect real local bytes; neither infers a training run.
+    verify_gsplat_static_appearance_staged_dataset(request, source, staged)
+    materialization = materialize_verified_gsplat_ply(
+        artifact_ref=artifact_ref, output_root=output_root, profile=profile
+    )
+
+    source_refs = list(request.source_geometry.source_artifacts)
+    if request.source_surface is not None:
+        source_refs.append(request.source_surface.artifact_ref)
+        source_refs.extend(request.source_surface.source_artifacts)
+    source_refs.extend(request.supporting_artifacts)
+    # Multiple canonical ancestry paths may legitimately refer to the same
+    # exact artifact. The result boundary requires the canonical set union.
+    distinct = {(item.artifact_id.value, item.artifact_kind.value): item for item in source_refs}
+    ancestry = tuple(distinct[key] for key in sorted(distinct))
+    geometry = request.source_geometry.geometry_solution
+    candidate = AppearanceModel(
+        artifact_ref=artifact_ref,
+        source_geometry=request.source_geometry,
+        source_surface=request.source_surface,
+        source_observation_ids=request.source_observation_ids,
+        representation=request.output_representation,
+        local_frame_id=geometry.local_frame_id,
+        scale_status=geometry.scale_status,
+        producer=producer,
+        source_artifacts=ancestry,
+    )
+    return build_static_appearance_candidate_result(request, candidate, materialization)
+
+
 __all__ = [
     "GSPLAT_REFERENCE_PYCOLMAP_REVISION",
     "GSPLAT_STATIC_APPEARANCE_REPRESENTATION",
@@ -1683,6 +1764,7 @@ __all__ = [
     "GsplatStaticAppearanceStagedDataset",
     "GsplatStaticAppearanceTrainingProfile",
     "GsplatStaticAppearanceVerifiedImage",
+    "assemble_verified_gsplat_static_appearance_result",
     "inspect_gsplat_static_appearance_shared_track_pixels",
     "materialize_verified_gsplat_ply",
     "preflight_gsplat_static_appearance_inputs",
