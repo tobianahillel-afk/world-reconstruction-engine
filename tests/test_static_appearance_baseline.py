@@ -252,9 +252,7 @@ def _reference_pycolmap_fixture(
 
 
 def test_gsplat_reference_reader_has_exact_pinned_source_identity() -> None:
-    assert GSPLAT_REFERENCE_PYCOLMAP_REVISION == (
-        "cc7ea4b7301720ac29287dbe450952511b32125e"
-    )
+    assert GSPLAT_REFERENCE_PYCOLMAP_REVISION == "cc7ea4b7301720ac29287dbe450952511b32125e"
     pins = baseline_module._GSPLAT_REFERENCE_PYCOLMAP_FILES
     assert len(pins) == 9
     assert tuple(path for path, _size, _sha in pins) == tuple(
