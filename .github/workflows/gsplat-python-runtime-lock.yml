@@ -33,7 +33,7 @@ jobs:
     timeout-minutes: 20
     env:
       LOCK_KEY: runtime_python_lock
-      TARGET_PYTHON_REQUEST: "3.10"
+      TARGET_PYTHON_REQUEST: "3.10.21"
       PIP_VERSION: "25.3"
       PYTORCH_INDEX: https://download.pytorch.org/whl/cu124
 
@@ -47,7 +47,7 @@ jobs:
         uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
           version: "0.12.13"
-          python-version: "3.10"
+          python-version: "3.10.21"
           enable-cache: false
 
       - name: Prepare exact pip resolver
@@ -126,24 +126,24 @@ jobs:
             "torch==2.4.0+cu124"
             "torchvision==0.19.0+cu124"
             "numpy==1.26.4"
-            "scipy"
-            "opencv-python"
-            "Pillow"
-            "imageio"
-            "scikit-learn"
-            "tqdm"
-            "tyro>=0.8.8"
-            "viser>=0.2.1"
-            "PyYAML"
-            "matplotlib"
-            "tensorboard"
-            "torchmetrics[image]"
-            "ninja"
-            "jaxtyping"
-            "rich>=12"
-            "typing-extensions"
-            "setuptools>=68.0.0"
-            "wheel"
+            "scipy==1.15.3"
+            "opencv-python==4.11.0.86"
+            "Pillow==12.3.0"
+            "imageio==2.38.0"
+            "scikit-learn==1.7.2"
+            "tqdm==4.70.1"
+            "tyro==1.0.16"
+            "viser==1.1.1"
+            "PyYAML==6.0.3"
+            "matplotlib==3.10.9"
+            "tensorboard==2.21.0"
+            "torchmetrics[image]==1.9.0"
+            "ninja==1.13.2"
+            "jaxtyping==0.3.7"
+            "rich==14.3.4"
+            "typing-extensions==4.16.0"
+            "setuptools==84.0.0"
+            "wheel==0.48.0"
           )
           if test -s "$constraints"; then
             args+=(--constraint "$constraints")
@@ -256,6 +256,11 @@ jobs:
                   if str(value).startswith("License ::")
               )
               requires_dist = sorted(str(value) for value in metadata.get("requires_dist", []))
+              license_expression = str(metadata.get("license_expression") or "").strip()
+              legacy_license = str(metadata.get("license") or "").strip()
+              if not (license_expression or classifiers or legacy_license):
+                  raise SystemExit(f"{name}=={version}: missing direct wheel license metadata")
+              legacy_bytes = legacy_license.encode("utf-8")
               packages.append(
                   {
                       "name": name,
@@ -268,9 +273,17 @@ jobs:
                       "sha256_source": hash_source,
                       "requires_python": metadata.get("requires_python"),
                       "requires_dist": requires_dist,
-                      "license": metadata.get("license"),
-                      "license_expression": metadata.get("license_expression"),
+                      "license_expression": license_expression or None,
                       "license_classifiers": classifiers,
+                      "legacy_license": (
+                          legacy_license
+                          if legacy_license and len(legacy_bytes) <= 512 and "\n" not in legacy_license
+                          else None
+                      ),
+                      "legacy_license_sha256": (
+                          hashlib.sha256(legacy_bytes).hexdigest() if legacy_bytes else None
+                      ),
+                      "legacy_license_byte_length": len(legacy_bytes),
                   }
               )
 
