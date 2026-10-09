@@ -84,7 +84,7 @@ jobs:
           assert len(packages) == len(lock["packages"]) == 75
           assert packages["torch"]["version"] == "2.4.0+cu124"
 
-          pending = {"torch", "ninja", "setuptools", "wheel"}
+          pending = {"torch", "numpy", "ninja", "setuptools", "wheel"}
           selected: set[str] = set()
           while pending:
               name = pending.pop()
@@ -143,7 +143,9 @@ jobs:
           "$NATIVE_PYTHON" -m pip check
           "$NATIVE_PYTHON" - <<'PY'
           import sys
+          import numpy
           import torch
+          assert numpy.__version__ == "1.26.4", numpy.__version__
           assert sys.version.startswith("3.10.21")
           assert torch.__version__ == "2.4.0+cu124", torch.__version__
           assert torch.version.cuda == "12.4", torch.version.cuda
