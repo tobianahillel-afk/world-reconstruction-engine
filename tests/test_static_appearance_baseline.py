@@ -2071,7 +2071,7 @@ def test_exact_ply_assembly_rejects_output_identity_reused_as_input(
 ) -> None:
     request, source, staged, output, profile, _ref, producer = _retained_gsplat_fixture(tmp_path)
     existing = request.source_geometry.source_artifacts[0]
-    with pytest.raises(GsplatStaticAppearancePreflightError, match=r"appearance\\.static"):
+    with pytest.raises(GsplatStaticAppearancePreflightError, match=r"appearance\.static"):
         assemble_verified_gsplat_static_appearance_result(
             request=request,
             source=source,
