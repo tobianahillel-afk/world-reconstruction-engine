@@ -2081,3 +2081,9 @@ def test_exact_ply_assembly_rejects_output_identity_reused_as_input(
             profile=profile,
             producer=producer,
         )
+
+
+def test_verified_gsplat_output_assembly_is_exposed_from_reconstruction_package() -> None:
+    from wre.reconstruction import assemble_verified_gsplat_static_appearance_result as exported
+
+    assert exported is assemble_verified_gsplat_static_appearance_result
