@@ -389,9 +389,7 @@ def verify_gsplat_fused_ssim_reference_sources(
     root = _safe_root(source_root, "gsplat fused-ssim source_root")
     package = root / "fused_ssim"
     if package.is_symlink() or not package.is_dir():
-        raise GsplatStaticAppearancePreflightError(
-            "fused-ssim package must be a real directory"
-        )
+        raise GsplatStaticAppearancePreflightError("fused-ssim package must be a real directory")
     expected_package = {"fused_ssim/__init__.py"}
     actual_package: set[str] = set()
     for path in package.rglob("*"):
@@ -406,14 +404,13 @@ def verify_gsplat_fused_ssim_reference_sources(
         )
 
     reviewed_top_level = {
-        relative for relative, _size, _blob in _GSPLAT_FUSED_SSIM_SOURCE_FILES
+        relative
+        for relative, _size, _blob in _GSPLAT_FUSED_SSIM_SOURCE_FILES
         if "/" not in relative
     }
     for path in root.iterdir():
         if path.is_symlink():
-            raise GsplatStaticAppearancePreflightError(
-                "fused-ssim source root contains a symlink"
-            )
+            raise GsplatStaticAppearancePreflightError("fused-ssim source root contains a symlink")
         if path.is_file() and path.suffix in {".py", ".cpp", ".cu", ".h"}:
             if path.name not in reviewed_top_level:
                 raise GsplatStaticAppearancePreflightError(
