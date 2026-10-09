@@ -882,6 +882,7 @@ def verify_gsplat_static_appearance_shared_scene_tracks(
         )
     )
 
+
 @dataclass(frozen=True, slots=True)
 class GsplatStaticAppearanceSharedTrackPixelPair:
     """Observed sRGB8 pixel difference at reciprocal COLMAP tracks, not radiance truth.
