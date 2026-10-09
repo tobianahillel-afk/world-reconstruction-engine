@@ -96,10 +96,10 @@ from wre.reconstruction.colmap_reconstruction import (
 )
 from wre.reconstruction.geometry_solution_comparison import GeometrySolutionCandidate
 from wre.reconstruction.static_appearance_baseline import (
+    GSPLAT_REFERENCE_PYCOLMAP_REVISION,
     GSPLAT_STATIC_APPEARANCE_REPRESENTATION,
     GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION,
     GSPLAT_STATIC_APPEARANCE_SOURCE_TREE,
-    GSPLAT_REFERENCE_PYCOLMAP_REVISION,
     GsplatStaticAppearancePreflightError,
     GsplatStaticAppearancePreflightSource,
     GsplatStaticAppearanceTrainingProfile,
@@ -107,8 +107,8 @@ from wre.reconstruction.static_appearance_baseline import (
     preflight_gsplat_static_appearance_inputs,
     verify_gsplat_static_appearance_matching_capture_metadata,
     verify_gsplat_static_appearance_native_geometry,
-    verify_gsplat_static_appearance_reference_sources,
     verify_gsplat_reference_pycolmap_sources,
+    verify_gsplat_static_appearance_reference_sources,
     verify_gsplat_static_appearance_shared_scene_tracks,
     verify_gsplat_static_appearance_source_photometry,
 )
