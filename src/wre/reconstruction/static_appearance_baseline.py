@@ -10,7 +10,9 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import shutil
 import struct
+import tempfile
 import zlib
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
@@ -1134,6 +1136,176 @@ def inspect_gsplat_static_appearance_shared_track_pixels(
     return tuple(result)
 
 
+
+@dataclass(frozen=True, slots=True)
+class GsplatStaticAppearanceStagedDataset:
+    """Private exact COLMAP/PNG trainer input tree, not a trained AppearanceModel."""
+
+    dataset_root: Path
+    source_geometry_id: str
+    native_model_ref: ArtifactRef
+    entries: tuple[ArtifactMaterializationEntry, ...]
+
+
+def _copy_gsplat_source_exact(
+    source_file: Path,
+    output_file: Path,
+    *,
+    expected_sha256: Sha256Digest,
+    expected_bytes: int,
+) -> ArtifactMaterializationEntry:
+    """Copy one immutable file in bounded chunks; verify source AND copied bytes."""
+
+    if source_file.is_symlink() or not source_file.is_file():
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat staging requires a regular source file without symlinks"
+        )
+    digest = hashlib.sha256()
+    count = 0
+    output_file.parent.mkdir(parents=True, exist_ok=True)
+    with source_file.open("rb") as source_stream, output_file.open("xb") as output_stream:
+        while True:
+            chunk = source_stream.read(1024 * 1024)
+            if not chunk:
+                break
+            count += len(chunk)
+            if count > expected_bytes:
+                raise GsplatStaticAppearancePreflightError(
+                    "gsplat staging source byte count exceeds the audited input"
+                )
+            digest.update(chunk)
+            output_stream.write(chunk)
+    actual_sha256 = Sha256Digest(digest.hexdigest())
+    if count != expected_bytes or actual_sha256 != expected_sha256:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat staging source identity changed during copy"
+        )
+
+    # Re-hash the independently staged bytes, rather than assuming copy succeeded.
+    staged_hash = hashlib.sha256()
+    staged_size = 0
+    with output_file.open("rb") as staged_stream:
+        while chunk := staged_stream.read(1024 * 1024):
+            staged_size += len(chunk)
+            staged_hash.update(chunk)
+    if staged_size != expected_bytes or staged_hash.hexdigest() != expected_sha256.value:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat staged file differs from the audited input"
+        )
+    if source_file.is_symlink() or not source_file.is_file():
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat staging source disappeared or changed type"
+        )
+    return ArtifactMaterializationEntry(
+        relative_path=output_file.name,
+        sha256=actual_sha256,
+        byte_length=count,
+    )
+
+
+def stage_verified_gsplat_static_appearance_dataset(
+    request: StaticAppearanceCandidateRequest,
+    source: GsplatStaticAppearancePreflightSource,
+    *,
+    dataset_root: Path,
+) -> GsplatStaticAppearanceStagedDataset:
+    """Stage verified PNG and unmodified native COLMAP files in a fresh private tree.
+
+    The reference trainer expects data_dir/images and data_dir/sparse/0. This
+    CPU-only stage preserves exact original PNG and binary model bytes without
+    image resampling, pose transforms, hidden parser normalization or invoking
+    gsplat. The final destination must not exist; failures remove only WRE's
+    own temporary tree and never touch source images or solver-native files.
+    """
+
+    verified = preflight_gsplat_static_appearance_inputs(request, source)
+    if not isinstance(dataset_root, Path):
+        raise TypeError("gsplat dataset_root must be pathlib.Path")
+    if dataset_root.is_symlink() or dataset_root.exists():
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat staged dataset destination must not already exist"
+        )
+    parent = _safe_root(dataset_root.parent, "gsplat dataset parent")
+    destination = parent / dataset_root.name
+    images_root = _safe_root(source.image_root, "gsplat image_root")
+    native_root = _safe_root(source.native_model_root, "gsplat native_model_root")
+    if any(
+        destination.is_relative_to(root) or root.is_relative_to(destination)
+        for root in (images_root, native_root)
+    ):
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat staged dataset must not overlap source image or native-model roots"
+        )
+    native_model = _verified_native_model_path(
+        source.native_model_root, source.native_model_artifact
+    )
+    expected_model_files = ("cameras.bin", "images.bin", "points3D.bin")
+    if tuple(item.relative_path for item in source.native_model_artifact.files) != expected_model_files:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat staging requires the exact COLMAP binary cameras/images/points model"
+        )
+
+    temporary = Path(tempfile.mkdtemp(prefix=".wre-gsplat-dataset-", dir=parent))
+    published = False
+    try:
+        entries: list[ArtifactMaterializationEntry] = []
+        for item, expected in zip(source.images, verified.images, strict=True):
+            if (
+                item.image_name != expected.image_name
+                or item.observation.observation_id != expected.observation_id
+            ):
+                raise GsplatStaticAppearancePreflightError(
+                    "gsplat source observation identity changed before staging"
+                )
+            staged_file = temporary / "images" / item.image_name
+            copied = _copy_gsplat_source_exact(
+                item.source_path,
+                staged_file,
+                expected_sha256=expected.sha256,
+                expected_bytes=expected.byte_length,
+            )
+            entries.append(
+                ArtifactMaterializationEntry(
+                    relative_path=f"images/{item.image_name}",
+                    sha256=copied.sha256,
+                    byte_length=copied.byte_length,
+                )
+            )
+
+        for manifest in source.native_model_artifact.files:
+            staged_file = temporary / "sparse" / "0" / manifest.relative_path
+            copied = _copy_gsplat_source_exact(
+                native_model / manifest.relative_path,
+                staged_file,
+                expected_sha256=manifest.sha256,
+                expected_bytes=manifest.byte_length,
+            )
+            entries.append(
+                ArtifactMaterializationEntry(
+                    relative_path=f"sparse/0/{manifest.relative_path}",
+                    sha256=copied.sha256,
+                    byte_length=copied.byte_length,
+                )
+            )
+        ordered = tuple(sorted(entries, key=lambda item: item.relative_path))
+        if destination.exists() or destination.is_symlink():
+            raise GsplatStaticAppearancePreflightError(
+                "gsplat destination appeared while preparing private data"
+            )
+        temporary.rename(destination)
+        published = True
+    finally:
+        if not published:
+            shutil.rmtree(temporary)
+
+    return GsplatStaticAppearanceStagedDataset(
+        dataset_root=destination,
+        source_geometry_id=verified.source_geometry_id,
+        native_model_ref=verified.native_model_ref,
+        entries=ordered,
+    )
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class GsplatStaticAppearanceTrainingProfile:
     """Audited single-GPU overrides for the exact upstream reference trainer.
@@ -1387,11 +1559,13 @@ __all__ = [
     "GsplatStaticAppearancePreflightSource",
     "GsplatStaticAppearanceSharedTrackPair",
     "GsplatStaticAppearanceSharedTrackPixelPair",
+    "GsplatStaticAppearanceStagedDataset",
     "GsplatStaticAppearanceTrainingProfile",
     "GsplatStaticAppearanceVerifiedImage",
     "inspect_gsplat_static_appearance_shared_track_pixels",
     "materialize_verified_gsplat_ply",
     "preflight_gsplat_static_appearance_inputs",
+    "stage_verified_gsplat_static_appearance_dataset",
     "verify_gsplat_reference_pycolmap_sources",
     "verify_gsplat_static_appearance_matching_capture_metadata",
     "verify_gsplat_static_appearance_native_geometry",
