@@ -713,4 +713,5 @@ __all__ = [
     "reconstruct_colmap_globally",
     "reconstruct_colmap_incrementally",
     "verify_colmap_geometry",
+    "verify_gsplat_fused_ssim_reference_sources",
 ]
