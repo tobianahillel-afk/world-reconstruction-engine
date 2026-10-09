@@ -22,6 +22,11 @@ next_action: >-
   white-balance mode and color temperature must match across two or more observations.
   Missing or differing metadata fail closed; equal capture declarations do not prove
   equal scene radiance, tone mapping, actual overlap or camera-response calibration.
+  PR #205 adds a separate CPU-only necessary-evidence gate over the exact audited COLMAP native
+  sparse model: all selected registered source observations must form a connected graph of
+  reciprocal, valid shared Point3D/Point2D tracks with exact image-name identities. This
+  proves bounded geometric overlap only, not equal radiance, photometric calibration, view
+  quality or GPU training success.
   The additional exact-source gate verifies ten reviewed gsplat v1.5.3 trainer
   entrypoint/requirements/parser/helper files against
   immutable upstream Git blob SHA-1 identities and byte lengths before any future external import.
