@@ -1308,6 +1308,125 @@ def stage_verified_gsplat_static_appearance_dataset(
     )
 
 
+def verify_gsplat_static_appearance_staged_dataset(
+    request: StaticAppearanceCandidateRequest,
+    source: GsplatStaticAppearancePreflightSource,
+    staged: GsplatStaticAppearanceStagedDataset,
+) -> tuple[ArtifactMaterializationEntry, ...]:
+    """Recheck the complete private dataset before handing it to an external trainer.
+
+    A successful earlier staging operation is not proof that the on-disk tree is
+    still intact. Verify the original input identities again, require exactly the
+    canonical trainer file set and reject symlinks, unknown files, directories,
+    changed payloads or mismatched request/geometry ancestry. No trainer import.
+    """
+
+    if not isinstance(staged, GsplatStaticAppearanceStagedDataset):
+        raise TypeError("gsplat staged dataset must be GsplatStaticAppearanceStagedDataset")
+    verified = preflight_gsplat_static_appearance_inputs(request, source)
+    if (
+        staged.source_geometry_id != verified.source_geometry_id
+        or staged.native_model_ref != verified.native_model_ref
+    ):
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat staged dataset has different source geometry or native model ancestry"
+        )
+    if staged.dataset_root.is_symlink():
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat staged dataset root must not be a symlink"
+        )
+    root = _safe_root(staged.dataset_root, "gsplat staged dataset")
+    native_model = _verified_native_model_path(
+        source.native_model_root, source.native_model_artifact
+    )
+    expected_native_names = ("cameras.bin", "images.bin", "points3D.bin")
+    if tuple(item.relative_path for item in source.native_model_artifact.files) != (
+        expected_native_names
+    ):
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat staged dataset requires exactly three audited COLMAP binary files"
+        )
+
+    expected_files: dict[str, tuple[Path, Sha256Digest, int]] = {}
+    for item, image in zip(source.images, verified.images, strict=True):
+        if (
+            item.image_name != image.image_name
+            or item.observation.observation_id != image.observation_id
+        ):
+            raise GsplatStaticAppearancePreflightError(
+                "gsplat staged dataset source observation identities changed"
+            )
+        expected_files[f"images/{image.image_name}"] = (
+            item.source_path,
+            image.sha256,
+            image.byte_length,
+        )
+    for item in source.native_model_artifact.files:
+        expected_files[f"sparse/0/{item.relative_path}"] = (
+            native_model / item.relative_path,
+            item.sha256,
+            item.byte_length,
+        )
+    expected_entries = tuple(
+        ArtifactMaterializationEntry(
+            relative_path=relative_path, sha256=digest, byte_length=byte_length
+        )
+        for relative_path, (_source, digest, byte_length) in sorted(expected_files.items())
+    )
+    if staged.entries != expected_entries:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat staged dataset manifest differs from exact original inputs"
+        )
+
+    allowed_directories = {"images", "sparse", "sparse/0"}
+    present_files: set[str] = set()
+    for path in root.rglob("*"):
+        relative_path = path.relative_to(root).as_posix()
+        if path.is_symlink():
+            raise GsplatStaticAppearancePreflightError("gsplat staged dataset contains a symlink")
+        if path.is_dir():
+            if relative_path not in allowed_directories:
+                raise GsplatStaticAppearancePreflightError(
+                    "gsplat staged dataset contains an unexpected directory"
+                )
+        elif path.is_file():
+            if relative_path not in expected_files:
+                raise GsplatStaticAppearancePreflightError(
+                    "gsplat staged dataset contains an unexpected file"
+                )
+            present_files.add(relative_path)
+        else:
+            raise GsplatStaticAppearancePreflightError(
+                "gsplat staged dataset contains an unsupported file type"
+            )
+    if present_files != set(expected_files):
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat staged dataset is missing an audited input file"
+        )
+
+    for relative_path, (original, expected_digest, expected_size) in sorted(expected_files.items()):
+        for path in (original, root / relative_path):
+            if path.is_symlink() or not path.is_file():
+                raise GsplatStaticAppearancePreflightError(
+                    "gsplat staged dataset or its original source is not a regular file"
+                )
+            digest = hashlib.sha256()
+            total = 0
+            with path.open("rb") as stream:
+                while chunk := stream.read(1024 * 1024):
+                    total += len(chunk)
+                    if total > expected_size:
+                        raise GsplatStaticAppearancePreflightError(
+                            "gsplat staged dataset file exceeds its audited size"
+                        )
+                    digest.update(chunk)
+            if total != expected_size or digest.hexdigest() != expected_digest.value:
+                raise GsplatStaticAppearancePreflightError(
+                    "gsplat staged dataset or original source differs from audited SHA-256"
+                )
+    return expected_entries
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class GsplatStaticAppearanceTrainingProfile:
     """Audited single-GPU overrides for the exact upstream reference trainer.
@@ -1574,4 +1693,5 @@ __all__ = [
     "verify_gsplat_static_appearance_reference_sources",
     "verify_gsplat_static_appearance_shared_scene_tracks",
     "verify_gsplat_static_appearance_source_photometry",
+    "verify_gsplat_static_appearance_staged_dataset",
 ]
