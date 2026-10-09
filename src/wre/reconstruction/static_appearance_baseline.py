@@ -526,9 +526,7 @@ def verify_gsplat_nerfview_reference_sources(
                 f"nerfview source file missing: {relative}"
             ) from exc
         if not resolved.is_file() or not resolved.is_relative_to(root):
-            raise GsplatStaticAppearancePreflightError(
-                f"nerfview source file invalid: {relative}"
-            )
+            raise GsplatStaticAppearancePreflightError(f"nerfview source file invalid: {relative}")
         if resolved.stat().st_size != expected_size:
             raise GsplatStaticAppearancePreflightError(
                 f"nerfview source byte length differs: {relative}"
