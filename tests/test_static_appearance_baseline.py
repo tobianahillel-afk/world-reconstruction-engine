@@ -71,7 +71,11 @@ from wre.domain.observations import (
     SourceRef,
 )
 from wre.domain.point_maps import PointMap, PointMapId
-from wre.domain.producer_identity import ArtifactProducerIdentity, ConfigurationIdentity
+from wre.domain.producer_identity import (
+    ArtifactProducerIdentity,
+    ConfigurationIdentity,
+    ModelIdentity,
+)
 from wre.domain.runs import DerivedArtifactProvenance, ProducerRef, ReconstructionRunId
 from wre.photometry import (
     convert_rgb8_to_linear_reference,
@@ -103,6 +107,7 @@ from wre.reconstruction.static_appearance_baseline import (
     GsplatStaticAppearancePreflightError,
     GsplatStaticAppearancePreflightSource,
     GsplatStaticAppearanceTrainingProfile,
+    assemble_verified_gsplat_static_appearance_result,
     inspect_gsplat_static_appearance_shared_track_pixels,
     materialize_verified_gsplat_ply,
     preflight_gsplat_static_appearance_inputs,
@@ -1906,4 +1911,158 @@ def test_gsplat_staged_dataset_revalidation_rejects_root_symlink(
     with pytest.raises(GsplatStaticAppearancePreflightError, match="root must not be a symlink"):
         verify_gsplat_static_appearance_staged_dataset(
             request, source, replace(staged, dataset_root=alias)
+        )
+
+
+def _retained_gsplat_fixture(
+    tmp_path: Path,
+) -> tuple[
+    StaticAppearanceCandidateRequest,
+    GsplatStaticAppearancePreflightSource,
+    baseline_module.GsplatStaticAppearanceStagedDataset,
+    Path,
+    GsplatStaticAppearanceTrainingProfile,
+    ArtifactRef,
+    ArtifactProducerIdentity,
+]:
+    request, source = _stageable_dataset_fixture(tmp_path)
+    staged = stage_verified_gsplat_static_appearance_dataset(
+        request, source, dataset_root=tmp_path / "trainer-input"
+    )
+    output_root, profile, ref = _gsplat_output(tmp_path, _gsplat_ply(vertices=2))
+    producer = ArtifactProducerIdentity(
+        producer=ProducerRef(implementation="gsplat.examples.simple_trainer", version="1.5.3"),
+        configuration=ConfigurationIdentity(sha256=profile.configuration_sha256),
+        model=ModelIdentity(
+            name="gsplat",
+            version="1.5.3",
+            revision=GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION,
+        ),
+    )
+    return request, source, staged, output_root, profile, ref, producer
+
+
+def test_exact_ply_output_assembles_complete_appearance_result_without_mutating_sources(
+    tmp_path: Path,
+) -> None:
+    request, source, staged, output, profile, ref, producer = _retained_gsplat_fixture(
+        tmp_path
+    )
+    result = assemble_verified_gsplat_static_appearance_result(
+        request=request,
+        source=source,
+        staged=staged,
+        artifact_ref=ref,
+        output_root=output,
+        profile=profile,
+        producer=producer,
+    )
+    assert result.request is request
+    assert result.candidate.source_geometry is request.source_geometry
+    assert result.candidate.source_surface is None
+    assert result.candidate.source_observation_ids == request.source_observation_ids
+    assert result.candidate.artifact_ref == ref
+    assert result.candidate.producer is producer
+    assert result.candidate.representation == request.output_representation
+    assert result.candidate.local_frame_id == request.source_geometry.geometry_solution.local_frame_id
+    assert result.candidate.scale_status is GeometryScaleStatus.UNRESOLVED
+    assert result.candidate.source_artifacts == tuple(
+        sorted(
+            (*request.source_geometry.source_artifacts, *request.supporting_artifacts),
+            key=lambda item: (item.artifact_id.value, item.artifact_kind.value),
+        )
+    )
+    assert result.materialization.artifact_ref == ref
+    assert result.materialization.entries[0].sha256 == _digest(
+        (output / profile.expected_ply_relative_path).read_bytes()
+    )
+    assert (
+        assemble_verified_gsplat_static_appearance_result(
+            request=request, source=source, staged=staged, artifact_ref=ref,
+            output_root=output, profile=profile, producer=producer
+        )
+        == result
+    )
+    assert not hasattr(result, "gpu_execution_evidence")
+    assert not hasattr(result, "quality_score")
+
+
+@pytest.mark.parametrize(
+    ("mutation", "reason"),
+    [
+        ("configuration", "configuration differs"),
+        ("model", "exact checkpoint-free reference trainer"),
+        ("revision", "exact checkpoint-free reference trainer"),
+        ("implementation", "exact checkpoint-free reference trainer"),
+    ],
+)
+def test_exact_ply_assembly_rejects_false_producer_identity(
+    tmp_path: Path, mutation: str, reason: str
+) -> None:
+    request, source, staged, output, profile, ref, producer = _retained_gsplat_fixture(
+        tmp_path
+    )
+    if mutation == "configuration":
+        producer = replace(
+            producer, configuration=ConfigurationIdentity(sha256=_digest(b"wrong config"))
+        )
+    elif mutation == "model":
+        producer = replace(
+            producer, model=ModelIdentity(name="other", version="1.5.3")
+        )
+    elif mutation == "revision":
+        producer = replace(
+            producer,
+            model=ModelIdentity(name="gsplat", version="1.5.3", revision="wrong"),
+        )
+    else:
+        producer = replace(
+            producer, producer=ProducerRef(implementation="unknown", version="1.5.3")
+        )
+    with pytest.raises(GsplatStaticAppearancePreflightError, match=reason):
+        assemble_verified_gsplat_static_appearance_result(
+            request=request, source=source, staged=staged, artifact_ref=ref,
+            output_root=output, profile=profile, producer=producer
+        )
+
+
+def test_exact_ply_assembly_rejects_modified_training_inputs_and_output(
+    tmp_path: Path,
+) -> None:
+    request, source, staged, output, profile, ref, producer = _retained_gsplat_fixture(
+        tmp_path
+    )
+    source.images[0].source_path.write_bytes(b"changed after staging")
+    with pytest.raises(GsplatStaticAppearancePreflightError):
+        assemble_verified_gsplat_static_appearance_result(
+            request=request, source=source, staged=staged, artifact_ref=ref,
+            output_root=output, profile=profile, producer=producer
+        )
+
+    # A fresh fixture proves output verification is independent from input hashes.
+    tmp2 = tmp_path / "second"
+    tmp2.mkdir()
+    request, source, staged, output, profile, ref, producer = _retained_gsplat_fixture(
+        tmp2
+    )
+    ply = output / profile.expected_ply_relative_path
+    ply.write_bytes(ply.read_bytes()[:-1])
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="truncated"):
+        assemble_verified_gsplat_static_appearance_result(
+            request=request, source=source, staged=staged, artifact_ref=ref,
+            output_root=output, profile=profile, producer=producer
+        )
+
+
+def test_exact_ply_assembly_rejects_output_identity_reused_as_input(
+    tmp_path: Path,
+) -> None:
+    request, source, staged, output, profile, _ref, producer = _retained_gsplat_fixture(
+        tmp_path
+    )
+    existing = request.source_geometry.source_artifacts[0]
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="appearance.static"):
+        assemble_verified_gsplat_static_appearance_result(
+            request=request, source=source, staged=staged,
+            artifact_ref=existing, output_root=output, profile=profile, producer=producer
         )
