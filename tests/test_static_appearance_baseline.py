@@ -1240,12 +1240,12 @@ def _shared_track_fixture(
     images = {
         1: SimpleNamespace(
             name="frame.png",
-            num_points2D=1,
+            num_points2D=lambda: 1,
             point2D=lambda _index: SimpleNamespace(point3D_id=reciprocal_point_id),
         ),
         2: SimpleNamespace(
             name=second_image_name,
-            num_points2D=1,
+            num_points2D=lambda: 1,
             point2D=lambda _index: SimpleNamespace(point3D_id=reciprocal_point_id),
         ),
     }
