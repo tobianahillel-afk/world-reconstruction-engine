@@ -104,9 +104,9 @@ from wre.reconstruction.static_appearance_baseline import (
     materialize_verified_gsplat_ply,
     preflight_gsplat_static_appearance_inputs,
     verify_gsplat_static_appearance_matching_capture_metadata,
-    verify_gsplat_static_appearance_shared_scene_tracks,
     verify_gsplat_static_appearance_native_geometry,
     verify_gsplat_static_appearance_reference_sources,
+    verify_gsplat_static_appearance_shared_scene_tracks,
     verify_gsplat_static_appearance_source_photometry,
 )
 from wre.reconstruction.static_appearance_candidate import StaticAppearanceCandidateRequest
