@@ -1674,7 +1674,6 @@ def materialize_verified_gsplat_ply(
     )
 
 
-
 def assemble_verified_gsplat_static_appearance_result(
     *,
     request: StaticAppearanceCandidateRequest,
@@ -1734,9 +1733,7 @@ def assemble_verified_gsplat_static_appearance_result(
     source_refs.extend(request.supporting_artifacts)
     # Multiple canonical ancestry paths may legitimately refer to the same
     # exact artifact. The result boundary requires the canonical set union.
-    distinct = {
-        (item.artifact_id.value, item.artifact_kind.value): item for item in source_refs
-    }
+    distinct = {(item.artifact_id.value, item.artifact_kind.value): item for item in source_refs}
     ancestry = tuple(distinct[key] for key in sorted(distinct))
     geometry = request.source_geometry.geometry_solution
     candidate = AppearanceModel(
