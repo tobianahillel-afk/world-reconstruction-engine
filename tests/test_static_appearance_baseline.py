@@ -1732,9 +1732,12 @@ def test_gsplat_private_staging_preserves_exact_bytes_and_ancestry(
             for item in source.native_model_artifact.files
         },
     }
-    assert sorted(path.relative_to(destination).as_posix() for path in destination.rglob("*") if path.is_file()) == [
-        item.relative_path for item in result.entries
-    ]
+    staged_paths = sorted(
+        path.relative_to(destination).as_posix()
+        for path in destination.rglob("*")
+        if path.is_file()
+    )
+    assert staged_paths == [item.relative_path for item in result.entries]
     for entry in result.entries:
         source_bytes = expected_sources[entry.relative_path].read_bytes()
         assert (destination / entry.relative_path).read_bytes() == source_bytes
