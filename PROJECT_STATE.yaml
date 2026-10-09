@@ -36,12 +36,18 @@ next_action: >-
   interchangeable with WRE's PyCOLMAP 4.2.0 environment. PR #206 adds a separate offline source-byte
   gate for the exact MIT rmbrualla/pycolmap SceneManager reader commit cc7ea4b7301720ac29287dbe450952511b32125e:
   nine reviewed package/metadata/license files are Git-blob pinned, while unexpected package files
-  and symlinks fail closed. That is not runtime import, native-model cross-read or Python dependency
-  approval. Next close an isolated exact gsplat trainer Python/Torch/CUDA/pycolmap reference
-  dependency/license lock, independently test SceneManager native-model compatibility,
-  prove actual cross-observation
-  photometric suitability using independently supported shared-scene evidence beyond capture-setting
-  metadata equality, execute a private supported-GPU fixture, and
+  and symlinks fail closed. PR #207 now adds a separate CPU-only real native-model
+  compatibility fixture: exact PyCOLMAP 4.2.0 reconstructs 12 registered images and 477
+  points; the unchanged reviewed SceneManager fork, isolated under Python 3.12 NumPy 1.26.4
+  and SciPy 1.16.2, reads camera models intrinsics poses image names 2D links 3D RGB/error
+  and reciprocal tracks identically, with audited native binary hashes unchanged. The old
+  fork fails to import under NumPy 2.5.3 because np.uint64(-1) raises OverflowError,
+  so do not put the two PyCOLMAP readers in one runtime. This is one real fixture only,
+  not universal compatibility or trainer GPU approval. Next close the exact gsplat trainer
+  Python/Torch/CUDA and isolated SceneManager dependency/license lock, prove actual
+  cross-observation photometric suitability using independently supported shared-scene
+  evidence beyond capture-setting metadata equality, execute a private supported-GPU
+  fixture, and
   construct a complete AppearanceModel plus actual ArtifactMaterializationMetadata behind V2L18.2.
   Preserve caller geometry, local frame, scale, original pixel bytes and source lineage. Keep
   unsupported hardware DEFERRED/UNVERIFIED. No default route, held-out scoring, router promotion
