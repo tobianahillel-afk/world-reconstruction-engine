@@ -593,9 +593,7 @@ def verify_gsplat_static_appearance_matching_capture_metadata(
     The gsplat reference trainer still reads the original PNG pixels.
     """
 
-    identities = verify_gsplat_static_appearance_source_photometry(
-        request, source, assessments
-    )
+    identities = verify_gsplat_static_appearance_source_photometry(request, source, assessments)
     if len(assessments) < 2:
         raise GsplatStaticAppearancePreflightError(
             "multi-view capture comparison requires at least two real observations"
