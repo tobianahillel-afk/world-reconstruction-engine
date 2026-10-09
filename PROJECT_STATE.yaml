@@ -55,7 +55,14 @@ next_action: >-
   every staged file, and publish only after a complete successful copy. Source
   overlap, symlinks, missing native files, tampering and partial workspaces fail
   closed without modifying caller data. This is CPU-only input staging, not a
-  trained appearance model or GPU/runtime approval. Next close the exact gsplat trainer
+  trained appearance model or GPU/runtime approval. PR #211 independently revalidates the
+  complete private staged tree and original source hashes just before external execution.
+  PR #212 now assembles a real already-produced, validated degree-3 PLY into the canonical
+  AppearanceModel and ArtifactMaterializationMetadata with exact source ancestry, producer
+  configuration, source geometry, frame and scale. This is a retained-output contract test
+  on synthetic fixture bytes, not an observed GPU training run, calibrated radiance or a
+  shipping approval. The output assembly is exported through wre.reconstruction.
+  Next close the exact gsplat trainer
   Python/Torch/CUDA and isolated SceneManager dependency/license lock, prove actual
   cross-observation photometric suitability using independently supported shared-scene
   evidence beyond capture-setting metadata equality, execute a private supported-GPU
