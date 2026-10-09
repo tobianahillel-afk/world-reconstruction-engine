@@ -879,6 +879,13 @@ dependencies:
     reference_colmap_parser_git_blob_sha1: 6c21f2c663b60d9dc38471a9963a3b5d092e5ed2
     reference_requirements_numpy: '<2.0.0'
     reference_requirements_pycolmap_fork: rmbrualla/pycolmap@cc7ea4b7301720ac29287dbe450952511b32125e
+    reference_pycolmap_source_revision: cc7ea4b7301720ac29287dbe450952511b32125e
+    reference_pycolmap_package_version: 0.0.1
+    reference_pycolmap_source_license: MIT
+    reference_pycolmap_source_file_count: 9
+    reference_pycolmap_scene_manager_git_blob_sha1: 352f051f71aad8bbad70c0b6cc63b83d3ab90ce5
+    reference_pycolmap_license_git_blob_sha1: 5156d3d49e0c312561c59680658b6261f635abe3
+    reference_pycolmap_source_verification: local_exact_git_blob_preflight_only
     reference_entrypoint_file_count: 10
     reference_entrypoint_verification: local_exact_git_blob_preflight_only
     license: Apache-2.0
@@ -897,9 +904,18 @@ dependencies:
       ea0a940ea796e486aa68e8fc284ee01cb5a27662 requests numpy<2.0.0
       and rmbrualla/pycolmap commit cc7ea4b7301720ac29287dbe450952511b32125e,
       rather than the independent approved WRE PyCOLMAP 4.2.0 path.
-      Do not pip-install that floating/unreviewed example environment into WRE;
-      prove one separate exact solver/native Python/Torch/CUDA dependency lock
-      and the SceneManager API compatibility before any GPU run.
+      The referenced rmbrualla/pycolmap commit is a distinct pure-Python
+      SceneManager reader, whose pinned package source declares version 0.0.1
+      and MIT license (source license blob 5156d3d49e0c312561c59680658b6261f635abe3).
+      A separate offline CPU preflight now verifies its exact nine selected
+      package/metadata/license files including SceneManager and rejects
+      unexpected package Python files or any source-byte drift. This is
+      source-identity evidence only and does not approve the old fork's runtime,
+      prove it reads WRE's COLMAP 4.2.0 native model, or close numpy/scipy.
+      Do not pip-install that unqualified example environment into WRE;
+      prove one isolated exact Python/Torch/CUDA dependency and license lock,
+      then independently exercise SceneManager cross-read compatibility before
+      any GPU run.
       Its COLMAP parser expects native sparse cameras
       images tracks and colored points that cannot be reconstructed by inventing
       private information from a canonical geometry envelope. The default upstream
