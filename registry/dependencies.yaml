@@ -890,6 +890,17 @@ dependencies:
     reference_fused_ssim_license: MIT
     reference_fused_ssim_verified_build_source_files: 7
     reference_fused_ssim_build_source_verification: local_exact_git_blob_preflight_only
+    reference_fused_ssim_native_build_import: verified_cpu_host_no_gpu_execution
+    reference_fused_ssim_native_build_workflow: gsplat-fused-ssim-native-build
+    reference_fused_ssim_native_build_python: '3.10.21'
+    reference_fused_ssim_native_build_torch: 2.4.0+cu124
+    reference_fused_ssim_native_build_numpy: 1.26.4
+    reference_fused_ssim_native_build_exact_wheels: 27
+    reference_fused_ssim_native_build_cuda_nvcc: '12.4.131'
+    reference_fused_ssim_native_build_gcc: 11.4.0
+    reference_fused_ssim_native_build_gpu_execution: false
+    reference_fused_ssim_native_build_binary_reproducibility: unverified
+    reference_fused_ssim_native_build_last_binary_sha256: 9b8079c8affdb9491c0234b26d5a4889da6e54a11335d03f9637976a4f448c14
     reference_fused_bilagrid_source_revision: 90f9788e57d3545e3a033c1038bb9986549632fe
     reference_fused_bilagrid_source_tree_sha1: ee863004a76eb54b44c7761eb6178069bc794752
     reference_fused_bilagrid_license_git_blob_sha1: 139a05b81af1c7dd1bc15adbc8f5834ac88ac8c9
@@ -3115,10 +3126,19 @@ dependencies:
       and direct wheel license metadata for every resolved package, while the
       exact gsplat, fused-ssim, nerfview and historical SceneManager sources
       remain separately revision-pinned and are to be installed with no
-      dependency re-resolution. This is resolver evidence only: it is not a
-      CUDA-extension build, import, GPU or training proof. Next close the exact
-      CUDA toolkit/host-compiler/native-extension build identity before any
-      supported GPU run.
+      dependency re-resolution. PR #220 separately proved a compile-only CUDA 12.4.131
+      NVCC/GCC 11.4.0 toolchain in a digest-pinned NVIDIA image. PR #221 then
+      installed the exact 27-wheel native-build subset from the reviewed lock
+      (including Python 3.10.21, torch 2.4.0+cu124 and NumPy 1.26.4), verified
+      seven immutable fused-ssim source blobs, and actually built/imported the
+      fused_ssim_cuda native extension without a GPU. This is genuine scoped
+      native build/import evidence, not gsplat rasterizer build, trainer import,
+      kernel execution, GPU training, CUDA ABI generality or shipping approval.
+      Two successful source-identical builds produced different binary SHA-256
+      values, so byte-identical binary reproducibility remains UNVERIFIED.
+      Next prove the full gsplat CUDA rasterizer native build/import under the
+      reviewed external profile and independently verify its actual GPU path
+      on supported hardware.
       Its COLMAP parser expects native sparse cameras
       images tracks and colored points that cannot be reconstructed by inventing
       private information from a canonical geometry envelope. The default upstream

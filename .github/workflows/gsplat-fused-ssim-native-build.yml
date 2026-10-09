@@ -1,0 +1,276 @@
+name: gsplat-fused-ssim-native-build
+
+# Real native extension build/import evidence on a CPU-hosted CUDA toolkit runner.
+# No kernel launch, appearance training, or shipping/default approval is implied.
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/gsplat-fused-ssim-native-build.yml"
+      - "src/wre/reconstruction/static_appearance_baseline.py"
+      - "registry/dependencies.yaml"
+      - "registry/work-items/v2m3.yaml"
+      - "PROJECT_STATE.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-extension:
+    name: exact-fused-ssim-build-import-no-gpu
+    runs-on: ubuntu-24.04
+    container:
+      image: nvidia/cuda@sha256:da6791294b0b04d7e65d87b7451d6f2390b4d36225ab0701ee7dfec5769829f5
+    timeout-minutes: 55
+    env:
+      CUDA_HOME: /usr/local/cuda
+      PYTHON_TARGET: "3.10.21"
+      TORCH_CUDA_ARCH_LIST: "7.5"
+      MAX_JOBS: "2"
+      FUSED_SSIM_REVISION: 328dc9836f513d00c4b5bc38fe30478b4435cbb5
+      PYTHONPATH: ""
+
+    steps:
+      - name: Checkout WRE exact registry and source pins
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Bootstrap exact Python without touching WRE's mandatory environment
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.13"
+          python-version: "3.10.21"
+          enable-cache: false
+
+      - name: Create private Python 3.10.21 native build environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$CUDA_HOME/bin/nvcc"
+          "$CUDA_HOME/bin/nvcc" --version | grep 'release 12.4,'
+          uv venv --seed --python "$PYTHON_TARGET" "$RUNNER_TEMP/gsplat-native-venv"
+          echo "NATIVE_PYTHON=$RUNNER_TEMP/gsplat-native-venv/bin/python" >> "$GITHUB_ENV"
+
+      - name: Derive audited Torch dependency closure and exact wheel URLs
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run --no-project --with "pyyaml==6.0.2" --with "packaging==26.0" python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          import re
+          from pathlib import Path
+          from urllib.parse import urlsplit
+
+          import yaml
+          from packaging.requirements import Requirement
+          from packaging.utils import canonicalize_name
+
+          entry = yaml.safe_load(Path("registry/dependencies.yaml").read_text(encoding="utf-8"))[
+              "dependencies"
+          ]["gsplat_static_appearance"]
+          lock = entry["runtime_python_lock"]
+          assert lock["target"]["python"] == "3.10.21"
+          assert lock["target"]["torch_cuda"] == "12.4"
+          assert lock["gpu_execution_evidence"] is False
+          packages = {canonicalize_name(p["name"]): p for p in lock["packages"]}
+          assert len(packages) == len(lock["packages"]) == 75
+          assert packages["torch"]["version"] == "2.4.0+cu124"
+
+          pending = {"torch", "numpy", "ninja", "setuptools", "wheel"}
+          selected: set[str] = set()
+          while pending:
+              name = pending.pop()
+              if name in selected:
+                  continue
+              item = packages.get(name)
+              if item is None:
+                  raise SystemExit(f"unlocked Torch build dependency: {name}")
+              selected.add(name)
+              for requirement_string in item["requires_dist"]:
+                  requirement = Requirement(requirement_string)
+                  if requirement.marker is not None and not requirement.marker.evaluate({"extra": ""}):
+                      continue
+                  dependency = canonicalize_name(requirement.name)
+                  if dependency not in packages:
+                      raise SystemExit(f"unlocked required dependency: {name} -> {dependency}")
+                  if not requirement.specifier.contains(packages[dependency]["version"], prereleases=True):
+                      raise SystemExit(f"incompatible reviewed lock: {name} -> {dependency}")
+                  pending.add(dependency)
+
+          lines = []
+          manifest = []
+          for name in sorted(selected):
+              item = packages[name]
+              url = item["url"]
+              sha = item["sha256"]
+              parsed = urlsplit(url)
+              if parsed.scheme != "https" or parsed.fragment:
+                  raise SystemExit(f"non-canonical exact wheel URL for {name}")
+              if not re.fullmatch("[0-9a-f]{64}", sha):
+                  raise SystemExit(f"invalid exact wheel digest for {name}")
+              lines.append(f"{item['name']} @ {url}#sha256={sha}")
+              manifest.append({
+                  "name": item["name"],
+                  "version": item["version"],
+                  "url": url,
+                  "sha256": sha,
+              })
+
+          output = Path(os.environ["RUNNER_TEMP"])
+          (output / "fused-ssim-locked-wheel-urls.txt").write_text(
+              "\n".join(lines) + "\n", encoding="utf-8"
+          )
+          (output / "fused-ssim-wheel-subset.json").write_text(
+              json.dumps(manifest, sort_keys=True, indent=2) + "\n", encoding="utf-8"
+          )
+          print(f"Selected {len(selected)} exact locked Torch/build wheel URLs.")
+          PY
+
+      - name: Install only hash-verified reviewed wheel URLs, without dependency resolution
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$NATIVE_PYTHON" -m pip install --no-index --no-deps --no-cache-dir \
+            --require-hashes -r "$RUNNER_TEMP/fused-ssim-locked-wheel-urls.txt"
+          "$NATIVE_PYTHON" -m pip check
+          "$NATIVE_PYTHON" - <<'PY'
+          import sys
+          import numpy
+          import torch
+          assert numpy.__version__ == "1.26.4", numpy.__version__
+          assert sys.version.startswith("3.10.21")
+          assert torch.__version__ == "2.4.0+cu124", torch.__version__
+          assert torch.version.cuda == "12.4", torch.version.cuda
+          assert not torch.cuda.is_available(), "a CPU-only native preflight must not claim GPU"
+          print("Reviewed PyTorch 2.4.0+cu124 imported with GPU unavailable.")
+          PY
+
+      - name: Materialize seven exact upstream fused-ssim source files
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$NATIVE_PYTHON" - <<'PY'
+          from __future__ import annotations
+
+          import ast
+          import hashlib
+          import os
+          import urllib.request
+          from pathlib import Path
+
+          module = ast.parse(
+              Path("src/wre/reconstruction/static_appearance_baseline.py").read_text(
+                  encoding="utf-8"
+              )
+          )
+          pins = None
+          revision = None
+          for statement in module.body:
+              if isinstance(statement, ast.Assign):
+                  for target in statement.targets:
+                      if isinstance(target, ast.Name) and target.id == "_GSPLAT_FUSED_SSIM_SOURCE_FILES":
+                          pins = ast.literal_eval(statement.value)
+                      if isinstance(target, ast.Name) and target.id == "_GSPLAT_FUSED_SSIM_REVISION":
+                          revision = ast.literal_eval(statement.value)
+              if isinstance(statement, ast.AnnAssign) and isinstance(statement.target, ast.Name):
+                  if statement.target.id == "_GSPLAT_FUSED_SSIM_SOURCE_FILES":
+                      pins = ast.literal_eval(statement.value)
+          if revision != os.environ["FUSED_SSIM_REVISION"] or not isinstance(pins, tuple):
+              raise SystemExit("fused-ssim exact upstream pins differ from reviewed WRE constants")
+          if len(pins) != 7:
+              raise SystemExit("unexpected fused-ssim source closure")
+          root = Path(os.environ["RUNNER_TEMP"]) / "fused-ssim-source"
+          root.mkdir(parents=True, exist_ok=False)
+          for relative, expected_bytes, blob_sha in pins:
+              if ".." in Path(relative).parts or relative.startswith("/"):
+                  raise SystemExit("unsafe pinned source path")
+              url = (
+                  "https://raw.githubusercontent.com/rahul-goel/fused-ssim/"
+                  + revision + "/" + relative
+              )
+              request = urllib.request.Request(url, headers={"User-Agent": "WRE-V2L18.3"})
+              with urllib.request.urlopen(request, timeout=120) as response:
+                  content = response.read(expected_bytes + 1)
+              actual_blob = hashlib.sha1(
+                  f"blob {len(content)}\0".encode() + content, usedforsecurity=False
+              ).hexdigest()
+              if len(content) != expected_bytes or actual_blob != blob_sha:
+                  raise SystemExit(f"fused-ssim source digest mismatch: {relative}")
+              path = root / relative
+              path.parent.mkdir(parents=True, exist_ok=True)
+              path.write_bytes(content)
+          print("Verified exactly seven source files without importing fused_ssim.")
+          PY
+
+      - name: Build and import exact fused-ssim native CUDA extension
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$NATIVE_PYTHON" -m pip install --no-deps --no-build-isolation --no-cache-dir \
+            "$RUNNER_TEMP/fused-ssim-source"
+          "$NATIVE_PYTHON" - <<'PY'
+          import torch
+          import fused_ssim
+          import fused_ssim_cuda
+          assert torch.__version__ == "2.4.0+cu124"
+          assert not torch.cuda.is_available()
+          assert fused_ssim_cuda.__file__.endswith(".so")
+          print("Built and imported fused_ssim_cuda; no CUDA kernel was executed.")
+          PY
+
+      - name: Retain exact build provenance without claiming GPU execution
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$NATIVE_PYTHON" - <<'PY'
+          import hashlib
+          import json
+          import os
+          import pathlib
+          import torch
+          import fused_ssim_cuda
+
+          module_path = pathlib.Path(fused_ssim_cuda.__file__)
+          digest = hashlib.sha256(module_path.read_bytes()).hexdigest()
+          data = {
+              "schema_version": 1,
+              "evidence_kind": "fused_ssim_native_build_import_cpu_host_only",
+              "upstream_revision": os.environ["FUSED_SSIM_REVISION"],
+              "cuda_toolkit_image_index_sha256": "da6791294b0b04d7e65d87b7451d6f2390b4d36225ab0701ee7dfec5769829f5",
+              "cuda_toolkit_major_minor": "12.4",
+              "torch_version": torch.__version__,
+              "torch_cuda_version": torch.version.cuda,
+              "python_version": "3.10.21",
+              "native_module_sha256": digest,
+              "native_module_byte_length": module_path.stat().st_size,
+              "source_pin_count": 7,
+              "python_wheel_subset": json.loads(
+                  (pathlib.Path(os.environ["RUNNER_TEMP"]) / "fused-ssim-wheel-subset.json").read_text()
+              ),
+              "native_extension_build_evidence": True,
+              "native_extension_import_evidence": True,
+              "gsplat_native_extension_build_evidence": False,
+              "gpu_execution_evidence": False,
+              "training_execution_evidence": False,
+              "redistribution_review": "pending",
+          }
+          output = pathlib.Path(os.environ["GITHUB_WORKSPACE"]) / "fused-ssim-native-evidence.json"
+          output.write_text(json.dumps(data, indent=2, sort_keys=True) + "\n")
+          print(f"Fused-SSIM native build: {module_path.stat().st_size} bytes, {digest}")
+          PY
+
+      - name: Retain native extension qualification evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v2l18-3-fused-ssim-native-build-import
+          path: fused-ssim-native-evidence.json
+          if-no-files-found: error
+          retention-days: 30

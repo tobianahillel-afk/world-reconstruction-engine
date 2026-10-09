@@ -62,19 +62,21 @@ next_action: >-
   configuration, source geometry, frame and scale. This is a retained-output contract test
   on synthetic fixture bytes, not an observed GPU training run, calibrated radiance or a
   shipping approval. The output assembly is exported through wre.reconstruction.
-  PR #219 closes the resolver-only Python/Torch portion of the external trainer environment:
-  CPython 3.10.21, torch 2.4.0+cu124, torchvision 0.19.0+cu124, NumPy 1.26.4 and
-  71 additional exact wheel artifacts are pinned with artifact SHA-256 and direct license
-  metadata, while the exact gsplat, fused-ssim, nerfview and historical SceneManager
-  sources remain separately Git-revision-pinned and must be installed without dependency
-  re-resolution. This evidence does not prove CUDA toolkit/compiler compatibility, native
-  extension build/import, GPU execution or training. Next close the exact CUDA 12.4
-  toolkit/NVCC/host-compiler build identity and a CPU-hosted native-extension build/import
-  preflight, then prove actual cross-observation photometric suitability using independently
-  supported shared-scene evidence beyond capture-setting metadata equality. After those
-  non-GPU gates, execute the retained private supported-GPU fixture when an approved runner
-  is available and bind its execution evidence to the produced PLY before constructing the
-  complete AppearanceModel plus actual ArtifactMaterializationMetadata behind V2L18.2.
+  PR #219 pins the exact 75-wheel external Python/Torch resolver-only closure for
+  CPython 3.10.21, torch 2.4.0+cu124, torchvision 0.19.0+cu124 and NumPy 1.26.4.
+  PR #220 proves a digest-pinned CUDA 12.4.131/GCC 11.4.0 toolchain can compile one
+  CUDA C++17 object on a CPU-hosted runner; this is not a native solver build or GPU
+  execution. PR #221 now installs 27 exact reviewed Torch/build wheel artifacts with
+  SHA-256 checks, verifies all seven pinned fused-ssim source files and successfully
+  builds/imports fused_ssim_cuda under that CUDA toolkit with no GPU. Two successful
+  builds have different resulting binary hashes, so bit-identical binary reproducibility
+  is not proven. The next separate native gate is the actual gsplat v1.5.3 rasterizer
+  build/import, followed by complete offline trainer import/ABI checks, source/model
+  redistribution review and independently supported shared-scene photometric suitability
+  beyond matching capture-setting metadata. After those non-GPU gates, run the retained
+  private fixture on a supported GPU when available, bind real training evidence to
+  the produced PLY and construct the canonical AppearanceModel plus actual
+  ArtifactMaterializationMetadata behind V2L18.2.
   Preserve caller geometry, local frame, scale, original pixel bytes and source lineage.
   Keep unsupported hardware DEFERRED/UNVERIFIED. No default route, held-out scoring, router
   promotion or V2L18.4 implementation.
