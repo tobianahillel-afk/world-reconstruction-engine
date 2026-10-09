@@ -2087,3 +2087,102 @@ def test_verified_gsplat_output_assembly_is_exposed_from_reconstruction_package(
     from wre.reconstruction import assemble_verified_gsplat_static_appearance_result as exported
 
     assert exported is assemble_verified_gsplat_static_appearance_result
+
+
+def _fused_ssim_source_fixture(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> tuple[Path, dict[str, bytes]]:
+    """Synthetic source bytes for the verifier, not a real upstream checkout."""
+
+    root = tmp_path / "fused-ssim"
+    data = {
+        "LICENSE": b"synthetic MIT license",
+        "ext.cpp": b"// synthetic extension\n",
+        "fused_ssim/__init__.py": b"# synthetic import\n",
+        "setup.py": b"# synthetic build\n",
+        "ssim.cu": b"// synthetic CUDA kernel\n",
+        "ssim.h": b"// synthetic header\n",
+    }
+    for relative, payload in data.items():
+        file = root / relative
+        file.parent.mkdir(parents=True, exist_ok=True)
+        file.write_bytes(payload)
+    monkeypatch.setattr(
+        baseline_module,
+        "_GSPLAT_FUSED_SSIM_SOURCE_FILES",
+        tuple(
+            (relative, len(payload), baseline_module._git_blob_sha1(payload))
+            for relative, payload in sorted(data.items())
+        ),
+    )
+    return root, data
+
+
+def test_gsplat_fused_ssim_source_pins_identify_reviewed_cuda_build() -> None:
+    assert baseline_module._GSPLAT_FUSED_SSIM_REVISION == (
+        "328dc9836f513d00c4b5bc38fe30478b4435cbb5"
+    )
+    pinned = baseline_module._GSPLAT_FUSED_SSIM_SOURCE_FILES
+    assert len(pinned) == 7
+    assert tuple(path for path, _size, _sha in pinned) == tuple(
+        sorted(path for path, _size, _sha in pinned)
+    )
+    assert ("ssim.cu", 18431, "2df752d7fcedc008f34de3ed185a6dc507fa4476") in pinned
+    assert (
+        "fused_ssim/__init__.py",
+        1388,
+        "776fed79e4ef93fb40ff768df7606ab2b0efa192",
+    ) in pinned
+
+
+def test_gsplat_fused_ssim_source_gate_is_offline_and_byte_exact(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, data = _fused_ssim_source_fixture(tmp_path, monkeypatch)
+    result = baseline_module.verify_gsplat_fused_ssim_reference_sources(root)
+    assert tuple(entry.relative_path for entry in result) == tuple(sorted(data))
+    assert result == baseline_module.verify_gsplat_fused_ssim_reference_sources(root)
+    for entry in result:
+        payload = data[entry.relative_path]
+        assert entry.sha256 == _digest(payload)
+        assert entry.byte_length == len(payload)
+
+
+def test_gsplat_fused_ssim_source_gate_rejects_tamper_missing_and_extra_code(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, _data = _fused_ssim_source_fixture(tmp_path, monkeypatch)
+    kernel = root / "ssim.cu"
+    original = kernel.read_bytes()
+    kernel.write_bytes(b"X" + original[1:])
+    with pytest.raises(baseline_module.GsplatStaticAppearancePreflightError):
+        baseline_module.verify_gsplat_fused_ssim_reference_sources(root)
+    kernel.write_bytes(original)
+
+    (root / "fused_ssim" / "extra.py").write_text("print('unexpected')\n")
+    with pytest.raises(baseline_module.GsplatStaticAppearancePreflightError):
+        baseline_module.verify_gsplat_fused_ssim_reference_sources(root)
+    (root / "fused_ssim" / "extra.py").unlink()
+
+    (root / "cuda_override.cu").write_text("// unexpected\n")
+    with pytest.raises(baseline_module.GsplatStaticAppearancePreflightError):
+        baseline_module.verify_gsplat_fused_ssim_reference_sources(root)
+    (root / "cuda_override.cu").unlink()
+
+    kernel.unlink()
+    with pytest.raises(baseline_module.GsplatStaticAppearancePreflightError):
+        baseline_module.verify_gsplat_fused_ssim_reference_sources(root)
+
+
+def test_gsplat_fused_ssim_source_gate_rejects_symlink_and_wrong_input_type(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, _data = _fused_ssim_source_fixture(tmp_path, monkeypatch)
+    with pytest.raises(TypeError):
+        baseline_module.verify_gsplat_fused_ssim_reference_sources(
+            cast(Path, "not-a-path")
+        )
+    target = root / "ssim.h"
+    (root / "fused_ssim" / "unexpected_link.py").symlink_to(target)
+    with pytest.raises(baseline_module.GsplatStaticAppearancePreflightError):
+        baseline_module.verify_gsplat_fused_ssim_reference_sources(root)
