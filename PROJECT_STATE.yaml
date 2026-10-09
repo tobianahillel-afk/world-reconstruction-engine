@@ -62,15 +62,22 @@ next_action: >-
   configuration, source geometry, frame and scale. This is a retained-output contract test
   on synthetic fixture bytes, not an observed GPU training run, calibrated radiance or a
   shipping approval. The output assembly is exported through wre.reconstruction.
-  Next close the exact gsplat trainer
-  Python/Torch/CUDA and isolated SceneManager dependency/license lock, prove actual
-  cross-observation photometric suitability using independently supported shared-scene
-  evidence beyond capture-setting metadata equality, execute a private supported-GPU
-  fixture, and
-  construct a complete AppearanceModel plus actual ArtifactMaterializationMetadata behind V2L18.2.
-  Preserve caller geometry, local frame, scale, original pixel bytes and source lineage. Keep
-  unsupported hardware DEFERRED/UNVERIFIED. No default route, held-out scoring, router promotion
-  or V2L18.4 implementation.
+  PR #219 closes the resolver-only Python/Torch portion of the external trainer environment:
+  CPython 3.10.21, torch 2.4.0+cu124, torchvision 0.19.0+cu124, NumPy 1.26.4 and
+  71 additional exact wheel artifacts are pinned with artifact SHA-256 and direct license
+  metadata, while the exact gsplat, fused-ssim, nerfview and historical SceneManager
+  sources remain separately Git-revision-pinned and must be installed without dependency
+  re-resolution. This evidence does not prove CUDA toolkit/compiler compatibility, native
+  extension build/import, GPU execution or training. Next close the exact CUDA 12.4
+  toolkit/NVCC/host-compiler build identity and a CPU-hosted native-extension build/import
+  preflight, then prove actual cross-observation photometric suitability using independently
+  supported shared-scene evidence beyond capture-setting metadata equality. After those
+  non-GPU gates, execute the retained private supported-GPU fixture when an approved runner
+  is available and bind its execution evidence to the produced PLY before constructing the
+  complete AppearanceModel plus actual ArtifactMaterializationMetadata behind V2L18.2.
+  Preserve caller geometry, local frame, scale, original pixel bytes and source lineage.
+  Keep unsupported hardware DEFERRED/UNVERIFIED. No default route, held-out scoring, router
+  promotion or V2L18.4 implementation.
 blockers: []
 architecture:
   product_blueprint: docs/01_PRODUCT.md
