@@ -886,6 +886,8 @@ dependencies:
     reference_fused_ssim_source_tree_sha1: ac5f1d8fe5d519f9c44b220d235bf1f198463da7
     reference_fused_ssim_license_git_blob_sha1: 541f73944912fde14ffb971f22ba516042b95ab7
     reference_fused_ssim_license: MIT
+    reference_fused_ssim_verified_build_source_files: 7
+    reference_fused_ssim_build_source_verification: local_exact_git_blob_preflight_only
     reference_fused_bilagrid_source_revision: 90f9788e57d3545e3a033c1038bb9986549632fe
     reference_fused_bilagrid_source_tree_sha1: ee863004a76eb54b44c7761eb6178069bc794752
     reference_fused_bilagrid_license_git_blob_sha1: 139a05b81af1c7dd1bc15adbc8f5834ac88ac8c9
@@ -923,8 +925,13 @@ dependencies:
       conditionally when use_fused_bilagrid is enabled; the reviewed WRE profile
       explicitly disables it and both bilateral-grid variants. Accordingly the
       future bounded environment must include and verify the exact fused-ssim
-      native CUDA extension, but must not add fused-bilagrid as a mandatory runtime
-      dependency. Importing simple_trainer still eagerly requires nerfview, viser,
+      native CUDA extension. A pure offline preflight now binds its MIT LICENSE,
+      README, Python import wrapper, setup.py, ext.cpp, ssim.cu and ssim.h to
+      seven reviewed Git blob identities and byte lengths and rejects tampering,
+      additional Python/CUDA build entrypoints and package symlinks. This is
+      source evidence only, not a compiled CUDA wheel, Torch/CUDA ABI, full tree,
+      transitive-license or actual training proof. Do not add fused-bilagrid as
+      a mandatory runtime dependency. Importing simple_trainer still eagerly requires nerfview, viser,
       torchmetrics image metrics and torch.utils.tensorboard even with viewer/video/
       TensorBoard use disabled. These are import-closure observations only; exact
       Python package/build hashes, CUDA ABI, native wheel licenses, runtime import
