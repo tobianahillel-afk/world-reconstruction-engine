@@ -1136,7 +1136,6 @@ def inspect_gsplat_static_appearance_shared_track_pixels(
     return tuple(result)
 
 
-
 @dataclass(frozen=True, slots=True)
 class GsplatStaticAppearanceStagedDataset:
     """Private exact COLMAP/PNG trainer input tree, not a trained AppearanceModel."""
