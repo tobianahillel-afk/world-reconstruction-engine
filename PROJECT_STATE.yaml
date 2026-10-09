@@ -43,7 +43,13 @@ next_action: >-
   and reciprocal tracks identically, with audited native binary hashes unchanged. The old
   fork fails to import under NumPy 2.5.3 because np.uint64(-1) raises OverflowError,
   so do not put the two PyCOLMAP readers in one runtime. This is one real fixture only,
-  not universal compatibility or trainer GPU approval. Next close the exact gsplat trainer
+  not universal compatibility or trainer GPU approval. PR #209 adds a separate CPU-only,
+  source-byte-bound cross-observation pixel diagnostic: after exact V2L17 metadata checks
+  and reciprocal COLMAP 3D track support, it decodes the actual original sRGB PNG pixels
+  at common tracks and retains per-observation-pair raw sRGB-channel differences and exact
+  PNG identities. This is descriptive observation evidence only, not a color/radiance
+  calibration, threshold-based quality gate, camera-response solution or GPU training proof.
+  Next close the exact gsplat trainer
   Python/Torch/CUDA and isolated SceneManager dependency/license lock, prove actual
   cross-observation photometric suitability using independently supported shared-scene
   evidence beyond capture-setting metadata equality, execute a private supported-GPU

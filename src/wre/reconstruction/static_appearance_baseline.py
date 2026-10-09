@@ -883,6 +883,257 @@ def verify_gsplat_static_appearance_shared_scene_tracks(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class GsplatStaticAppearanceSharedTrackPixelPair:
+    """Observed sRGB8 pixel difference at reciprocal COLMAP tracks, not radiance truth.
+
+    Differences are descriptive before photometric calibration, occlusion testing,
+    outlier filtering or held-out rendering. They cannot approve GPU training.
+    """
+
+    left_observation_id: ObservationId
+    right_observation_id: ObservationId
+    left_png_sha256: Sha256Digest
+    right_png_sha256: Sha256Digest
+    shared_track_count: int
+    mean_absolute_srgb_channel_delta: float
+
+
+def _decode_audited_gsplat_png_rgb8(data: bytes) -> tuple[int, int, bytes]:
+    """Decode the already-supported sRGB RGB8 PNG filters without optional imports.
+
+    The existing source-byte gate verifies PNG chunk CRCs, all critical chunks,
+    raster length, sRGB declaration and zlib integrity. This second read performs
+    the five PNG inverse scanline filters before sampling *actual* source pixels.
+    It does not apply exposure or color-response calibration.
+    """
+
+    width, height = _png_srgb_dimensions(data)
+    cursor = len(_PNG_SIGNATURE)
+    compressed = bytearray()
+    while cursor < len(data):
+        length = struct.unpack_from(">I", data, cursor)[0]
+        kind = data[cursor + 4 : cursor + 8]
+        cursor += 8
+        if kind == b"IDAT":
+            compressed.extend(data[cursor : cursor + length])
+        cursor += length + 4
+
+    stride = width * 3
+    expected = height * (1 + stride)
+    decoder = zlib.decompressobj()
+    try:
+        raw = decoder.decompress(bytes(compressed), expected + 1)
+    except zlib.error as exc:
+        raise GsplatStaticAppearancePreflightError("shared-track PNG raster is corrupt") from exc
+    if len(raw) != expected or not decoder.eof or decoder.unused_data:
+        raise GsplatStaticAppearancePreflightError("shared-track PNG raster is incomplete")
+
+    raster = bytearray(height * stride)
+    previous = bytearray(stride)
+    offset = 0
+    for row_index in range(height):
+        filter_type = raw[offset]
+        offset += 1
+        encoded = raw[offset : offset + stride]
+        offset += stride
+        current = bytearray(stride)
+        for position, byte in enumerate(encoded):
+            left = current[position - 3] if position >= 3 else 0
+            up = previous[position]
+            upper_left = previous[position - 3] if position >= 3 else 0
+            if filter_type == 0:
+                predictor = 0
+            elif filter_type == 1:
+                predictor = left
+            elif filter_type == 2:
+                predictor = up
+            elif filter_type == 3:
+                predictor = (left + up) // 2
+            else:
+                base = left + up - upper_left
+                a = abs(base - left)
+                b = abs(base - up)
+                c = abs(base - upper_left)
+                predictor = left if a <= b and a <= c else up if b <= c else upper_left
+            current[position] = (byte + predictor) & 0xFF
+        raster[row_index * stride : (row_index + 1) * stride] = current
+        previous = current
+    return width, height, bytes(raster)
+
+
+def inspect_gsplat_static_appearance_shared_track_pixels(
+    request: StaticAppearanceCandidateRequest,
+    source: GsplatStaticAppearancePreflightSource,
+    assessments: tuple[PhotometricCompatibilityAssessment, ...],
+    *,
+    features: ColmapFeatureExtractionResult,
+    expected_environment: ColmapEnvironmentIdentity,
+    module: object,
+) -> tuple[GsplatStaticAppearanceSharedTrackPixelPair, ...]:
+    """Read original sRGB pixels at verified common 3D tracks for diagnostics only.
+
+    This first repeats the strict existing source/photometry/capture/native-track
+    gates. It then re-hashes the exact original PNG bytes, applies PNG inverse
+    filters, and samples each reciprocal 2D track at its containing pixel. No
+    RGB threshold, calibration, view-weight or quality-pass decision is inferred:
+    equal observed pixels do not prove equal scene radiance, and unequal pixels
+    can be caused by viewpoint, occlusion, lighting or camera-response effects.
+    """
+
+    pairs = verify_gsplat_static_appearance_shared_scene_tracks(
+        request,
+        source,
+        assessments,
+        features=features,
+        expected_environment=expected_environment,
+        module=module,
+    )
+    root = _safe_root(source.image_root, "gsplat image_root")
+    images_by_name: dict[str, tuple[ObservationId, Sha256Digest, int, int, bytes]] = {}
+    for item in source.images:
+        path = root / item.image_name
+        if path.is_symlink() or item.source_path.is_symlink():
+            raise GsplatStaticAppearancePreflightError(
+                "shared-track source image changed into a symlink"
+            )
+        try:
+            resolved = path.resolve(strict=True)
+            bound = item.source_path.resolve(strict=True)
+            if not resolved.is_file() or resolved.parent != root or resolved != bound:
+                raise GsplatStaticAppearancePreflightError(
+                    "shared-track source image is not the exact original bound file"
+                )
+            data = resolved.read_bytes()
+        except (OSError, RuntimeError) as exc:
+            raise GsplatStaticAppearancePreflightError(
+                "shared-track source image is inaccessible"
+            ) from exc
+        if (
+            len(data) != item.observation.asset.byte_length
+            or Sha256Digest(hashlib.sha256(data).hexdigest()) != item.observation.asset.sha256
+        ):
+            raise GsplatStaticAppearancePreflightError(
+                "shared-track source PNG bytes differ from the original Observation"
+            )
+        width, height, pixels = _decode_audited_gsplat_png_rgb8(data)
+        images_by_name[item.image_name] = (
+            item.observation.observation_id,
+            item.observation.asset.sha256,
+            width,
+            height,
+            pixels,
+        )
+
+    path = _verified_native_model_path(source.native_model_root, source.native_model_artifact)
+    try:
+        native = cast(Any, module).Reconstruction(path)
+        if not bool(native.is_valid()):
+            raise GsplatStaticAppearancePreflightError(
+                "native COLMAP model is invalid during source-pixel inspection"
+            )
+        image_ids = tuple(sorted(int(value) for value in native.reg_image_ids()))
+        native_images = {image_id: native.image(image_id) for image_id in image_ids}
+        if len(image_ids) != len(images_by_name) or {
+            image.name for image in native_images.values()
+        } != set(images_by_name):
+            raise GsplatStaticAppearancePreflightError(
+                "native COLMAP image identities differ during source-pixel inspection"
+            )
+
+        totals: dict[tuple[str, str], tuple[int, int]] = {}
+        for point_id in sorted(int(value) for value in native.point3D_ids()):
+            point = native.point3D(point_id)
+            sampled: dict[str, tuple[int, int, int]] = {}
+            for element in point.track.elements:
+                image_id = int(element.image_id)
+                index = int(element.point2D_idx)
+                if image_id not in native_images:
+                    raise GsplatStaticAppearancePreflightError(
+                        "foreign native COLMAP image in shared-track pixel evidence"
+                    )
+                image = native_images[image_id]
+                if index < 0 or index >= int(image.num_points2D()):
+                    raise GsplatStaticAppearancePreflightError(
+                        "invalid native COLMAP 2D index in shared-track pixel evidence"
+                    )
+                point2d = image.point2D(index)
+                if int(point2d.point3D_id) != point_id:
+                    raise GsplatStaticAppearancePreflightError(
+                        "non-reciprocal native COLMAP track in shared-track pixel evidence"
+                    )
+                obs_id, _sha, width, height, pixels = images_by_name[image.name]
+                xy = point2d.xy
+                x, y = float(xy[0]), float(xy[1])
+                if not math.isfinite(x) or not math.isfinite(y):
+                    raise GsplatStaticAppearancePreflightError(
+                        "native COLMAP track contains non-finite source-pixel coordinates"
+                    )
+                # COLMAP image coordinates refer to pixel centers (0.5, 0.5).
+                px, py = math.floor(x), math.floor(y)
+                if px < 0 or py < 0 or px >= width or py >= height:
+                    raise GsplatStaticAppearancePreflightError(
+                        "native COLMAP track lies outside the exact source image"
+                    )
+                offset = (py * width + px) * 3
+                if obs_id.value in sampled:
+                    raise GsplatStaticAppearancePreflightError(
+                        "duplicate native COLMAP observation in shared-track pixel evidence"
+                    )
+                sampled[obs_id.value] = (
+                    pixels[offset],
+                    pixels[offset + 1],
+                    pixels[offset + 2],
+                )
+            sorted_ids = sorted(sampled)
+            for position, left in enumerate(sorted_ids):
+                for right in sorted_ids[position + 1 :]:
+                    delta = sum(
+                        abs(a - b) for a, b in zip(sampled[left], sampled[right], strict=True)
+                    )
+                    count, total = totals.get((left, right), (0, 0))
+                    totals[(left, right)] = count + 1, total + delta
+    except GsplatStaticAppearancePreflightError:
+        raise
+    except (
+        AttributeError,
+        TypeError,
+        IndexError,
+        KeyError,
+        ValueError,
+        OverflowError,
+        RuntimeError,
+        OSError,
+    ) as exc:
+        raise GsplatStaticAppearancePreflightError(
+            "native COLMAP source-pixel track evidence cannot be audited"
+        ) from exc
+
+    sha_by_id = {
+        image.observation.observation_id.value: image.observation.asset.sha256
+        for image in source.images
+    }
+    result: list[GsplatStaticAppearanceSharedTrackPixelPair] = []
+    for pair in pairs:
+        left, right = pair.left_observation_id.value, pair.right_observation_id.value
+        count, total = totals.get((left, right), (0, 0))
+        if count != pair.shared_point_count:
+            raise GsplatStaticAppearancePreflightError(
+                "native COLMAP shared-track counts changed during pixel inspection"
+            )
+        result.append(
+            GsplatStaticAppearanceSharedTrackPixelPair(
+                left_observation_id=pair.left_observation_id,
+                right_observation_id=pair.right_observation_id,
+                left_png_sha256=sha_by_id[left],
+                right_png_sha256=sha_by_id[right],
+                shared_track_count=count,
+                mean_absolute_srgb_channel_delta=total / (count * 3 * 255),
+            )
+        )
+    return tuple(result)
+
+
 @dataclass(frozen=True, slots=True, kw_only=True)
 class GsplatStaticAppearanceTrainingProfile:
     """Audited single-GPU overrides for the exact upstream reference trainer.
@@ -1135,8 +1386,10 @@ __all__ = [
     "GsplatStaticAppearancePreflightEvidence",
     "GsplatStaticAppearancePreflightSource",
     "GsplatStaticAppearanceSharedTrackPair",
+    "GsplatStaticAppearanceSharedTrackPixelPair",
     "GsplatStaticAppearanceTrainingProfile",
     "GsplatStaticAppearanceVerifiedImage",
+    "inspect_gsplat_static_appearance_shared_track_pixels",
     "materialize_verified_gsplat_ply",
     "preflight_gsplat_static_appearance_inputs",
     "verify_gsplat_reference_pycolmap_sources",
