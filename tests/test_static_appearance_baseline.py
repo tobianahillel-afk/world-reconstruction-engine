@@ -1210,7 +1210,9 @@ def test_multiview_capture_gate_requires_two_exact_distinct_source_observations(
         verify_gsplat_static_appearance_matching_capture_metadata(
             request, source, (one,)
         )
-    multi_request, multi_source = _two_view_parts(tmp_path / "other")
+    second_root = tmp_path / "other"
+    second_root.mkdir()
+    multi_request, multi_source = _two_view_parts(second_root)
     foreign = _gsplat_photo_assessment(
         multi_source, observation_id=ObservationId("obs:foreign"),
         capture=(100.0, 0.01, 4.0, 0.0),
