@@ -719,9 +719,7 @@ def test_gsplat_ply_rejects_wrong_degree_or_partial_harmonics(
         "rot_2",
         "rot_3",
     )
-    root, profile, ref = _gsplat_output(
-        tmp_path, _gsplat_ply(properties=properties), steps=20
-    )
+    root, profile, ref = _gsplat_output(tmp_path, _gsplat_ply(properties=properties), steps=20)
     with pytest.raises(GsplatStaticAppearancePreflightError, match="property schema"):
         materialize_verified_gsplat_ply(
             artifact_ref=ref,
