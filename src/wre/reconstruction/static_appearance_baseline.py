@@ -62,6 +62,23 @@ from wre.reconstruction.static_appearance_candidate import (
     build_static_appearance_candidate_result,
 )
 
+# Reviewed MIT fused-ssim source at rahul-goel/fused-ssim revision
+# 328dc9836f513d00c4b5bc38fe30478b4435cbb5. This eagerly imported
+# CUDA loss is mandatory for the selected upstream trainer. These are the
+# executable/build source files plus license and README, not the full Git tree
+# or proof of an installed CUDA extension or its binary/toolchain license.
+_GSPLAT_FUSED_SSIM_REVISION = "328dc9836f513d00c4b5bc38fe30478b4435cbb5"
+_GSPLAT_FUSED_SSIM_SOURCE_FILES: tuple[tuple[str, int, str], ...] = (
+    ("LICENSE", 1067, "541f73944912fde14ffb971f22ba516042b95ab7"),
+    ("README.md", 3960, "b2cd9676ef94dbd0f6488bd08b71fc6b5a159310"),
+    ("ext.cpp", 179, "3eeece12ad64d46e79c810ba7569325f96e35573"),
+    ("fused_ssim/__init__.py", 1388, "776fed79e4ef93fb40ff768df7606ab2b0efa192"),
+    ("setup.py", 2348, "47d2689243b49a9005e061edd3a95e30170d279b"),
+    ("ssim.cu", 18431, "2df752d7fcedc008f34de3ed185a6dc507fa4476"),
+    ("ssim.h", 508, "adb00543b71403bd5350b0734f1ced0bee8da2fe"),
+)
+
+
 GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION = "937e29912570c372bed6747a5c9bf85fed877bae"
 GSPLAT_STATIC_APPEARANCE_TRAINER_GIT_BLOB = "6a30be737b5c9af53a140f64faf499d8d4d0933f"
 GSPLAT_STATIC_APPEARANCE_SOURCE_TREE = "90c3f0b2352e6d2725bcba1ef0407168f922c0fa"
@@ -346,6 +363,94 @@ def verify_gsplat_reference_pycolmap_sources(
         if resolved.stat().st_size != expected_length:
             raise GsplatStaticAppearancePreflightError(
                 f"reference pycolmap source changed during verification: {relative}"
+            )
+        entries.append(
+            ArtifactMaterializationEntry(
+                relative_path=relative,
+                sha256=Sha256Digest(hashlib.sha256(data).hexdigest()),
+                byte_length=len(data),
+            )
+        )
+    return tuple(entries)
+
+
+
+def verify_gsplat_fused_ssim_reference_sources(
+    source_root: Path,
+) -> tuple[ArtifactMaterializationEntry, ...]:
+    """Verify the reviewed local fused-ssim import/CUDA-build sources without executing them.
+
+    This does not approve a built wheel, compiled CUDA extension, Torch/CUDA ABI,
+    complete transitive dependency closure or a real appearance training run.
+    """
+
+    if not isinstance(source_root, Path):
+        raise TypeError("gsplat fused-ssim source_root must be pathlib.Path")
+    root = _safe_root(source_root, "gsplat fused-ssim source_root")
+    package = root / "fused_ssim"
+    if package.is_symlink() or not package.is_dir():
+        raise GsplatStaticAppearancePreflightError(
+            "fused-ssim package must be a real directory"
+        )
+    expected_package = {"fused_ssim/__init__.py"}
+    actual_package: set[str] = set()
+    for path in package.rglob("*"):
+        if path.is_symlink() or not path.is_file():
+            raise GsplatStaticAppearancePreflightError(
+                "fused-ssim package has an unexpected source path or symlink"
+            )
+        actual_package.add(path.relative_to(root).as_posix())
+    if actual_package != expected_package:
+        raise GsplatStaticAppearancePreflightError(
+            "fused-ssim import package differs from the reviewed source"
+        )
+
+    reviewed_top_level = {
+        relative for relative, _size, _blob in _GSPLAT_FUSED_SSIM_SOURCE_FILES
+        if "/" not in relative
+    }
+    for path in root.iterdir():
+        if path.is_symlink():
+            raise GsplatStaticAppearancePreflightError(
+                "fused-ssim source root contains a symlink"
+            )
+        if path.is_file() and path.suffix in {".py", ".cpp", ".cu", ".h"}:
+            if path.name not in reviewed_top_level:
+                raise GsplatStaticAppearancePreflightError(
+                    "fused-ssim has an unexpected executable or build source file"
+                )
+
+    entries: list[ArtifactMaterializationEntry] = []
+    for relative, expected_size, expected_blob in _GSPLAT_FUSED_SSIM_SOURCE_FILES:
+        candidate = root
+        for part in PurePosixPath(relative).parts:
+            candidate /= part
+            if candidate.is_symlink():
+                raise GsplatStaticAppearancePreflightError(
+                    f"fused-ssim source path contains symlink: {relative}"
+                )
+        try:
+            resolved = candidate.resolve(strict=True)
+        except (OSError, RuntimeError) as exc:
+            raise GsplatStaticAppearancePreflightError(
+                f"fused-ssim source file missing: {relative}"
+            ) from exc
+        if not resolved.is_file() or not resolved.is_relative_to(root):
+            raise GsplatStaticAppearancePreflightError(
+                f"fused-ssim source file invalid: {relative}"
+            )
+        if resolved.stat().st_size != expected_size:
+            raise GsplatStaticAppearancePreflightError(
+                f"fused-ssim source byte length differs: {relative}"
+            )
+        data = resolved.read_bytes()
+        if len(data) != expected_size or _git_blob_sha1(data) != expected_blob:
+            raise GsplatStaticAppearancePreflightError(
+                f"fused-ssim source Git blob differs: {relative}"
+            )
+        if resolved.stat().st_size != expected_size:
+            raise GsplatStaticAppearancePreflightError(
+                f"fused-ssim source changed during verification: {relative}"
             )
         entries.append(
             ArtifactMaterializationEntry(
