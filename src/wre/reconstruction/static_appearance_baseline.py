@@ -59,6 +59,28 @@ GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION = "937e29912570c372bed6747a5c9bf85fed87
 GSPLAT_STATIC_APPEARANCE_TRAINER_GIT_BLOB = "6a30be737b5c9af53a140f64faf499d8d4d0933f"
 GSPLAT_STATIC_APPEARANCE_SOURCE_TREE = "90c3f0b2352e6d2725bcba1ef0407168f922c0fa"
 GSPLAT_STATIC_APPEARANCE_REPRESENTATION = "gaussian.splat.ply"
+GSPLAT_REFERENCE_PYCOLMAP_REVISION = "cc7ea4b7301720ac29287dbe450952511b32125e"
+
+# This is the pure-Python SceneManager reader pinned by the exact upstream
+# examples/requirements.txt. It is *not* WRE's native PyCOLMAP 4.2.0 runtime.
+# The pinned MIT source is a necessary input for an isolated external environment,
+# not proof of native-model cross-read, pip transitive closure or GPU execution.
+_GSPLAT_REFERENCE_PYCOLMAP_FILES: tuple[tuple[str, int, str], ...] = (
+    ("LICENSE.txt", 1084, "5156d3d49e0c312561c59680658b6261f635abe3"),
+    ("README.md", 490, "7f6769bb42537467eb155356012441e90b3c8920"),
+    ("pycolmap/__init__.py", 178, "62e55b8d45b45f2255dc116c367e393f4c27e353"),
+    ("pycolmap/camera.py", 9527, "29f2fcb7815a2ea66193520c02d5e0d4bf4b13f0"),
+    ("pycolmap/database.py", 10081, "c11948d8ec464c567c1581e6dd588350efa4c7a5"),
+    ("pycolmap/image.py", 944, "14efa32b0a91f116cbd7836b6480a60b10371196"),
+    ("pycolmap/rotation.py", 11595, "f0b4e811620e9668e8a44b1fd15e0574a7307f6a"),
+    (
+        "pycolmap/scene_manager.py",
+        26996,
+        "352f051f71aad8bbad70c0b6cc63b83d3ab90ce5",
+    ),
+    ("pyproject.toml", 359, "610d833fc084bc48e114c36f52f2a9e3b99945a6"),
+)
+
 
 # Exact git-blob identities at the reviewed gsplat v1.5.3 source revision.
 # These are the *reference trainer's entrypoints*, not proof that an arbitrary
@@ -234,6 +256,84 @@ def verify_gsplat_static_appearance_reference_sources(
         if resolved.stat().st_size != expected_size:
             raise GsplatStaticAppearancePreflightError(
                 f"gsplat reference source changed during verification: {relative}"
+            )
+        entries.append(
+            ArtifactMaterializationEntry(
+                relative_path=relative,
+                sha256=Sha256Digest(hashlib.sha256(data).hexdigest()),
+                byte_length=len(data),
+            )
+        )
+    return tuple(entries)
+
+
+def verify_gsplat_reference_pycolmap_sources(
+    source_root: Path,
+) -> tuple[ArtifactMaterializationEntry, ...]:
+    """Verify the exact MIT SceneManager fork's offline source closure.
+
+    The official gsplat trainer imports SceneManager from this fork, not from
+    the independent WRE PyCOLMAP 4.2.0 package. This checks source bytes only:
+    it does not import/install the fork, prove native sparse-model compatibility,
+    resolve numpy/scipy, or authorize a trainer/GPU execution environment.
+    """
+
+    if not isinstance(source_root, Path):
+        raise TypeError("gsplat reference pycolmap source_root must be pathlib.Path")
+    root = _safe_root(source_root, "gsplat reference pycolmap source_root")
+    package = root / "pycolmap"
+    if package.is_symlink() or not package.is_dir():
+        raise GsplatStaticAppearancePreflightError(
+            "reference pycolmap package must be a real directory"
+        )
+    expected = {
+        relative
+        for relative, _size, _git_sha in _GSPLAT_REFERENCE_PYCOLMAP_FILES
+        if relative.startswith("pycolmap/")
+    }
+    actual: set[str] = set()
+    for path in package.rglob("*"):
+        if path.is_symlink() or not path.is_file():
+            raise GsplatStaticAppearancePreflightError(
+                "reference pycolmap contains an unexpected directory or symlink"
+            )
+        actual.add(path.relative_to(root).as_posix())
+    if actual != expected:
+        raise GsplatStaticAppearancePreflightError(
+            "reference pycolmap package source closure differs from the reviewed commit"
+        )
+
+    entries: list[ArtifactMaterializationEntry] = []
+    for relative, expected_length, git_blob in _GSPLAT_REFERENCE_PYCOLMAP_FILES:
+        candidate = root
+        for part in PurePosixPath(relative).parts:
+            candidate /= part
+            if candidate.is_symlink():
+                raise GsplatStaticAppearancePreflightError(
+                    f"reference pycolmap source path contains symlink: {relative}"
+                )
+        try:
+            resolved = candidate.resolve(strict=True)
+        except (OSError, RuntimeError) as exc:
+            raise GsplatStaticAppearancePreflightError(
+                f"reference pycolmap source file missing: {relative}"
+            ) from exc
+        if not resolved.is_file() or not resolved.is_relative_to(root):
+            raise GsplatStaticAppearancePreflightError(
+                f"reference pycolmap source path invalid: {relative}"
+            )
+        if resolved.stat().st_size != expected_length:
+            raise GsplatStaticAppearancePreflightError(
+                f"reference pycolmap source byte length differs: {relative}"
+            )
+        data = resolved.read_bytes()
+        if len(data) != expected_length or _git_blob_sha1(data) != git_blob:
+            raise GsplatStaticAppearancePreflightError(
+                f"reference pycolmap source Git blob differs: {relative}"
+            )
+        if resolved.stat().st_size != expected_length:
+            raise GsplatStaticAppearancePreflightError(
+                f"reference pycolmap source changed during verification: {relative}"
             )
         entries.append(
             ArtifactMaterializationEntry(
@@ -1018,6 +1118,7 @@ def materialize_verified_gsplat_ply(
 
 
 __all__ = [
+    "GSPLAT_REFERENCE_PYCOLMAP_REVISION",
     "GSPLAT_STATIC_APPEARANCE_REPRESENTATION",
     "GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION",
     "GSPLAT_STATIC_APPEARANCE_SOURCE_TREE",
@@ -1030,6 +1131,7 @@ __all__ = [
     "GsplatStaticAppearanceVerifiedImage",
     "materialize_verified_gsplat_ply",
     "preflight_gsplat_static_appearance_inputs",
+    "verify_gsplat_reference_pycolmap_sources",
     "verify_gsplat_static_appearance_matching_capture_metadata",
     "verify_gsplat_static_appearance_native_geometry",
     "verify_gsplat_static_appearance_reference_sources",
