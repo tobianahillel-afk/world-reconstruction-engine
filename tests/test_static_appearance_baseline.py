@@ -1539,10 +1539,10 @@ def test_shared_track_pixel_evidence_reports_actual_color_difference_without_sco
     first = source.images[1]
     image_header = struct.pack(">IIBBBBB", 2, 1, 8, 2, 0, 0, 0)
     second_png = (
-        b"\\x89PNG\\r\\n\\x1a\\n"
+        b"\x89PNG\r\n\x1a\n"
         + _chunk(b"IHDR", image_header)
-        + _chunk(b"sRGB", b"\\x00")
-        + _chunk(b"IDAT", zlib.compress(b"\\x00\\x41\\x80\\xc0\\x40\\x80\\xc0"))
+        + _chunk(b"sRGB", b"\x00")
+        + _chunk(b"IDAT", zlib.compress(b"\x00\x41\x80\xc0\x40\x80\xc0"))
         + _chunk(b"IEND", b"")
     )
     first.source_path.write_bytes(second_png)
@@ -1578,26 +1578,26 @@ def test_shared_track_pixel_evidence_reports_actual_color_difference_without_sco
 @pytest.mark.parametrize(
     ("filter_type", "second_encoded"),
     [
-        (0, b"\\x40\\x80\\xc0"),
-        (1, b"\\x00\\x00\\x00"),
-        (2, b"\\x40\\x80\\xc0"),
-        (3, b"\\x20\\x40\\x60"),
-        (4, b"\\x00\\x00\\x00"),
+        (0, b"\x40\x80\xc0"),
+        (1, b"\x00\x00\x00"),
+        (2, b"\x40\x80\xc0"),
+        (3, b"\x20\x40\x60"),
+        (4, b"\x00\x00\x00"),
     ],
 )
 def test_shared_track_png_decoder_applies_all_five_png_filters(
     filter_type: int, second_encoded: bytes
 ) -> None:
-    pixel = b"\\x40\\x80\\xc0"
+    pixel = b"\x40\x80\xc0"
     header = struct.pack(">IIBBBBB", 2, 1, 8, 2, 0, 0, 0)
     # These reference residuals reconstruct the second pixel to pixel
     # for every filter; the first sample for filters 1/3/4 must be its
     # literal RGB value, since the previous scanline is zero.
     payload = bytes((filter_type,)) + pixel + second_encoded
     png = (
-        b"\\x89PNG\\r\\n\\x1a\\n"
+        b"\x89PNG\r\n\x1a\n"
         + _chunk(b"IHDR", header)
-        + _chunk(b"sRGB", b"\\x00")
+        + _chunk(b"sRGB", b"\x00")
         + _chunk(b"IDAT", zlib.compress(payload))
         + _chunk(b"IEND", b"")
     )
