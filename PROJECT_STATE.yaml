@@ -70,13 +70,21 @@ next_action: >-
   SHA-256 checks, verifies all seven pinned fused-ssim source files and successfully
   builds/imports fused_ssim_cuda under that CUDA toolkit with no GPU. Two successful
   builds have different resulting binary hashes, so bit-identical binary reproducibility
-  is not proven. The next separate native gate is the actual gsplat v1.5.3 rasterizer
-  build/import, followed by complete offline trainer import/ABI checks, source/model
-  redistribution review and independently supported shared-scene photometric suitability
-  beyond matching capture-setting metadata. After those non-GPU gates, run the retained
-  private fixture on a supported GPU when available, bind real training evidence to
-  the produced PLY and construct the canonical AppearanceModel plus actual
-  ArtifactMaterializationMetadata behind V2L18.2.
+  is not proven. PR #222 now independently installs 33 exact reviewed Torch/build wheel
+  artifacts, verifies the immutable gsplat v1.5.3 full tree and sole GLM submodule, then
+  compiles and imports the real gsplat CUDA rasterizer extension on the CPU-hosted CUDA
+  12.4.131 toolchain. The retained csrc.so is 15,928,040 bytes with SHA-256
+  ba8864f8a63f8b9f3f96e9e0d754895f90dbe0e6dbc0e8627cc9c1cd71b814ee; GPU execution,
+  rasterizer kernel execution and appearance training remain false, and binary
+  reproducibility remains unverified. The next separate non-GPU gate is the complete
+  offline trainer import/ABI closure using the already-reviewed exact Python lock,
+  gsplat rasterizer, fused-ssim, nerfview and legacy SceneManager boundaries without
+  remote fetch or GPU execution. After that, complete source/model redistribution review
+  and independently supported shared-scene photometric suitability beyond matching
+  capture-setting metadata. Only after those non-GPU gates should the retained private
+  fixture run on supported GPU hardware, with real training evidence bound to the produced
+  PLY and canonical AppearanceModel plus actual ArtifactMaterializationMetadata behind
+  V2L18.2.
   Preserve caller geometry, local frame, scale, original pixel bytes and source lineage.
   Keep unsupported hardware DEFERRED/UNVERIFIED. No default route, held-out scoring, router
   promotion or V2L18.4 implementation.
@@ -103,4 +111,4 @@ reviews:
 quality:
   fast_ci_required: true
   known_regressions: 0
-updated_at: '2026-10-09'
+updated_at: '2026-10-11'

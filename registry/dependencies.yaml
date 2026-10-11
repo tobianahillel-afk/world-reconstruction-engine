@@ -901,6 +901,27 @@ dependencies:
     reference_fused_ssim_native_build_gpu_execution: false
     reference_fused_ssim_native_build_binary_reproducibility: unverified
     reference_fused_ssim_native_build_last_binary_sha256: 9b8079c8affdb9491c0234b26d5a4889da6e54a11335d03f9637976a4f448c14
+    reference_gsplat_rasterizer_native_build_import: verified_cpu_host_no_gpu_execution
+    reference_gsplat_rasterizer_native_build_workflow: gsplat-native-rasterizer-build
+    reference_gsplat_rasterizer_native_build_run_id: 37965324860
+    reference_gsplat_rasterizer_native_build_artifact_digest: sha256:98c084f54e488bf77e5e3ef5adb67b1d0f77099bf212c27c8c014bfb5344e16c
+    reference_gsplat_rasterizer_native_build_source_revision: 937e29912570c372bed6747a5c9bf85fed877bae
+    reference_gsplat_rasterizer_native_build_source_tree_sha1: 90c3f0b2352e6d2725bcba1ef0407168f922c0fa
+    reference_gsplat_rasterizer_native_build_glm_revision: 33b4a621a697a305bc3a7610d290677b96beb181
+    reference_gsplat_rasterizer_native_build_glm_tree_sha1: e57f342f0fb63852d65e0da2090528fdca9b0117
+    reference_gsplat_rasterizer_native_build_glm_license_blob_sha1: 779c32fb9afef1180798d46f08b4373e427ac693
+    reference_gsplat_rasterizer_native_build_python: '3.10.21'
+    reference_gsplat_rasterizer_native_build_torch: 2.4.0+cu124
+    reference_gsplat_rasterizer_native_build_numpy: 1.26.4
+    reference_gsplat_rasterizer_native_build_exact_wheels: 33
+    reference_gsplat_rasterizer_native_build_cuda_nvcc: '12.4.131'
+    reference_gsplat_rasterizer_native_build_compile_arch: sm_75
+    reference_gsplat_rasterizer_native_module_sha256: ba8864f8a63f8b9f3f96e9e0d754895f90dbe0e6dbc0e8627cc9c1cd71b814ee
+    reference_gsplat_rasterizer_native_module_byte_length: 15928040
+    reference_gsplat_rasterizer_native_build_gpu_execution: false
+    reference_gsplat_rasterizer_kernel_execution: false
+    reference_gsplat_rasterizer_training_execution: false
+    reference_gsplat_rasterizer_native_binary_reproducibility: unverified
     reference_fused_bilagrid_source_revision: 90f9788e57d3545e3a033c1038bb9986549632fe
     reference_fused_bilagrid_source_tree_sha1: ee863004a76eb54b44c7761eb6178069bc794752
     reference_fused_bilagrid_license_git_blob_sha1: 139a05b81af1c7dd1bc15adbc8f5834ac88ac8c9
