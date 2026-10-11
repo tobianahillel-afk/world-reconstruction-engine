@@ -85,7 +85,7 @@ jobs:
           assert lock["target"]["torch_cuda"] == "12.4"
           assert lock["gpu_execution_evidence"] is False
           packages = {canonicalize_name(p["name"]): p for p in lock["packages"]}
-          assert len(packages) == len(lock["packages"]) == 75
+          assert len(packages) == len(lock["packages"]) == 76
           assert packages["torch"]["version"] == "2.4.0+cu124"
 
           pending = {"torch", "numpy", "ninja", "setuptools", "wheel", "jaxtyping", "rich"}
