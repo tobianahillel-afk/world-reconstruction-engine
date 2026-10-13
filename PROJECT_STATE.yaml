@@ -82,7 +82,13 @@ next_action: >-
   12.4.131 toolchain. The retained csrc.so is 15,928,040 bytes with SHA-256
   ba8864f8a63f8b9f3f96e9e0d754895f90dbe0e6dbc0e8627cc9c1cd71b814ee; GPU execution,
   rasterizer kernel execution and appearance training remain false, and binary
-  reproducibility remains unverified. The next separate non-GPU gate is the complete
+  reproducibility remains unverified. PR #224 now independently proves the real
+  nerfview 0.1.2 eager imports, including splines and splines.quaternion, in an
+  isolated CPython 3.10.21 environment with 53 exact SHA-256-locked wheels from
+  the 76-wheel reviewed registry closure and verified immutable nerfview source
+  revision/tree. GitHub Actions retained this CPU-hosted import evidence;
+  native gsplat/fused-ssim co-import, full trainer ABI and GPU training remain
+  unverified by that focused check. The next separate non-GPU gate is the complete
   offline trainer import/ABI closure using the corrected exact 76-wheel Python lock,
   gsplat rasterizer, fused-ssim, nerfview and legacy SceneManager boundaries without
   remote fetch or GPU execution. After that, complete source/model redistribution review
