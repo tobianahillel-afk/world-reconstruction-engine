@@ -1,0 +1,228 @@
+name: gsplat-nerfview-import-preflight
+
+# V2L18.3: exact nerfview eager-import compatibility, without trainer/GPU execution.
+# This is an isolated dependency/import proof, not a gsplat training qualification.
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/gsplat-nerfview-import-preflight.yml"
+      - "registry/dependencies.yaml"
+      - "registry/work-items/v2m3.yaml"
+      - "PROJECT_STATE.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gsplat-nerfview-import-preflight
+  cancel-in-progress: true
+
+jobs:
+  real-import:
+    name: reviewed-nerfview-splines-eager-import-no-gpu
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      TARGET_PYTHON: "3.10.21"
+      NERFVIEW_REVISION: 4538024fe0d15fd1a0e4d760f3695fc44ca72787
+      NERFVIEW_TREE: e333400e39605978a3d1f9cf6d73ddf577a8c8e3
+      PYTHONPATH: ""
+
+    steps:
+      - name: Checkout reviewed WRE registry
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Bootstrap pinned Python and uv
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.13"
+          python-version: "3.10.21"
+          enable-cache: false
+
+      - name: Create disposable external import environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv venv --seed --python "$TARGET_PYTHON" "$RUNNER_TEMP/nerfview-import-venv"
+          echo "IMPORT_PYTHON=$RUNNER_TEMP/nerfview-import-venv/bin/python" >> "$GITHUB_ENV"
+
+      - name: Derive exact reviewed eager import wheel closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run --no-project --with "pyyaml==6.0.2" --with "packaging==26.0" python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          import re
+          from pathlib import Path
+          from urllib.parse import urlsplit
+
+          import yaml
+          from packaging.requirements import Requirement
+          from packaging.utils import canonicalize_name
+
+          lock = yaml.safe_load(Path("registry/dependencies.yaml").read_text(encoding="utf-8"))[
+              "dependencies"
+          ]["gsplat_static_appearance"]["runtime_python_lock"]
+          assert lock["target"]["python"] == "3.10.21"
+          assert lock["target"]["torch_cuda"] == "12.4"
+          assert lock["runtime_execution_evidence"] is False
+          assert lock["gpu_execution_evidence"] is False
+          packages = {canonicalize_name(p["name"]): p for p in lock["packages"]}
+          assert len(packages) == len(lock["packages"]) == 76
+          assert packages["splines"]["version"] == "0.3.3"
+          assert packages["torch"]["version"] == "2.4.0+cu124"
+
+          # These are the actual reviewed eager imports from nerfview/__init__.py,
+          # render_panel.py and viewer.py (plus their locked transitive closure).
+          pending = {
+              "numpy", "imageio", "matplotlib", "splines", "scipy",
+              "torch", "viser", "jaxtyping", "rich",
+          }
+          selected: set[str] = set()
+          while pending:
+              name = pending.pop()
+              if name in selected:
+                  continue
+              package = packages.get(name)
+              if package is None:
+                  raise SystemExit(f"unlocked nerfview runtime dependency: {name}")
+              selected.add(name)
+              for requirement_text in package["requires_dist"]:
+                  requirement = Requirement(requirement_text)
+                  if requirement.marker is not None and not requirement.marker.evaluate(
+                      {"extra": "", "python_version": "3.10", "python_full_version": "3.10.21"}
+                  ):
+                      continue
+                  dependency = canonicalize_name(requirement.name)
+                  locked = packages.get(dependency)
+                  if locked is None or not requirement.specifier.contains(
+                      locked["version"], prereleases=True
+                  ):
+                      raise SystemExit(f"missing/incompatible pinned dependency: {name} -> {dependency}")
+                  pending.add(dependency)
+
+          requirements = []
+          manifest = []
+          for name in sorted(selected):
+              package = packages[name]
+              url = package["url"]
+              sha256 = package["sha256"]
+              parsed = urlsplit(url)
+              if parsed.scheme != "https" or parsed.hostname not in {
+                  "files.pythonhosted.org", "download.pytorch.org"
+              } or parsed.fragment or parsed.username or parsed.password:
+                  raise SystemExit(f"unapproved wheel origin for {name}")
+              if not re.fullmatch(r"[0-9a-f]{64}", sha256):
+                  raise SystemExit(f"invalid reviewed wheel SHA-256 for {name}")
+              requirements.append(f"{package['name']} @ {url}#sha256={sha256}")
+              manifest.append({
+                  "name": package["name"],
+                  "version": package["version"],
+                  "url": url,
+                  "sha256": sha256,
+              })
+
+          temporary = Path(os.environ["RUNNER_TEMP"])
+          (temporary / "nerfview-pinned-wheels.txt").write_text(
+              "\n".join(requirements) + "\n", encoding="utf-8"
+          )
+          (temporary / "nerfview-pinned-manifest.json").write_text(
+              json.dumps(manifest, sort_keys=True, indent=2) + "\n", encoding="utf-8"
+          )
+          print(f"Selected {len(selected)} exact SHA-256-locked wheel artifacts.")
+          PY
+
+      - name: Install reviewed Python wheels without resolver substitution
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$IMPORT_PYTHON" -m pip install --no-index --no-deps --no-cache-dir \
+            --require-hashes -r "$RUNNER_TEMP/nerfview-pinned-wheels.txt"
+          "$IMPORT_PYTHON" -m pip check
+
+      - name: Fetch exact reviewed nerfview source tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/nerfview-source"
+          git init -q "$root"
+          git -C "$root" remote add origin https://github.com/nerfstudio-project/nerfview.git
+          git -C "$root" fetch --quiet --depth=1 origin "$NERFVIEW_REVISION"
+          git -C "$root" checkout --quiet --detach FETCH_HEAD
+          test "$(git -C "$root" rev-parse HEAD)" = "$NERFVIEW_REVISION"
+          test "$(git -C "$root" rev-parse HEAD^{tree})" = "$NERFVIEW_TREE"
+
+      - name: Import real pinned nerfview and splines with no GPU
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$IMPORT_PYTHON" - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          root = Path(os.environ["RUNNER_TEMP"])
+          source = (root / "nerfview-source").resolve(strict=True)
+          sys.path.insert(0, str(source))
+
+          import numpy
+          import splines
+          import splines.quaternion
+          import torch
+          import viser
+          import nerfview
+          from nerfview import CameraState, RenderTabState, apply_float_colormap
+
+          actual = Path(nerfview.__file__).resolve(strict=True)
+          assert actual == source / "nerfview" / "__init__.py"
+          assert nerfview.__version__ == "0.1.2", nerfview.__version__
+          assert numpy.__version__ == "1.26.4", numpy.__version__
+          assert torch.__version__ == "2.4.0+cu124", torch.__version__
+          assert splines.quaternion.__file__ is not None
+          assert all((CameraState, RenderTabState, apply_float_colormap))
+          assert not torch.cuda.is_available(), "no GPU execution permitted"
+
+          manifest = (root / "nerfview-pinned-manifest.json").read_bytes()
+          evidence = {
+              "schema_version": 1,
+              "evidence_kind": "pinned_nerfview_eager_import_cpu_host_only",
+              "nerfview_revision": os.environ["NERFVIEW_REVISION"],
+              "nerfview_source_tree": os.environ["NERFVIEW_TREE"],
+              "nerfview_version": nerfview.__version__,
+              "nerfview_entrypoint_sha256": hashlib.sha256(actual.read_bytes()).hexdigest(),
+              "python_version": ".".join(map(str, sys.version_info[:3])),
+              "torch_version": torch.__version__,
+              "numpy_version": numpy.__version__,
+              "viser_version": viser.__version__,
+              "splines_version": "0.3.3",
+              "wheel_manifest_sha256": hashlib.sha256(manifest).hexdigest(),
+              "wheel_manifest": json.loads(manifest),
+              "nerfview_eager_import_evidence": True,
+              "full_gsplat_trainer_import_evidence": False,
+              "native_cuda_build_evidence": False,
+              "gpu_execution_evidence": False,
+              "training_execution_evidence": False,
+              "redistribution_review": "pending",
+          }
+          output = Path(os.environ["GITHUB_WORKSPACE"]) / "nerfview-import-evidence.json"
+          output.write_text(json.dumps(evidence, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+          print("Imported exact nerfview + splines; trainer execution/GPU evidence remains false.")
+          PY
+
+      - name: Retain verified import evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v2l18-3-nerfview-eager-import
+          path: nerfview-import-evidence.json
+          if-no-files-found: error
+          retention-days: 30
