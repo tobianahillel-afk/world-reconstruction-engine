@@ -115,7 +115,8 @@ jobs:
               sha256 = package["sha256"]
               parsed = urlsplit(url)
               if parsed.scheme != "https" or parsed.hostname not in {
-                  "files.pythonhosted.org", "download.pytorch.org", "pypi.nvidia.com"
+                  "files.pythonhosted.org", "download.pytorch.org",
+                  "download-r2.pytorch.org", "pypi.nvidia.com"
               } or parsed.fragment or parsed.username or parsed.password:
                   raise SystemExit(f"unapproved wheel origin for {name}")
               if not re.fullmatch(r"[0-9a-f]{64}", sha256):
