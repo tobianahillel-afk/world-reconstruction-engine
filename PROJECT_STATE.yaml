@@ -62,8 +62,14 @@ next_action: >-
   configuration, source geometry, frame and scale. This is a retained-output contract test
   on synthetic fixture bytes, not an observed GPU training run, calibrated radiance or a
   shipping approval. The output assembly is exported through wre.reconstruction.
-  PR #219 pins the exact 75-wheel external Python/Torch resolver-only closure for
-  CPython 3.10.21, torch 2.4.0+cu124, torchvision 0.19.0+cu124 and NumPy 1.26.4.
+  PR #219 initially pinned the exact 75-wheel external Python/Torch resolver-only
+  closure for CPython 3.10.21, torch 2.4.0+cu124, torchvision 0.19.0+cu124 and
+  NumPy 1.26.4. Exact trainer-import review later found that the pinned nerfview
+  source eagerly imports splines and splines.quaternion despite omitting splines
+  from its own pyproject metadata. The runtime lock therefore now contains 76 exact
+  wheels by adding only splines 0.3.3 (MIT; wheel SHA-256
+  47b68f370b17c68d9ebe24fc6525532f61d5796bb655c3b9e7e8a76d2518ff09)
+  while preserving every previous wheel identity.
   PR #220 proves a digest-pinned CUDA 12.4.131/GCC 11.4.0 toolchain can compile one
   CUDA C++17 object on a CPU-hosted runner; this is not a native solver build or GPU
   execution. PR #221 now installs 27 exact reviewed Torch/build wheel artifacts with
@@ -77,7 +83,7 @@ next_action: >-
   ba8864f8a63f8b9f3f96e9e0d754895f90dbe0e6dbc0e8627cc9c1cd71b814ee; GPU execution,
   rasterizer kernel execution and appearance training remain false, and binary
   reproducibility remains unverified. The next separate non-GPU gate is the complete
-  offline trainer import/ABI closure using the already-reviewed exact Python lock,
+  offline trainer import/ABI closure using the corrected exact 76-wheel Python lock,
   gsplat rasterizer, fused-ssim, nerfview and legacy SceneManager boundaries without
   remote fetch or GPU execution. After that, complete source/model redistribution review
   and independently supported shared-scene photometric suitability beyond matching

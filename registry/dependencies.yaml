@@ -922,6 +922,11 @@ dependencies:
     reference_gsplat_rasterizer_kernel_execution: false
     reference_gsplat_rasterizer_training_execution: false
     reference_gsplat_rasterizer_native_binary_reproducibility: unverified
+    reference_nerfview_undeclared_splines_version: 0.3.3
+    reference_nerfview_undeclared_splines_source_revision: fc2fff2285d2f64ef3596a2b61127707ff31a572
+    reference_nerfview_undeclared_splines_source_tree_sha1: 88c4bf44a5af6a19760a448541a99738f2eb2e16
+    reference_nerfview_undeclared_splines_license_blob_sha1: fc5018e18bfbd3127a63dfbc360fc075c0213df3
+    reference_nerfview_undeclared_splines_license: MIT
     reference_fused_bilagrid_source_revision: 90f9788e57d3545e3a033c1038bb9986549632fe
     reference_fused_bilagrid_source_tree_sha1: ee863004a76eb54b44c7761eb6178069bc794752
     reference_fused_bilagrid_license_git_blob_sha1: 139a05b81af1c7dd1bc15adbc8f5834ac88ac8c9
@@ -2360,6 +2365,23 @@ dependencies:
             url: "https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl"
             version: "1.17.0"
           - direct: false
+            filename: "splines-0.3.3-py3-none-any.whl"
+            legacy_license: "MIT"
+            legacy_license_byte_length: 3
+            legacy_license_sha256: "e5dcffe836b6ec8a58e492419b550e65fb8cbdc308503979e5dacb33ac7ea3b7"
+            license_classifiers:
+              - "License :: OSI Approved :: MIT License"
+            license_expression: null
+            name: "splines"
+            requested: true
+            requires_dist:
+              - "NumPy"
+            requires_python: ">=3.7"
+            sha256: "47b68f370b17c68d9ebe24fc6525532f61d5796bb655c3b9e7e8a76d2518ff09"
+            sha256_source: "pip_report"
+            url: "https://files.pythonhosted.org/packages/d7/a5/2a1c72741acd5383ff320496ba7d449407491f1513a7dba72ed053e7142e/splines-0.3.3-py3-none-any.whl"
+            version: "0.3.3"
+          - direct: false
             filename: "sympy-1.14.0-py3-none-any.whl"
             legacy_license: "BSD"
             legacy_license_byte_length: 3
@@ -3053,6 +3075,7 @@ dependencies:
           - "tqdm"
           - "tyro>=0.8.8"
           - "viser>=0.2.1"
+          - "splines==0.3.3"
           - "PyYAML"
           - "matplotlib"
           - "tensorboard"
@@ -3140,9 +3163,16 @@ dependencies:
       compatibility fixture, not a universal format guarantee, full transitive
       runtime/license approval or successful gsplat GPU training. Do not install
       that historical fork into WRE's native PyCOLMAP 4.2.0 environment.
-      PR qualification now records an exact 75-wheel external Python runtime
+      PR qualification now records an exact 76-wheel external Python runtime
       closure for CPython 3.10.21 with torch 2.4.0+cu124, torchvision
-      0.19.0+cu124, NumPy 1.26.4 and the CUDA 12.4 wheel family. The lock
+      0.19.0+cu124, NumPy 1.26.4 and the CUDA 12.4 wheel family. Exact import
+      review of nerfview revision 4538024fe0d15fd1a0e4d760f3695fc44ca72787
+      found that render_panel.py eagerly imports splines and splines.quaternion
+      even though nerfview does not declare splines in pyproject.toml. The lock
+      therefore explicitly adds splines 0.3.3 from exact wheel SHA-256
+      47b68f370b17c68d9ebe24fc6525532f61d5796bb655c3b9e7e8a76d2518ff09;
+      upstream source revision fc2fff2285d2f64ef3596a2b61127707ff31a572
+      declares only NumPy and MIT licensing. The lock
       records exact artifact URLs/SHA-256 identities, Requires-Dist metadata
       and direct wheel license metadata for every resolved package, while the
       exact gsplat, fused-ssim, nerfview and historical SceneManager sources
@@ -3157,9 +3187,11 @@ dependencies:
       kernel execution, GPU training, CUDA ABI generality or shipping approval.
       Two successful source-identical builds produced different binary SHA-256
       values, so byte-identical binary reproducibility remains UNVERIFIED.
-      Next prove the full gsplat CUDA rasterizer native build/import under the
-      reviewed external profile and independently verify its actual GPU path
-      on supported hardware.
+      PR #222 now also proves the full gsplat CUDA rasterizer native build/import
+      under the reviewed external profile without GPU execution. The next separate
+      non-GPU gate is complete offline simple_trainer import/ABI compatibility across
+      the exact gsplat rasterizer, fused-ssim, nerfview and SceneManager closures;
+      actual GPU kernel/training execution remains deferred to supported hardware.
       Its COLMAP parser expects native sparse cameras
       images tracks and colored points that cannot be reconstructed by inventing
       private information from a canonical geometry envelope. The default upstream

@@ -127,6 +127,7 @@ jobs:
             "tqdm==4.70.1"
             "tyro==1.0.16"
             "viser==1.1.1"
+            "splines==0.3.3"
             "PyYAML==6.0.3"
             "matplotlib==3.10.9"
             "tensorboard==2.21.0"
@@ -179,6 +180,7 @@ jobs:
               "tqdm",
               "tyro>=0.8.8",
               "viser>=0.2.1",
+              "splines==0.3.3",
               "PyYAML",
               "matplotlib",
               "tensorboard",
@@ -194,7 +196,6 @@ jobs:
               "fused-bilagrid",
               "imageio-ffmpeg",
               "plas",
-              "splines",
               "tensorly",
               "torchpq",
           }
@@ -296,6 +297,7 @@ jobs:
           assert "torchmetrics" in by_name
           assert "tensorboard" in by_name
           assert "viser" in by_name
+          assert by_name["splines"]["version"] == "0.3.3", by_name["splines"]
           assert "jaxtyping" in by_name
           assert "nvidia-cuda-runtime-cu12" in by_name
           assert "nvidia-cudnn-cu12" in by_name
@@ -378,7 +380,13 @@ jobs:
             exit 0
           fi
           test "$status" -eq 0
-          diff -u "$committed" "$generated"
+          if ! diff -u "$committed" "$generated"; then
+            echo "Committed gsplat Python runtime lock differs from exact regeneration."
+            echo "----- BEGIN GENERATED GSPLAT PYTHON RUNTIME LOCK -----"
+            cat "$generated"
+            echo "----- END GENERATED GSPLAT PYTHON RUNTIME LOCK -----"
+            exit 1
+          fi
           echo "Committed gsplat Python runtime lock matches exact regeneration."
 
       - name: Retain machine-readable resolver evidence
