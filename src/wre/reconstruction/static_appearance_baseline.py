@@ -806,6 +806,74 @@ def verify_gsplat_static_appearance_native_geometry(
     return canonical
 
 
+
+def export_verified_gsplat_native_colmap_xyz_ply(
+    request: StaticAppearanceCandidateRequest,
+    source: GsplatStaticAppearancePreflightSource,
+    *,
+    features: ColmapFeatureExtractionResult,
+    expected_environment: ColmapEnvironmentIdentity,
+    destination: Path,
+    module: object | None = None,
+) -> Sha256Digest:
+    """Export verified native COLMAP geometry as a viewable, CPU-only XYZ PLY.
+
+    This previews canonical sparse positions in their original local frame.
+    It is not a colored/photorealistic Gaussian reconstruction, metric-scale
+    estimate, or a replacement for the original source geometry artifact.
+    """
+
+    if not isinstance(destination, Path) or not destination.is_absolute():
+        raise TypeError("COLMAP XYZ preview destination must be an absolute pathlib.Path")
+    if destination.suffix != ".ply" or destination.is_symlink() or destination.exists():
+        raise GsplatStaticAppearancePreflightError(
+            "COLMAP XYZ preview requires a new .ply destination"
+        )
+    # Reuse the actual native PyCOLMAP canonicalization and complete
+    # camera/point/frame equality gate, not a second decoder.
+    canonical = verify_gsplat_static_appearance_native_geometry(
+        request,
+        source,
+        features=features,
+        expected_environment=expected_environment,
+        module=module,
+    )
+    parent = _safe_root(destination.parent, "COLMAP XYZ preview parent")
+    target = parent / destination.name
+    points = canonical.point_map.positions_xyz
+    header = (
+        "ply\n"
+        "format binary_little_endian 1.0\n"
+        f"element vertex {len(points)}\n"
+        "property float x\n"
+        "property float y\n"
+        "property float z\n"
+        "end_header\n"
+    ).encode("ascii")
+    digest = hashlib.sha256()
+    created = False
+    try:
+        with target.open("xb") as output:
+            created = True
+            output.write(header)
+            digest.update(header)
+            for xyz in points:
+                try:
+                    record = struct.pack("<3f", *xyz)
+                except (OverflowError, struct.error) as exc:
+                    raise GsplatStaticAppearancePreflightError(
+                        "verified COLMAP coordinates cannot be exported as float32 PLY"
+                    ) from exc
+                output.write(record)
+                digest.update(record)
+    except Exception:
+        if created:
+            target.unlink(missing_ok=True)
+        raise
+    return Sha256Digest(digest.hexdigest())
+
+
+
 def verify_gsplat_static_appearance_source_photometry(
     request: StaticAppearanceCandidateRequest,
     source: GsplatStaticAppearancePreflightSource,
@@ -2299,6 +2367,7 @@ __all__ = [
     "GsplatStaticAppearanceTrainingProfile",
     "GsplatStaticAppearanceVerifiedImage",
     "assemble_verified_gsplat_static_appearance_result",
+    "export_verified_gsplat_native_colmap_xyz_ply",
     "inspect_gsplat_static_appearance_shared_track_pixels",
     "materialize_verified_gsplat_ply",
     "preflight_gsplat_static_appearance_inputs",
