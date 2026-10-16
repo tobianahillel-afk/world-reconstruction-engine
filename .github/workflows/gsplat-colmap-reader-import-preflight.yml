@@ -45,11 +45,27 @@ jobs:
           uv venv --python "$PYTHON_TARGET" "$RUNNER_TEMP/colmap-reader-venv"
           echo "IMPORT_PYTHON=$RUNNER_TEMP/colmap-reader-venv/bin/python" >> "$GITHUB_ENV"
 
+      - name: Bootstrap hash-locked YAML and requirement parsers
+        shell: bash
+        run: |
+          set -euo pipefail
+          # These two exact artifacts are already reviewed in the 76-wheel lock.
+          # Do not fetch floating bootstrap tools to generate verified manifests.
+          uv venv --python "$PYTHON_TARGET" "$RUNNER_TEMP/colmap-manifest-bootstrap"
+          cat > "$RUNNER_TEMP/colmap-manifest-bootstrap.txt" <<'WHEELS'
+          PyYAML @ https://files.pythonhosted.org/packages/7a/1e/7acc4f0e74c4b3d9531e24739e0ab832a5edf40e64fbae1a9c01941cabd7/pyyaml-6.0.3-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl#sha256=9c7708761fccb9397fe64bbc0395abcae8c4bf7b0eac081e12b809bf47700d0b
+          packaging @ https://files.pythonhosted.org/packages/63/34/ba1c580383c9eada3711951fef0795c80b829a078d72188184bcab9dd527/packaging-26.3-py3-none-any.whl#sha256=d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c
+          WHEELS
+          uv pip install --python "$RUNNER_TEMP/colmap-manifest-bootstrap/bin/python" \
+            --no-index --no-deps --no-cache --require-hashes \
+            -r "$RUNNER_TEMP/colmap-manifest-bootstrap.txt"
+          uv pip check --python "$RUNNER_TEMP/colmap-manifest-bootstrap/bin/python"
+
       - name: Derive exact hash-locked import wheel closure
         shell: bash
         run: |
           set -euo pipefail
-          uv run --no-project --with "pyyaml==6.0.2" --with "packaging==26.0" python - <<'PY'
+          "$RUNNER_TEMP/colmap-manifest-bootstrap/bin/python" - <<'PY'
           from __future__ import annotations
 
           import json
@@ -72,6 +88,10 @@ jobs:
           assert len(packages) == len(lock["packages"]) == 76
           assert packages["torch"]["version"] == "2.4.0+cu124"
           assert packages["numpy"]["version"] == "1.26.4"
+          assert packages["pyyaml"]["version"] == "6.0.3"
+          assert packages["pyyaml"]["sha256"] == "9c7708761fccb9397fe64bbc0395abcae8c4bf7b0eac081e12b809bf47700d0b"
+          assert packages["packaging"]["version"] == "26.3"
+          assert packages["packaging"]["sha256"] == "d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c"
 
           # Actual upstream examples/datasets/colmap.py and normalize.py imports.
           pending = {
