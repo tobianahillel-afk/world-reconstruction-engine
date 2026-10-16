@@ -1725,7 +1725,9 @@ def verify_gsplat_reference_trainer_config_fields(
     if not isinstance(profile, GsplatStaticAppearanceTrainingProfile):
         raise TypeError("gsplat training profile must be GsplatStaticAppearanceTrainingProfile")
     verify_gsplat_static_appearance_reference_sources(source_root)
-    source_file = _safe_root(source_root, "gsplat trainer source_root") / "examples/simple_trainer.py"
+    source_file = (
+        _safe_root(source_root, "gsplat trainer source_root") / "examples/simple_trainer.py"
+    )
     payload = source_file.read_bytes()
     pinned = next(
         (size, blob)
