@@ -725,7 +725,7 @@ jobs:
       # Run the actual-photo CPU reconstruction BEFORE expensive native CUDA
       # compilation. Keep the original photo pipeline in one place and make
       # its real 3D/preview outputs inspectable even while CUDA builds run.
-      - name: Stage thirteen real-photo CPU 3D, UV texture, measured reprojection and COLMAP outputs early
+      - name: Stage fourteen real-photo CPU 3D, GLB, measured reprojection and COLMAP outputs early
         shell: bash
         run: |
           set -euo pipefail
@@ -735,6 +735,7 @@ jobs:
             wre-real-stereo-cpu-reconstruction.ply \
             wre-real-stereo-cpu-surface.ply \
             wre-real-stereo-cpu-textured.obj \
+            wre-real-stereo-cpu-textured.glb \
             wre-real-stereo-cpu-textured.mtl \
             wre-real-stereo-cpu-texture.png \
             wre-real-stereo-cpu-disparity.png \
@@ -749,7 +750,7 @@ jobs:
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 13
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 14
 
       - name: Publish real-photo CPU 3D plus COLMAP before native CUDA builds
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -1742,6 +1743,7 @@ jobs:
             wre-real-stereo-cpu-reconstruction.ply \
             wre-real-stereo-cpu-surface.ply \
             wre-real-stereo-cpu-textured.obj \
+            wre-real-stereo-cpu-textured.glb \
             wre-real-stereo-cpu-textured.mtl \
             wre-real-stereo-cpu-texture.png \
             wre-real-stereo-cpu-disparity.png \
@@ -1754,8 +1756,8 @@ jobs:
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 29
-          echo "Staged all 29 real PLY/OBJ/MTL/PNG/NPY/JSON/ZIP files for artifact upload"
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 30
+          echo "Staged all 30 real PLY/OBJ/GLB/MTL/PNG/NPY/JSON/ZIP files for artifact upload"
 
       - name: Publish CPU COLMAP 3D preview and measured reprojection
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
