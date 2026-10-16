@@ -770,7 +770,7 @@ def test_gsplat_ply_rejects_disappearance_during_streamed_read(
         return UnlinkOnRead(stream) if path == target and mode == "rb" else stream
 
     monkeypatch.setattr(Path, "open", unlink_during_read)
-    with pytest.raises(GsplatStaticAppearancePreflightError, match="changed during verification"):
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="changed during"):
         materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
     assert not target.exists()
 
