@@ -2217,7 +2217,6 @@ def materialize_verified_gsplat_ply(
     )
 
 
-
 def export_verified_gsplat_rgb_centers_ply(
     *,
     artifact_ref: ArtifactRef,
