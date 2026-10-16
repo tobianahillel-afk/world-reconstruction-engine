@@ -395,6 +395,40 @@ jobs:
           virtual_views = [project_sparse_view(shift) for shift in camera_shifts]
           assert all(count >= 300 for _, count in virtual_views)
           assert not np.array_equal(virtual_views[0][0], virtual_views[1][0])
+          # A second, denser CPU presentation uses OpenCV's native image
+          # sampler and the measured stereo disparity. This is an approximate
+          # target-to-left backward warp, NOT a new 3D/4D renderer or inpainting.
+          # Nearest-neighbor sampling retains observed source pixel colors.
+          def warp_observed_pixels(camera_x):
+              source_x = xx + camera_x * disparity
+              # Invalid source coordinates never enter the source sampler.
+              safe_x = np.where(valid, source_x, -1.0).astype(np.float32)
+              source_valid = cv2.remap(
+                  valid.astype(np.uint8), safe_x, yy,
+                  interpolation=cv2.INTER_NEAREST,
+                  borderMode=cv2.BORDER_CONSTANT,
+              )
+              observed = (
+                  valid & (source_valid != 0)
+                  & (safe_x >= 0.0) & (safe_x < float(width))
+              )
+              warped = cv2.remap(
+                  left, safe_x, yy, interpolation=cv2.INTER_NEAREST,
+                  borderMode=cv2.BORDER_CONSTANT,
+              )
+              warped[~observed] = 0
+              return warped, int(np.count_nonzero(observed))
+
+          dense_views = [warp_observed_pixels(shift) for shift in camera_shifts]
+          assert all(count >= 500 for _, count in dense_views)
+          assert not np.array_equal(dense_views[0][0], dense_views[1][0])
+          dense_preview = cv2.hconcat([
+              left, dense_views[0][0], dense_views[1][0]
+          ])
+          dense_path = output / "wre-real-stereo-cpu-dense-warps.png"
+          assert cv2.imwrite(str(dense_path), dense_preview)
+          assert np.array_equal(cv2.imread(str(dense_path)), dense_preview)
+
           virtual_preview = cv2.hconcat([
               left, virtual_views[0][0], virtual_views[1][0]
           ])
@@ -443,6 +477,12 @@ jobs:
               "sparse_novel_view_disocclusion_filled": False,
               "sparse_novel_view_is_gaussian_render": False,
               "sparse_novel_view_is_photorealistic": False,
+              "dense_cpu_warp_shifts_in_arbitrary_baseline_units": list(camera_shifts),
+              "dense_cpu_warp_valid_observed_pixels": [count for _, count in dense_views],
+              "dense_cpu_warp_method": "OpenCV nearest-neighbor disparity backward remap",
+              "dense_cpu_warp_is_exact_depth_aware_render": False,
+              "dense_cpu_warp_inpainting_or_hallucination": False,
+              "dense_cpu_warp_photorealism_or_heldout_quality_proven": False,
               "photos_are_real": True,
               "two_view_stereo_only": True,
               "ground_truth_accuracy_benchmark": False,
@@ -558,7 +598,7 @@ jobs:
       # Run the actual-photo CPU reconstruction BEFORE expensive native CUDA
       # compilation. Keep the original photo pipeline in one place and make
       # its real 3D/preview outputs inspectable even while CUDA builds run.
-      - name: Stage eleven real-photo CPU 3D, UV texture and COLMAP outputs early
+      - name: Stage twelve real-photo CPU 3D, UV texture, dense warp and COLMAP outputs early
         shell: bash
         run: |
           set -euo pipefail
@@ -573,6 +613,7 @@ jobs:
             wre-real-stereo-cpu-disparity.png \
             wre-real-stereo-cpu-photos.png \
             wre-real-stereo-cpu-novel-views.png \
+            wre-real-stereo-cpu-dense-warps.png \
             wre-real-stereo-cpu-metrics.json \
             wre-real-stereo-colmap-dataset.zip \
             wre-real-stereo-colmap-handoff.json
@@ -580,7 +621,7 @@ jobs:
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 11
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 12
 
       - name: Publish real-photo CPU 3D plus COLMAP before native CUDA builds
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -1578,13 +1619,14 @@ jobs:
             wre-real-stereo-cpu-disparity.png \
             wre-real-stereo-cpu-photos.png \
             wre-real-stereo-cpu-novel-views.png \
+            wre-real-stereo-cpu-dense-warps.png \
             wre-real-stereo-cpu-metrics.json
           do
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 27
-          echo "Staged all 27 real PLY/OBJ/MTL/PNG/NPY/JSON/ZIP files for artifact upload"
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 28
+          echo "Staged all 28 real PLY/OBJ/MTL/PNG/NPY/JSON/ZIP files for artifact upload"
 
       - name: Publish CPU COLMAP 3D preview and measured reprojection
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
