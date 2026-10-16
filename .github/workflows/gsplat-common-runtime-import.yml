@@ -238,6 +238,34 @@ jobs:
           photometric_mae = float(np.mean(residual[valid]))
           assert np.isfinite(photometric_mae)
 
+          # Reuse the existing reverse OpenCV matcher early to cross-check
+          # left-image 3D points against observed right-image geometry.
+          right_matcher = cv2.StereoSGBM_create(
+              minDisparity=-128, numDisparities=128, blockSize=block,
+              P1=8 * 3 * block * block, P2=32 * 3 * block * block,
+              uniquenessRatio=8, speckleWindowSize=70, speckleRange=2,
+              disp12MaxDiff=1,
+          )
+          right_disparity = -right_matcher.compute(right, left).astype(np.float32) / 16.0
+          right_valid = (
+              np.isfinite(right_disparity)
+              & (right_disparity > 2.0)
+              & (right_disparity < 128.0)
+          )
+          assert int(right_valid.sum()) >= 500
+          right_x = np.rint(xx - disparity).astype(np.int32)
+          within_right = valid & (right_x >= 0) & (right_x < width)
+          sampled_x = np.clip(right_x, 0, width - 1)
+          sampled_right = right_disparity[yy.astype(np.intp), sampled_x]
+          checked = (
+              within_right
+              & right_valid[yy.astype(np.intp), sampled_x]
+              & (np.abs(disparity - sampled_right) <= 2.0)
+          )
+          checked_count = int(checked.sum())
+          assert checked_count >= 500
+          assert checked_count <= int(valid.sum())
+
           focal_guess = float(width)
           baseline_gauge = 1.0
           principal_x, principal_y = (width - 1) / 2.0, (height - 1) / 2.0
@@ -273,6 +301,30 @@ jobs:
                       f"{point[0]:.7g} {point[1]:.7g} {point[2]:.7g} "
                       f"{int(color[0])} {int(color[1])} {int(color[2])}\n"
                   )
+          # Export a second, viewable RGB 3D cloud from correspondences
+          # verified in BOTH real photographs. Preserve the original cloud.
+          chosen = checked[yy_selected, xx_selected]
+          checked_xyz, checked_rgb = xyz[chosen], rgb[chosen]
+          assert len(checked_xyz) >= 100
+          checked_cloud = output / "wre-real-stereo-cpu-lr-consistent.ply"
+          with checked_cloud.open("w", encoding="ascii", newline="\n") as file:
+              file.write(header.replace(
+                  f"element vertex {len(xyz)}", f"element vertex {len(checked_xyz)}"
+              ))
+              for point, color in zip(checked_xyz, checked_rgb):
+                  file.write(
+                      f"{point[0]:.7g} {point[1]:.7g} {point[2]:.7g} "
+                      f"{int(color[0])} {int(color[1])} {int(color[2])}\n"
+                  )
+          assert checked_cloud.stat().st_size > 100
+          # Green = two-way geometry consistent, red = one-way-only pixel.
+          diagnostic = np.zeros_like(left)
+          diagnostic[valid & ~checked] = (0, 0, 255)
+          diagnostic[checked] = (0, 255, 0)
+          consistency_png = output / "wre-real-stereo-cpu-lr-consistency.png"
+          assert cv2.imwrite(str(consistency_png), diagnostic)
+          assert np.array_equal(cv2.imread(str(consistency_png)), diagnostic)
+
           # Functional SURFACE reconstruction from the same observed stereo
           # disparity. Only connect local, valid neighbouring pixels whose
           # depths agree; never bridge occlusions or claim watertight geometry.
@@ -623,19 +675,7 @@ jobs:
           # Positive right disparity is x_left - x_right, so its observed
           # pixel projects to x_right + (1 - camera_x) * right_disparity.
           # Never synthesize unknown colors or overwrite visible left pixels.
-          right_matcher = cv2.StereoSGBM_create(
-              minDisparity=-128, numDisparities=128, blockSize=block,
-              P1=8 * 3 * block * block, P2=32 * 3 * block * block,
-              uniquenessRatio=8, speckleWindowSize=70, speckleRange=2,
-              disp12MaxDiff=1,
-          )
-          right_disparity = -right_matcher.compute(right, left).astype(np.float32) / 16.0
-          right_valid = (
-              np.isfinite(right_disparity)
-              & (right_disparity > 2.0)
-              & (right_disparity < 128.0)
-          )
-          assert int(right_valid.sum()) >= 500
+
 
           def warp_right_observed_pixels(camera_x):
               projected_x = np.rint(
@@ -740,6 +780,12 @@ jobs:
               "baseline_model_units_arbitrary": baseline_gauge,
               "approximate_focal_pixels": focal_guess,
               "disparity_valid_fraction": coverage,
+              "left_right_consistency_tolerance_pixels": 2.0,
+              "left_right_consistent_pixels": checked_count,
+              "left_right_consistent_fraction_of_valid": checked_count / int(valid.sum()),
+              "left_right_consistent_exported_points": int(len(checked_xyz)),
+              "left_right_consistency_png": consistency_png.name,
+              "left_right_consistency_is_independent_ground_truth": False,
               "median_disparity_pixels": float(np.median(disparity[valid])),
               "stereo_photometric_mae_0_255": photometric_mae,
               "exported_colored_3d_points": int(len(xyz)),
@@ -926,7 +972,7 @@ jobs:
       # Run the actual-photo CPU reconstruction BEFORE expensive native CUDA
       # compilation. Keep the original photo pipeline in one place and make
       # its real 3D/preview outputs inspectable even while CUDA builds run.
-      - name: Stage seventeen real-photo CPU 3D, animated mesh, GLB and COLMAP outputs early
+      - name: Stage nineteen real-photo CPU 3D, animated mesh, GLB and COLMAP outputs early
         shell: bash
         run: |
           set -euo pipefail
@@ -934,6 +980,7 @@ jobs:
           mkdir -p "$destination"
           for file in \
             wre-real-stereo-cpu-reconstruction.ply \
+            wre-real-stereo-cpu-lr-consistent.ply \
             wre-real-stereo-cpu-surface.ply \
             wre-real-stereo-cpu-textured.obj \
             wre-real-stereo-cpu-textured.glb \
@@ -943,6 +990,7 @@ jobs:
             wre-real-stereo-cpu-textured.mtl \
             wre-real-stereo-cpu-texture.png \
             wre-real-stereo-cpu-disparity.png \
+            wre-real-stereo-cpu-lr-consistency.png \
             wre-real-stereo-cpu-photos.png \
             wre-real-stereo-cpu-novel-views.png \
             wre-real-stereo-cpu-dense-warps.png \
@@ -954,7 +1002,7 @@ jobs:
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 17
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 19
 
       - name: Publish real-photo CPU 3D plus COLMAP before native CUDA builds
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -1945,6 +1993,7 @@ jobs:
             wre-sift-cpu-view-1.png \
             wre-sift-cpu-view-2.png \
             wre-real-stereo-cpu-reconstruction.ply \
+            wre-real-stereo-cpu-lr-consistent.ply \
             wre-real-stereo-cpu-surface.ply \
             wre-real-stereo-cpu-textured.obj \
             wre-real-stereo-cpu-textured.glb \
@@ -1954,6 +2003,7 @@ jobs:
             wre-real-stereo-cpu-textured.mtl \
             wre-real-stereo-cpu-texture.png \
             wre-real-stereo-cpu-disparity.png \
+            wre-real-stereo-cpu-lr-consistency.png \
             wre-real-stereo-cpu-photos.png \
             wre-real-stereo-cpu-novel-views.png \
             wre-real-stereo-cpu-dense-warps.png \
@@ -1963,8 +2013,8 @@ jobs:
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 33
-          echo "Staged all 33 real PLY/OBJ/GLB/GIF/MTL/PNG/NPY/JSON/ZIP files for artifact upload"
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 35
+          echo "Staged all 35 real PLY/OBJ/GLB/GIF/MTL/PNG/NPY/JSON/ZIP files for artifact upload"
 
       - name: Publish CPU COLMAP 3D preview and measured reprojection
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
