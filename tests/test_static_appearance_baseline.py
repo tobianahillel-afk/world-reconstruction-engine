@@ -108,6 +108,7 @@ from wre.reconstruction.static_appearance_baseline import (
     GsplatStaticAppearancePreflightSource,
     GsplatStaticAppearanceTrainingProfile,
     assemble_verified_gsplat_static_appearance_result,
+    build_gsplat_reference_trainer_path_overrides,
     inspect_gsplat_static_appearance_shared_track_pixels,
     materialize_verified_gsplat_ply,
     preflight_gsplat_static_appearance_inputs,
@@ -191,7 +192,153 @@ def test_gsplat_reference_source_gate_verifies_exact_bytes_without_import(
     assert result == verify_gsplat_static_appearance_reference_sources(root)
 
 
-@pytest.mark.parametrize("mutation", ("none", "missing_field", "missing_dataclass"))
+def _plausible_gsplat_runtime_tree(tmp_path: Path) -> Path:
+    """Only path-level fixture: not audited COLMAP bytes or a decodable PNG."""
+    staged = tmp_path / "staged-colmap"
+    (staged / "images").mkdir(parents=True)
+    (staged / "sparse" / "0").mkdir(parents=True)
+    (staged / "images" / "frame.png").write_bytes(b"synthetic image")
+    for name in ("cameras.bin", "images.bin", "points3D.bin"):
+        (staged / "sparse" / "0" / name).write_bytes(b"synthetic model")
+    return staged
+
+
+def test_gsplat_trainer_config_uses_explicit_isolated_paths(tmp_path: Path) -> None:
+    staged = _plausible_gsplat_runtime_tree(tmp_path)
+    output = tmp_path / "private-results"
+    profile = GsplatStaticAppearanceTrainingProfile(max_steps=20)
+    expected_identity = profile.configuration_sha256
+
+    overrides = build_gsplat_reference_trainer_path_overrides(
+        profile=profile, dataset_root=staged, output_root=output
+    )
+    assert overrides["data_dir"] == str(staged)
+    assert overrides["result_dir"] == str(output)
+    stable = {
+        key: value for key, value in overrides.items() if key not in ("data_dir", "result_dir")
+    }
+    assert stable == profile.reference_overrides()
+    assert overrides["ply_steps"] == [20]
+    assert profile.configuration_sha256 == expected_identity
+    assert not output.exists()
+
+
+@pytest.mark.parametrize(
+    "invalid_case",
+    ("relative", "existing", "overlap", "missing_images", "missing_colmap", "symlink"),
+)
+def test_gsplat_trainer_config_rejects_unsafe_runtime_paths(
+    tmp_path: Path, invalid_case: str
+) -> None:
+    staged = _plausible_gsplat_runtime_tree(tmp_path)
+    destination = tmp_path / "results"
+    if invalid_case == "relative":
+        destination = Path("results")
+    elif invalid_case == "existing":
+        destination.mkdir()
+    elif invalid_case == "overlap":
+        destination = staged / "new-results"
+    elif invalid_case == "missing_images":
+        (staged / "images" / "frame.png").unlink()
+        (staged / "images").rmdir()
+    elif invalid_case == "missing_colmap":
+        for name in ("cameras.bin", "images.bin", "points3D.bin"):
+            (staged / "sparse" / "0" / name).unlink()
+        (staged / "sparse" / "0").rmdir()
+    elif invalid_case == "symlink":
+        destination.symlink_to(staged, target_is_directory=True)
+
+    with pytest.raises(GsplatStaticAppearancePreflightError):
+        build_gsplat_reference_trainer_path_overrides(
+            profile=GsplatStaticAppearanceTrainingProfile(),
+            dataset_root=staged,
+            output_root=destination,
+        )
+
+
+@pytest.mark.parametrize(
+    ("missing", "expected_message"),
+    (
+        ("cameras.bin", "real COLMAP binary model files"),
+        ("images.bin", "real COLMAP binary model files"),
+        ("points3D.bin", "real COLMAP binary model files"),
+        ("frame.png", "regular PNG image"),
+    ),
+)
+def test_gsplat_trainer_config_rejects_missing_runtime_dataset_files(
+    tmp_path: Path, missing: str, expected_message: str
+) -> None:
+    staged = _plausible_gsplat_runtime_tree(tmp_path)
+    target = (
+        staged / "images" / missing
+        if missing.endswith(".png")
+        else staged / "sparse" / "0" / missing
+    )
+    target.unlink()
+    with pytest.raises(GsplatStaticAppearancePreflightError, match=expected_message):
+        build_gsplat_reference_trainer_path_overrides(
+            profile=GsplatStaticAppearanceTrainingProfile(),
+            dataset_root=staged,
+            output_root=tmp_path / "results",
+        )
+
+
+@pytest.mark.parametrize("linked", ("cameras.bin", "frame.png"))
+def test_gsplat_trainer_config_rejects_symlinked_runtime_dataset_files(
+    tmp_path: Path, linked: str
+) -> None:
+    staged = _plausible_gsplat_runtime_tree(tmp_path)
+    target = (
+        staged / "images" / linked if linked.endswith(".png") else staged / "sparse" / "0" / linked
+    )
+    real_file = tmp_path / "other-file"
+    target.rename(real_file)
+    target.symlink_to(real_file)
+    assert target.is_file() and target.is_symlink()
+    expected_message = "regular PNG image" if linked.endswith(".png") else "real COLMAP"
+    with pytest.raises(GsplatStaticAppearancePreflightError, match=expected_message):
+        build_gsplat_reference_trainer_path_overrides(
+            profile=GsplatStaticAppearanceTrainingProfile(),
+            dataset_root=staged,
+            output_root=tmp_path / "results",
+        )
+
+
+@pytest.mark.parametrize("alias_part", ("images", "sparse", "sparse/0"))
+def test_gsplat_trainer_config_rejects_symlinked_colmap_subdirectories(
+    tmp_path: Path, alias_part: str
+) -> None:
+    staged = tmp_path / "staged-colmap"
+    (staged / "images").mkdir(parents=True)
+    (staged / "sparse" / "0").mkdir(parents=True)
+    linked = staged.joinpath(*alias_part.split("/"))
+    original = tmp_path / "real-subdirectory"
+    linked.rename(original)
+    linked.symlink_to(original, target_is_directory=True)
+    assert linked.is_dir()  # A plain is_dir check would follow and accept the alias.
+    assert linked.is_symlink()
+
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="real staged images"):
+        build_gsplat_reference_trainer_path_overrides(
+            profile=GsplatStaticAppearanceTrainingProfile(),
+            dataset_root=staged,
+            output_root=tmp_path / "results",
+        )
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    (
+        "none",
+        "missing_field",
+        "missing_dataclass",
+        "missing_colmap",
+        "missing_fused_ssim",
+        "missing_gsplat",
+        "missing_nerfview",
+        "missing_torch",
+    ),
+)
 def test_pinned_gsplat_trainer_config_fields_without_runtime_import(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mutation: str
 ) -> None:
@@ -200,8 +347,18 @@ def test_pinned_gsplat_trainer_config_fields_without_runtime_import(
     profile = GsplatStaticAppearanceTrainingProfile(max_steps=20)
     overrides = sorted(profile.reference_overrides())
     fields = [name for name in overrides if mutation != "missing_field" or name != "save_ply"]
+    imports = (
+        ("import torch", "missing_torch"),
+        ("from datasets.colmap import Dataset, Parser", "missing_colmap"),
+        ("from fused_ssim import fused_ssim", "missing_fused_ssim"),
+        ("from gsplat import export_splats", "missing_gsplat"),
+        ("from gsplat.rendering import rasterization", "missing_gsplat"),
+        ("from gsplat_viewer import GsplatViewer", "missing_nerfview"),
+        ("from nerfview import CameraState", "missing_nerfview"),
+    )
+    source = "".join(line + "\n" for line, omission in imports if mutation != omission)
     decorator = "" if mutation == "missing_dataclass" else "@dataclass\n"
-    source = decorator + "class Config:\n"
+    source += decorator + "class Config:\n"
     source += "".join(f"    {name}: object = None\n" for name in fields)
     payload = source.encode("ascii")
     data["examples/simple_trainer.py"] = payload
@@ -218,7 +375,8 @@ def test_pinned_gsplat_trainer_config_fields_without_runtime_import(
     if mutation == "none":
         assert verify_gsplat_reference_trainer_config_fields(root, profile) == tuple(overrides)
     else:
-        with pytest.raises(GsplatStaticAppearancePreflightError, match="Config"):
+        message = "Config" if mutation in {"missing_field", "missing_dataclass"} else "import"
+        with pytest.raises(GsplatStaticAppearancePreflightError, match=message):
             verify_gsplat_reference_trainer_config_fields(root, profile)
 
 
@@ -232,6 +390,94 @@ def test_pinned_gsplat_config_gate_rejects_modified_source_after_pin(
     source.write_bytes(b"print('other!!')\n")
     with pytest.raises(GsplatStaticAppearancePreflightError, match="Git blob differs"):
         verify_gsplat_reference_trainer_config_fields(root, GsplatStaticAppearanceTrainingProfile())
+
+
+@pytest.mark.parametrize("registry_mutation", ("missing", "duplicate"))
+def test_gsplat_config_gate_rejects_unreviewed_trainer_pin_registry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, registry_mutation: str
+) -> None:
+    # All on-disk bytes are valid and individually pinned. Fail only because
+    # the source registry omits or duplicates the trainer Config identity.
+    root, data = _reviewed_source_fixture(tmp_path, monkeypatch)
+    profile = GsplatStaticAppearanceTrainingProfile(max_steps=20)
+    payload = (
+        "@dataclass\nclass Config:\n"
+        + "".join(f"    {name}: object = None\n" for name in profile.reference_overrides())
+    ).encode("ascii")
+    trainer_name = "examples/simple_trainer.py"
+    (root / trainer_name).write_bytes(payload)
+    data[trainer_name] = payload
+    pinned = [
+        (name, len(blob), baseline_module._git_blob_sha1(blob))
+        for name, blob in sorted(data.items())
+        if registry_mutation != "missing" or name != trainer_name
+    ]
+    if registry_mutation == "duplicate":
+        pinned.append((trainer_name, len(payload), baseline_module._git_blob_sha1(payload)))
+    monkeypatch.setattr(baseline_module, "_GSPLAT_REFERENCE_SOURCE_FILES", tuple(pinned))
+
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="exactly one pinned"):
+        verify_gsplat_reference_trainer_config_fields(root, profile)
+
+
+def test_gsplat_reference_source_gate_rejects_unlink_during_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, _data = _reviewed_source_fixture(tmp_path, monkeypatch)
+    target = root / "examples/simple_trainer.py"
+    original_read_bytes = Path.read_bytes
+    removed = False
+
+    def unlink_before_read(path: Path) -> bytes:
+        nonlocal removed
+        if path == target and not removed:
+            target.unlink()
+            removed = True
+        return original_read_bytes(path)
+
+    monkeypatch.setattr(Path, "read_bytes", unlink_before_read)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="disappeared during"):
+        verify_gsplat_static_appearance_reference_sources(root)
+    assert removed
+    assert not target.exists()
+
+
+def test_gsplat_config_gate_rejects_unlink_after_source_verification(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, data = _reviewed_source_fixture(tmp_path, monkeypatch)
+    profile = GsplatStaticAppearanceTrainingProfile(max_steps=20)
+    payload = (
+        "@dataclass\nclass Config:\n"
+        + "".join(f"    {field}: object = None\n" for field in profile.reference_overrides())
+    ).encode("ascii")
+    target = root / "examples/simple_trainer.py"
+    target.write_bytes(payload)
+    data["examples/simple_trainer.py"] = payload
+    monkeypatch.setattr(
+        baseline_module,
+        "_GSPLAT_REFERENCE_SOURCE_FILES",
+        tuple(
+            (path, len(blob), baseline_module._git_blob_sha1(blob))
+            for path, blob in sorted(data.items())
+        ),
+    )
+    original_read_bytes = Path.read_bytes
+    reads = 0
+
+    def unlink_before_second_read(path: Path) -> bytes:
+        nonlocal reads
+        if path == target:
+            reads += 1
+            if reads == 2:
+                target.unlink()
+        return original_read_bytes(path)
+
+    monkeypatch.setattr(Path, "read_bytes", unlink_before_second_read)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="during Config schema"):
+        verify_gsplat_reference_trainer_config_fields(root, profile)
+    assert reads == 2
+    assert not target.exists()
 
 
 def test_gsplat_reference_source_gate_rejects_same_size_tampering(

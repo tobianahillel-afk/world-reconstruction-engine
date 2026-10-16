@@ -290,19 +290,24 @@ def verify_gsplat_static_appearance_reference_sources(
             raise GsplatStaticAppearancePreflightError(
                 f"gsplat reference source path invalid: {relative}"
             )
-        if resolved.stat().st_size != expected_size:
+        try:
+            if resolved.stat().st_size != expected_size:
+                raise GsplatStaticAppearancePreflightError(
+                    f"gsplat reference source byte length differs: {relative}"
+                )
+            data = resolved.read_bytes()
+            if len(data) != expected_size or _git_blob_sha1(data) != expected_git_blob:
+                raise GsplatStaticAppearancePreflightError(
+                    f"gsplat reference source Git blob differs: {relative}"
+                )
+            if resolved.stat().st_size != expected_size:
+                raise GsplatStaticAppearancePreflightError(
+                    f"gsplat reference source changed during verification: {relative}"
+                )
+        except OSError as exc:
             raise GsplatStaticAppearancePreflightError(
-                f"gsplat reference source byte length differs: {relative}"
-            )
-        data = resolved.read_bytes()
-        if len(data) != expected_size or _git_blob_sha1(data) != expected_git_blob:
-            raise GsplatStaticAppearancePreflightError(
-                f"gsplat reference source Git blob differs: {relative}"
-            )
-        if resolved.stat().st_size != expected_size:
-            raise GsplatStaticAppearancePreflightError(
-                f"gsplat reference source changed during verification: {relative}"
-            )
+                f"gsplat reference source disappeared during verification: {relative}"
+            ) from exc
         entries.append(
             ArtifactMaterializationEntry(
                 relative_path=relative,
@@ -1709,6 +1714,80 @@ class GsplatStaticAppearanceTrainingProfile:
         return f"ply/point_cloud_{self.max_steps - 1}.ply"
 
 
+def build_gsplat_reference_trainer_path_overrides(
+    *,
+    profile: GsplatStaticAppearanceTrainingProfile,
+    dataset_root: Path,
+    output_root: Path,
+) -> dict[str, object]:
+    """Bind the exact trainer to explicit private input/output paths, without running it.
+
+    The pinned Config defaults point to upstream sample data/results; no future
+    runner may fall back to those paths. Source bytes must be checked separately.
+    This builder neither creates the output directory nor validates dataset bytes.
+    """
+
+    if not isinstance(profile, GsplatStaticAppearanceTrainingProfile):
+        raise TypeError("gsplat runtime profile must be GsplatStaticAppearanceTrainingProfile")
+    if not isinstance(dataset_root, Path) or not isinstance(output_root, Path):
+        raise TypeError("gsplat runtime paths must be pathlib.Path")
+    if not dataset_root.is_absolute() or not output_root.is_absolute():
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat runtime input and output paths must be absolute"
+        )
+    dataset = _safe_root(dataset_root, "gsplat runtime dataset_root")
+    staged_directories = (
+        dataset / "images",
+        dataset / "sparse",
+        dataset / "sparse" / "0",
+    )
+    if any(path.is_symlink() or not path.is_dir() for path in staged_directories):
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat runtime dataset requires real staged images and COLMAP directories"
+        )
+    # The reference COLMAP parser opens all three binary model components.
+    # A directory-only check can otherwise accept an empty staged fixture.
+    model_root = dataset / "sparse" / "0"
+    if any(
+        (model_root / name).is_symlink() or not (model_root / name).is_file()
+        for name in ("cameras.bin", "images.bin", "points3D.bin")
+    ):
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat runtime dataset lacks real COLMAP binary model files"
+        )
+    try:
+        has_png = any(
+            path.suffix.lower() == ".png" and not path.is_symlink() and path.is_file()
+            for path in (dataset / "images").iterdir()
+        )
+    except OSError as exc:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat runtime image directory could not be inspected"
+        ) from exc
+    if not has_png:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat runtime dataset has no regular PNG image"
+        )
+    if output_root.is_symlink() or output_root.exists():
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat runtime output directory must not already exist"
+        )
+    output_parent = _safe_root(output_root.parent, "gsplat runtime output parent")
+    destination = output_parent / output_root.name
+    if destination.is_relative_to(dataset) or dataset.is_relative_to(destination):
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat runtime output directory overlaps the staged dataset"
+        )
+    if destination.is_symlink() or destination.exists():
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat runtime output directory changed before configuration"
+        )
+    result = profile.reference_overrides()
+    result["data_dir"] = str(dataset)
+    result["result_dir"] = str(destination)
+    return result
+
+
 def verify_gsplat_reference_trainer_config_fields(
     source_root: Path,
     profile: GsplatStaticAppearanceTrainingProfile,
@@ -1728,13 +1807,23 @@ def verify_gsplat_reference_trainer_config_fields(
     source_file = (
         _safe_root(source_root, "gsplat trainer source_root") / "examples/simple_trainer.py"
     )
-    payload = source_file.read_bytes()
-    pinned = next(
+    try:
+        payload = source_file.read_bytes()
+    except OSError as exc:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat trainer source disappeared during Config schema verification"
+        ) from exc
+    trainer_pins = [
         (size, blob)
         for path, size, blob in _GSPLAT_REFERENCE_SOURCE_FILES
         if path == "examples/simple_trainer.py"
-    )
-    if len(payload) != pinned[0] or _git_blob_sha1(payload) != pinned[1]:
+    ]
+    if len(trainer_pins) != 1:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat trainer source registry must contain exactly one pinned Config source"
+        )
+    pinned_size, pinned_blob = trainer_pins[0]
+    if len(payload) != pinned_size or _git_blob_sha1(payload) != pinned_blob:
         raise GsplatStaticAppearancePreflightError(
             "gsplat trainer source changed before Config schema verification"
         )
@@ -1753,6 +1842,34 @@ def verify_gsplat_reference_trainer_config_fields(
         raise GsplatStaticAppearancePreflightError(
             "gsplat trainer does not declare the expected dataclass Config"
         )
+    # An exact source pin is not an installed environment: also check the
+    # trainer's declared direct integration edges before a future repin.
+    required_imports = {
+        "datasets.colmap": {"Parser", "Dataset"},
+        "fused_ssim": {"fused_ssim"},
+        "gsplat": {"export_splats"},
+        "gsplat.rendering": {"rasterization"},
+        "gsplat_viewer": {"GsplatViewer"},
+        "nerfview": {"CameraState"},
+    }
+    imported: dict[str, set[str]] = {}
+    for node in parsed.body:
+        if isinstance(node, ast.ImportFrom) and node.level == 0 and node.module is not None:
+            imported.setdefault(node.module, set()).update(alias.name for alias in node.names)
+    if any(
+        not required <= imported.get(module, set()) for module, required in required_imports.items()
+    ):
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat trainer is missing reviewed direct integration imports"
+        )
+    if not any(
+        isinstance(node, ast.Import) and any(alias.name == "torch" for alias in node.names)
+        for node in parsed.body
+    ):
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat trainer is missing the reviewed PyTorch import"
+        )
+
     fields = {
         node.target.id
         for node in configs[0].body
