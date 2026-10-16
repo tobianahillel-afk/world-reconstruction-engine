@@ -1172,6 +1172,47 @@ jobs:
                       f"{point[0]:.7g} {point[1]:.7g} {point[2]:.7g} "
                       f"{int(color[0])} {int(color[1])} {int(color[2])}\n"
                   )
+          # Functional 3D output beyond point export: project actual
+          # photo-colored reconstructed XYZ from TWO UNOBSERVED camera positions.
+          # Use nearest-Z per projected pixel; leave disocclusion holes black.
+          # This is sparse CPU reprojection, not Gaussian/NeRF rendering.
+          def project_sparse_view(camera_x):
+              camera_xyz = xyz.copy()
+              camera_xyz[:, 0] -= camera_x
+              projected_x = np.rint(
+                  focal_guess * camera_xyz[:, 0] / camera_xyz[:, 2] + principal_x
+              ).astype(np.int32)
+              projected_y = np.rint(
+                  focal_guess * camera_xyz[:, 1] / camera_xyz[:, 2] + principal_y
+              ).astype(np.int32)
+              inside = (
+                  (projected_x >= 0) & (projected_x < width)
+                  & (projected_y >= 0) & (projected_y < height)
+                  & (camera_xyz[:, 2] > 0)
+              )
+              assert int(inside.sum()) >= 500
+              x_inside, y_inside = projected_x[inside], projected_y[inside]
+              depth_inside = camera_xyz[inside, 2]
+              # Select the nearest actual 3D point at each discrete pixel.
+              flat_pixels = y_inside * width + x_inside
+              ordered = np.lexsort((depth_inside, flat_pixels))
+              _, first = np.unique(flat_pixels[ordered], return_index=True)
+              nearest = ordered[first]
+              preview = np.zeros((height, width, 3), dtype=np.uint8)
+              preview[y_inside[nearest], x_inside[nearest]] = rgb[inside][nearest, ::-1]
+              return preview, int(len(nearest))
+
+          camera_shifts = (0.3, 0.7)  # arbitrary stereo-baseline gauge
+          virtual_views = [project_sparse_view(shift) for shift in camera_shifts]
+          assert all(count >= 300 for _, count in virtual_views)
+          assert not np.array_equal(virtual_views[0][0], virtual_views[1][0])
+          virtual_preview = cv2.hconcat([
+              left, virtual_views[0][0], virtual_views[1][0]
+          ])
+          assert cv2.imwrite(
+              str(Path(os.environ["RUNNER_TEMP"]) / "wre-real-stereo-cpu-novel-views.png"),
+              virtual_preview,
+          )
           normalized = np.uint8(np.clip(disparity / 128.0 * 255.0, 0, 255))
           disparity_preview = cv2.applyColorMap(normalized, cv2.COLORMAP_TURBO)
           disparity_preview[~valid] = 0
@@ -1196,6 +1237,12 @@ jobs:
               "median_disparity_pixels": float(np.median(disparity[valid])),
               "stereo_photometric_mae_0_255": photometric_mae,
               "exported_colored_3d_points": int(len(xyz)),
+              "sparse_novel_view_shifts_in_arbitrary_baseline_units": list(camera_shifts),
+              "sparse_novel_view_visible_pixels": [count for _, count in virtual_views],
+              "sparse_novel_view_method": "CPU forward projection with nearest-depth z-buffer",
+              "sparse_novel_view_disocclusion_filled": False,
+              "sparse_novel_view_is_gaussian_render": False,
+              "sparse_novel_view_is_photorealistic": False,
               "photos_are_real": True,
               "two_view_stereo_only": True,
               "ground_truth_accuracy_benchmark": False,
@@ -1248,13 +1295,14 @@ jobs:
             wre-real-stereo-cpu-reconstruction.ply \
             wre-real-stereo-cpu-disparity.png \
             wre-real-stereo-cpu-photos.png \
+            wre-real-stereo-cpu-novel-views.png \
             wre-real-stereo-cpu-metrics.json
           do
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 22
-          echo "Staged all 22 real PLY/PNG/NPY/JSON/ZIP files for artifact upload"
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 23
+          echo "Staged all 23 real PLY/PNG/NPY/JSON/ZIP files for artifact upload"
 
       - name: Publish CPU COLMAP 3D preview and measured reprojection
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
