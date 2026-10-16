@@ -1807,6 +1807,34 @@ main(0, 0, 1, cfg)
 """
 
 
+def _verify_gsplat_reference_producer(
+    profile: GsplatStaticAppearanceTrainingProfile, producer: ArtifactProducerIdentity
+) -> None:
+    """Check one exact source/profile identity before training and at output assembly."""
+
+    if not isinstance(profile, GsplatStaticAppearanceTrainingProfile):
+        raise TypeError("gsplat result profile must be GsplatStaticAppearanceTrainingProfile")
+    if not isinstance(producer, ArtifactProducerIdentity):
+        raise TypeError("gsplat result producer must be ArtifactProducerIdentity")
+    if producer.configuration.sha256 != profile.configuration_sha256:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat output producer configuration differs from the reviewed training profile"
+        )
+    if (
+        producer.producer.implementation != "gsplat.examples.simple_trainer"
+        or producer.producer.version != "1.5.3"
+        or producer.producer.revision != GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION
+        or producer.model is None
+        or producer.model.name != "gsplat"
+        or producer.model.version != "1.5.3"
+        or producer.model.revision != GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION
+        or producer.checkpoint is not None
+    ):
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat output producer does not identify the exact checkpoint-free reference trainer"
+        )
+
+
 def run_gsplat_reference_training(
     *,
     request: StaticAppearanceCandidateRequest,
@@ -1831,6 +1859,7 @@ def run_gsplat_reference_training(
     CPU-only CI exercises orchestration only, not GPU execution or training.
     """
 
+    _verify_gsplat_reference_producer(profile, producer)
     if type(cuda_device_index) is not int or cuda_device_index < 0:
         raise ValueError("gsplat CUDA device index must be a nonnegative integer")
     if type(timeout_seconds) is not int or timeout_seconds <= 0:
@@ -1853,8 +1882,6 @@ def run_gsplat_reference_training(
         raise GsplatStaticAppearancePreflightError(
             "gsplat external trainer output must be an appearance artifact"
         )
-    if not isinstance(producer, ArtifactProducerIdentity):
-        raise TypeError("gsplat external trainer requires an explicit producer identity")
     # Ownership is intentionally explicit: only WRE's new private output
     # directory is created, and is not removed when a run fails.
     output_root.mkdir(mode=0o700)
@@ -2202,28 +2229,7 @@ def assemble_verified_gsplat_static_appearance_result(
         raise TypeError("gsplat result request must be StaticAppearanceCandidateRequest")
     if not isinstance(profile, GsplatStaticAppearanceTrainingProfile):
         raise TypeError("gsplat result profile must be GsplatStaticAppearanceTrainingProfile")
-    if not isinstance(producer, ArtifactProducerIdentity):
-        raise TypeError("gsplat result producer must be ArtifactProducerIdentity")
-    if producer.configuration.sha256 != profile.configuration_sha256:
-        raise GsplatStaticAppearancePreflightError(
-            "gsplat output producer configuration differs from the reviewed training profile"
-        )
-    if (
-        producer.producer.implementation != "gsplat.examples.simple_trainer"
-        or producer.producer.version != "1.5.3"
-        or (
-            producer.producer.revision is not None
-            and producer.producer.revision != GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION
-        )
-        or producer.model is None
-        or producer.model.name != "gsplat"
-        or producer.model.version != "1.5.3"
-        or producer.model.revision != GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION
-        or producer.checkpoint is not None
-    ):
-        raise GsplatStaticAppearancePreflightError(
-            "gsplat output producer does not identify the exact checkpoint-free reference trainer"
-        )
+    _verify_gsplat_reference_producer(profile, producer)
     if request.output_representation.value != GSPLAT_STATIC_APPEARANCE_REPRESENTATION:
         raise GsplatStaticAppearancePreflightError(
             "gsplat output representation differs from the reviewed PLY payload"
