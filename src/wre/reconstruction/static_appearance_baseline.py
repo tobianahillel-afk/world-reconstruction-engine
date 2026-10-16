@@ -1739,12 +1739,17 @@ def verify_gsplat_reference_trainer_config_fields(
         raise GsplatStaticAppearancePreflightError(
             "gsplat trainer source disappeared during Config schema verification"
         ) from exc
-    pinned = next(
+    trainer_pins = [
         (size, blob)
         for path, size, blob in _GSPLAT_REFERENCE_SOURCE_FILES
         if path == "examples/simple_trainer.py"
-    )
-    if len(payload) != pinned[0] or _git_blob_sha1(payload) != pinned[1]:
+    ]
+    if len(trainer_pins) != 1:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat trainer source registry must contain exactly one pinned Config source"
+        )
+    pinned_size, pinned_blob = trainer_pins[0]
+    if len(payload) != pinned_size or _git_blob_sha1(payload) != pinned_blob:
         raise GsplatStaticAppearancePreflightError(
             "gsplat trainer source changed before Config schema verification"
         )
