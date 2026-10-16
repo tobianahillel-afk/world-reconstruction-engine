@@ -153,6 +153,10 @@ jobs:
             "$COMMON_SOURCES/ssim"
           "$COMMON_PYTHON" -m pip install --no-deps --no-build-isolation --no-cache-dir \
             "$COMMON_SOURCES/gsplat"
+          # Install the exact selected nerfview checkout into site-packages.
+          # The -I child in PR #234 does not insert this repo onto sys.path.
+          "$COMMON_PYTHON" -m pip install --no-deps --no-build-isolation --no-cache-dir \
+            "$COMMON_SOURCES/nerfview"
 
       - name: Actually import trainer, native extensions, viewer and COLMAP together
         shell: bash
@@ -166,7 +170,6 @@ jobs:
           root = Path(os.environ["COMMON_SOURCES"])
           sys.path[:0] = [
               str(root / "gsplat" / "examples"),
-              str(root / "nerfview"),
               str(root / "scene-manager"),
           ]
           import torch
