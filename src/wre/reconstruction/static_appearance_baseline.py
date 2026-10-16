@@ -1714,6 +1714,53 @@ class GsplatStaticAppearanceTrainingProfile:
         return f"ply/point_cloud_{self.max_steps - 1}.ply"
 
 
+
+def build_gsplat_reference_trainer_path_overrides(
+    *,
+    profile: GsplatStaticAppearanceTrainingProfile,
+    dataset_root: Path,
+    output_root: Path,
+) -> dict[str, object]:
+    """Bind the exact trainer to explicit private input/output paths, without running it.
+
+    The pinned Config defaults point to upstream sample data/results; no future
+    runner may fall back to those paths. Source bytes must be checked separately.
+    This builder neither creates the output directory nor validates dataset bytes.
+    """
+
+    if not isinstance(profile, GsplatStaticAppearanceTrainingProfile):
+        raise TypeError("gsplat runtime profile must be GsplatStaticAppearanceTrainingProfile")
+    if not isinstance(dataset_root, Path) or not isinstance(output_root, Path):
+        raise TypeError("gsplat runtime paths must be pathlib.Path")
+    if not dataset_root.is_absolute() or not output_root.is_absolute():
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat runtime input and output paths must be absolute"
+        )
+    dataset = _safe_root(dataset_root, "gsplat runtime dataset_root")
+    if not (dataset / "images").is_dir() or not (dataset / "sparse" / "0").is_dir():
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat runtime dataset lacks the staged images or COLMAP model"
+        )
+    if output_root.is_symlink() or output_root.exists():
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat runtime output directory must not already exist"
+        )
+    output_parent = _safe_root(output_root.parent, "gsplat runtime output parent")
+    destination = output_parent / output_root.name
+    if destination.is_relative_to(dataset) or dataset.is_relative_to(destination):
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat runtime output directory overlaps the staged dataset"
+        )
+    if destination.is_symlink() or destination.exists():
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat runtime output directory changed before configuration"
+        )
+    result = profile.reference_overrides()
+    result["data_dir"] = str(dataset)
+    result["result_dir"] = str(destination)
+    return result
+
+
 def verify_gsplat_reference_trainer_config_fields(
     source_root: Path,
     profile: GsplatStaticAppearanceTrainingProfile,
