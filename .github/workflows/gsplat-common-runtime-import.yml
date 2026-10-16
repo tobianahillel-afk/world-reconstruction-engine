@@ -360,6 +360,43 @@ jobs:
 
           focal_guess = float(width)
           baseline_gauge = 1.0
+
+          # Export quantitative fields alongside RGB previews: grayscale PFM
+          # float32 little endian with scanlines stored bottom to top.
+          # Zero means an unobserved pixel. Relative depth is NOT metres.
+          disparity_field = np.where(valid, disparity, 0.0).astype(np.float32)
+          depth_field = np.zeros_like(disparity_field)
+          np.divide(
+              np.float32(focal_guess * baseline_gauge), disparity_field,
+              out=depth_field, where=valid,
+          )
+          assert np.isfinite(depth_field).all() and np.all(depth_field[valid] > 0)
+
+          def write_and_verify_pfm(name, field):
+              assert field.shape == (height, width) and field.dtype == np.float32
+              destination = Path(os.environ["RUNNER_TEMP"]) / name
+              header = f"Pf\n{width} {height}\n-1.0\n".encode("ascii")
+              pixels = np.ascontiguousarray(field[::-1, :], dtype="<f4")
+              with destination.open("wb") as stream:
+                  stream.write(header)
+                  stream.write(pixels.tobytes())
+              with destination.open("rb") as stream:
+                  assert stream.readline() == b"Pf\n"
+                  assert stream.readline() == f"{width} {height}\n".encode("ascii")
+                  assert stream.readline() == b"-1.0\n"
+                  payload = stream.read()
+              assert len(payload) == height * width * 4
+              restored = np.frombuffer(payload, dtype="<f4").reshape(height, width)[::-1]
+              assert np.array_equal(restored, field)
+              assert np.count_nonzero(restored) == int(valid.sum())
+              return destination.name
+
+          disparity_pfm = write_and_verify_pfm(
+              "wre-real-stereo-cpu-disparity-f32.pfm", disparity_field
+          )
+          depth_pfm = write_and_verify_pfm(
+              "wre-real-stereo-cpu-depth-model-f32.pfm", depth_field
+          )
           principal_x, principal_y = (width - 1) / 2.0, (height - 1) / 2.0
           yy_selected, xx_selected = np.where(valid[::3, ::3])
           yy_selected *= 3
@@ -1108,6 +1145,12 @@ jobs:
               "calibrated_metric_depth": False,
               "baseline_model_units_arbitrary": baseline_gauge,
               "approximate_focal_pixels": focal_guess,
+              "dense_disparity_float32_pfm": disparity_pfm,
+              "dense_depth_float32_pfm": depth_pfm,
+              "dense_pfm_invalid_pixel_value": 0.0,
+              "dense_depth_pfm_units": "arbitrary baseline=1, not metres",
+              "dense_pfm_shape_height_width": [height, width],
+              "dense_pfm_valid_pixels": int(valid.sum()),
               "disparity_valid_fraction": coverage,
               "left_right_consistency_tolerance_pixels": 2.0,
               "left_right_consistent_pixels": checked_count,
@@ -1337,6 +1380,8 @@ jobs:
             wre-real-stereo-cpu-textured.mtl \
             wre-real-stereo-cpu-texture.png \
             wre-real-stereo-cpu-disparity.png \
+            wre-real-stereo-cpu-disparity-f32.pfm \
+            wre-real-stereo-cpu-depth-model-f32.pfm \
             wre-real-stereo-cpu-lr-consistency.png \
             wre-real-stereo-cpu-photos.png \
             wre-real-stereo-cpu-novel-views.png \
@@ -1349,7 +1394,7 @@ jobs:
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 24
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 26
 
       - name: Publish real-photo CPU 3D plus COLMAP before native CUDA builds
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -2355,6 +2400,8 @@ jobs:
             wre-real-stereo-cpu-textured.mtl \
             wre-real-stereo-cpu-texture.png \
             wre-real-stereo-cpu-disparity.png \
+            wre-real-stereo-cpu-disparity-f32.pfm \
+            wre-real-stereo-cpu-depth-model-f32.pfm \
             wre-real-stereo-cpu-lr-consistency.png \
             wre-real-stereo-cpu-photos.png \
             wre-real-stereo-cpu-novel-views.png \
@@ -2365,8 +2412,8 @@ jobs:
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 40
-          echo "Staged all 40 real PLY/OBJ/GLB/GIF/MTL/PNG/NPY/JSON/ZIP files for artifact upload"
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 42
+          echo "Staged all 42 real PLY/OBJ/GLB/GIF/MTL/PNG/PFM/NPY/JSON/ZIP files for artifact upload"
 
       - name: Publish CPU COLMAP 3D preview and measured reprojection
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
