@@ -1804,12 +1804,28 @@ def materialize_verified_gsplat_ply(
             opened.st_ctime_ns,
         )
 
+        def read_checked(size: int, *, header: bool = False) -> bytes:
+            try:
+                return stream.readline(size) if header else stream.read(size)
+            except OSError as exc:
+                raise GsplatStaticAppearancePreflightError(
+                    "gsplat PLY read failed during materialization verification"
+                ) from exc
+
+        def tell_checked() -> int:
+            try:
+                return stream.tell()
+            except OSError as exc:
+                raise GsplatStaticAppearancePreflightError(
+                    "gsplat PLY offset check failed during materialization verification"
+                ) from exc
+
         def read_header_line() -> str:
-            raw = stream.readline(_MAX_GSPLAT_PLY_HEADER_BYTES + 1)
+            raw = read_checked(_MAX_GSPLAT_PLY_HEADER_BYTES + 1, header=True)
             if (
                 not raw
                 or len(raw) > _MAX_GSPLAT_PLY_HEADER_BYTES
-                or stream.tell() > _MAX_GSPLAT_PLY_HEADER_BYTES
+                or tell_checked() > _MAX_GSPLAT_PLY_HEADER_BYTES
                 or not raw.endswith(b"\n")
             ):
                 raise GsplatStaticAppearancePreflightError(
@@ -1878,7 +1894,7 @@ def materialize_verified_gsplat_ply(
                 "gsplat PLY property schema differs from the exact exporter"
             )
 
-        header_length = stream.tell()
+        header_length = tell_checked()
         stride = len(properties) * 4
         expected_size = header_length + count * stride
         size = opened.st_size
@@ -1896,7 +1912,7 @@ def materialize_verified_gsplat_ply(
         # bytes we have inspected. The bounded read limits transient memory.
         remaining = count * stride
         while remaining:
-            chunk = stream.read(min(remaining, stride * max(1, 4096 // stride)))
+            chunk = read_checked(min(remaining, stride * max(1, 4096 // stride)))
             if not chunk or len(chunk) % stride:
                 raise GsplatStaticAppearancePreflightError("gsplat PLY vertex data is incomplete")
             # Inspect whole Gaussian records: finite floats alone do not make
@@ -1939,7 +1955,7 @@ def materialize_verified_gsplat_ply(
                     )
             digest.update(chunk)
             remaining -= len(chunk)
-        if stream.read(1):
+        if read_checked(1):
             raise GsplatStaticAppearancePreflightError("gsplat PLY contains trailing bytes")
         final_handle = os.fstat(stream.fileno())
         if (
