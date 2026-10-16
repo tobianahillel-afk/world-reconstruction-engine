@@ -1736,9 +1736,14 @@ def build_gsplat_reference_trainer_path_overrides(
             "gsplat runtime input and output paths must be absolute"
         )
     dataset = _safe_root(dataset_root, "gsplat runtime dataset_root")
-    if not (dataset / "images").is_dir() or not (dataset / "sparse" / "0").is_dir():
+    staged_directories = (
+        dataset / "images",
+        dataset / "sparse",
+        dataset / "sparse" / "0",
+    )
+    if any(path.is_symlink() or not path.is_dir() for path in staged_directories):
         raise GsplatStaticAppearancePreflightError(
-            "gsplat runtime dataset lacks the staged images or COLMAP model"
+            "gsplat runtime dataset requires real staged images and COLMAP directories"
         )
     if output_root.is_symlink() or output_root.exists():
         raise GsplatStaticAppearancePreflightError(
