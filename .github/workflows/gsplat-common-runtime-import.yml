@@ -291,6 +291,38 @@ jobs:
               decoded.load_cameras()
               decoded.load_images()
               decoded.load_points3D()
+
+              # Exercise the pinned upstream Dataset's native sparse-depth
+              # generation, not only WRE's own point-cloud reprojection.
+              train_depths = Dataset(parsed, split="train", load_depths=True)
+              test_depths = Dataset(parsed, split="test", load_depths=True)
+              batches = (test_depths[0], train_depths[0], train_depths[1])
+              upstream_depth_errors = []
+              upstream_depth_samples = 0
+              for index, batch in enumerate(batches):
+                  name = parsed.image_names[index]
+                  original = decoded.images[decoded.name_to_image_id[name]]
+                  predicted = np.asarray(batch["points"], dtype=np.float64)
+                  observed = np.asarray(original.points2D, dtype=np.float64)
+                  depths = np.asarray(batch["depths"], dtype=np.float64)
+                  assert predicted.shape == observed.shape == (4, 2)
+                  assert depths.shape == (4,)
+                  assert np.all(np.isfinite(predicted))
+                  assert np.all(np.isfinite(depths))
+                  assert np.allclose(depths, 2.0, rtol=0, atol=1e-6)
+                  # Comparing sorted coordinates avoids assuming matching
+                  # iteration order between legacy SceneManager and Dataset.
+                  projected_ordered = np.array(sorted(map(tuple, predicted)))
+                  observed_ordered = np.array(sorted(map(tuple, observed)))
+                  upstream_depth_errors.extend(
+                      np.linalg.norm(projected_ordered - observed_ordered, axis=1)
+                  )
+                  upstream_depth_samples += len(depths)
+              upstream_depth_rmse = float(
+                  np.sqrt(np.mean(np.square(upstream_depth_errors)))
+              )
+              assert upstream_depth_samples == 12
+              assert upstream_depth_rmse < 1e-5, upstream_depth_rmse
               residuals = []
               for image_index, name in enumerate(parsed.image_names):
                   image = decoded.images[decoded.name_to_image_id[name]]
@@ -378,6 +410,8 @@ jobs:
                   "sparse_points": len(decoded.points3D),
                   "reprojection_observations": len(residuals),
                   "reprojection_rmse_px": rmse,
+                  "upstream_sparse_depth_rmse_px": upstream_depth_rmse,
+                  "upstream_sparse_depth_samples": upstream_depth_samples,
                   "cpu_sparse_render_rgb_rmse": sparse_rgb_rmse,
                   "cpu_sparse_render_projected_samples": drawn_samples,
                   "cpu_sparse_depth_unit": "COLMAP model distance",
@@ -389,6 +423,7 @@ jobs:
               )
               print("COLMAP real 3D PLY and CPU RGB/depth reprojection previews generated.")
               print(f"Measured CPU reprojection RMSE: {rmse:.9f} pixels, 12 observations.")
+              print(f"gsplat Dataset(load_depths=True): {upstream_depth_samples} CPU depths, RMS={upstream_depth_rmse:.9f} pixels.")
               print(f"Rendered 3-view RGB RMSE: {sparse_rgb_rmse:.9f}, {drawn_samples} projected samples.")
               print("No CUDA kernels, Gaussian reconstruction or GPU training occurred.")
           PY
