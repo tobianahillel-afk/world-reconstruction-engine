@@ -83,7 +83,10 @@ next_action: >-
   ba8864f8a63f8b9f3f96e9e0d754895f90dbe0e6dbc0e8627cc9c1cd71b814ee; GPU execution,
   rasterizer kernel execution and appearance training remain false, and binary
   reproducibility remains unverified. The original PR #224 nerfview-only import
-  used 53 hash-locked wheels. Its consolidated snapshot 07d3eeebdd0bdebf96a81a4853e9322f7debf88f
+  used 53 hash-locked wheels at exact commit 38787c4b083c6a9a9a5c6738f790c942f8d79fc1;
+  GitHub run 38894645381 retained artifact 12042874218 with SHA-256
+  3887a3ddce1b2c58978baf59ff7f13b7a160adc1b2f552285592cf5d23beed83.
+  Its consolidated snapshot 07d3eeebdd0bdebf96a81a4853e9322f7debf88f
   subsequently imported real pinned nerfview, splines, gsplat trainer Python helper
   modules, gsplat COLMAP Parser/Dataset and the legacy rmbrualla SceneManager
   together under CPython 3.10.21 with 58 exact pinned wheels. GitHub Actions
@@ -99,9 +102,15 @@ next_action: >-
   workflow-containing SHA returned CHANGES_REQUIRED: disputed scope, the
   dependency-review skip on Dependency Graph HTTP 404, and proof consistency.
   Source/registry evidence was corrected separately, but the repository-wide
-  dependency-review block remains OPEN in PR #226. The new PR #224 snapshot,
-  with only registry/PROJECT_STATE evidence changes, requires its OWN L2;
-  do not merge based on prior passing CI or historical L2. Real dataset loading, native gsplat/fused-ssim co-import,
+  dependency-review block remains OPEN in PR #226. The registry-only PR #224
+  snapshot 5d5e06cbaccd91ee7b4a2c273c102df007db6423 was independently reviewed
+  with CHANGES_REQUIRED: the historical 53-wheel proof lacked a directly linked
+  run/artifact/digest, the L2 evidence was not tied to a reviewed commit, and the
+  repository's dependency-review and custom dependency coverage remained blocked.
+  The candidate now retains these historical identifiers and explicit reviewed
+  SHAs, but **does not** establish a genuine GitHub vulnerability scan or a
+  GPU baseline. Every further commit requires its own SHA-bound L2, and
+  historical success must not be transferred to later snapshots. Real dataset loading, native gsplat/fused-ssim co-import,
   full trainer ABI and GPU appearance training remain UNVERIFIED. The next
   separately evidenced gate is a complete full-trainer/native ABI import using
   the corrected exact 76-wheel Python lock,
