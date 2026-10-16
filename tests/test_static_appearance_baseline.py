@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import ast
 import hashlib
+import os
 import struct
+import sys
 import zlib
 from dataclasses import FrozenInstanceError, replace
 from datetime import UTC, datetime
@@ -1057,6 +1059,62 @@ def test_external_gsplat_runner_builds_complete_canonical_candidate_with_process
     assert result.materialization.entries[0].relative_path == "ply/point_cloud_19.ply"
     assert result.materialization.entries[0].sha256 == _digest(_gsplat_ply(vertices=2))
     assert (output / "wre-reference-training.log").exists()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="smoke executable uses POSIX shebang")
+def test_external_gsplat_runner_spawns_real_process_and_assembles_appearance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CPU-only OS-process smoke: child emulates trainer output, NOT CUDA."""
+    request, source, staged, output, profile, artifact_ref, producer = _retained_gsplat_fixture(
+        tmp_path
+    )
+    (output / profile.expected_ply_relative_path).unlink()
+    (output / "ply").rmdir()
+    output.rmdir()
+    source_root = tmp_path / "pinned-reference"
+    (source_root / "examples").mkdir(parents=True)
+    runtime = tmp_path / "fake-external-python"
+    runtime.with_name("smoke-reference.ply").write_bytes(_gsplat_ply(vertices=2))
+    runtime.write_text(
+        f"#!{sys.executable}\n"
+        "import json\n"
+        "from pathlib import Path\n"
+        "import sys\n"
+        "assert sys.argv[1:3] == ['-I', '-c']\n"
+        "assert 'from simple_trainer import Config, main' in sys.argv[3]\n"
+        "cfg = json.load(sys.stdin)\n"
+        "assert cfg['max_steps'] == 20\n"
+        "assert cfg['save_ply'] is True\n"
+        "assert cfg['disable_viewer'] is True\n"
+        "assert cfg['data_dir']\n"
+        "target = Path(cfg['result_dir']) / 'ply' / 'point_cloud_19.ply'\n"
+        "target.parent.mkdir()\n"
+        "target.write_bytes(Path(__file__).with_name('smoke-reference.ply').read_bytes())\n"
+        "print('CPU subprocess smoke: fixture emitted, no CUDA training')\n",
+        encoding="utf-8",
+    )
+    runtime.chmod(0o700)
+    monkeypatch.setattr(
+        baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
+    )
+    result = run_gsplat_reference_training(
+        request=request,
+        source=source,
+        staged=staged,
+        profile=profile,
+        source_root=source_root,
+        python_executable=runtime,
+        output_root=output,
+        artifact_ref=artifact_ref,
+        producer=producer,
+        cuda_device_index=0,
+        timeout_seconds=15,
+    )
+    assert result.candidate.artifact_ref == artifact_ref
+    assert result.candidate.source_geometry is request.source_geometry
+    assert result.materialization.entries[0].sha256 == _digest(_gsplat_ply(vertices=2))
+    assert b"CPU subprocess smoke" in (output / "wre-reference-training.log").read_bytes()
 
 
 @pytest.mark.parametrize("return_code", (1, 0))
