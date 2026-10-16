@@ -291,9 +291,15 @@ jobs:
               "wre_source_commit": checkout_sha,
               "github_run_id": os.environ["GITHUB_RUN_ID"],
               "github_run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
+              "github_run_url": (
+                  f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/"
+                  f"{os.environ['GITHUB_RUN_ID']}"
+              ),
+              "github_workflow_ref": os.environ["GITHUB_WORKFLOW_REF"],
               "kind": "pinned_gsplat_reference_trainer_python_eager_import_consolidated",
-              "wre_sha": os.environ.get("GITHUB_SHA"),
-              "github_run_id": os.environ["GITHUB_RUN_ID"],
+              # GitHub's triggering SHA can be a synthetic PR merge SHA;
+              # the only reviewed WRE source commit is the checked-out head above.
+              "github_trigger_sha": os.environ["GITHUB_SHA"],
               "gsplat_revision": os.environ["GSPLAT_REV"],
               "gsplat_tree": os.environ["GSPLAT_TREE"],
               "nerfview_revision": os.environ["NERFVIEW_REV"],
