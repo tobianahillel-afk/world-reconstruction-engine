@@ -764,6 +764,78 @@ def test_gsplat_ply_rejects_parent_directory_swap(
     assert replaced
 
 
+@pytest.mark.parametrize(
+    ("failure_point", "expected_message"),
+    (
+        ("header", "read failed"),
+        ("offset", "offset check failed"),
+        ("payload", "read failed"),
+        ("trailer", "read failed"),
+    ),
+)
+def test_gsplat_ply_converts_stream_io_errors_to_preflight(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure_point: str,
+    expected_message: str,
+) -> None:
+    data = _gsplat_ply(vertices=2)
+    root, profile, ref = _gsplat_output(tmp_path, data)
+    target = root / profile.expected_ply_relative_path
+    original_open = Path.open
+    injected = False
+
+    class FaultyStream:
+        def __init__(self, stream: Any) -> None:
+            self.stream = stream
+            self.read_count = 0
+
+        def __enter__(self) -> FaultyStream:
+            return self
+
+        def __exit__(self, *args: Any) -> Any:
+            return self.stream.__exit__(*args)
+
+        def __getattr__(self, name: str) -> Any:
+            return getattr(self.stream, name)
+
+        def readline(self, *args: Any) -> bytes:
+            nonlocal injected
+            if failure_point == "header":
+                injected = True
+                raise OSError("injected header read failure")
+            return self.stream.readline(*args)
+
+        def tell(self) -> int:
+            nonlocal injected
+            if failure_point == "offset":
+                injected = True
+                raise OSError("injected offset failure")
+            return self.stream.tell()
+
+        def read(self, *args: Any) -> bytes:
+            nonlocal injected
+            self.read_count += 1
+            if (failure_point == "payload" and self.read_count == 1) or (
+                failure_point == "trailer" and self.read_count == 2
+            ):
+                injected = True
+                raise OSError("injected payload read failure")
+            return self.stream.read(*args)
+
+    def open_with_fault(path: Path, mode: str = "r", *args: Any, **kwargs: Any) -> Any:
+        opened = original_open(path, mode, *args, **kwargs)
+        if path == target and mode == "rb":
+            return FaultyStream(opened)
+        return opened
+
+    monkeypatch.setattr(Path, "open", open_with_fault)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match=expected_message) as exc:
+        materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
+    assert injected
+    assert isinstance(exc.value.__cause__, OSError)
+
+
 def test_gsplat_ply_rejects_disappearance_during_streamed_read(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
