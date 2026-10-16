@@ -218,51 +218,65 @@ jobs:
           from datasets.colmap import Dataset, Parser
 
           # These are valid COLMAP binary records (not WRE's placeholder bytes).
-          # The fixture has one pinhole camera, three registered views and one
-          # 3D track observed in all three views; no SfM or training is claimed.
+          # Real 3D reference fixture: four colored 3D points, three RGB views,
+          # twelve geometrically consistent 2D observations and three COLMAP
+          # binary files. No new SfM solver or artificial parser replacement.
+          from pycolmap import SceneManager
+          
+          points = (
+              (1, (-0.4, -0.3, 2.0), (255, 64, 64)),
+              (2, (0.4, -0.3, 2.0), (64, 255, 64)),
+              (3, (-0.4, 0.3, 2.0), (64, 64, 255)),
+              (4, (0.4, 0.3, 2.0), (255, 255, 64)),
+          )
           with tempfile.TemporaryDirectory(prefix="wre-colmap-cpu-", dir=os.environ["RUNNER_TEMP"]) as temp:
               dataset = Path(temp)
               photos = dataset / "images"
               sparse = dataset / "sparse" / "0"
               photos.mkdir()
               sparse.mkdir(parents=True)
-
+          
               (sparse / "cameras.bin").write_bytes(
                   struct.pack("<Q", 1)
                   + struct.pack("<IiQQ4d", 1, 1, 4, 4, 4.0, 4.0, 2.0, 2.0)
               )
               images_bin = bytearray(struct.pack("<Q", 3))
+              preview = Image.new("RGB", (12, 4))
               for image_id in range(1, 4):
                   name = f"frame-{image_id:02d}.png"
-                  pixels = np.full((4, 4, 3), image_id * 40, dtype=np.uint8)
-                  Image.fromarray(pixels, mode="RGB").save(photos / name)
-                  # camera-to-world positions differ, while the model remains static.
                   tx = (2 - image_id) * 0.2
+                  pixels = np.full((4, 4, 3), 12, dtype=np.uint8)
                   images_bin.extend(
                       struct.pack("<I4d3dI", image_id, 1.0, 0.0, 0.0, 0.0, tx, 0.0, 0.0, 1)
                   )
                   images_bin.extend(name.encode("ascii") + b"\x00")
-                  images_bin.extend(struct.pack("<Qddq", 1, 2.0, 2.0, 1))
+                  images_bin.extend(struct.pack("<Q", len(points)))
+                  for point_id, (x, y, z), rgb in points:
+                      u, v = 4.0 * (x + tx) / z + 2.0, 4.0 * y / z + 2.0
+                      images_bin.extend(struct.pack("<ddq", u, v, point_id))
+                      pixels[int(round(v)), int(round(u))] = rgb
+                  Image.fromarray(pixels).save(photos / name)
+                  preview.paste(Image.fromarray(pixels), ((image_id - 1) * 4, 0))
               (sparse / "images.bin").write_bytes(images_bin)
-
-              points = bytearray(struct.pack("<Q", 1))
-              points.extend(
-                  struct.pack("<Q3d3BdQ", 1, 0.0, 0.0, 2.0, 255, 128, 64, 0.01, 3)
-              )
-              for image_id in range(1, 4):
-                  points.extend(struct.pack("<II", image_id, 0))
-              (sparse / "points3D.bin").write_bytes(points)
-
+              preview.save(Path(os.environ["RUNNER_TEMP"]) / "wre-colmap-cpu-views.png")
+          
+              point_bin = bytearray(struct.pack("<Q", len(points)))
+              for point_index, (point_id, xyz, rgb) in enumerate(points):
+                  point_bin.extend(struct.pack("<Q3d3BdQ", point_id, *xyz, *rgb, 0.01, 3))
+                  for image_id in range(1, 4):
+                      point_bin.extend(struct.pack("<II", image_id, point_index))
+              (sparse / "points3D.bin").write_bytes(point_bin)
+          
+              # Decode through the real pinned gsplat/legacy COLMAP sources.
               parsed = Parser(str(dataset), factor=1, normalize=False, test_every=8)
-              train = Dataset(parsed, split="train")
-              test = Dataset(parsed, split="test")
+              training = Dataset(parsed, split="train")
+              testing = Dataset(parsed, split="test")
               assert parsed.image_names == [
                   "frame-01.png", "frame-02.png", "frame-03.png"
               ]
-              assert parsed.points.shape == (1, 3)
-              assert np.allclose(parsed.points[0], [0.0, 0.0, 2.0])
-              assert len(train) == 2 and len(test) == 1
-              for batch in (train[0], train[1], test[0]):
+              assert parsed.points.shape == (4, 3)
+              assert len(training) == 2 and len(testing) == 1
+              for batch in (training[0], training[1], testing[0]):
                   assert isinstance(batch["image"], torch.Tensor)
                   assert batch["image"].shape == (4, 4, 3)
                   assert batch["image"].device.type == "cpu"
@@ -270,6 +284,71 @@ jobs:
                   assert batch["camtoworld"].shape == (4, 4)
                   assert torch.isfinite(batch["K"]).all()
                   assert torch.isfinite(batch["camtoworld"]).all()
-              print("Three REAL binary COLMAP views decoded with upstream Parser/Dataset.")
-              print("CPU tensor generation verified; no CUDA kernel or training occurred.")
+          
+              # Use the actual decoded 2D observations, 3D points and camera
+              # matrices to measure geometric reprojection accuracy in pixels.
+              decoded = SceneManager(str(sparse))
+              decoded.load_cameras()
+              decoded.load_images()
+              decoded.load_points3D()
+              residuals = []
+              for image_index, name in enumerate(parsed.image_names):
+                  image = decoded.images[decoded.name_to_image_id[name]]
+                  K = parsed.Ks_dict[parsed.camera_ids[image_index]]
+                  world_to_camera = np.linalg.inv(parsed.camtoworlds[image_index])
+                  for observed_xy, point_id in zip(image.points2D, image.point3D_ids):
+                      point_index = decoded.point3D_id_to_point3D_idx[point_id]
+                      xyz = decoded.points3D[point_index]
+                      position = world_to_camera[:3, :3] @ xyz + world_to_camera[:3, 3]
+                      assert position[2] > 0.0
+                      pixel = (K @ position)[:2] / position[2]
+                      residuals.append(float(np.linalg.norm(pixel - observed_xy)))
+              assert len(residuals) == 12
+              rmse = float(np.sqrt(np.mean(np.square(residuals))))
+              assert np.isfinite(rmse) and rmse < 1e-6, rmse
+          
+              # A genuine, standards-compliant sparse *point-cloud* PLY for
+              # external 3D viewers. This is NOT a trained Gaussian splat PLY.
+              preview_ply = Path(os.environ["RUNNER_TEMP"]) / "wre-colmap-cpu-preview.ply"
+              header = (
+                  "ply\nformat ascii 1.0\n"
+                  f"element vertex {len(decoded.points3D)}\n"
+                  "property float x\nproperty float y\nproperty float z\n"
+                  "property uchar red\nproperty uchar green\nproperty uchar blue\n"
+                  "end_header\n"
+              )
+              lines = [
+                  f"{xyz[0]:.9g} {xyz[1]:.9g} {xyz[2]:.9g} "
+                  f"{int(rgb[0])} {int(rgb[1])} {int(rgb[2])}"
+                  for xyz, rgb in zip(decoded.points3D, decoded.point3D_colors)
+              ]
+              preview_ply.write_text(header + "\n".join(lines) + "\n", encoding="ascii")
+          
+              import json
+              report = {
+                  "source": "actual pinned COLMAP Parser and SceneManager",
+                  "registered_views": len(parsed.image_names),
+                  "sparse_points": len(decoded.points3D),
+                  "reprojection_observations": len(residuals),
+                  "reprojection_rmse_px": rmse,
+                  "real_cuda_execution": False,
+                  "real_gaussian_training": False,
+              }
+              (Path(os.environ["RUNNER_TEMP"]) / "wre-colmap-cpu-metrics.json").write_text(
+                  json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+              )
+              print("COLMAP real 3D point-cloud PLY and 3-view preview generated.")
+              print(f"Measured CPU reprojection RMSE: {rmse:.9f} pixels, 12 observations.")
+              print("No CUDA kernels, Gaussian reconstruction or GPU training occurred.")
           PY
+          
+      - name: Publish CPU COLMAP 3D preview and measured reprojection
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wre-colmap-cpu-3d-preview
+          path: |
+            ${{ runner.temp }}/wre-colmap-cpu-preview.ply
+            ${{ runner.temp }}/wre-colmap-cpu-views.png
+            ${{ runner.temp }}/wre-colmap-cpu-metrics.json
+          if-no-files-found: error
+          retention-days: 7
