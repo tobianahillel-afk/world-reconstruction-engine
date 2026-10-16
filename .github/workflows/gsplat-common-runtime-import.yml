@@ -324,6 +324,53 @@ jobs:
               ]
               preview_ply.write_text(header + "\n".join(lines) + "\n", encoding="ascii")
           
+              # Functional CPU-only point-cloud projection: decode the
+              # camera matrices and 3D colors, z-buffer into each 4x4 view,
+              # then compare the projected RGB image against the real PNGs.
+              # This is a sparse geometry renderer, NOT Gaussian splatting.
+              render_strip = np.zeros((4, 12, 3), dtype=np.uint8)
+              depth_strip = np.zeros((4, 12), dtype=np.float32)
+              all_rgb_errors = []
+              drawn_samples = 0
+              for image_index, name in enumerate(parsed.image_names):
+                  frame = np.full((4, 4, 3), 12, dtype=np.uint8)
+                  depth = np.full((4, 4), np.inf, dtype=np.float32)
+                  K = parsed.Ks_dict[parsed.camera_ids[image_index]]
+                  world_to_camera = np.linalg.inv(parsed.camtoworlds[image_index])
+                  for xyz, rgb in zip(decoded.points3D, decoded.point3D_colors):
+                      position = world_to_camera[:3, :3] @ xyz + world_to_camera[:3, 3]
+                      if position[2] <= 0:
+                          continue
+                      projected = K @ position
+                      u, v = (int(round(float(v))) for v in projected[:2] / position[2])
+                      if 0 <= u < 4 and 0 <= v < 4 and position[2] <= depth[v, u]:
+                          frame[v, u] = rgb
+                          depth[v, u] = position[2]
+                          drawn_samples += 1
+                  observed = np.asarray(Image.open(photos / name).convert("RGB"))
+                  assert observed.shape == frame.shape
+                  all_rgb_errors.extend((frame.astype(np.int16) - observed.astype(np.int16)).ravel())
+                  x = image_index * 4
+                  render_strip[:, x : x + 4] = frame
+                  depth_strip[:, x : x + 4] = np.where(np.isfinite(depth), depth, 0.0)
+              assert drawn_samples == 12, drawn_samples
+              sparse_rgb_rmse = float(np.sqrt(np.mean(np.square(all_rgb_errors, dtype=np.float64))))
+              assert sparse_rgb_rmse == 0.0, sparse_rgb_rmse
+              # Upscaled nearest-neighbor PNGs are genuinely viewable without
+              # adding a viewer framework or downloading JavaScript packages.
+              Image.fromarray(render_strip).resize(
+                  (768, 256), resample=Image.Resampling.NEAREST
+              ).save(Path(os.environ["RUNNER_TEMP"]) / "wre-colmap-cpu-render.png")
+              depth_shades = np.where(
+                  depth_strip > 0.0,
+                  np.clip(255.0 - depth_strip * 50.0, 0.0, 255.0),
+                  0.0,
+              ).astype(np.uint8)
+              Image.fromarray(depth_shades).resize(
+                  (768, 256), resample=Image.Resampling.NEAREST
+              ).save(Path(os.environ["RUNNER_TEMP"]) / "wre-colmap-cpu-depth.png")
+              np.save(Path(os.environ["RUNNER_TEMP"]) / "wre-colmap-cpu-depth.npy", depth_strip)
+
               import json
               report = {
                   "source": "actual pinned COLMAP Parser and SceneManager",
@@ -331,14 +378,18 @@ jobs:
                   "sparse_points": len(decoded.points3D),
                   "reprojection_observations": len(residuals),
                   "reprojection_rmse_px": rmse,
+                  "cpu_sparse_render_rgb_rmse": sparse_rgb_rmse,
+                  "cpu_sparse_render_projected_samples": drawn_samples,
+                  "cpu_sparse_depth_unit": "COLMAP model distance",
                   "real_cuda_execution": False,
                   "real_gaussian_training": False,
               }
               (Path(os.environ["RUNNER_TEMP"]) / "wre-colmap-cpu-metrics.json").write_text(
                   json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
               )
-              print("COLMAP real 3D point-cloud PLY and 3-view preview generated.")
+              print("COLMAP real 3D PLY and CPU RGB/depth reprojection previews generated.")
               print(f"Measured CPU reprojection RMSE: {rmse:.9f} pixels, 12 observations.")
+              print(f"Rendered 3-view RGB RMSE: {sparse_rgb_rmse:.9f}, {drawn_samples} projected samples.")
               print("No CUDA kernels, Gaussian reconstruction or GPU training occurred.")
           PY
           
@@ -350,5 +401,8 @@ jobs:
             ${{ runner.temp }}/wre-colmap-cpu-preview.ply
             ${{ runner.temp }}/wre-colmap-cpu-views.png
             ${{ runner.temp }}/wre-colmap-cpu-metrics.json
+            ${{ runner.temp }}/wre-colmap-cpu-render.png
+            ${{ runner.temp }}/wre-colmap-cpu-depth.png
+            ${{ runner.temp }}/wre-colmap-cpu-depth.npy
           if-no-files-found: error
           retention-days: 7
