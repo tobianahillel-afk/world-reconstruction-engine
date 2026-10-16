@@ -1760,7 +1760,14 @@ def materialize_verified_gsplat_ply(
     file_path = root / profile.expected_ply_relative_path
     if file_path.is_symlink() or not file_path.is_file():
         raise GsplatStaticAppearancePreflightError("gsplat expected final PLY file is missing")
-    if file_path.resolve(strict=True).parent != ply_directory.resolve(strict=True):
+    try:
+        resolved_parent = file_path.resolve(strict=True).parent
+        verified_parent = ply_directory.resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat PLY changed or disappeared during path verification"
+        ) from exc
+    if resolved_parent != verified_parent:
         raise GsplatStaticAppearancePreflightError("gsplat PLY escaped its output directory")
 
     # Tie the checked path to the actual descriptor: replacing a pathname
