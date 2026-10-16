@@ -12,9 +12,9 @@ import hashlib
 import json
 import math
 import os
-import subprocess
 import shutil
 import struct
+import subprocess
 import tempfile
 import zlib
 from dataclasses import dataclass
