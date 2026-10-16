@@ -409,29 +409,26 @@ jobs:
           virtual_views = [project_sparse_view(shift) for shift in camera_shifts]
           assert all(count >= 300 for _, count in virtual_views)
           assert not np.array_equal(virtual_views[0][0], virtual_views[1][0])
-          # A second, denser CPU presentation uses OpenCV's native image
-          # sampler and the measured stereo disparity. This is an approximate
-          # target-to-left backward warp, NOT a new 3D/4D renderer or inpainting.
-          # Nearest-neighbor sampling retains observed source pixel colors.
+          # Dense CPU forward projection from disparity at each OBSERVED
+          # left-image pixel, rather than incorrectly sampling disparity at an
+          # unobserved target pixel. Choose the closest source surface when
+          # several samples land on one target pixel; leave holes black.
+          # This remains stereo 2.5D, NOT Gaussian/4D rendering or inpainting.
           def warp_observed_pixels(camera_x):
-              source_x = xx + camera_x * disparity
-              # Invalid source coordinates never enter the source sampler.
-              safe_x = np.where(valid, source_x, -1.0).astype(np.float32)
-              source_valid = cv2.remap(
-                  valid.astype(np.uint8), safe_x, yy,
-                  interpolation=cv2.INTER_NEAREST,
-                  borderMode=cv2.BORDER_CONSTANT,
+              projected_x = np.rint(
+                  np.where(valid, xx - camera_x * disparity, -1.0)
+              ).astype(np.int32)
+              inside = valid & (projected_x >= 0) & (projected_x < width)
+              target_pixels = (
+                  yy[inside].astype(np.int32) * width + projected_x[inside]
               )
-              observed = (
-                  valid & (source_valid != 0)
-                  & (safe_x >= 0.0) & (safe_x < float(width))
-              )
-              warped = cv2.remap(
-                  left, safe_x, yy, interpolation=cv2.INTER_NEAREST,
-                  borderMode=cv2.BORDER_CONSTANT,
-              )
-              warped[~observed] = 0
-              return warped, int(np.count_nonzero(observed))
+              # Higher positive disparity means smaller positive depth.
+              ordered = np.lexsort((-disparity[inside], target_pixels))
+              _, first = np.unique(target_pixels[ordered], return_index=True)
+              nearest = ordered[first]
+              warped = np.zeros_like(left)
+              warped.reshape(-1, 3)[target_pixels[nearest]] = left[inside][nearest]
+              return warped, int(len(nearest))
 
           dense_views = [warp_observed_pixels(shift) for shift in camera_shifts]
           assert all(count >= 500 for _, count in dense_views)
@@ -493,7 +490,8 @@ jobs:
               "sparse_novel_view_is_photorealistic": False,
               "dense_cpu_warp_shifts_in_arbitrary_baseline_units": list(camera_shifts),
               "dense_cpu_warp_valid_observed_pixels": [count for _, count in dense_views],
-              "dense_cpu_warp_method": "OpenCV nearest-neighbor disparity backward remap",
+              "dense_cpu_warp_method": "CPU source-disparity forward projection with nearest-depth z-buffer",
+              "dense_cpu_warp_occlusion_policy": "nearest positive depth; unobserved holes black",
               "dense_cpu_warp_is_exact_depth_aware_render": False,
               "dense_cpu_warp_inpainting_or_hallucination": False,
               "dense_cpu_warp_photorealism_or_heldout_quality_proven": False,
