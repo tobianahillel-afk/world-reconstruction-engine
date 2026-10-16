@@ -1151,6 +1151,7 @@ def test_external_gsplat_runner_spawns_real_process_and_assembles_appearance(
     monkeypatch.setattr(
         baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
     )
+    preview = tmp_path / "training-preview.ply"
     result = run_gsplat_reference_training(
         request=request,
         source=source,
@@ -1163,11 +1164,22 @@ def test_external_gsplat_runner_spawns_real_process_and_assembles_appearance(
         producer=producer,
         cuda_device_index=0,
         timeout_seconds=15,
+        preview_path=preview,
     )
     assert result.candidate.artifact_ref == artifact_ref
     assert result.candidate.source_geometry is request.source_geometry
     assert result.materialization.entries[0].sha256 == _digest(_gsplat_ply(vertices=2))
     assert b"CPU subprocess smoke" in (output / "wre-reference-training.log").read_bytes()
+    # Real OS-process -> model artifact -> independently viewable XYZ/RGB PLY.
+    # The subprocess emits a synthetic Gaussian fixture, never GPU training.
+    encoded = preview.read_bytes()
+    header_end = encoded.index(b"end_header\n") + len(b"end_header\n")
+    assert b"element vertex 2\n" in encoded[:header_end]
+    assert b"property uchar red\n" in encoded[:header_end]
+    assert len(encoded[header_end:]) == 2 * struct.calcsize("<3f3B")
+    assert (output / profile.expected_ply_relative_path).read_bytes() == _gsplat_ply(
+        vertices=2
+    )
 
 
 @pytest.mark.parametrize("mutation", ("missing_revision", "wrong_configuration"))
