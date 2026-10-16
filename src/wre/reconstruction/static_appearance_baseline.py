@@ -1745,6 +1745,29 @@ def build_gsplat_reference_trainer_path_overrides(
         raise GsplatStaticAppearancePreflightError(
             "gsplat runtime dataset requires real staged images and COLMAP directories"
         )
+    # The reference COLMAP parser opens all three binary model components.
+    # A directory-only check can otherwise accept an empty staged fixture.
+    model_root = dataset / "sparse" / "0"
+    if any(
+        (model_root / name).is_symlink() or not (model_root / name).is_file()
+        for name in ("cameras.bin", "images.bin", "points3D.bin")
+    ):
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat runtime dataset lacks real COLMAP binary model files"
+        )
+    try:
+        has_png = any(
+            path.suffix.lower() == ".png" and not path.is_symlink() and path.is_file()
+            for path in (dataset / "images").iterdir()
+        )
+    except OSError as exc:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat runtime image directory could not be inspected"
+        ) from exc
+    if not has_png:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat runtime dataset has no regular PNG image"
+        )
     if output_root.is_symlink() or output_root.exists():
         raise GsplatStaticAppearancePreflightError(
             "gsplat runtime output directory must not already exist"
