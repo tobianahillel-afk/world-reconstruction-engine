@@ -773,6 +773,18 @@ def test_gsplat_ply_materialization_rejects_nonfinite_payload(tmp_path: Path) ->
         materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
 
 
+def test_gsplat_ply_rejects_zero_norm_rotation_quaternion(tmp_path: Path) -> None:
+    # A finite all-zero quaternion cannot specify a rotation. The hash and
+    # vertex count are otherwise valid, so this must fail on payload semantics.
+    data = bytearray(_gsplat_ply(vertices=2))
+    stride = 59 * 4  # Exact source schema: 6 + 45 + 8 float32 properties.
+    first_vertex_rotation = len(data) - stride * 2 + stride - 4 * 4
+    data[first_vertex_rotation : first_vertex_rotation + 16] = bytes(16)
+    root, profile, ref = _gsplat_output(tmp_path, bytes(data))
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="zero-norm rotation"):
+        materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
+
+
 def test_gsplat_ply_materialization_rejects_zero_gaussians_and_forged_header(
     tmp_path: Path,
 ) -> None:
