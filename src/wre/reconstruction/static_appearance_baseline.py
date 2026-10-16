@@ -1745,13 +1745,10 @@ def verify_gsplat_reference_trainer_config_fields(
             "gsplat trainer has an invalid Config source"
         ) from exc
     configs = [
-        node
-        for node in parsed.body
-        if isinstance(node, ast.ClassDef) and node.name == "Config"
+        node for node in parsed.body if isinstance(node, ast.ClassDef) and node.name == "Config"
     ]
     if len(configs) != 1 or not any(
-        isinstance(dec, ast.Name) and dec.id == "dataclass"
-        for dec in configs[0].decorator_list
+        isinstance(dec, ast.Name) and dec.id == "dataclass" for dec in configs[0].decorator_list
     ):
         raise GsplatStaticAppearancePreflightError(
             "gsplat trainer does not declare the expected dataclass Config"
