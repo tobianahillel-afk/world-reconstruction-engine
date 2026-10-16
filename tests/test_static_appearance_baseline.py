@@ -1146,6 +1146,8 @@ def test_external_gsplat_runner_rejects_native_frame_mismatch_before_training(
     (output / profile.expected_ply_relative_path).unlink()
     (output / "ply").rmdir()
     output.rmdir()
+    runtime = tmp_path / "external-python"
+    runtime.write_bytes(b"explicit isolated interpreter for negative test")
     checks = 0
 
     def reject_native_geometry(*_args: Any, **_kwargs: Any) -> None:
@@ -1173,7 +1175,7 @@ def test_external_gsplat_runner_rejects_native_frame_mismatch_before_training(
             features=cast(ColmapFeatureExtractionResult, object()),
             expected_environment=cast(ColmapEnvironmentIdentity, object()),
             source_root=tmp_path / "unavailable-source",
-            python_executable=tmp_path / "unavailable-python",
+            python_executable=runtime,
             output_root=output,
             artifact_ref=artifact_ref,
             producer=producer,
