@@ -48,8 +48,8 @@ jobs:
               echo "enabled=true" >> "${GITHUB_OUTPUT}"
               ;;
             403|404)
-              echo "enabled=false" >> "${GITHUB_OUTPUT}"
-              echo "::warning::Dependency Graph is not enabled or not available (HTTP ${status}); strict Dependency Review is configured but cannot run until the repository setting is enabled."
+              echo "::error::Dependency Graph unavailable (HTTP ${status}). Dependency Review did NOT execute. Enable the repository Dependency Graph and required token permissions; fail closed instead of reporting a false green."
+              exit 1
               ;;
             *)
               echo "Unexpected Dependency Graph API response: HTTP ${status}" >&2
