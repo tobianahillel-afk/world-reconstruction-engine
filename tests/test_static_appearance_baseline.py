@@ -1088,6 +1088,7 @@ def test_external_gsplat_runner_spawns_real_process_and_assembles_appearance(
         "import sys\n"
         "assert sys.argv[1:3] == ['-I', '-c']\n"
         "assert 'from simple_trainer import Config, main' in sys.argv[3]\n"
+        "assert 'torch.hub.download_url_to_file = reject_implicit_download' in sys.argv[3]\n"
         "cfg = json.load(sys.stdin)\n"
         "assert cfg['max_steps'] == 20\n"
         "assert cfg['save_ply'] is True\n"
