@@ -679,7 +679,11 @@ def _gsplat_ply(*, properties: tuple[str, ...] | None = None, vertices: int = 1)
         + "".join(f"property float {field}\n" for field in fields)
         + "end_header\n"
     ).encode("ascii")
-    payload = tuple(float(index + 1) for index in range(len(fields)))
+    payload = [float(index + 1) for index in range(len(fields))]
+    if fields == standard:
+        # Actual gsplat log-scale magnitudes are near zero; unrealistic
+        # 54..56 would cause overflow after exp(scale)**2 in float32.
+        payload[-8:] = [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]
     return header + struct.pack("<" + "f" * len(payload), *payload) * vertices
 
 
@@ -967,6 +971,32 @@ def test_gsplat_ply_rejects_zero_norm_rotation_quaternion(tmp_path: Path) -> Non
     root, profile, ref = _gsplat_output(tmp_path, bytes(data))
     with pytest.raises(GsplatStaticAppearancePreflightError, match="zero-norm rotation"):
         materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
+
+
+@pytest.mark.parametrize(
+    ("log_scale", "should_reject"),
+    ((100.0, True), (-100.0, True), (45.0, True), (-45.0, True),
+     (0.0, False), (40.0, False), (-40.0, False)),
+)
+def test_gsplat_ply_rejects_float32_overflowing_log_scales(
+    tmp_path: Path, log_scale: float, should_reject: bool
+) -> None:
+    # Mutate the first Gaussian's first scale logit in the canonical 59-float
+    # reference PLY, preserving the full payload and the second Gaussian.
+    original = _gsplat_ply(vertices=2)
+    data = bytearray(original)
+    stride = 59 * 4
+    first_scale_offset = len(data) - 2 * stride + stride - 7 * 4
+    data[first_scale_offset : first_scale_offset + 4] = struct.pack("<f", log_scale)
+    root, profile, ref = _gsplat_output(tmp_path, bytes(data))
+    if should_reject:
+        with pytest.raises(GsplatStaticAppearancePreflightError, match="numerically unstable log scale"):
+            materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
+    else:
+        result = materialize_verified_gsplat_ply(
+            artifact_ref=ref, output_root=root, profile=profile
+        )
+        assert result.entries[0].sha256 == _digest(bytes(data))
 
 
 @pytest.mark.parametrize(
