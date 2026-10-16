@@ -279,7 +279,7 @@ jobs:
           test -n "$ARTIFACT_URL"
           {
             echo "### WRE V2L18.3 exact nerfview import evidence"
-            echo "Reviewed HEAD: \\`$REVIEWED_HEAD_SHA\\`"
+            echo "Reviewed HEAD: $REVIEWED_HEAD_SHA"
             echo "GitHub run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
             echo "Attempt: $GITHUB_RUN_ATTEMPT"
             echo "Evidence JSON SHA-256:"
