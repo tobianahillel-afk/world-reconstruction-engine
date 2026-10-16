@@ -1807,6 +1807,9 @@ torch.hub.download_url_to_file = reject_implicit_download
 
 if not torch.cuda.is_available() or torch.cuda.device_count() != 1:
     raise RuntimeError("gsplat reference training requires exactly one visible CUDA GPU")
+import gsplat
+if gsplat.__version__ != "1.5.3":
+    raise RuntimeError("gsplat runtime version differs from the pinned reference trainer")
 sys.path.insert(0, sys.argv[1])
 from simple_trainer import Config, main
 
