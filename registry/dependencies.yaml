@@ -935,6 +935,12 @@ dependencies:
     # Historical narrow nerfview-only gate. Preserve this 53-wheel evidence:
     # it is NOT the combined current 58-wheel trainer-helper/COLMAP gate.
     reference_nerfview_eager_import_exact_wheels: 53
+    # This earlier narrow proof is not the later 58-wheel combined proof.
+    # Exact GitHub run/immutable PR HEAD and original archived artifact:
+    reference_nerfview_eager_import_source_commit: 38787c4b083c6a9a9a5c6738f790c942f8d79fc1
+    reference_nerfview_eager_import_run_id: 38894645381
+    reference_nerfview_eager_import_artifact_id: 12042874218
+    reference_nerfview_eager_import_artifact_digest_sha256: 3887a3ddce1b2c58978baf59ff7f13b7a160adc1b2f552285592cf5d23beed83
     reference_nerfview_eager_import_verified: true
     reference_nerfview_eager_import_gpu_execution: false
     reference_nerfview_eager_import_full_trainer_execution: false
