@@ -111,6 +111,7 @@ from wre.reconstruction.static_appearance_baseline import (
     GsplatStaticAppearanceTrainingProfile,
     assemble_verified_gsplat_static_appearance_result,
     build_gsplat_reference_trainer_path_overrides,
+    export_verified_gsplat_native_colmap_xyz_ply,
     inspect_gsplat_static_appearance_shared_track_pixels,
     materialize_verified_gsplat_ply,
     preflight_gsplat_static_appearance_inputs,
@@ -1480,6 +1481,85 @@ def test_native_geometry_reuses_audited_pycolmap_reader_and_preserves_exact_inpu
     assert calls[0]["features"] is features
     assert calls[0]["expected_environment"] is environment
     assert calls[0]["module"] is None
+
+
+def test_native_colmap_xyz_preview_exports_actual_canonical_points(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    request, source = _parts(tmp_path)
+    features, environment = _native_feature_evidence(tmp_path)
+    canonical = _native_canonical(request, source)
+    monkeypatch.setattr(
+        baseline_module, "canonicalize_colmap_sparse_model", lambda **_kw: canonical
+    )
+    destination = tmp_path / "canonical-geometry.ply"
+    preview_hash = export_verified_gsplat_native_colmap_xyz_ply(
+        request,
+        source,
+        features=features,
+        expected_environment=environment,
+        destination=destination,
+    )
+    header = (
+        b"ply\nformat binary_little_endian 1.0\n"
+        b"element vertex 1\n"
+        b"property float x\nproperty float y\nproperty float z\nend_header\n"
+    )
+    expected = header + struct.pack("<3f", 1.0, 2.0, 3.0)
+    assert destination.read_bytes() == expected
+    assert preview_hash == _digest(expected)
+    assert canonical.point_map is request.source_geometry.point_maps[0]
+    # The preview is derived, not a rewrite of the solver-native model.
+    assert source.native_model_artifact.files
+
+
+def test_native_colmap_xyz_preview_refuses_foreign_geometry_without_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    request, source = _parts(tmp_path)
+    features, environment = _native_feature_evidence(tmp_path)
+    canonical = _native_canonical(request, source)
+    monkeypatch.setattr(
+        baseline_module, "canonicalize_colmap_sparse_model", lambda **_kw: canonical
+    )
+    camera = request.source_geometry.camera_solutions[0]
+    mismatched = replace(camera, intrinsic_parameters=(3.0, 2.0, 1.0, 0.5))
+    different = replace(
+        request,
+        source_geometry=replace(request.source_geometry, camera_solutions=(mismatched,)),
+    )
+    destination = tmp_path / "cannot-export.ply"
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="do not match"):
+        export_verified_gsplat_native_colmap_xyz_ply(
+            different,
+            source,
+            features=features,
+            expected_environment=environment,
+            destination=destination,
+        )
+    assert not destination.exists()
+
+
+def test_native_colmap_xyz_preview_does_not_overwrite_existing_file(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    request, source = _parts(tmp_path)
+    features, environment = _native_feature_evidence(tmp_path)
+    canonical = _native_canonical(request, source)
+    monkeypatch.setattr(
+        baseline_module, "canonicalize_colmap_sparse_model", lambda **_kw: canonical
+    )
+    destination = tmp_path / "already-exists.ply"
+    destination.write_bytes(b"do not overwrite")
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="new .ply"):
+        export_verified_gsplat_native_colmap_xyz_ply(
+            request,
+            source,
+            features=features,
+            expected_environment=environment,
+            destination=destination,
+        )
+    assert destination.read_bytes() == b"do not overwrite"
 
 
 def test_native_geometry_rejects_foreign_camera_even_if_geometry_id_is_unchanged(
