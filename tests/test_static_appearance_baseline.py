@@ -986,6 +986,14 @@ def _gsplat_output(
     return output, profile, ref
 
 
+def test_external_gsplat_training_is_exposed_by_public_reconstruction_package() -> None:
+    from wre import reconstruction
+
+    assert reconstruction.run_gsplat_reference_training is run_gsplat_reference_training
+    assert "run_gsplat_reference_training" in reconstruction.__all__
+    assert "run_gsplat_reference_training" in baseline_module.__all__
+
+
 def test_external_gsplat_runner_builds_complete_canonical_candidate_with_process_stub(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
