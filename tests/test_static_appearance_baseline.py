@@ -111,6 +111,7 @@ from wre.reconstruction.static_appearance_baseline import (
     GsplatStaticAppearanceTrainingProfile,
     assemble_verified_gsplat_static_appearance_result,
     build_gsplat_reference_trainer_path_overrides,
+    export_verified_gsplat_rgb_centers_ply,
     inspect_gsplat_static_appearance_shared_track_pixels,
     materialize_verified_gsplat_ply,
     preflight_gsplat_static_appearance_inputs,
@@ -1239,6 +1240,68 @@ def test_external_gsplat_runner_rejects_failure_or_missing_output(
             timeout_seconds=30,
         )
     assert (output / "wre-reference-training.log").exists()
+
+
+def test_verified_gsplat_gaussian_centers_export_real_viewable_rgb_ply(
+    tmp_path: Path,
+) -> None:
+    # The color conversion matches pinned gsplat/exporter.py sh2rgb,
+    # but this is not a rendered/occlusion-aware Gaussian image.
+    first = [0.0] * 59
+    first[:6] = [1.0, 2.0, 3.0, 0.0, 0.0, 0.0]
+    first[-4] = 1.0  # nonzero quaternion
+    second = [0.0] * 59
+    second[:6] = [-1.0, 0.0, 2.0, 2.0, -2.0, 0.0]
+    second[-4] = 1.0
+    template = _gsplat_ply(vertices=2)
+    header_end = template.index(b"end_header\n") + len(b"end_header\n")
+    real_splats = template[:header_end] + struct.pack("<59f", *first) + struct.pack(
+        "<59f", *second
+    )
+    root, profile, ref = _gsplat_output(tmp_path, real_splats)
+    preview_parent = tmp_path / "viewer"
+    preview_parent.mkdir()
+    preview = preview_parent / "gaussian-centers-rgb.ply"
+    preview_sha = export_verified_gsplat_rgb_centers_ply(
+        artifact_ref=ref,
+        output_root=root,
+        profile=profile,
+        preview_path=preview,
+    )
+
+    encoded = preview.read_bytes()
+    assert preview_sha == _digest(encoded)
+    assert b"property uchar red\n" in encoded
+    split = encoded.index(b"end_header\n") + len(b"end_header\n")
+    assert encoded[:split].startswith(b"ply\nformat binary_little_endian 1.0\n")
+    assert encoded[split:] == (
+        struct.pack("<3f3B", 1.0, 2.0, 3.0, 127, 127, 127)
+        + struct.pack("<3f3B", -1.0, 0.0, 2.0, 255, 0, 127)
+    )
+    # This secondary point preview must not change the model's original bytes.
+    assert (root / profile.expected_ply_relative_path).read_bytes() == real_splats
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="new distinct"):
+        export_verified_gsplat_rgb_centers_ply(
+            artifact_ref=ref, output_root=root, profile=profile, preview_path=preview
+        )
+
+
+def test_verified_gsplat_gaussian_centers_preview_rejects_unverified_model(
+    tmp_path: Path,
+) -> None:
+    corrupted = _gsplat_ply(vertices=1) + b"unexpected"
+    root, profile, ref = _gsplat_output(tmp_path, corrupted)
+    viewer = tmp_path / "viewer"
+    viewer.mkdir()
+    preview = viewer / "points.ply"
+    with pytest.raises(GsplatStaticAppearancePreflightError):
+        export_verified_gsplat_rgb_centers_ply(
+            artifact_ref=ref,
+            output_root=root,
+            profile=profile,
+            preview_path=preview,
+        )
+    assert not preview.exists()
 
 
 def test_gsplat_ply_materialization_hashes_real_output_and_retains_path(tmp_path: Path) -> None:
