@@ -144,6 +144,333 @@ jobs:
           test "$(git -C "$glm" rev-parse HEAD^{tree})" = "$GLM_TREE"
           echo "COMMON_SOURCES=$root" >> "$GITHUB_ENV"
 
+      - name: Reconstruct actual Middlebury photographs with pinned OpenCV stereo (CPU)
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$COMMON_PYTHON" - <<'PY'
+          import hashlib
+          import json
+          import os
+          import urllib.request
+          from pathlib import Path
+
+          import cv2
+          import numpy as np
+
+          # Two REAL, rectified stereo photographs distributed in the OpenCV
+          # example tree; underlying images are from the Middlebury 2006 set.
+          # Use an immutable upstream Git revision AND exact Git blob IDs.
+          # Dataset credit: Middlebury Stereo 2006 (Scharstein et al.).
+          opencv_sha = "9b6287ec500ef7b327ac74c4f6c9cd84a2cbc9cd"
+          images = {
+              "aloeL.jpg": "4c192768e4ddd2ada20f91a5e0bd3648fbc78818",
+              "aloeR.jpg": "7ecdf48919be3ac7dd0cc6e594ab00398ac956b2",
+          }
+          photos = []
+          for name, expected_blob in images.items():
+              url = (
+                  "https://raw.githubusercontent.com/opencv/opencv/"
+                  f"{opencv_sha}/samples/data/{name}"
+              )
+              with urllib.request.urlopen(url, timeout=30) as response:
+                  data = response.read(1_000_001)
+              assert 0 < len(data) <= 1_000_000, "Stereo photo size exceeds bound"
+              git_blob = hashlib.sha1(
+                  f"blob {len(data)}\0".encode("ascii") + data
+              ).hexdigest()
+              assert git_blob == expected_blob, "Pinned real photo Git blob mismatch"
+              image = cv2.imdecode(
+                  np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_COLOR
+              )
+              assert image is not None and image.ndim == 3
+              photos.append(image)
+          left, right = photos
+          assert left.shape == right.shape and left.shape[1] >= 320
+          original_shape = [int(left.shape[0]), int(left.shape[1])]
+          if left.shape[1] > 768:
+              new_size = (left.shape[1] // 2, left.shape[0] // 2)
+              left = cv2.resize(left, new_size, interpolation=cv2.INTER_AREA)
+              right = cv2.resize(right, new_size, interpolation=cv2.INTER_AREA)
+          height, width = left.shape[:2]
+
+          # OpenCV's established native SGBM; no homegrown stereo solver.
+          # The example photographs are rectified, but no reliable metric
+          # calibration is supplied here. XYZ uses an ARBITRARY baseline=1.
+          block = 5
+          matcher = cv2.StereoSGBM_create(
+              minDisparity=0, numDisparities=128, blockSize=block,
+              P1=8 * 3 * block * block, P2=32 * 3 * block * block,
+              uniquenessRatio=8, speckleWindowSize=70, speckleRange=2,
+              disp12MaxDiff=1,
+          )
+          disparity = matcher.compute(left, right).astype(np.float32) / 16.0
+          valid = np.isfinite(disparity) & (disparity > 2.0) & (disparity < 128.0)
+          coverage = float(np.mean(valid))
+          assert coverage > 0.03, f"Insufficient real stereo coverage: {coverage}"
+          # Photometric consistency is a real observed metric, NOT a
+          # ground-truth reconstruction accuracy score.
+          yy, xx = np.indices((height, width), dtype=np.float32)
+          right_warp = cv2.remap(
+              right, xx - disparity, yy, interpolation=cv2.INTER_LINEAR,
+              borderMode=cv2.BORDER_CONSTANT,
+          )
+          residual = np.mean(
+              np.abs(left.astype(np.float32) - right_warp.astype(np.float32)),
+              axis=2,
+          )
+          photometric_mae = float(np.mean(residual[valid]))
+          assert np.isfinite(photometric_mae)
+
+          focal_guess = float(width)
+          baseline_gauge = 1.0
+          principal_x, principal_y = (width - 1) / 2.0, (height - 1) / 2.0
+          yy_selected, xx_selected = np.where(valid[::3, ::3])
+          yy_selected *= 3
+          xx_selected *= 3
+          assert len(xx_selected) >= 1000
+          take = max(1, len(xx_selected) // 20000)
+          yy_selected = yy_selected[::take][:20000]
+          xx_selected = xx_selected[::take][:20000]
+          disp_selected = disparity[yy_selected, xx_selected]
+          depth = focal_guess * baseline_gauge / disp_selected
+          xyz = np.column_stack((
+              (xx_selected - principal_x) * depth / focal_guess,
+              (yy_selected - principal_y) * depth / focal_guess,
+              depth,
+          ))
+          assert len(xyz) >= 500 and np.all(np.isfinite(xyz))
+          rgb = left[yy_selected, xx_selected, ::-1]
+          output = Path(os.environ["RUNNER_TEMP"])
+          header = (
+              "ply\nformat ascii 1.0\n"
+              f"element vertex {len(xyz)}\n"
+              "property float x\nproperty float y\nproperty float z\n"
+              "property uchar red\nproperty uchar green\nproperty uchar blue\n"
+              "end_header\n"
+          )
+          cloud = output / "wre-real-stereo-cpu-reconstruction.ply"
+          with cloud.open("w", encoding="ascii", newline="\n") as file:
+              file.write(header)
+              for point, color in zip(xyz, rgb):
+                  file.write(
+                      f"{point[0]:.7g} {point[1]:.7g} {point[2]:.7g} "
+                      f"{int(color[0])} {int(color[1])} {int(color[2])}\n"
+                  )
+          # Functional 3D output beyond point export: project actual
+          # photo-colored reconstructed XYZ from TWO UNOBSERVED camera positions.
+          # Use nearest-Z per projected pixel; leave disocclusion holes black.
+          # This is sparse CPU reprojection, not Gaussian/NeRF rendering.
+          def project_sparse_view(camera_x):
+              camera_xyz = xyz.copy()
+              camera_xyz[:, 0] -= camera_x
+              projected_x = np.rint(
+                  focal_guess * camera_xyz[:, 0] / camera_xyz[:, 2] + principal_x
+              ).astype(np.int32)
+              projected_y = np.rint(
+                  focal_guess * camera_xyz[:, 1] / camera_xyz[:, 2] + principal_y
+              ).astype(np.int32)
+              inside = (
+                  (projected_x >= 0) & (projected_x < width)
+                  & (projected_y >= 0) & (projected_y < height)
+                  & (camera_xyz[:, 2] > 0)
+              )
+              assert int(inside.sum()) >= 500
+              x_inside, y_inside = projected_x[inside], projected_y[inside]
+              depth_inside = camera_xyz[inside, 2]
+              # Select the nearest actual 3D point at each discrete pixel.
+              flat_pixels = y_inside * width + x_inside
+              ordered = np.lexsort((depth_inside, flat_pixels))
+              _, first = np.unique(flat_pixels[ordered], return_index=True)
+              nearest = ordered[first]
+              preview = np.zeros((height, width, 3), dtype=np.uint8)
+              preview[y_inside[nearest], x_inside[nearest]] = rgb[inside][nearest, ::-1]
+              return preview, int(len(nearest))
+
+          camera_shifts = (0.3, 0.7)  # arbitrary stereo-baseline gauge
+          virtual_views = [project_sparse_view(shift) for shift in camera_shifts]
+          assert all(count >= 300 for _, count in virtual_views)
+          assert not np.array_equal(virtual_views[0][0], virtual_views[1][0])
+          virtual_preview = cv2.hconcat([
+              left, virtual_views[0][0], virtual_views[1][0]
+          ])
+          assert cv2.imwrite(
+              str(Path(os.environ["RUNNER_TEMP"]) / "wre-real-stereo-cpu-novel-views.png"),
+              virtual_preview,
+          )
+          normalized = np.uint8(np.clip(disparity / 128.0 * 255.0, 0, 255))
+          disparity_preview = cv2.applyColorMap(normalized, cv2.COLORMAP_TURBO)
+          disparity_preview[~valid] = 0
+          assert cv2.imwrite(
+              str(output / "wre-real-stereo-cpu-disparity.png"), disparity_preview
+          )
+          assert cv2.imwrite(
+              str(output / "wre-real-stereo-cpu-photos.png"),
+              cv2.hconcat([left, right]),
+          )
+          metrics = {
+              "dataset": "Middlebury 2006 Aloe (OpenCV example photographs)",
+              "source_commit": opencv_sha,
+              "source_git_blobs": images,
+              "original_photo_height_width": original_shape,
+              "processed_photo_height_width": [height, width],
+              "algorithm": "pinned OpenCV 4.10 StereoSGBM",
+              "calibrated_metric_depth": False,
+              "baseline_model_units_arbitrary": baseline_gauge,
+              "approximate_focal_pixels": focal_guess,
+              "disparity_valid_fraction": coverage,
+              "median_disparity_pixels": float(np.median(disparity[valid])),
+              "stereo_photometric_mae_0_255": photometric_mae,
+              "exported_colored_3d_points": int(len(xyz)),
+              "sparse_novel_view_shifts_in_arbitrary_baseline_units": list(camera_shifts),
+              "sparse_novel_view_visible_pixels": [count for _, count in virtual_views],
+              "sparse_novel_view_method": "CPU forward projection with nearest-depth z-buffer",
+              "sparse_novel_view_disocclusion_filled": False,
+              "sparse_novel_view_is_gaussian_render": False,
+              "sparse_novel_view_is_photorealistic": False,
+              "photos_are_real": True,
+              "two_view_stereo_only": True,
+              "ground_truth_accuracy_benchmark": False,
+              "real_cuda_execution": False,
+              "real_gaussian_training": False,
+              "real_4d_reconstruction": False,
+          }
+          (output / "wre-real-stereo-cpu-metrics.json").write_text(
+              json.dumps(metrics, sort_keys=True, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          print(
+              f"REAL-photograph CPU stereo: {len(xyz)} points, "
+              f"{coverage:.1%} disparity coverage, "
+              f"photometric MAE={photometric_mae:.3f}/255. "
+              "Depth scale is NOT metrically calibrated."
+          )
+          PY
+
+      # Prepare a genuine two-image COLMAP input from the previously computed
+      # REAL-image stereo cloud. Approximate K/baseline: arbitrary scale.
+      - name: Export true photographed stereo points as registered COLMAP (CPU)
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$COMMON_PYTHON" - <<'PY'
+          import json
+          import os
+          import struct
+          import zipfile
+          from pathlib import Path
+
+          import cv2
+          import numpy as np
+
+          out = Path(os.environ["RUNNER_TEMP"])
+          summary = json.loads((out / "wre-real-stereo-cpu-metrics.json").read_text())
+          photos = cv2.imread(str(out / "wre-real-stereo-cpu-photos.png"))
+          assert photos is not None
+          h, double_w = photos.shape[:2]
+          assert double_w % 2 == 0
+          w = double_w // 2
+          assert [h, w] == summary["processed_photo_height_width"]
+          f, b = float(summary["approximate_focal_pixels"]), 1.0
+          cx, cy = (w - 1) / 2, (h - 1) / 2
+          text = (out / "wre-real-stereo-cpu-reconstruction.ply").read_text().splitlines()
+          header = text.index("end_header")
+          count = int(next(x.split()[-1] for x in text if x.startswith("element vertex ")))
+          assert 500 <= count <= 20000 and len(text) == header + 1 + count
+          values = np.array([[float(v) for v in row.split()]
+                             for row in text[header + 1:]], dtype=np.float64)
+          assert values.shape == (count, 6)
+          xyz, rgb = values[:, :3], values[:, 3:].astype(np.uint8)
+          assert np.all(np.isfinite(xyz)) and np.all(xyz[:, 2] > 0)
+          uv0 = np.column_stack((f * xyz[:, 0] / xyz[:, 2] + cx,
+                                 f * xyz[:, 1] / xyz[:, 2] + cy))
+          uv1 = uv0.copy()
+          uv1[:, 0] -= f * b / xyz[:, 2]
+          keep = ((uv0[:, 0] >= 0) & (uv0[:, 0] < w)
+                  & (uv1[:, 0] >= 0) & (uv1[:, 0] < w)
+                  & (uv0[:, 1] >= 0) & (uv0[:, 1] < h))
+          xyz, rgb, uv0, uv1 = xyz[keep], rgb[keep], uv0[keep], uv1[keep]
+          assert len(xyz) >= 500
+          root = out / "wre-real-stereo-colmap"
+          images, sparse = root / "images", root / "sparse" / "0"
+          images.mkdir(parents=True)
+          sparse.mkdir(parents=True)
+          names = ("aloe-left.png", "aloe-right.png")
+          for index, name in enumerate(names):
+              assert cv2.imwrite(str(images / name),
+                                 photos[:, index * w:(index + 1) * w])
+          (sparse / "cameras.bin").write_bytes(
+              struct.pack("<Q", 1) +
+              struct.pack("<IiQQ4d", 1, 1, w, h, f, f, cx, cy))
+          images_bin = bytearray(struct.pack("<Q", 2))
+          for image_id, (name, pixels) in enumerate(zip(names, (uv0, uv1)), 1):
+              images_bin.extend(struct.pack(
+                  "<I4d3dI", image_id, 1.0, 0.0, 0.0, 0.0,
+                  0.0 if image_id == 1 else -b, 0.0, 0.0, 1))
+              images_bin.extend(name.encode() + b"\x00")
+              images_bin.extend(struct.pack("<Q", len(xyz)))
+              for point_id, (u, v) in enumerate(pixels, 1):
+                  images_bin.extend(struct.pack("<ddq", float(u), float(v), point_id))
+          (sparse / "images.bin").write_bytes(images_bin)
+          points_bin = bytearray(struct.pack("<Q", len(xyz)))
+          for i, (point, color) in enumerate(zip(xyz, rgb)):
+              points_bin.extend(struct.pack(
+                  "<Q3d3BdQ", i + 1, *map(float, point), *map(int, color),
+                  0.0, 2))
+              for image_id in (1, 2):
+                  points_bin.extend(struct.pack("<II", image_id, i))
+          (sparse / "points3D.bin").write_bytes(points_bin)
+          assert len(xyz) <= 20000
+          with zipfile.ZipFile(out / "wre-real-stereo-colmap-dataset.zip",
+                               "w", zipfile.ZIP_DEFLATED) as archive:
+              for file in sorted(root.rglob("*")):
+                  if file.is_file():
+                      archive.write(file, file.relative_to(root))
+          info = {
+              "real_photographs": True, "input_views": 2,
+              "registered_3d_tracks": int(len(xyz)),
+              "camera_intrinsics_approximate": True,
+              "stereo_baseline_arbitrary": True,
+              "reprojection_not_independent_ground_truth": True,
+              "gpu_training_not_executed": True,
+              "actual_gsplat_parser_not_yet_executed": True,
+          }
+          (out / "wre-real-stereo-colmap-handoff.json").write_text(
+              json.dumps(info, sort_keys=True, indent=2) + "\n")
+          print(f"REAL stereo -> COLMAP: {len(xyz)} tracks / 2 photographs")
+          PY
+
+      # Run the actual-photo CPU reconstruction BEFORE expensive native CUDA
+      # compilation. Keep the original photo pipeline in one place and make
+      # its real 3D/preview outputs inspectable even while CUDA builds run.
+      - name: Stage seven real-photo CPU 3D and COLMAP outputs early
+        shell: bash
+        run: |
+          set -euo pipefail
+          destination="$GITHUB_WORKSPACE/wre-real-stereo-cpu-preview"
+          mkdir -p "$destination"
+          for file in \
+            wre-real-stereo-cpu-reconstruction.ply \
+            wre-real-stereo-cpu-disparity.png \
+            wre-real-stereo-cpu-photos.png \
+            wre-real-stereo-cpu-novel-views.png \
+            wre-real-stereo-cpu-metrics.json \
+            wre-real-stereo-colmap-dataset.zip \
+            wre-real-stereo-colmap-handoff.json
+          do
+            test -s "$RUNNER_TEMP/$file"
+            cp "$RUNNER_TEMP/$file" "$destination/$file"
+          done
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 7
+
+      - name: Publish real-photo CPU 3D plus COLMAP before native CUDA builds
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wre-real-stereo-cpu-early-preview
+          path: wre-real-stereo-cpu-preview/
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Build BOTH upstream CUDA extensions into the SAME Python interpreter
         shell: bash
         run: |
@@ -195,6 +522,41 @@ jobs:
           assert cfg.camera_model == "pinhole"
           print("ALL selected trainer native/viewer/COLMAP modules imported together.")
           print("No CUDA kernel, training, reconstruction, or GPU was executed.")
+          PY
+
+      - name: Read actual photographed two-view COLMAP in pinned gsplat Dataset (CPU)
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$COMMON_PYTHON" -I - <<'PY'
+          import os
+          import sys
+          from pathlib import Path
+
+          import numpy as np
+          import torch
+
+          sys.path.insert(0, str(Path(os.environ["COMMON_SOURCES"]) / "gsplat" / "examples"))
+          from datasets.colmap import Dataset, Parser
+
+          root = Path(os.environ["RUNNER_TEMP"]) / "wre-real-stereo-colmap"
+          assert all((root / "sparse" / "0" / name).is_file() for name in
+                     ("cameras.bin", "images.bin", "points3D.bin"))
+          parsed = Parser(str(root), factor=1, normalize=False, test_every=8)
+          assert parsed.image_names == ["aloe-left.png", "aloe-right.png"]
+          assert parsed.points.shape[0] >= 500
+          training = Dataset(parsed, split="train")
+          evaluation = Dataset(parsed, split="test")
+          assert len(training) == 1 and len(evaluation) == 1
+          for batch in (training[0], evaluation[0]):
+              assert isinstance(batch["image"], torch.Tensor)
+              assert batch["image"].device.type == "cpu"
+              assert batch["image"].shape[-1] == 3
+              assert batch["camtoworld"].shape == (4, 4)
+              assert torch.isfinite(batch["camtoworld"]).all()
+          assert np.all(np.isfinite(parsed.points))
+          print("Real stereo photographs: pinned gsplat COLMAP Parser and Dataset decoded")
+          print("Two real images, >=500 estimated XYZ points, no CUDA or training")
           PY
 
       - name: Decode a real 3-view COLMAP binary dataset with the pinned trainer (CPU)
@@ -1057,209 +1419,6 @@ jobs:
               f"depths {upper_depth:.3f}/{lower_depth:.3f} model units."
           )
           print("Synthetic scene only; no real-photo SfM, GPU or Gaussian training.")
-          PY
-
-      - name: Reconstruct actual Middlebury photographs with pinned OpenCV stereo (CPU)
-        shell: bash
-        run: |
-          set -euo pipefail
-          "$COMMON_PYTHON" - <<'PY'
-          import hashlib
-          import json
-          import os
-          import urllib.request
-          from pathlib import Path
-
-          import cv2
-          import numpy as np
-
-          # Two REAL, rectified stereo photographs distributed in the OpenCV
-          # example tree; underlying images are from the Middlebury 2006 set.
-          # Use an immutable upstream Git revision AND exact Git blob IDs.
-          # Dataset credit: Middlebury Stereo 2006 (Scharstein et al.).
-          opencv_sha = "9b6287ec500ef7b327ac74c4f6c9cd84a2cbc9cd"
-          images = {
-              "aloeL.jpg": "4c192768e4ddd2ada20f91a5e0bd3648fbc78818",
-              "aloeR.jpg": "7ecdf48919be3ac7dd0cc6e594ab00398ac956b2",
-          }
-          photos = []
-          for name, expected_blob in images.items():
-              url = (
-                  "https://raw.githubusercontent.com/opencv/opencv/"
-                  f"{opencv_sha}/samples/data/{name}"
-              )
-              with urllib.request.urlopen(url, timeout=30) as response:
-                  data = response.read(1_000_001)
-              assert 0 < len(data) <= 1_000_000, "Stereo photo size exceeds bound"
-              git_blob = hashlib.sha1(
-                  f"blob {len(data)}\0".encode("ascii") + data
-              ).hexdigest()
-              assert git_blob == expected_blob, "Pinned real photo Git blob mismatch"
-              image = cv2.imdecode(
-                  np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_COLOR
-              )
-              assert image is not None and image.ndim == 3
-              photos.append(image)
-          left, right = photos
-          assert left.shape == right.shape and left.shape[1] >= 320
-          original_shape = [int(left.shape[0]), int(left.shape[1])]
-          if left.shape[1] > 768:
-              new_size = (left.shape[1] // 2, left.shape[0] // 2)
-              left = cv2.resize(left, new_size, interpolation=cv2.INTER_AREA)
-              right = cv2.resize(right, new_size, interpolation=cv2.INTER_AREA)
-          height, width = left.shape[:2]
-
-          # OpenCV's established native SGBM; no homegrown stereo solver.
-          # The example photographs are rectified, but no reliable metric
-          # calibration is supplied here. XYZ uses an ARBITRARY baseline=1.
-          block = 5
-          matcher = cv2.StereoSGBM_create(
-              minDisparity=0, numDisparities=128, blockSize=block,
-              P1=8 * 3 * block * block, P2=32 * 3 * block * block,
-              uniquenessRatio=8, speckleWindowSize=70, speckleRange=2,
-              disp12MaxDiff=1,
-          )
-          disparity = matcher.compute(left, right).astype(np.float32) / 16.0
-          valid = np.isfinite(disparity) & (disparity > 2.0) & (disparity < 128.0)
-          coverage = float(np.mean(valid))
-          assert coverage > 0.03, f"Insufficient real stereo coverage: {coverage}"
-          # Photometric consistency is a real observed metric, NOT a
-          # ground-truth reconstruction accuracy score.
-          yy, xx = np.indices((height, width), dtype=np.float32)
-          right_warp = cv2.remap(
-              right, xx - disparity, yy, interpolation=cv2.INTER_LINEAR,
-              borderMode=cv2.BORDER_CONSTANT,
-          )
-          residual = np.mean(
-              np.abs(left.astype(np.float32) - right_warp.astype(np.float32)),
-              axis=2,
-          )
-          photometric_mae = float(np.mean(residual[valid]))
-          assert np.isfinite(photometric_mae)
-
-          focal_guess = float(width)
-          baseline_gauge = 1.0
-          principal_x, principal_y = (width - 1) / 2.0, (height - 1) / 2.0
-          yy_selected, xx_selected = np.where(valid[::3, ::3])
-          yy_selected *= 3
-          xx_selected *= 3
-          assert len(xx_selected) >= 1000
-          take = max(1, len(xx_selected) // 20000)
-          yy_selected = yy_selected[::take][:20000]
-          xx_selected = xx_selected[::take][:20000]
-          disp_selected = disparity[yy_selected, xx_selected]
-          depth = focal_guess * baseline_gauge / disp_selected
-          xyz = np.column_stack((
-              (xx_selected - principal_x) * depth / focal_guess,
-              (yy_selected - principal_y) * depth / focal_guess,
-              depth,
-          ))
-          assert len(xyz) >= 500 and np.all(np.isfinite(xyz))
-          rgb = left[yy_selected, xx_selected, ::-1]
-          output = Path(os.environ["RUNNER_TEMP"])
-          header = (
-              "ply\nformat ascii 1.0\n"
-              f"element vertex {len(xyz)}\n"
-              "property float x\nproperty float y\nproperty float z\n"
-              "property uchar red\nproperty uchar green\nproperty uchar blue\n"
-              "end_header\n"
-          )
-          cloud = output / "wre-real-stereo-cpu-reconstruction.ply"
-          with cloud.open("w", encoding="ascii", newline="\n") as file:
-              file.write(header)
-              for point, color in zip(xyz, rgb):
-                  file.write(
-                      f"{point[0]:.7g} {point[1]:.7g} {point[2]:.7g} "
-                      f"{int(color[0])} {int(color[1])} {int(color[2])}\n"
-                  )
-          # Functional 3D output beyond point export: project actual
-          # photo-colored reconstructed XYZ from TWO UNOBSERVED camera positions.
-          # Use nearest-Z per projected pixel; leave disocclusion holes black.
-          # This is sparse CPU reprojection, not Gaussian/NeRF rendering.
-          def project_sparse_view(camera_x):
-              camera_xyz = xyz.copy()
-              camera_xyz[:, 0] -= camera_x
-              projected_x = np.rint(
-                  focal_guess * camera_xyz[:, 0] / camera_xyz[:, 2] + principal_x
-              ).astype(np.int32)
-              projected_y = np.rint(
-                  focal_guess * camera_xyz[:, 1] / camera_xyz[:, 2] + principal_y
-              ).astype(np.int32)
-              inside = (
-                  (projected_x >= 0) & (projected_x < width)
-                  & (projected_y >= 0) & (projected_y < height)
-                  & (camera_xyz[:, 2] > 0)
-              )
-              assert int(inside.sum()) >= 500
-              x_inside, y_inside = projected_x[inside], projected_y[inside]
-              depth_inside = camera_xyz[inside, 2]
-              # Select the nearest actual 3D point at each discrete pixel.
-              flat_pixels = y_inside * width + x_inside
-              ordered = np.lexsort((depth_inside, flat_pixels))
-              _, first = np.unique(flat_pixels[ordered], return_index=True)
-              nearest = ordered[first]
-              preview = np.zeros((height, width, 3), dtype=np.uint8)
-              preview[y_inside[nearest], x_inside[nearest]] = rgb[inside][nearest, ::-1]
-              return preview, int(len(nearest))
-
-          camera_shifts = (0.3, 0.7)  # arbitrary stereo-baseline gauge
-          virtual_views = [project_sparse_view(shift) for shift in camera_shifts]
-          assert all(count >= 300 for _, count in virtual_views)
-          assert not np.array_equal(virtual_views[0][0], virtual_views[1][0])
-          virtual_preview = cv2.hconcat([
-              left, virtual_views[0][0], virtual_views[1][0]
-          ])
-          assert cv2.imwrite(
-              str(Path(os.environ["RUNNER_TEMP"]) / "wre-real-stereo-cpu-novel-views.png"),
-              virtual_preview,
-          )
-          normalized = np.uint8(np.clip(disparity / 128.0 * 255.0, 0, 255))
-          disparity_preview = cv2.applyColorMap(normalized, cv2.COLORMAP_TURBO)
-          disparity_preview[~valid] = 0
-          assert cv2.imwrite(
-              str(output / "wre-real-stereo-cpu-disparity.png"), disparity_preview
-          )
-          assert cv2.imwrite(
-              str(output / "wre-real-stereo-cpu-photos.png"),
-              cv2.hconcat([left, right]),
-          )
-          metrics = {
-              "dataset": "Middlebury 2006 Aloe (OpenCV example photographs)",
-              "source_commit": opencv_sha,
-              "source_git_blobs": images,
-              "original_photo_height_width": original_shape,
-              "processed_photo_height_width": [height, width],
-              "algorithm": "pinned OpenCV 4.10 StereoSGBM",
-              "calibrated_metric_depth": False,
-              "baseline_model_units_arbitrary": baseline_gauge,
-              "approximate_focal_pixels": focal_guess,
-              "disparity_valid_fraction": coverage,
-              "median_disparity_pixels": float(np.median(disparity[valid])),
-              "stereo_photometric_mae_0_255": photometric_mae,
-              "exported_colored_3d_points": int(len(xyz)),
-              "sparse_novel_view_shifts_in_arbitrary_baseline_units": list(camera_shifts),
-              "sparse_novel_view_visible_pixels": [count for _, count in virtual_views],
-              "sparse_novel_view_method": "CPU forward projection with nearest-depth z-buffer",
-              "sparse_novel_view_disocclusion_filled": False,
-              "sparse_novel_view_is_gaussian_render": False,
-              "sparse_novel_view_is_photorealistic": False,
-              "photos_are_real": True,
-              "two_view_stereo_only": True,
-              "ground_truth_accuracy_benchmark": False,
-              "real_cuda_execution": False,
-              "real_gaussian_training": False,
-              "real_4d_reconstruction": False,
-          }
-          (output / "wre-real-stereo-cpu-metrics.json").write_text(
-              json.dumps(metrics, sort_keys=True, indent=2) + "\n",
-              encoding="utf-8",
-          )
-          print(
-              f"REAL-photograph CPU stereo: {len(xyz)} points, "
-              f"{coverage:.1%} disparity coverage, "
-              f"photometric MAE={photometric_mae:.3f}/255. "
-              "Depth scale is NOT metrically calibrated."
-          )
           PY
 
       - name: Stage complete 3D CPU preview bundle for upload
