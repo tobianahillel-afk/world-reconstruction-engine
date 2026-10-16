@@ -926,9 +926,24 @@ jobs:
                   cv2.LINE_AA,
               )
               novel_images.append(frame)
+          assert np.any(novel_images[0] != novel_images[1]), (
+              "Two distinct virtual camera poses produced identical projections"
+          )
           novel_strip = cv2.hconcat(novel_images)
           assert cv2.imwrite(
               str(output / "wre-sift-cpu-estimated-novel-views.png"), novel_strip
+          )
+          handoff_path = output / "wre-sift-estimated-colmap-handoff.json"
+          handoff_metrics = json.loads(handoff_path.read_text(encoding="utf-8"))
+          handoff_metrics.update({
+              "novel_sparse_projection_camera_fractions": [0.5, 1.5],
+              "novel_sparse_projection_visible_points": novel_visible,
+              "novel_sparse_projection_method": "CPU colored 3D point projection",
+              "novel_sparse_projection_is_gaussian_render": False,
+          })
+          handoff_path.write_text(
+              json.dumps(handoff_metrics, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
           )
           print(
               f"Two real CPU projections of estimated 3D at unsampled poses: "
