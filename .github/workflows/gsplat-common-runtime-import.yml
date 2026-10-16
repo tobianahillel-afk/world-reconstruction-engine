@@ -339,6 +339,97 @@ jobs:
               rmse = float(np.sqrt(np.mean(np.square(residuals))))
               assert np.isfinite(rmse) and rmse < 1e-6, rmse
           
+              # Reconstruct 3D positions from the *decoded 2D observations*
+              # of two camera views. This is a real two-view linear triangulation
+              # using pinned NumPy SVD; the COLMAP XYZ positions serve only as
+              # independent ground-truth checks, not inputs to triangulation.
+              projections = [
+                  parsed.Ks_dict[parsed.camera_ids[index]]
+                  @ np.linalg.inv(parsed.camtoworlds[index])[:3, :]
+                  for index in range(3)
+              ]
+              measured_tracks = []
+              for name in parsed.image_names:
+                  view = decoded.images[decoded.name_to_image_id[name]]
+                  measured_tracks.append(
+                      {
+                          int(point_id): np.asarray(xy, dtype=np.float64)
+                          for xy, point_id in zip(view.points2D, view.point3D_ids)
+                          if int(point_id) >= 0
+                      }
+                  )
+              shared_ids = sorted(set(measured_tracks[0]) & set(measured_tracks[1]))
+              assert len(shared_ids) == len(decoded.points3D) == 4
+              assert all(point_id in measured_tracks[2] for point_id in shared_ids)
+              sample_image = np.asarray(Image.open(photos / parsed.image_names[0]).convert("RGB"))
+              triangulated = []
+              xyz_errors = []
+              heldout_errors = []
+              for point_id in shared_ids:
+                  u0, v0 = measured_tracks[0][point_id]
+                  u1, v1 = measured_tracks[1][point_id]
+                  P0, P1, P2 = projections
+                  design = np.stack(
+                      (
+                          u0 * P0[2] - P0[0],
+                          v0 * P0[2] - P0[1],
+                          u1 * P1[2] - P1[0],
+                          v1 * P1[2] - P1[1],
+                      )
+                  )
+                  # Solve the homogeneous DLT system, not an ad-hoc ray solver.
+                  _u, _singular_values, vh = np.linalg.svd(design)
+                  homogeneous = vh[-1]
+                  assert abs(homogeneous[3]) > 1e-12
+                  estimate = homogeneous[:3] / homogeneous[3]
+                  expected = decoded.points3D[
+                      decoded.point3D_id_to_point3D_idx[point_id]
+                  ]
+                  xyz_errors.append(float(np.linalg.norm(estimate - expected)))
+                  camera_xyz = P2 @ np.append(estimate, 1.0)
+                  assert camera_xyz[2] > 0.0
+                  heldout_pixel = camera_xyz[:2] / camera_xyz[2]
+                  heldout_errors.append(
+                      float(np.linalg.norm(heldout_pixel - measured_tracks[2][point_id]))
+                  )
+                  source_pixel = measured_tracks[0][point_id]
+                  pixel_x, pixel_y = (int(round(float(v))) for v in source_pixel)
+                  assert 0 <= pixel_x < sample_image.shape[1]
+                  assert 0 <= pixel_y < sample_image.shape[0]
+                  color = sample_image[pixel_y, pixel_x]
+                  assert np.array_equal(
+                      color,
+                      decoded.point3D_colors[decoded.point3D_id_to_point3D_idx[point_id]],
+                  )
+                  triangulated.append((estimate, color))
+              triangulation_xyz_rmse = float(
+                  np.sqrt(np.mean(np.square(xyz_errors, dtype=np.float64)))
+              )
+              triangulation_heldout_rmse = float(
+                  np.sqrt(np.mean(np.square(heldout_errors, dtype=np.float64)))
+              )
+              assert triangulation_xyz_rmse < 1e-6, triangulation_xyz_rmse
+              assert triangulation_heldout_rmse < 1e-6, triangulation_heldout_rmse
+              triangulated_ply = (
+                  Path(os.environ["RUNNER_TEMP"]) / "wre-colmap-cpu-triangulated.ply"
+              )
+              triangulated_header = (
+                  "ply\nformat ascii 1.0\n"
+                  f"element vertex {len(triangulated)}\n"
+                  "property float x\nproperty float y\nproperty float z\n"
+                  "property uchar red\nproperty uchar green\nproperty uchar blue\n"
+                  "end_header\n"
+              )
+              triangulated_lines = [
+                  f"{xyz[0]:.9g} {xyz[1]:.9g} {xyz[2]:.9g} "
+                  f"{int(rgb[0])} {int(rgb[1])} {int(rgb[2])}"
+                  for xyz, rgb in triangulated
+              ]
+              triangulated_ply.write_text(
+                  triangulated_header + "\n".join(triangulated_lines) + "\n",
+                  encoding="ascii",
+              )
+
               # A genuine, standards-compliant sparse *point-cloud* PLY for
               # external 3D viewers. This is NOT a trained Gaussian splat PLY.
               preview_ply = Path(os.environ["RUNNER_TEMP"]) / "wre-colmap-cpu-preview.ply"
@@ -412,6 +503,12 @@ jobs:
                   "reprojection_rmse_px": rmse,
                   "upstream_sparse_depth_rmse_px": upstream_depth_rmse,
                   "upstream_sparse_depth_samples": upstream_depth_samples,
+                  "two_view_triangulated_points": len(triangulated),
+                  "two_view_xyz_rmse_model_units": triangulation_xyz_rmse,
+                  "third_view_heldout_reprojection_rmse_px": triangulation_heldout_rmse,
+                  "triangulated_colors_sampled_from_png": True,
+                  "two_view_correspondences_provided": True,
+                  "real_sfm_feature_matching": False,
                   "cpu_sparse_render_rgb_rmse": sparse_rgb_rmse,
                   "cpu_sparse_render_projected_samples": drawn_samples,
                   "cpu_sparse_depth_unit": "COLMAP model distance",
@@ -425,6 +522,8 @@ jobs:
               print(f"Measured CPU reprojection RMSE: {rmse:.9f} pixels, 12 observations.")
               print(f"gsplat Dataset(load_depths=True): {upstream_depth_samples} CPU depths, RMS={upstream_depth_rmse:.9f} pixels.")
               print(f"Rendered 3-view RGB RMSE: {sparse_rgb_rmse:.9f}, {drawn_samples} projected samples.")
+              print(f"Two-view triangulation: {len(triangulated)} RGB points, XYZ RMS={triangulation_xyz_rmse:.9g} model units.")
+              print(f"Third-view held-out reprojection RMS={triangulation_heldout_rmse:.9g} pixels.")
               print("No CUDA kernels, Gaussian reconstruction or GPU training occurred.")
           PY
           
@@ -434,6 +533,7 @@ jobs:
           name: wre-colmap-cpu-3d-preview
           path: |
             ${{ runner.temp }}/wre-colmap-cpu-preview.ply
+            ${{ runner.temp }}/wre-colmap-cpu-triangulated.ply
             ${{ runner.temp }}/wre-colmap-cpu-views.png
             ${{ runner.temp }}/wre-colmap-cpu-metrics.json
             ${{ runner.temp }}/wre-colmap-cpu-render.png
