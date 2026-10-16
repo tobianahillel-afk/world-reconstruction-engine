@@ -1043,6 +1043,7 @@ def test_external_gsplat_runner_builds_complete_canonical_candidate_with_process
     assert kwargs["cwd"] == source_root / "examples"
     assert kwargs["env"]["CUDA_VISIBLE_DEVICES"] == "2"
     assert kwargs["env"]["PIP_NO_INDEX"] == "1"
+    assert "WRE_PRIVATE_CI_TOKEN" not in kwargs["env"]
     assert kwargs["timeout"] == 30
     assert kwargs["stderr"] == baseline_module.subprocess.STDOUT
     runtime_config = baseline_module.json.loads(kwargs["input"])
@@ -1075,10 +1076,14 @@ def test_external_gsplat_runner_spawns_real_process_and_assembles_appearance(
     source_root = tmp_path / "pinned-reference"
     (source_root / "examples").mkdir(parents=True)
     runtime = tmp_path / "fake-external-python"
+    # A real external child must never inherit unrelated GitHub/cloud secrets.
+    monkeypatch.setenv("WRE_PRIVATE_CI_TOKEN", "do-not-leak-to-native-trainer")
     runtime.with_name("smoke-reference.ply").write_bytes(_gsplat_ply(vertices=2))
     runtime.write_text(
         f"#!{sys.executable}\n"
         "import json\n"
+        "import os\n"
+        "assert 'WRE_PRIVATE_CI_TOKEN' not in os.environ\n"
         "from pathlib import Path\n"
         "import sys\n"
         "assert sys.argv[1:3] == ['-I', '-c']\n"
