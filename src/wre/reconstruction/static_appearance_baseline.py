@@ -806,7 +806,6 @@ def verify_gsplat_static_appearance_native_geometry(
     return canonical
 
 
-
 def export_verified_gsplat_native_colmap_xyz_ply(
     request: StaticAppearanceCandidateRequest,
     source: GsplatStaticAppearancePreflightSource,
@@ -871,7 +870,6 @@ def export_verified_gsplat_native_colmap_xyz_ply(
             target.unlink(missing_ok=True)
         raise
     return Sha256Digest(digest.hexdigest())
-
 
 
 def verify_gsplat_static_appearance_source_photometry(
