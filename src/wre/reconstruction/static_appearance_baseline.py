@@ -1859,6 +1859,7 @@ def run_gsplat_reference_training(
     producer: ArtifactProducerIdentity,
     cuda_device_index: int,
     timeout_seconds: int,
+    preview_path: Path | None = None,
 ) -> StaticAppearanceCandidateResult:
     """Run the exact reference trainer on an EXPLICIT external CUDA environment.
 
@@ -1952,7 +1953,7 @@ def run_gsplat_reference_training(
         raise GsplatStaticAppearancePreflightError(
             "gsplat reference training failed; inspect the private training log"
         )
-    return assemble_verified_gsplat_static_appearance_result(
+    result = assemble_verified_gsplat_static_appearance_result(
         request=request,
         source=source,
         staged=staged,
@@ -1961,6 +1962,16 @@ def run_gsplat_reference_training(
         profile=profile,
         producer=producer,
     )
+    if preview_path is not None:
+        # Optional actual 3D point-preview: centers and SH0 RGB only.
+        # Preserve the model and its canonical provenance independently.
+        export_verified_gsplat_rgb_centers_ply(
+            artifact_ref=artifact_ref,
+            output_root=output_root,
+            profile=profile,
+            preview_path=preview_path,
+        )
+    return result
 
 
 def verify_gsplat_reference_trainer_config_fields(
