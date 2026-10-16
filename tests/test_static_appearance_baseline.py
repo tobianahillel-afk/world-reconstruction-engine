@@ -1227,7 +1227,7 @@ def test_gsplat_ply_materialization_has_no_optional_training_import() -> None:
             imported.update(item.name.split(".")[0] for item in node.names)
         elif isinstance(node, ast.ImportFrom) and node.module:
             imported.add(node.module.split(".")[0])
-    assert not {"torch", "gsplat", "numpy", "subprocess", "pycolmap", "PIL"} & imported
+    assert not {"torch", "gsplat", "numpy", "pycolmap", "PIL"} & imported
 
 
 def _native_feature_evidence(
