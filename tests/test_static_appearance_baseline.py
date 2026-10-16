@@ -986,24 +986,20 @@ def _gsplat_output(
     return output, profile, ref
 
 
-def test_external_gsplat_runner_hands_real_config_to_process_and_hashes_ply(
+def test_external_gsplat_runner_builds_complete_canonical_candidate_with_process_stub(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    """Offline process-orchestration test ONLY; CUDA training is not run."""
-    dataset = _plausible_gsplat_runtime_tree(tmp_path)
-    source = tmp_path / "pinned-source"
-    (source / "examples").mkdir(parents=True)
+    """Real staging/PLY/candidate assembly; substituted CUDA process only."""
+    request, source, staged, output, profile, artifact_ref, producer = _retained_gsplat_fixture(
+        tmp_path
+    )
+    (output / profile.expected_ply_relative_path).unlink()
+    (output / "ply").rmdir()
+    output.rmdir()
+    source_root = tmp_path / "pinned-source"
+    (source_root / "examples").mkdir(parents=True)
     runtime = tmp_path / "external-python"
     runtime.write_bytes(b"stub: external runtime explicitly provided")
-    output = tmp_path / "external-output"
-    artifact_ref = ArtifactRef(
-        ArtifactId("appearance:gsplat:external-process-fixture"),
-        APPEARANCE_MODEL_ARTIFACT_KIND,
-    )
-    profile = GsplatStaticAppearanceTrainingProfile(max_steps=20)
-    monkeypatch.setattr(
-        baseline_module, "verify_gsplat_static_appearance_staged_dataset", lambda *_: ()
-    )
     monkeypatch.setattr(
         baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
     )
@@ -1012,22 +1008,20 @@ def test_external_gsplat_runner_hands_real_config_to_process_and_hashes_ply(
     def fake_cuda_process(command: list[str], **kwargs: Any) -> SimpleNamespace:
         calls.append((command, kwargs))
         (output / "ply").mkdir()
-        (output / profile.expected_ply_relative_path).write_bytes(_gsplat_ply())
+        (output / profile.expected_ply_relative_path).write_bytes(_gsplat_ply(vertices=2))
         return SimpleNamespace(returncode=0)
 
     monkeypatch.setattr(baseline_module.subprocess, "run", fake_cuda_process)
     result = run_gsplat_reference_training(
-        request=cast(StaticAppearanceCandidateRequest, object()),
-        source=cast(GsplatStaticAppearancePreflightSource, object()),
-        staged=cast(
-            baseline_module.GsplatStaticAppearanceStagedDataset,
-            SimpleNamespace(dataset_root=dataset),
-        ),
+        request=request,
+        source=source,
+        staged=staged,
         profile=profile,
-        source_root=source,
+        source_root=source_root,
         python_executable=runtime,
         output_root=output,
         artifact_ref=artifact_ref,
+        producer=producer,
         cuda_device_index=2,
         timeout_seconds=30,
     )
@@ -1035,22 +1029,25 @@ def test_external_gsplat_runner_hands_real_config_to_process_and_hashes_ply(
     command, kwargs = calls[0]
     assert command[:3] == [str(runtime), "-I", "-c"]
     assert "from simple_trainer import Config, main" in command[3]
-    assert command[4] == str(source / "examples")
-    assert kwargs["cwd"] == source / "examples"
+    assert command[4] == str(source_root / "examples")
+    assert kwargs["cwd"] == source_root / "examples"
     assert kwargs["env"]["CUDA_VISIBLE_DEVICES"] == "2"
     assert kwargs["env"]["PIP_NO_INDEX"] == "1"
     assert kwargs["timeout"] == 30
     assert kwargs["stderr"] == baseline_module.subprocess.STDOUT
     runtime_config = baseline_module.json.loads(kwargs["input"])
-    assert runtime_config["data_dir"] == str(dataset)
+    assert runtime_config["data_dir"] == str(staged.dataset_root)
     assert runtime_config["result_dir"] == str(output)
     assert runtime_config["save_ply"] is True
     assert runtime_config["disable_viewer"] is True
     assert runtime_config["pose_opt"] is False
     assert runtime_config["max_steps"] == 20
-    assert result.artifact_ref == artifact_ref
-    assert result.entries[0].relative_path == "ply/point_cloud_19.ply"
-    assert result.entries[0].sha256 == _digest(_gsplat_ply())
+    assert result.request is request
+    assert result.candidate.source_geometry is request.source_geometry
+    assert result.candidate.producer is producer
+    assert result.candidate.artifact_ref == artifact_ref
+    assert result.materialization.entries[0].relative_path == "ply/point_cloud_19.ply"
+    assert result.materialization.entries[0].sha256 == _digest(_gsplat_ply(vertices=2))
     assert (output / "wre-reference-training.log").exists()
 
 
@@ -1058,15 +1055,16 @@ def test_external_gsplat_runner_hands_real_config_to_process_and_hashes_ply(
 def test_external_gsplat_runner_rejects_failure_or_missing_output(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, return_code: int
 ) -> None:
-    dataset = _plausible_gsplat_runtime_tree(tmp_path)
-    source = tmp_path / "upstream"
-    (source / "examples").mkdir(parents=True)
+    request, source, staged, output, profile, ref, producer = _retained_gsplat_fixture(
+        tmp_path
+    )
+    (output / profile.expected_ply_relative_path).unlink()
+    (output / "ply").rmdir()
+    output.rmdir()
+    source_root = tmp_path / "upstream"
+    (source_root / "examples").mkdir(parents=True)
     runtime = tmp_path / "external-python"
     runtime.write_bytes(b"stub")
-    output = tmp_path / "output"
-    monkeypatch.setattr(
-        baseline_module, "verify_gsplat_static_appearance_staged_dataset", lambda *_: ()
-    )
     monkeypatch.setattr(
         baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
     )
@@ -1077,20 +1075,15 @@ def test_external_gsplat_runner_rejects_failure_or_missing_output(
     )
     with pytest.raises(GsplatStaticAppearancePreflightError):
         run_gsplat_reference_training(
-            request=cast(StaticAppearanceCandidateRequest, object()),
-            source=cast(GsplatStaticAppearancePreflightSource, object()),
-            staged=cast(
-                baseline_module.GsplatStaticAppearanceStagedDataset,
-                SimpleNamespace(dataset_root=dataset),
-            ),
-            profile=GsplatStaticAppearanceTrainingProfile(max_steps=20),
-            source_root=source,
+            request=request,
+            source=source,
+            staged=staged,
+            profile=profile,
+            source_root=source_root,
             python_executable=runtime,
             output_root=output,
-            artifact_ref=ArtifactRef(
-                ArtifactId("appearance:gsplat:failed-execution"),
-                APPEARANCE_MODEL_ARTIFACT_KIND,
-            ),
+            artifact_ref=ref,
+            producer=producer,
             cuda_device_index=0,
             timeout_seconds=30,
         )
