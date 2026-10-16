@@ -1790,7 +1790,6 @@ def build_gsplat_reference_trainer_path_overrides(
     return result
 
 
-
 # The external interpreter is an explicit, caller-owned CUDA environment.
 # -I prevents user site/PYTHONPATH injection; only the pinned examples directory
 # is prepended in the child. The parent never imports torch or CUDA modules.
