@@ -524,6 +524,41 @@ jobs:
           print("No CUDA kernel, training, reconstruction, or GPU was executed.")
           PY
 
+      - name: Read actual photographed two-view COLMAP in pinned gsplat Dataset (CPU)
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$COMMON_PYTHON" -I - <<'PY'
+          import os
+          import sys
+          from pathlib import Path
+
+          import numpy as np
+          import torch
+
+          sys.path.insert(0, str(Path(os.environ["COMMON_SOURCES"]) / "gsplat" / "examples"))
+          from datasets.colmap import Dataset, Parser
+
+          root = Path(os.environ["RUNNER_TEMP"]) / "wre-real-stereo-colmap"
+          assert all((root / "sparse" / "0" / name).is_file() for name in
+                     ("cameras.bin", "images.bin", "points3D.bin"))
+          parsed = Parser(str(root), factor=1, normalize=False, test_every=8)
+          assert parsed.image_names == ["aloe-left.png", "aloe-right.png"]
+          assert parsed.points.shape[0] >= 500
+          training = Dataset(parsed, split="train")
+          evaluation = Dataset(parsed, split="test")
+          assert len(training) == 1 and len(evaluation) == 1
+          for batch in (training[0], evaluation[0]):
+              assert isinstance(batch["image"], torch.Tensor)
+              assert batch["image"].device.type == "cpu"
+              assert batch["image"].shape[-1] == 3
+              assert batch["camtoworld"].shape == (4, 4)
+              assert torch.isfinite(batch["camtoworld"]).all()
+          assert np.all(np.isfinite(parsed.points))
+          print("Real stereo photographs: pinned gsplat COLMAP Parser and Dataset decoded")
+          print("Two real images, >=500 estimated XYZ points, no CUDA or training")
+          PY
+
       - name: Decode a real 3-view COLMAP binary dataset with the pinned trainer (CPU)
         shell: bash
         run: |
