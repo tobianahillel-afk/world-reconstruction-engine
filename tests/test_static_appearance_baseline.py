@@ -14,6 +14,7 @@ from typing import Any, cast
 
 import pytest
 
+import wre.reconstruction as reconstruction
 import wre.reconstruction.static_appearance_baseline as baseline_module
 from wre.domain import (
     LINEAR_SRGB_F64,
@@ -1509,9 +1510,10 @@ def test_native_colmap_xyz_preview_exports_actual_canonical_points(
     assert destination.read_bytes() == expected
     assert preview_hash == _digest(expected)
     assert canonical.point_map is request.source_geometry.point_maps[0]
-    import wre.reconstruction as reconstruction
-
-    assert reconstruction.export_verified_gsplat_native_colmap_xyz_ply is export_verified_gsplat_native_colmap_xyz_ply
+    assert (
+        reconstruction.export_verified_gsplat_native_colmap_xyz_ply
+        is export_verified_gsplat_native_colmap_xyz_ply
+    )
     # The preview is derived, not a rewrite of the solver-native model.
     assert source.native_model_artifact.files
 
