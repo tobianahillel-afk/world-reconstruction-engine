@@ -242,7 +242,8 @@ jobs:
                       struct.pack("<I4d3dI", image_id, 1.0, 0.0, 0.0, 0.0, tx, 0.0, 0.0, 1)
                   )
                   images_bin.extend(name.encode("ascii") + b"\x00")
-                  images_bin.extend(struct.pack("<Qddq", 1, 2.0, 2.0, 1))
+                  # Consistent 2D observation of (0, 0, 2) under COLMAP w2c tx.
+                  images_bin.extend(struct.pack("<Qddq", 1, 2.0 + 2.0 * tx, 2.0, 1))
               (sparse / "images.bin").write_bytes(images_bin)
 
               points = bytearray(struct.pack("<Q", 1))
@@ -270,6 +271,36 @@ jobs:
                   assert batch["camtoworld"].shape == (4, 4)
                   assert torch.isfinite(batch["K"]).all()
                   assert torch.isfinite(batch["camtoworld"]).all()
+              # Execute gsplat's actual sparse-depth projection, not a
+              # reimplementation: it transforms the 3D point into each
+              # camera and returns finite CPU pixel/depth tensors.
+              depth_train = Dataset(parsed, split="train", load_depths=True)
+              depth_test = Dataset(parsed, split="test", load_depths=True)
+              reprojection_errors = []
+              for batch, image_id in (
+                  (depth_train[0], 2),
+                  (depth_train[1], 3),
+                  (depth_test[0], 1),
+              ):
+                  assert batch["points"].shape == (1, 2)
+                  assert batch["depths"].shape == (1,)
+                  assert batch["points"].device.type == "cpu"
+                  assert batch["depths"].device.type == "cpu"
+                  expected = torch.tensor(
+                      [[2.0 + 0.4 * (2 - image_id), 2.0]], dtype=torch.float32
+                  )
+                  reprojection_errors.append(
+                      torch.linalg.vector_norm(batch["points"] - expected).item()
+                  )
+                  torch.testing.assert_close(
+                      batch["depths"], torch.tensor([2.0], dtype=torch.float32)
+                  )
+              rms = (
+                  sum(error * error for error in reprojection_errors)
+                  / len(reprojection_errors)
+              ) ** 0.5
+              assert rms < 1e-5, f"Native COLMAP reprojection RMS={rms} pixels"
+              print(f"Upstream sparse depth: RMS={rms:.6f} pixels across 3 CPU cameras.")
               print("Three REAL binary COLMAP views decoded with upstream Parser/Dataset.")
-              print("CPU tensor generation verified; no CUDA kernel or training occurred.")
+              print("CPU camera/depth output tested; no GPU kernel or training executed.")
           PY
