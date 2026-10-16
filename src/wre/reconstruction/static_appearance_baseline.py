@@ -1744,6 +1744,15 @@ def materialize_verified_gsplat_ply(
 
     root = _safe_root(output_root, "gsplat output_root")
     ply_directory = root / "ply"
+    # Verify ancestry as well as the leaf: replacing the ply/ directory after
+    # it was checked can otherwise redirect an identical, valid-looking file.
+    try:
+        root_before = root.lstat()
+        directory_before = ply_directory.lstat()
+    except OSError as exc:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat output directory changed or disappeared"
+        ) from exc
     if ply_directory.is_symlink() or not ply_directory.is_dir():
         raise GsplatStaticAppearancePreflightError(
             "gsplat output PLY directory must be a real directory"
@@ -1751,17 +1760,40 @@ def materialize_verified_gsplat_ply(
     file_path = root / profile.expected_ply_relative_path
     if file_path.is_symlink() or not file_path.is_file():
         raise GsplatStaticAppearancePreflightError("gsplat expected final PLY file is missing")
-    if file_path.resolve(strict=True).parent != ply_directory.resolve(strict=True):
+    try:
+        resolved_parent = file_path.resolve(strict=True).parent
+        verified_parent = ply_directory.resolve(strict=True)
+    except (OSError, RuntimeError) as exc:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat PLY changed or disappeared during path verification"
+        ) from exc
+    if resolved_parent != verified_parent:
         raise GsplatStaticAppearancePreflightError("gsplat PLY escaped its output directory")
 
     # Tie the checked path to the actual descriptor: replacing a pathname
     # between the symlink check and open must not change the bytes we certify.
-    before = file_path.lstat()
+    try:
+        before = file_path.lstat()
+    except OSError as exc:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat PLY changed or disappeared before opening"
+        ) from exc
     if not stat.S_ISREG(before.st_mode):
         raise GsplatStaticAppearancePreflightError("gsplat PLY must be a regular file")
     digest = hashlib.sha256()
-    with file_path.open("rb") as stream:
-        opened = os.fstat(stream.fileno())
+    try:
+        opened_stream = file_path.open("rb")
+    except OSError as exc:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat PLY changed or disappeared before opening"
+        ) from exc
+    with opened_stream as stream:
+        try:
+            opened = os.fstat(stream.fileno())
+        except OSError as exc:
+            raise GsplatStaticAppearancePreflightError(
+                "gsplat PLY descriptor could not be inspected before verification"
+            ) from exc
         identity = (opened.st_dev, opened.st_ino)
         if identity != (before.st_dev, before.st_ino):
             raise GsplatStaticAppearancePreflightError(
@@ -1777,12 +1809,28 @@ def materialize_verified_gsplat_ply(
             opened.st_ctime_ns,
         )
 
+        def read_checked(size: int, *, header: bool = False) -> bytes:
+            try:
+                return stream.readline(size) if header else stream.read(size)
+            except OSError as exc:
+                raise GsplatStaticAppearancePreflightError(
+                    "gsplat PLY read failed during materialization verification"
+                ) from exc
+
+        def tell_checked() -> int:
+            try:
+                return stream.tell()
+            except OSError as exc:
+                raise GsplatStaticAppearancePreflightError(
+                    "gsplat PLY offset check failed during materialization verification"
+                ) from exc
+
         def read_header_line() -> str:
-            raw = stream.readline(_MAX_GSPLAT_PLY_HEADER_BYTES + 1)
+            raw = read_checked(_MAX_GSPLAT_PLY_HEADER_BYTES + 1, header=True)
             if (
                 not raw
                 or len(raw) > _MAX_GSPLAT_PLY_HEADER_BYTES
-                or stream.tell() > _MAX_GSPLAT_PLY_HEADER_BYTES
+                or tell_checked() > _MAX_GSPLAT_PLY_HEADER_BYTES
                 or not raw.endswith(b"\n")
             ):
                 raise GsplatStaticAppearancePreflightError(
@@ -1851,7 +1899,7 @@ def materialize_verified_gsplat_ply(
                 "gsplat PLY property schema differs from the exact exporter"
             )
 
-        header_length = stream.tell()
+        header_length = tell_checked()
         stride = len(properties) * 4
         expected_size = header_length + count * stride
         size = opened.st_size
@@ -1859,11 +1907,17 @@ def materialize_verified_gsplat_ply(
             raise GsplatStaticAppearancePreflightError(
                 "gsplat PLY payload is truncated or contains unexpected bytes"
             )
+        # gsplat stores Gaussian scales as log-scale floats and applies
+        # torch.exp before its float32 covariance computation. Bound the
+        # log-scale so exp(scale)**2 stays finite AND normal in float32.
+        # This is a numeric preflight, not proof of GPU execution.
+        min_log_covariance_scale = -63.0 * math.log(2.0)
+        max_log_covariance_scale = 0.5 * math.log((2.0 - 2.0**-23) * 2.0**127)
         # Check the whole record stream, not just a header, and hash the same
         # bytes we have inspected. The bounded read limits transient memory.
         remaining = count * stride
         while remaining:
-            chunk = stream.read(min(remaining, stride * max(1, 4096 // stride)))
+            chunk = read_checked(min(remaining, stride * max(1, 4096 // stride)))
             if not chunk or len(chunk) % stride:
                 raise GsplatStaticAppearancePreflightError("gsplat PLY vertex data is incomplete")
             # Inspect whole Gaussian records: finite floats alone do not make
@@ -1872,6 +1926,13 @@ def materialize_verified_gsplat_ply(
                 if any(not math.isfinite(value) for value in record):
                     raise GsplatStaticAppearancePreflightError(
                         "gsplat PLY contains non-finite Gaussian parameters"
+                    )
+                if any(
+                    not min_log_covariance_scale <= value <= max_log_covariance_scale
+                    for value in record[-7:-4]
+                ):
+                    raise GsplatStaticAppearancePreflightError(
+                        "gsplat PLY contains a numerically unstable log scale"
                     )
                 rotation = record[-4:]
                 if not any(value != 0.0 for value in rotation):
@@ -1899,9 +1960,14 @@ def materialize_verified_gsplat_ply(
                     )
             digest.update(chunk)
             remaining -= len(chunk)
-        if stream.read(1):
+        if read_checked(1):
             raise GsplatStaticAppearancePreflightError("gsplat PLY contains trailing bytes")
-        final_handle = os.fstat(stream.fileno())
+        try:
+            final_handle = os.fstat(stream.fileno())
+        except OSError as exc:
+            raise GsplatStaticAppearancePreflightError(
+                "gsplat PLY descriptor could not be inspected after verification"
+            ) from exc
         if (
             final_handle.st_dev,
             final_handle.st_ino,
@@ -1912,7 +1978,23 @@ def materialize_verified_gsplat_ply(
             raise GsplatStaticAppearancePreflightError(
                 "gsplat PLY changed during materialization verification"
             )
-    final_path = file_path.lstat()
+    try:
+        final_path = file_path.lstat()
+        root_after = root.lstat()
+        directory_after = ply_directory.lstat()
+    except OSError as exc:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat PLY or parent directory changed during verification"
+        ) from exc
+    for old, new in ((root_before, root_after), (directory_before, directory_after)):
+        if (
+            not stat.S_ISDIR(old.st_mode)
+            or not stat.S_ISDIR(new.st_mode)
+            or (old.st_dev, old.st_ino) != (new.st_dev, new.st_ino)
+        ):
+            raise GsplatStaticAppearancePreflightError(
+                "gsplat PLY parent directory changed during verification"
+            )
     if (
         final_path.st_dev,
         final_path.st_ino,

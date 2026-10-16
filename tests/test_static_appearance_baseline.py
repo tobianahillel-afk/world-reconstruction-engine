@@ -679,7 +679,11 @@ def _gsplat_ply(*, properties: tuple[str, ...] | None = None, vertices: int = 1)
         + "".join(f"property float {field}\n" for field in fields)
         + "end_header\n"
     ).encode("ascii")
-    payload = tuple(float(index + 1) for index in range(len(fields)))
+    payload = [float(index + 1) for index in range(len(fields))]
+    if fields == standard:
+        # Actual gsplat log-scale magnitudes are near zero; unrealistic
+        # 54..56 would cause overflow after exp(scale)**2 in float32.
+        payload[-8:] = [0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0]
     return header + struct.pack("<" + "f" * len(payload), *payload) * vertices
 
 
@@ -707,6 +711,200 @@ def test_gsplat_ply_materialization_hashes_real_output_and_retains_path(tmp_path
         materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
         == result
     )
+
+
+def test_gsplat_ply_rejects_removal_during_strict_resolve(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The initial is_file check can succeed before the file disappears.
+    # This must fail as a WRE domain error rather than leak FileNotFoundError.
+    root, profile, ref = _gsplat_output(tmp_path, _gsplat_ply())
+    target = root / profile.expected_ply_relative_path
+    original_resolve = Path.resolve
+    removed = False
+
+    def unlink_on_resolve(path: Path, *args: Any, **kwargs: Any) -> Path:
+        nonlocal removed
+        if path == target and not removed:
+            target.unlink()
+            removed = True
+        return original_resolve(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", unlink_on_resolve)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="disappeared during path"):
+        materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
+    assert removed
+    assert not target.exists()
+
+
+def test_gsplat_ply_rejects_parent_directory_swap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data = _gsplat_ply()
+    root, profile, ref = _gsplat_output(tmp_path, data)
+    target = root / profile.expected_ply_relative_path
+    directory = root / "ply"
+    replacement = tmp_path / "new-ply"
+    replacement.mkdir()
+    (replacement / target.name).write_bytes(data)
+    original_lstat = Path.lstat
+    replaced = False
+
+    def swap_parent_before_leaf_stat(path: Path, *args: Any, **kwargs: Any) -> Any:
+        nonlocal replaced
+        if path == target and not replaced:
+            directory.rename(root / "old-ply")
+            replacement.rename(directory)
+            replaced = True
+        return original_lstat(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "lstat", swap_parent_before_leaf_stat)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="parent directory changed"):
+        materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
+    assert replaced
+
+
+@pytest.mark.parametrize(
+    ("failure_point", "expected_message"),
+    (
+        ("header", "read failed"),
+        ("offset", "offset check failed"),
+        ("payload", "read failed"),
+        ("trailer", "read failed"),
+    ),
+)
+def test_gsplat_ply_converts_stream_io_errors_to_preflight(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure_point: str,
+    expected_message: str,
+) -> None:
+    data = _gsplat_ply(vertices=2)
+    root, profile, ref = _gsplat_output(tmp_path, data)
+    target = root / profile.expected_ply_relative_path
+    original_open = Path.open
+    injected = False
+
+    class FaultyStream:
+        def __init__(self, stream: Any) -> None:
+            self.stream = stream
+            self.read_count = 0
+
+        def __enter__(self) -> FaultyStream:
+            return self
+
+        def __exit__(self, *args: Any) -> Any:
+            return self.stream.__exit__(*args)
+
+        def __getattr__(self, name: str) -> Any:
+            return getattr(self.stream, name)
+
+        def readline(self, *args: Any) -> bytes:
+            nonlocal injected
+            if failure_point == "header":
+                injected = True
+                raise OSError("injected header read failure")
+            return self.stream.readline(*args)
+
+        def tell(self) -> int:
+            nonlocal injected
+            if failure_point == "offset":
+                injected = True
+                raise OSError("injected offset failure")
+            return self.stream.tell()
+
+        def read(self, *args: Any) -> bytes:
+            nonlocal injected
+            self.read_count += 1
+            if (failure_point == "payload" and self.read_count == 1) or (
+                failure_point == "trailer" and self.read_count == 2
+            ):
+                injected = True
+                raise OSError("injected payload read failure")
+            return self.stream.read(*args)
+
+    def open_with_fault(path: Path, mode: str = "r", *args: Any, **kwargs: Any) -> Any:
+        opened = original_open(path, mode, *args, **kwargs)
+        if path == target and mode == "rb":
+            return FaultyStream(opened)
+        return opened
+
+    monkeypatch.setattr(Path, "open", open_with_fault)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match=expected_message) as exc:
+        materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
+    assert injected
+    assert isinstance(exc.value.__cause__, OSError)
+
+
+@pytest.mark.parametrize(
+    ("failing_call", "expected_message"),
+    ((1, "before verification"), (2, "after verification")),
+)
+def test_gsplat_ply_rejects_descriptor_stat_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failing_call: int,
+    expected_message: str,
+) -> None:
+    data = _gsplat_ply(vertices=2)
+    root, profile, ref = _gsplat_output(tmp_path, data)
+    original_fstat = baseline_module.os.fstat
+    calls = 0
+    injected = False
+
+    def failing_fstat(fd: int) -> Any:
+        nonlocal calls, injected
+        calls += 1
+        if calls == failing_call:
+            injected = True
+            raise OSError("injected descriptor stat failure")
+        return original_fstat(fd)
+
+    monkeypatch.setattr(baseline_module.os, "fstat", failing_fstat)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match=expected_message) as exc:
+        materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
+    assert injected
+    assert calls == failing_call
+    assert isinstance(exc.value.__cause__, OSError)
+
+
+def test_gsplat_ply_rejects_disappearance_during_streamed_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data = _gsplat_ply()
+    root, profile, ref = _gsplat_output(tmp_path, data)
+    target = root / profile.expected_ply_relative_path
+    original_open = Path.open
+
+    class UnlinkOnRead:
+        def __init__(self, stream: Any) -> None:
+            self.stream = stream
+            self.unlinked = False
+
+        def __enter__(self) -> UnlinkOnRead:
+            return self
+
+        def __exit__(self, *args: Any) -> Any:
+            return self.stream.__exit__(*args)
+
+        def __getattr__(self, name: str) -> Any:
+            return getattr(self.stream, name)
+
+        def read(self, *args: Any) -> bytes:
+            result = self.stream.read(*args)
+            if not self.unlinked:
+                target.unlink()
+                self.unlinked = True
+            return result
+
+    def unlink_during_read(path: Path, mode: str = "r", *args: Any, **kwargs: Any) -> Any:
+        stream = original_open(path, mode, *args, **kwargs)
+        return UnlinkOnRead(stream) if path == target and mode == "rb" else stream
+
+    monkeypatch.setattr(Path, "open", unlink_during_read)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="changed during"):
+        materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
+    assert not target.exists()
 
 
 def test_gsplat_ply_rejects_replacement_between_path_check_and_open(
@@ -877,6 +1075,41 @@ def test_gsplat_ply_rejects_zero_norm_rotation_quaternion(tmp_path: Path) -> Non
     root, profile, ref = _gsplat_output(tmp_path, bytes(data))
     with pytest.raises(GsplatStaticAppearancePreflightError, match="zero-norm rotation"):
         materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
+
+
+@pytest.mark.parametrize(
+    ("log_scale", "should_reject"),
+    (
+        (100.0, True),
+        (-100.0, True),
+        (45.0, True),
+        (-45.0, True),
+        (0.0, False),
+        (40.0, False),
+        (-40.0, False),
+    ),
+)
+def test_gsplat_ply_rejects_float32_overflowing_log_scales(
+    tmp_path: Path, log_scale: float, should_reject: bool
+) -> None:
+    # Mutate the first Gaussian's first scale logit in the canonical 59-float
+    # reference PLY, preserving the full payload and the second Gaussian.
+    original = _gsplat_ply(vertices=2)
+    data = bytearray(original)
+    stride = 59 * 4
+    first_scale_offset = len(data) - 2 * stride + stride - 7 * 4
+    data[first_scale_offset : first_scale_offset + 4] = struct.pack("<f", log_scale)
+    root, profile, ref = _gsplat_output(tmp_path, bytes(data))
+    if should_reject:
+        with pytest.raises(
+            GsplatStaticAppearancePreflightError, match="numerically unstable log scale"
+        ):
+            materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
+    else:
+        result = materialize_verified_gsplat_ply(
+            artifact_ref=ref, output_root=root, profile=profile
+        )
+        assert result.entries[0].sha256 == _digest(bytes(data))
 
 
 @pytest.mark.parametrize(
