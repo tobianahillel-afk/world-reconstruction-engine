@@ -2256,6 +2256,7 @@ __all__ = [
     "inspect_gsplat_static_appearance_shared_track_pixels",
     "materialize_verified_gsplat_ply",
     "preflight_gsplat_static_appearance_inputs",
+    "run_gsplat_reference_training",
     "stage_verified_gsplat_static_appearance_dataset",
     "verify_gsplat_reference_pycolmap_sources",
     "verify_gsplat_static_appearance_matching_capture_metadata",
