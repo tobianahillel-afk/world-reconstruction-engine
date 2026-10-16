@@ -1055,9 +1055,7 @@ def test_external_gsplat_runner_builds_complete_canonical_candidate_with_process
 def test_external_gsplat_runner_rejects_failure_or_missing_output(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, return_code: int
 ) -> None:
-    request, source, staged, output, profile, ref, producer = _retained_gsplat_fixture(
-        tmp_path
-    )
+    request, source, staged, output, profile, ref, producer = _retained_gsplat_fixture(tmp_path)
     (output / profile.expected_ply_relative_path).unlink()
     (output / "ply").rmdir()
     output.rmdir()
