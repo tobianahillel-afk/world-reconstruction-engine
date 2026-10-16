@@ -597,6 +597,139 @@ jobs:
           intrinsic = np.array(
               [[focal, 0.0, 160.0], [0.0, focal, 120.0], [0.0, 0.0, 1.0]]
           )
+
+          # New functional route: estimate the relative camera pose from the
+          # matched image pixels. The solver sees ONLY image points and known
+          # intrinsics, NOT reference poses, baselines or 3D ground truth.
+          # OpenCV's 5-point essential matrix + RANSAC + cheirality reuse the
+          # existing pinned native solver; monocular scale is unobservable.
+          cv2.setRNGSeed(20261016)
+          essential, ransac_mask = cv2.findEssentialMat(
+              points0, points1, intrinsic,
+              method=cv2.RANSAC, prob=0.999, threshold=0.5,
+          )
+          assert essential is not None and essential.shape == (3, 3)
+          recovered_count, recovered_rotation, recovered_translation, pose_mask = (
+              cv2.recoverPose(
+                  essential, points0, points1, intrinsic, mask=ransac_mask
+              )
+          )
+          inlier = pose_mask.reshape(-1) != 0
+          assert recovered_count == int(inlier.sum()) >= 60
+          angle_rad = float(np.arccos(np.clip(
+              (np.trace(recovered_rotation) - 1.0) / 2.0, -1.0, 1.0
+          )))
+          # Only sanity checks use the synthetic fixture's expected direction,
+          # never the pose estimator or its triangulation.
+          assert angle_rad < 0.08, angle_rad
+          assert recovered_translation[0, 0] < -0.9
+          assert abs(recovered_translation[1, 0]) < 0.20
+          assert abs(recovered_translation[2, 0]) < 0.20
+
+          estimated_projection0 = intrinsic @ np.column_stack(
+              (np.eye(3), np.zeros(3))
+          )
+          estimated_projection1 = intrinsic @ np.column_stack(
+              (recovered_rotation, recovered_translation)
+          )
+          pose_homogeneous = cv2.triangulatePoints(
+              estimated_projection0, estimated_projection1,
+              points0[inlier].T, points1[inlier].T,
+          )
+          pose_xyz = (pose_homogeneous[:3] / pose_homogeneous[3]).T
+          assert np.all(np.isfinite(pose_xyz))
+          assert np.all(pose_xyz[:, 2] > 0)
+          upper_inliers = points0[inlier, 1] < 120.0
+          lower_inliers = points0[inlier, 1] > 120.0
+          assert int(upper_inliers.sum()) >= 15
+          assert int(lower_inliers.sum()) >= 15
+          depth_ratio = float(
+              np.median(pose_xyz[lower_inliers, 2])
+              / np.median(pose_xyz[upper_inliers, 2])
+          )
+          assert 1.8 < depth_ratio < 2.2, depth_ratio
+
+          def image_reprojection(projection, coordinates):
+              projected = projection @ np.column_stack(
+                  (coordinates, np.ones(len(coordinates)))
+              ).T
+              return (projected[:2] / projected[2]).T
+
+          pose_rmse = float(np.sqrt(np.mean(
+              (
+                  np.sum(
+                      np.square(
+                          image_reprojection(estimated_projection0, pose_xyz)
+                          - points0[inlier]
+                      ), axis=1,
+                  )
+                  + np.sum(
+                      np.square(
+                          image_reprojection(estimated_projection1, pose_xyz)
+                          - points1[inlier]
+                      ), axis=1,
+                  )
+              ) / 2.0
+          )))
+          assert pose_rmse < 0.30, pose_rmse
+
+          # Register a THIRD camera against the estimated 3D, with only
+          # SIFT image observations and known K. Neither a reference camera
+          # pose nor the scene baseline is passed into this PnP solver.
+          cv2.setRNGSeed(20261016)
+          pnp_ok, pnp_rotation_vector, pnp_translation, pnp_inliers = (
+              cv2.solvePnPRansac(
+                  np.ascontiguousarray(pose_xyz, dtype=np.float64),
+                  np.ascontiguousarray(observed_third[inlier], dtype=np.float64),
+                  intrinsic, None,
+                  iterationsCount=500,
+                  reprojectionError=1.0,
+                  confidence=0.999,
+                  flags=cv2.SOLVEPNP_EPNP,
+              )
+          )
+          assert pnp_ok and pnp_inliers is not None
+          assert len(pnp_inliers) >= 50, len(pnp_inliers)
+          pnp_rotation, _ = cv2.Rodrigues(pnp_rotation_vector)
+          pnp_projection = intrinsic @ np.column_stack(
+              (pnp_rotation, pnp_translation)
+          )
+          local_ids = pnp_inliers.reshape(-1)
+          predicted_third = image_reprojection(
+              pnp_projection, pose_xyz[local_ids]
+          )
+          measured_third = observed_third[inlier][local_ids]
+          pnp_rmse = float(np.sqrt(np.mean(
+              np.sum(np.square(predicted_third - measured_third), axis=1)
+          )))
+          assert pnp_rmse < 0.50, pnp_rmse
+          assert np.all(np.isfinite(pnp_rotation))
+          assert np.all(np.isfinite(pnp_translation))
+          # The unscaled two-view baseline is one length unit by convention.
+          # All recovered camera translations share that SAME arbitrary gauge.
+          assert 1.5 < float(np.linalg.norm(pnp_translation)) < 2.5
+
+          estimated_cameras = {
+              "source": "actual three-view SIFT image correspondences",
+              "intrinsic_matrix": intrinsic.tolist(),
+              "scale": "arbitrary; no metric ground truth was supplied",
+              "world_to_camera": [
+                  {"image": 0, "rotation": np.eye(3).tolist(),
+                   "translation": [0.0, 0.0, 0.0]},
+                  {"image": 1, "rotation": recovered_rotation.tolist(),
+                   "translation": recovered_translation.reshape(-1).tolist()},
+                  {"image": 2, "rotation": pnp_rotation.tolist(),
+                   "translation": pnp_translation.reshape(-1).tolist()},
+              ],
+              "third_view_pnp_inliers": int(len(pnp_inliers)),
+              "third_view_pnp_reprojection_rmse_px": pnp_rmse,
+              "true_cuda_execution": False,
+          }
+          (output / "wre-sift-cpu-estimated-cameras.json").write_text(
+              json.dumps(estimated_cameras, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+
           projections = [
               intrinsic
               @ np.column_stack((np.eye(3), [-baseline * index, 0.0, 0.0]))
@@ -640,6 +773,22 @@ jobs:
                   f"{int(bgr[2])} {int(bgr[1])} {int(bgr[0])}"
               )
           cloud.write_text(header + "\n".join(rows) + "\n", encoding="ascii")
+          # Recovered-camera 3D is a separate, scale-ambiguous cloud. Its
+          # coordinates must never be presented as metric or COLMAP-anchored.
+          pose_rows = []
+          for xyz_point, image_xy in zip(pose_xyz, points0[inlier]):
+              x, y = (int(round(value)) for value in image_xy)
+              bgr = views[0][y, x]
+              pose_rows.append(
+                  f"{xyz_point[0]:.9g} {xyz_point[1]:.9g} {xyz_point[2]:.9g} "
+                  f"{int(bgr[2])} {int(bgr[1])} {int(bgr[0])}"
+              )
+          pose_header = header.replace(
+              f"element vertex {len(xyz)}", f"element vertex {len(pose_xyz)}"
+          )
+          (output / "wre-sift-cpu-estimated-pose.ply").write_text(
+              pose_header + "\n".join(pose_rows) + "\n", encoding="ascii"
+          )
           matches = [correspondences[0][idx] for idx in shared[:45]]
           preview = cv2.drawMatches(
               views[0], features[0][0], views[1], features[1][0],
@@ -654,6 +803,20 @@ jobs:
               "correspondences_from_pixel_features": True,
               "ground_truth_tracks_supplied_to_solver": False,
               "two_view_triangulated_points": len(xyz),
+              "relative_pose_estimated_from_pixels": True,
+              "relative_pose_known_intrinsics": True,
+              "relative_pose_scale_recovered": False,
+              "relative_pose_inliers": recovered_count,
+              "relative_pose_rotation_angle_rad": angle_rad,
+              "relative_pose_translation_unit_vector": [
+                  float(v) for v in recovered_translation.reshape(-1)
+              ],
+              "relative_pose_two_view_reprojection_rmse_px": pose_rmse,
+              "relative_pose_lower_upper_depth_ratio": depth_ratio,
+              "third_view_camera_pose_estimated_from_reconstructed_xyz": True,
+              "third_view_camera_pose_inliers": int(len(pnp_inliers)),
+              "third_view_camera_pose_reprojection_rmse_px": pnp_rmse,
+              "third_view_camera_translation_scale": "arbitrary",
               "upper_plane_median_depth_model_units": upper_depth,
               "lower_plane_median_depth_model_units": lower_depth,
               "third_view_heldout_reprojection_rmse_px": heldout_rmse,
@@ -692,6 +855,8 @@ jobs:
             wre-colmap-cpu-depth.png \
             wre-colmap-cpu-depth.npy \
             wre-sift-cpu-image-triangulated.ply \
+            wre-sift-cpu-estimated-pose.ply \
+            wre-sift-cpu-estimated-cameras.json \
             wre-sift-cpu-feature-correspondences.png \
             wre-sift-cpu-metrics.json \
             wre-sift-cpu-view-0.png \
@@ -701,8 +866,8 @@ jobs:
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 13
-          echo "Staged all 13 real PLY/PNG/NPY/JSON files for artifact upload"
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 15
+          echo "Staged all 15 real PLY/PNG/NPY/JSON files for artifact upload"
 
       - name: Publish CPU COLMAP 3D preview and measured reprojection
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
