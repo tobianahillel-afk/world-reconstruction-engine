@@ -498,6 +498,79 @@ jobs:
               off = view["byteOffset"]
               assert binary[off:off + view["byteLength"]] == expected
 
+          # Portable glTF POINTS preview of the 3D locations actually checked
+          # against BOTH photographs. Reuse the GLB/gltf convention above.
+          # This is a visualization of observed RGB samples, not Gaussian render.
+          checked_glb_name = "wre-real-stereo-cpu-lr-consistent.glb"
+          checked_positions = np.ascontiguousarray(checked_xyz, dtype="<f4")
+          checked_positions[:, 1:] *= -1.0  # Y-up, Z-back like textured GLB
+          checked_colors = np.ascontiguousarray(checked_rgb, dtype="u1")
+          assert checked_positions.shape == checked_colors.shape
+          assert np.all(np.isfinite(checked_positions))
+          point_binary, point_views = bytearray(), []
+          for values in (checked_positions.tobytes(), checked_colors.tobytes()):
+              offset = len(point_binary)
+              point_binary.extend(values)
+              point_binary.extend(b"\0" * (-len(point_binary) % 4))
+              point_views.append({
+                  "buffer": 0, "byteOffset": offset,
+                  "byteLength": len(values), "target": 34962,
+              })
+          point_document = {
+              "asset": {"version": "2.0", "generator": "WRE LR-checked real stereo CPU"},
+              "scene": 0, "scenes": [{"nodes": [0]}],
+              "nodes": [{"mesh": 0, "name": "Two-view consistent RGB points"}],
+              "meshes": [{"primitives": [{
+                  "attributes": {"POSITION": 0, "COLOR_0": 1}, "material": 0, "mode": 0,
+              }]}],
+              "materials": [{
+                  "name": "Observed RGB", "doubleSided": True,
+                  "pbrMetallicRoughness": {"metallicFactor": 0, "roughnessFactor": 1},
+                  "extensions": {"KHR_materials_unlit": {}},
+              }],
+              "extensionsUsed": ["KHR_materials_unlit"],
+              "buffers": [{"byteLength": len(point_binary)}],
+              "bufferViews": point_views,
+              "accessors": [
+                  {
+                      "bufferView": 0, "componentType": 5126,
+                      "count": len(checked_positions), "type": "VEC3",
+                      "min": checked_positions.min(axis=0).tolist(),
+                      "max": checked_positions.max(axis=0).tolist(),
+                  },
+                  {
+                      "bufferView": 1, "componentType": 5121,
+                      "count": len(checked_colors), "type": "VEC3", "normalized": True,
+                  },
+              ],
+          }
+          point_json = json.dumps(point_document, separators=(",", ":")).encode("utf-8")
+          point_json += b" " * (-len(point_json) % 4)
+          point_glb = (
+              struct.pack("<4sII", b"glTF", 2, 12 + 8 + len(point_json) + 8 + len(point_binary))
+              + struct.pack("<I4s", len(point_json), b"JSON") + point_json
+              + struct.pack("<I4s", len(point_binary), b"BIN\0") + point_binary
+          )
+          checked_glb_path = output / checked_glb_name
+          checked_glb_path.write_bytes(point_glb)
+          readback = checked_glb_path.read_bytes()
+          assert struct.unpack_from("<4sII", readback) == (b"glTF", 2, len(readback))
+          json_size, kind = struct.unpack_from("<I4s", readback, 12)
+          assert kind == b"JSON"
+          parsed = json.loads(readback[20:20 + json_size])
+          assert parsed["meshes"][0]["primitives"][0]["mode"] == 0
+          assert parsed["accessors"][0]["count"] == len(checked_xyz)
+          assert parsed["accessors"][1]["normalized"] is True
+          binary_start = 20 + json_size
+          binary_size, kind = struct.unpack_from("<I4s", readback, binary_start)
+          assert kind == b"BIN\0" and binary_start + 8 + binary_size == len(readback)
+          actual_binary = readback[binary_start + 8:]
+          for view, expected in zip(
+              parsed["bufferViews"], (checked_positions.tobytes(), checked_colors.tobytes())
+          ):
+              offset = view["byteOffset"]
+              assert actual_binary[offset:offset + view["byteLength"]] == expected
+
           # Render ACTUAL measured 3D mesh vertices/faces from a smoothly
           # moving virtual camera, rather than warping a flat photograph.
           # Use OpenCV's existing triangle fill and Pillow's animated GIF
@@ -784,6 +857,9 @@ jobs:
               "left_right_consistent_pixels": checked_count,
               "left_right_consistent_fraction_of_valid": checked_count / int(valid.sum()),
               "left_right_consistent_exported_points": int(len(checked_xyz)),
+              "left_right_consistent_glb": checked_glb_name,
+              "left_right_consistent_glb_primitive": "glTF 2.0 POINTS (observed RGB)",
+              "left_right_consistent_glb_metric_depth_calibrated": False,
               "left_right_consistency_png": consistency_png.name,
               "left_right_consistency_is_independent_ground_truth": False,
               "median_disparity_pixels": float(np.median(disparity[valid])),
@@ -972,7 +1048,7 @@ jobs:
       # Run the actual-photo CPU reconstruction BEFORE expensive native CUDA
       # compilation. Keep the original photo pipeline in one place and make
       # its real 3D/preview outputs inspectable even while CUDA builds run.
-      - name: Stage nineteen real-photo CPU 3D, animated mesh, GLB and COLMAP outputs early
+      - name: Stage twenty real-photo CPU 3D, animated mesh, GLB and COLMAP outputs early
         shell: bash
         run: |
           set -euo pipefail
@@ -981,6 +1057,7 @@ jobs:
           for file in \
             wre-real-stereo-cpu-reconstruction.ply \
             wre-real-stereo-cpu-lr-consistent.ply \
+            wre-real-stereo-cpu-lr-consistent.glb \
             wre-real-stereo-cpu-surface.ply \
             wre-real-stereo-cpu-textured.obj \
             wre-real-stereo-cpu-textured.glb \
@@ -1002,7 +1079,7 @@ jobs:
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 19
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 20
 
       - name: Publish real-photo CPU 3D plus COLMAP before native CUDA builds
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -1994,6 +2071,7 @@ jobs:
             wre-sift-cpu-view-2.png \
             wre-real-stereo-cpu-reconstruction.ply \
             wre-real-stereo-cpu-lr-consistent.ply \
+            wre-real-stereo-cpu-lr-consistent.glb \
             wre-real-stereo-cpu-surface.ply \
             wre-real-stereo-cpu-textured.obj \
             wre-real-stereo-cpu-textured.glb \
@@ -2013,8 +2091,8 @@ jobs:
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 35
-          echo "Staged all 35 real PLY/OBJ/GLB/GIF/MTL/PNG/NPY/JSON/ZIP files for artifact upload"
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 36
+          echo "Staged all 36 real PLY/OBJ/GLB/GIF/MTL/PNG/NPY/JSON/ZIP files for artifact upload"
 
       - name: Publish CPU COLMAP 3D preview and measured reprojection
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
