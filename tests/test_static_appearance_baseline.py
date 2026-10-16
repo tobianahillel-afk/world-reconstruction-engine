@@ -709,6 +709,30 @@ def test_gsplat_ply_materialization_hashes_real_output_and_retains_path(tmp_path
     )
 
 
+def test_gsplat_ply_rejects_removal_during_strict_resolve(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The initial is_file check can succeed before the file disappears.
+    # This must fail as a WRE domain error rather than leak FileNotFoundError.
+    root, profile, ref = _gsplat_output(tmp_path, _gsplat_ply())
+    target = root / profile.expected_ply_relative_path
+    original_resolve = Path.resolve
+    removed = False
+
+    def unlink_on_resolve(path: Path, *args: Any, **kwargs: Any) -> Path:
+        nonlocal removed
+        if path == target and not removed:
+            target.unlink()
+            removed = True
+        return original_resolve(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "resolve", unlink_on_resolve)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="disappeared during path"):
+        materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
+    assert removed
+    assert not target.exists()
+
+
 def test_gsplat_ply_rejects_parent_directory_swap(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
