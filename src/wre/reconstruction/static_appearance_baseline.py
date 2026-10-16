@@ -1880,11 +1880,7 @@ def run_gsplat_reference_training(
         "XDG_CACHE_HOME",
         "TORCH_EXTENSIONS_DIR",
     )
-    env = {
-        name: os.environ[name]
-        for name in runtime_environment_names
-        if name in os.environ
-    }
+    env = {name: os.environ[name] for name in runtime_environment_names if name in os.environ}
     env["CUDA_VISIBLE_DEVICES"] = str(cuda_device_index)
     env["PYTHONNOUSERSITE"] = "1"
     env["PIP_NO_INDEX"] = "1"
