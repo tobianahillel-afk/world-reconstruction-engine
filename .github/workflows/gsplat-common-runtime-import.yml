@@ -673,6 +673,63 @@ jobs:
           )))
           assert pose_rmse < 0.30, pose_rmse
 
+          # Register a THIRD camera against the estimated 3D, with only
+          # SIFT image observations and known K. Neither a reference camera
+          # pose nor the scene baseline is passed into this PnP solver.
+          cv2.setRNGSeed(20261016)
+          pnp_ok, pnp_rotation_vector, pnp_translation, pnp_inliers = (
+              cv2.solvePnPRansac(
+                  np.ascontiguousarray(pose_xyz, dtype=np.float64),
+                  np.ascontiguousarray(observed_third[inlier], dtype=np.float64),
+                  intrinsic, None,
+                  iterationsCount=500,
+                  reprojectionError=1.0,
+                  confidence=0.999,
+                  flags=cv2.SOLVEPNP_EPNP,
+              )
+          )
+          assert pnp_ok and pnp_inliers is not None
+          assert len(pnp_inliers) >= 50, len(pnp_inliers)
+          pnp_rotation, _ = cv2.Rodrigues(pnp_rotation_vector)
+          pnp_projection = intrinsic @ np.column_stack(
+              (pnp_rotation, pnp_translation)
+          )
+          local_ids = pnp_inliers.reshape(-1)
+          predicted_third = image_reprojection(
+              pnp_projection, pose_xyz[local_ids]
+          )
+          measured_third = observed_third[inlier][local_ids]
+          pnp_rmse = float(np.sqrt(np.mean(
+              np.sum(np.square(predicted_third - measured_third), axis=1)
+          )))
+          assert pnp_rmse < 0.50, pnp_rmse
+          assert np.all(np.isfinite(pnp_rotation))
+          assert np.all(np.isfinite(pnp_translation))
+          # The unscaled two-view baseline is one length unit by convention.
+          # All recovered camera translations share that SAME arbitrary gauge.
+          assert 1.5 < float(np.linalg.norm(pnp_translation)) < 2.5
+
+          estimated_cameras = {
+              "source": "actual three-view SIFT image correspondences",
+              "intrinsic_matrix": intrinsic.tolist(),
+              "scale": "arbitrary; no metric ground truth was supplied",
+              "world_to_camera": [
+                  {"image": 0, "rotation": np.eye(3).tolist(),
+                   "translation": [0.0, 0.0, 0.0]},
+                  {"image": 1, "rotation": recovered_rotation.tolist(),
+                   "translation": recovered_translation.reshape(-1).tolist()},
+                  {"image": 2, "rotation": pnp_rotation.tolist(),
+                   "translation": pnp_translation.reshape(-1).tolist()},
+              ],
+              "third_view_pnp_inliers": int(len(pnp_inliers)),
+              "third_view_pnp_reprojection_rmse_px": pnp_rmse,
+              "true_cuda_execution": False,
+          }
+          (output / "wre-sift-cpu-estimated-cameras.json").write_text(
+              json.dumps(estimated_cameras, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+
           projections = [
               intrinsic
               @ np.column_stack((np.eye(3), [-baseline * index, 0.0, 0.0]))
@@ -756,6 +813,10 @@ jobs:
               ],
               "relative_pose_two_view_reprojection_rmse_px": pose_rmse,
               "relative_pose_lower_upper_depth_ratio": depth_ratio,
+              "third_view_camera_pose_estimated_from_reconstructed_xyz": True,
+              "third_view_camera_pose_inliers": int(len(pnp_inliers)),
+              "third_view_camera_pose_reprojection_rmse_px": pnp_rmse,
+              "third_view_camera_translation_scale": "arbitrary",
               "upper_plane_median_depth_model_units": upper_depth,
               "lower_plane_median_depth_model_units": lower_depth,
               "third_view_heldout_reprojection_rmse_px": heldout_rmse,
@@ -795,6 +856,7 @@ jobs:
             wre-colmap-cpu-depth.npy \
             wre-sift-cpu-image-triangulated.ply \
             wre-sift-cpu-estimated-pose.ply \
+            wre-sift-cpu-estimated-cameras.json \
             wre-sift-cpu-feature-correspondences.png \
             wre-sift-cpu-metrics.json \
             wre-sift-cpu-view-0.png \
@@ -804,8 +866,8 @@ jobs:
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 14
-          echo "Staged all 14 real PLY/PNG/NPY/JSON files for artifact upload"
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 15
+          echo "Staged all 15 real PLY/PNG/NPY/JSON files for artifact upload"
 
       - name: Publish CPU COLMAP 3D preview and measured reprojection
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
