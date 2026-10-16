@@ -319,6 +319,48 @@ jobs:
           assert len(exported) - header_end - 1 == len(mesh_xyz) + len(faces)
           assert exported[-1].startswith("3 ")
 
+          # Textured mesh from the same measured stereo XYZ and faces. Each UV is
+          # mapped onto the ACTUAL photographed left image: no synthesized texture.
+          texture_name = "wre-real-stereo-cpu-texture.png"
+          obj_name = "wre-real-stereo-cpu-textured.obj"
+          mtl_name = "wre-real-stereo-cpu-textured.mtl"
+          assert cv2.imwrite(str(output / texture_name), left)
+          decoded_texture = cv2.imread(str(output / texture_name))
+          assert decoded_texture is not None and np.array_equal(decoded_texture, left)
+          uv = np.column_stack((
+              (mx + 0.5) / float(width),
+              1.0 - (my + 0.5) / float(height),
+          ))
+          assert uv.shape == (len(mesh_xyz), 2)
+          assert np.all(np.isfinite(uv)) and np.all((uv > 0.0) & (uv < 1.0))
+          (output / mtl_name).write_text(
+              "newmtl wre_observed_left_photo\n"
+              "Ka 0 0 0\nKd 1 1 1\nKs 0 0 0\n"
+              f"map_Kd {texture_name}\n",
+              encoding="ascii",
+          )
+          obj_path = output / obj_name
+          with obj_path.open("w", encoding="ascii", newline="\n") as obj:
+              obj.write(f"mtllib {mtl_name}\no measured_stereo_surface\n")
+              for xyz_row in mesh_xyz:
+                  obj.write(f"v {xyz_row[0]:.9g} {xyz_row[1]:.9g} {xyz_row[2]:.9g}\n")
+              for u, v in uv:
+                  obj.write(f"vt {u:.9g} {v:.9g}\n")
+              obj.write("usemtl wre_observed_left_photo\ns off\n")
+              for a, b, c in faces:
+                  obj.write(f"f {a+1}/{a+1} {b+1}/{b+1} {c+1}/{c+1}\n")
+          # Check the actual serialized OBJ/MTL/PNG bundle, not just in-memory counts.
+          obj_lines = obj_path.read_text(encoding="ascii").splitlines()
+          assert f"mtllib {mtl_name}" in obj_lines
+          assert "usemtl wre_observed_left_photo" in obj_lines
+          assert sum(line.startswith("v ") for line in obj_lines) == len(mesh_xyz)
+          assert sum(line.startswith("vt ") for line in obj_lines) == len(uv)
+          exported_faces = [line for line in obj_lines if line.startswith("f ")]
+          assert len(exported_faces) == len(faces)
+          for line, face in zip(exported_faces, faces):
+              assert line.split()[1:] == [f"{index+1}/{index+1}" for index in face]
+          assert f"map_Kd {texture_name}" in (output / mtl_name).read_text(encoding="ascii")
+
           # Functional 3D output beyond point export: project actual
           # photo-colored reconstructed XYZ from TWO UNOBSERVED camera positions.
           # Use nearest-Z per projected pixel; leave disocclusion holes black.
@@ -386,6 +428,11 @@ jobs:
               "exported_colored_3d_points": int(len(xyz)),
               "exported_surface_vertices": int(len(mesh_xyz)),
               "exported_surface_triangles": int(len(faces)),
+              "exported_textured_obj_vertices": int(len(mesh_xyz)),
+              "exported_textured_obj_uv": int(len(uv)),
+              "exported_textured_obj_triangles": int(len(faces)),
+              "textured_obj_texture_source": "observed left Aloe photograph",
+              "textured_obj_inpainted_or_novel_texture": False,
               "surface_depth_discontinuity_ratio_max": 1.15,
               "surface_mesh_is_watertight": False,
               "surface_mesh_is_photogrammetric_ground_truth": False,
@@ -511,7 +558,7 @@ jobs:
       # Run the actual-photo CPU reconstruction BEFORE expensive native CUDA
       # compilation. Keep the original photo pipeline in one place and make
       # its real 3D/preview outputs inspectable even while CUDA builds run.
-      - name: Stage seven real-photo CPU 3D and COLMAP outputs early
+      - name: Stage eleven real-photo CPU 3D, UV texture and COLMAP outputs early
         shell: bash
         run: |
           set -euo pipefail
@@ -520,6 +567,9 @@ jobs:
           for file in \
             wre-real-stereo-cpu-reconstruction.ply \
             wre-real-stereo-cpu-surface.ply \
+            wre-real-stereo-cpu-textured.obj \
+            wre-real-stereo-cpu-textured.mtl \
+            wre-real-stereo-cpu-texture.png \
             wre-real-stereo-cpu-disparity.png \
             wre-real-stereo-cpu-photos.png \
             wre-real-stereo-cpu-novel-views.png \
@@ -530,7 +580,7 @@ jobs:
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 8
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 11
 
       - name: Publish real-photo CPU 3D plus COLMAP before native CUDA builds
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -1522,6 +1572,9 @@ jobs:
             wre-sift-cpu-view-2.png \
             wre-real-stereo-cpu-reconstruction.ply \
             wre-real-stereo-cpu-surface.ply \
+            wre-real-stereo-cpu-textured.obj \
+            wre-real-stereo-cpu-textured.mtl \
+            wre-real-stereo-cpu-texture.png \
             wre-real-stereo-cpu-disparity.png \
             wre-real-stereo-cpu-photos.png \
             wre-real-stereo-cpu-novel-views.png \
@@ -1530,8 +1583,8 @@ jobs:
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 24
-          echo "Staged all 24 real PLY/PNG/NPY/JSON/ZIP files for artifact upload"
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 27
+          echo "Staged all 27 real PLY/OBJ/MTL/PNG/NPY/JSON/ZIP files for artifact upload"
 
       - name: Publish CPU COLMAP 3D preview and measured reprojection
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
