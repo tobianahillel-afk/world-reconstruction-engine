@@ -534,10 +534,14 @@ jobs:
           "$COMMON_PYTHON" - <<'PY'
           import json
           import os
+          import struct
+          import sys
+          import zipfile
           from pathlib import Path
 
           import cv2
           import numpy as np
+          from scipy.spatial.transform import Rotation
 
           # One deterministic, textured synthetic two-depth scene. Matching is
           # performed on REAL image pixels using pinned OpenCV SIFT/knnMatch.
@@ -730,6 +734,152 @@ jobs:
               encoding="utf-8",
           )
 
+          # FUNCTIONAL HANDOFF: take SIFT + EssentialMat + PnP estimates
+          # and construct a real standard COLMAP dataset, then round-trip it
+          # through the pinned gsplat Parser and Dataset. No supplied 3D
+          # ground-truth xyz or camera extrinsics enter these binary files.
+          from datasets.colmap import Dataset, Parser
+
+          estimated_root = output / "wre-sift-estimated-colmap"
+          estimated_images = estimated_root / "images"
+          estimated_sparse = estimated_root / "sparse" / "0"
+          estimated_images.mkdir(parents=True)
+          estimated_sparse.mkdir(parents=True)
+          selected = np.asarray(local_ids, dtype=np.int64)
+          reconstructed = np.ascontiguousarray(pose_xyz[selected], dtype=np.float64)
+          observed = [
+              points0[inlier][selected],
+              points1[inlier][selected],
+              observed_third[inlier][selected],
+          ]
+          estimated_poses = [
+              (np.eye(3), np.zeros(3)),
+              (recovered_rotation, recovered_translation.reshape(3)),
+              (pnp_rotation, pnp_translation.reshape(3)),
+          ]
+          assert len(reconstructed) >= 50
+          assert np.all(np.isfinite(reconstructed))
+          for rotation, translation in estimated_poses:
+              depths = (rotation @ reconstructed.T + translation.reshape(3, 1))[2]
+              assert np.all(depths > 0.0), "Invalid estimated COLMAP cheirality"
+
+          # PINHOLE model id 1; COLMAP binary record layout reused from the
+          # already exercised three-view fixture earlier in this workflow.
+          (estimated_sparse / "cameras.bin").write_bytes(
+              struct.pack("<Q", 1)
+              + struct.pack(
+                  "<IiQQ4d", 1, 1, 320, 240,
+                  float(intrinsic[0, 0]), float(intrinsic[1, 1]),
+                  float(intrinsic[0, 2]), float(intrinsic[1, 2]),
+              )
+          )
+          observations_bin = bytearray(struct.pack("<Q", 3))
+          colors = []
+          for local, position in enumerate(observed[0]):
+              x, y = (int(round(float(v))) for v in position)
+              assert 0 <= x < 320 and 0 <= y < 240
+              bgr = views[0][y, x]
+              colors.append((int(bgr[2]), int(bgr[1]), int(bgr[0])))
+          for view_index, ((rotation, translation), pixels) in enumerate(
+              zip(estimated_poses, observed), start=1
+          ):
+              q_xyzw = Rotation.from_matrix(rotation).as_quat()
+              q_wxyz = (
+                  float(q_xyzw[3]), float(q_xyzw[0]),
+                  float(q_xyzw[1]), float(q_xyzw[2]),
+              )
+              image_name = f"estimated-{view_index:02d}.png"
+              assert cv2.imwrite(str(estimated_images / image_name), views[view_index - 1])
+              observations_bin.extend(
+                  struct.pack(
+                      "<I4d3dI", view_index, *q_wxyz,
+                      *[float(value) for value in translation], 1,
+                  )
+              )
+              observations_bin.extend(image_name.encode("ascii") + b"\x00")
+              observations_bin.extend(struct.pack("<Q", len(reconstructed)))
+              for point_index, pixel in enumerate(pixels):
+                  observations_bin.extend(
+                      struct.pack(
+                          "<ddq", float(pixel[0]), float(pixel[1]), point_index + 1,
+                      )
+                  )
+          (estimated_sparse / "images.bin").write_bytes(observations_bin)
+          estimated_points = bytearray(struct.pack("<Q", len(reconstructed)))
+          for point_index, (xyz_point, rgb) in enumerate(zip(reconstructed, colors)):
+              errors = []
+              for (rotation, translation), pixels in zip(estimated_poses, observed):
+                  camera_xyz = rotation @ xyz_point + translation
+                  projected = intrinsic @ camera_xyz
+                  errors.append(
+                      np.linalg.norm(projected[:2] / projected[2] - pixels[point_index])
+                  )
+              track_error = float(np.sqrt(np.mean(np.square(errors))))
+              assert np.isfinite(track_error) and track_error < 1.0
+              estimated_points.extend(
+                  struct.pack(
+                      "<Q3d3BdQ", point_index + 1,
+                      *[float(x) for x in xyz_point], *rgb, track_error, 3,
+                  )
+              )
+              for image_id in range(1, 4):
+                  estimated_points.extend(struct.pack("<II", image_id, point_index))
+          (estimated_sparse / "points3D.bin").write_bytes(estimated_points)
+
+          # This is a true on-disk handoff, not mock data: actual gsplat CPU
+          # COLMAP parser and torch-backed Dataset load image pixels/poses/3D.
+          sys.path.insert(0, str(Path(os.environ["COMMON_SOURCES"]) / "gsplat" / "examples"))
+          parsed_estimated = Parser(
+              str(estimated_root), factor=1, normalize=False, test_every=8
+          )
+          assert len(parsed_estimated.image_names) == 3
+          assert parsed_estimated.points.shape == reconstructed.shape
+          assert np.allclose(
+              np.asarray(parsed_estimated.points), reconstructed, rtol=0, atol=1e-5
+          )
+          assert len(Dataset(parsed_estimated, split="train")) == 2
+          assert len(Dataset(parsed_estimated, split="test")) == 1
+          reprojection_errors = []
+          for image_index, pixels in enumerate(observed):
+              camera_to_world = parsed_estimated.camtoworlds[image_index]
+              world_to_camera = np.linalg.inv(camera_to_world)
+              camera_xyz = (
+                  world_to_camera[:3, :3] @ reconstructed.T
+                  + world_to_camera[:3, 3:4]
+              )
+              pixels_h = intrinsic @ camera_xyz
+              projected = (pixels_h[:2] / pixels_h[2]).T
+              reprojection_errors.extend(np.linalg.norm(projected - pixels, axis=1))
+          handoff_rmse = float(np.sqrt(np.mean(np.square(reprojection_errors))))
+          assert handoff_rmse < 0.65, handoff_rmse
+          report = {
+              "source": "SIFT image features + calibrated EssentialMat/RANSAC + PnP",
+              "points_from_image_matches": int(len(reconstructed)),
+              "registered_camera_count": 3,
+              "reprojection_observation_count": int(len(reprojection_errors)),
+              "roundtrip_colmap_reprojection_rmse_px": handoff_rmse,
+              "colmap_model_reloaded_by": "pinned gsplat upstream Parser/Dataset",
+              "intrinsics_known": True,
+              "scale": "arbitrary; monocular metric scale is unrecovered",
+              "synthetic_image_fixture": True,
+              "real_cuda_execution": False,
+              "real_gaussian_training": False,
+          }
+          (output / "wre-sift-estimated-colmap-handoff.json").write_text(
+              json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          with zipfile.ZipFile(
+              output / "wre-sift-estimated-colmap-model.zip", "w", zipfile.ZIP_DEFLATED
+          ) as archive:
+              for file in sorted(estimated_root.rglob("*")):
+                  if file.is_file():
+                      archive.write(file, file.relative_to(estimated_root).as_posix())
+          print(
+              f"Estimated COLMAP handoff: {len(reconstructed)} 3D points, "
+              f"three registered cameras, {handoff_rmse:.4f}px reprojection, "
+              "parsed by actual upstream gsplat dataset on CPU."
+          )
+
           projections = [
               intrinsic
               @ np.column_stack((np.eye(3), [-baseline * index, 0.0, 0.0]))
@@ -857,6 +1007,8 @@ jobs:
             wre-sift-cpu-image-triangulated.ply \
             wre-sift-cpu-estimated-pose.ply \
             wre-sift-cpu-estimated-cameras.json \
+            wre-sift-estimated-colmap-model.zip \
+            wre-sift-estimated-colmap-handoff.json \
             wre-sift-cpu-feature-correspondences.png \
             wre-sift-cpu-metrics.json \
             wre-sift-cpu-view-0.png \
@@ -866,8 +1018,8 @@ jobs:
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 15
-          echo "Staged all 15 real PLY/PNG/NPY/JSON files for artifact upload"
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 17
+          echo "Staged all 17 real PLY/PNG/NPY/JSON/ZIP files for artifact upload"
 
       - name: Publish CPU COLMAP 3D preview and measured reprojection
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
