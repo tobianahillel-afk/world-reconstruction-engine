@@ -152,6 +152,7 @@ jobs:
           import hashlib
           import json
           import os
+          import struct
           import time
           import urllib.error
           import urllib.request
@@ -363,6 +364,87 @@ jobs:
               obj.write("usemtl wre_observed_left_photo\ns off\n")
               for a, b, c in faces:
                   obj.write(f"f {a+1}/{a+1} {b+1}/{b+1} {c+1}/{c+1}\n")
+          # Self-contained glTF 2.0 binary model for common browser/desktop viewers.
+          # Reuse the same measured stereo vertices/faces and OBSERVED left texture.
+          # Camera Y-down/Z-forward -> glTF Y-up/-Z-forward (180-degree X rotation).
+          glb_name = "wre-real-stereo-cpu-textured.glb"
+          gltf_xyz = np.ascontiguousarray(mesh_xyz, dtype="<f4")
+          gltf_xyz[:, 1:] *= -1.0
+          gltf_uv = np.ascontiguousarray(
+              np.column_stack(((mx + 0.5) / width, (my + 0.5) / height)), dtype="<f4",
+          )
+          gltf_indices = np.ascontiguousarray(faces, dtype="<u4").reshape(-1)
+          assert len(gltf_indices) == 3 * len(faces)
+          assert np.all(gltf_indices < len(gltf_xyz))
+          texture_png = (output / texture_name).read_bytes()
+          assert texture_png.startswith(b"\x89PNG\r\n\x1a\n")
+          blob, views = bytearray(), []
+          for data, target in (
+              (gltf_xyz.tobytes(), 34962),
+              (gltf_uv.tobytes(), 34962),
+              (gltf_indices.tobytes(), 34963),
+              (texture_png, None),
+          ):
+              start = len(blob)
+              blob.extend(data)
+              blob.extend(b"\0" * (-len(blob) % 4))
+              view = {"buffer": 0, "byteOffset": start, "byteLength": len(data)}
+              if target is not None:
+                  view["target"] = target
+              views.append(view)
+          document = {
+              "asset": {"version": "2.0", "generator": "WRE real-photo stereo CPU"},
+              "scene": 0, "scenes": [{"nodes": [0]}],
+              "nodes": [{"mesh": 0, "name": "Measured stereo surface"}],
+              "meshes": [{"primitives": [{"attributes": {"POSITION": 0, "TEXCOORD_0": 1},
+                                         "indices": 2, "material": 0, "mode": 4}]}],
+              "materials": [{"name": "Unlit observed photograph", "doubleSided": True,
+                             "pbrMetallicRoughness": {"baseColorTexture": {"index": 0},
+                                                      "metallicFactor": 0, "roughnessFactor": 1},
+                             "extensions": {"KHR_materials_unlit": {}}}],
+              "extensionsUsed": ["KHR_materials_unlit"],
+              "textures": [{"sampler": 0, "source": 0}],
+              "samplers": [{"magFilter": 9729, "minFilter": 9729}],
+              "images": [{"bufferView": 3, "mimeType": "image/png"}],
+              "buffers": [{"byteLength": len(blob)}], "bufferViews": views,
+              "accessors": [
+                  {"bufferView": 0, "componentType": 5126, "count": len(gltf_xyz),
+                   "type": "VEC3", "min": gltf_xyz.min(axis=0).tolist(),
+                   "max": gltf_xyz.max(axis=0).tolist()},
+                  {"bufferView": 1, "componentType": 5126, "count": len(gltf_uv),
+                   "type": "VEC2"},
+                  {"bufferView": 2, "componentType": 5125, "count": len(gltf_indices),
+                   "type": "SCALAR"},
+              ],
+          }
+          json_chunk = json.dumps(document, separators=(",", ":")).encode("utf-8")
+          json_chunk += b" " * (-len(json_chunk) % 4)
+          glb_data = (
+              struct.pack("<4sII", b"glTF", 2, 12 + 8 + len(json_chunk) + 8 + len(blob))
+              + struct.pack("<I4s", len(json_chunk), b"JSON") + json_chunk
+              + struct.pack("<I4s", len(blob), b"BIN\0") + blob
+          )
+          (output / glb_name).write_bytes(glb_data)
+          # Reopen on disk; verify container sizes and each serialized mesh/texture view.
+          loaded = (output / glb_name).read_bytes()
+          assert struct.unpack_from("<4sII", loaded) == (b"glTF", 2, len(loaded))
+          json_length, kind = struct.unpack_from("<I4s", loaded, 12)
+          assert kind == b"JSON"
+          decoded = json.loads(loaded[20:20 + json_length])
+          start = 20 + json_length
+          bin_length, kind = struct.unpack_from("<I4s", loaded, start)
+          assert kind == b"BIN\0" and start + 8 + bin_length == len(loaded)
+          assert decoded["accessors"][0]["count"] == len(mesh_xyz)
+          assert decoded["accessors"][2]["count"] == 3 * len(faces)
+          assert decoded["buffers"][0]["byteLength"] == bin_length
+          binary = loaded[start + 8:]
+          for view, expected in zip(
+              decoded["bufferViews"],
+              (gltf_xyz.tobytes(), gltf_uv.tobytes(), gltf_indices.tobytes(), texture_png),
+          ):
+              off = view["byteOffset"]
+              assert binary[off:off + view["byteLength"]] == expected
+
           # Check the actual serialized OBJ/MTL/PNG bundle, not just in-memory counts.
           obj_lines = obj_path.read_text(encoding="ascii").splitlines()
           assert f"mtllib {mtl_name}" in obj_lines
@@ -498,6 +580,11 @@ jobs:
               "exported_textured_obj_vertices": int(len(mesh_xyz)),
               "exported_textured_obj_uv": int(len(uv)),
               "exported_textured_obj_triangles": int(len(faces)),
+              "exported_self_contained_glb": glb_name,
+              "glb_vertices": int(len(mesh_xyz)),
+              "glb_triangles": int(len(faces)),
+              "glb_texture_source": "observed left Aloe photograph",
+              "glb_metric_depth_calibrated": False,
               "textured_obj_texture_source": "observed left Aloe photograph",
               "textured_obj_inpainted_or_novel_texture": False,
               "surface_depth_discontinuity_ratio_max": 1.15,
