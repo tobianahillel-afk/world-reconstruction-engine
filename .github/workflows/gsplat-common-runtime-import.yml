@@ -160,6 +160,7 @@ jobs:
 
           import cv2
           import numpy as np
+          from PIL import Image
 
           # Two REAL, rectified stereo photographs distributed in the OpenCV
           # example tree; underlying images are from the Middlebury 2006 set.
@@ -445,6 +446,66 @@ jobs:
               off = view["byteOffset"]
               assert binary[off:off + view["byteLength"]] == expected
 
+          # Render ACTUAL measured 3D mesh vertices/faces from a smoothly
+          # moving virtual camera, rather than warping a flat photograph.
+          # Use OpenCV's existing triangle fill and Pillow's animated GIF
+          # writer. No custom native renderer, WebGL, CUDA or neural model.
+          # Painter depth ordering is approximate at self-occlusions, so
+          # this is a CPU geometry preview, NOT photorealistic 3DGS/4D.
+          gif_name = "wre-real-stereo-cpu-3d-flythrough.gif"
+          gif_size = (width // 2, height // 2)
+          gif_focal = focal_guess * gif_size[0] / width
+          triangles = np.asarray(faces, dtype=np.int32)
+          painter_order = np.argsort(
+              mesh_xyz[triangles, 2].mean(axis=1), kind="stable"
+          )[::-1]  # Far to near.
+          face_bgr = np.rint(mesh_rgb[triangles].mean(axis=1)[:, ::-1]).astype(np.uint8)
+          camera_positions = np.linspace(-0.2, 0.8, 16)
+          gif_frames = []
+          measured_pixel_counts = []
+          for camera_x in camera_positions:
+              camera_vertices = mesh_xyz.copy()
+              camera_vertices[:, 0] -= float(camera_x)
+              assert np.all(camera_vertices[:, 2] > 0.0)
+              projected = np.column_stack((
+                  np.rint(
+                      gif_focal * camera_vertices[:, 0] / camera_vertices[:, 2]
+                      + (gif_size[0] - 1) / 2.0
+                  ),
+                  np.rint(
+                      gif_focal * camera_vertices[:, 1] / camera_vertices[:, 2]
+                      + (gif_size[1] - 1) / 2.0
+                  ),
+              )).astype(np.int32)
+              frame = np.full((gif_size[1], gif_size[0], 3), (12, 12, 12), dtype=np.uint8)
+              for face_index in painter_order:
+                  cv2.fillConvexPoly(
+                      frame, projected[triangles[face_index]],
+                      tuple(int(v) for v in face_bgr[face_index]),
+                      lineType=cv2.LINE_8,
+                  )
+              colored = int(np.count_nonzero(np.any(frame != 12, axis=2)))
+              assert colored >= 100, "Real 3D mesh produced an empty orbit view"
+              measured_pixel_counts.append(colored)
+              gif_frames.append(Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)))
+          assert len(gif_frames) == 16
+          assert not np.array_equal(np.asarray(gif_frames[0]), np.asarray(gif_frames[-1]))
+          gif_path = output / gif_name
+          gif_frames[0].save(
+              gif_path, format="GIF", save_all=True,
+              append_images=gif_frames[1:], duration=110, loop=0,
+              optimize=False, disposal=2,
+          )
+          assert 100 < gif_path.stat().st_size < 8_000_000
+          with Image.open(gif_path) as decoded_gif:
+              assert decoded_gif.format == "GIF"
+              assert decoded_gif.n_frames == 16
+              assert decoded_gif.size == gif_size
+              decoded_gif.seek(0)
+              first_frame = decoded_gif.convert("RGB").tobytes()
+              decoded_gif.seek(15)
+              assert decoded_gif.convert("RGB").tobytes() != first_frame
+
           # Check the actual serialized OBJ/MTL/PNG bundle, not just in-memory counts.
           obj_lines = obj_path.read_text(encoding="ascii").splitlines()
           assert f"mtllib {mtl_name}" in obj_lines
@@ -581,6 +642,15 @@ jobs:
               "exported_textured_obj_uv": int(len(uv)),
               "exported_textured_obj_triangles": int(len(faces)),
               "exported_self_contained_glb": glb_name,
+              "cpu_3d_mesh_animation": gif_name,
+              "cpu_3d_mesh_animation_frames": 16,
+              "cpu_3d_mesh_animation_resolution": list(gif_size),
+              "cpu_3d_mesh_animation_camera_x_arbitrary_units": camera_positions.tolist(),
+              "cpu_3d_mesh_animation_measured_colored_pixels": measured_pixel_counts,
+              "cpu_3d_mesh_animation_method": "OpenCV projected real XYZ triangles; depth-sorted flat observed vertex RGB",
+              "cpu_3d_mesh_animation_approximate_occlusion": True,
+              "cpu_3d_mesh_animation_is_dynamic_4d_scene": False,
+              "cpu_3d_mesh_animation_is_gaussian_render": False,
               "glb_vertices": int(len(mesh_xyz)),
               "glb_triangles": int(len(faces)),
               "glb_texture_source": "observed left Aloe photograph",
@@ -725,7 +795,7 @@ jobs:
       # Run the actual-photo CPU reconstruction BEFORE expensive native CUDA
       # compilation. Keep the original photo pipeline in one place and make
       # its real 3D/preview outputs inspectable even while CUDA builds run.
-      - name: Stage fourteen real-photo CPU 3D, GLB, measured reprojection and COLMAP outputs early
+      - name: Stage fifteen real-photo CPU 3D, animated mesh, GLB and COLMAP outputs early
         shell: bash
         run: |
           set -euo pipefail
@@ -736,6 +806,7 @@ jobs:
             wre-real-stereo-cpu-surface.ply \
             wre-real-stereo-cpu-textured.obj \
             wre-real-stereo-cpu-textured.glb \
+            wre-real-stereo-cpu-3d-flythrough.gif \
             wre-real-stereo-cpu-textured.mtl \
             wre-real-stereo-cpu-texture.png \
             wre-real-stereo-cpu-disparity.png \
@@ -750,7 +821,7 @@ jobs:
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 14
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 15
 
       - name: Publish real-photo CPU 3D plus COLMAP before native CUDA builds
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -1744,6 +1815,7 @@ jobs:
             wre-real-stereo-cpu-surface.ply \
             wre-real-stereo-cpu-textured.obj \
             wre-real-stereo-cpu-textured.glb \
+            wre-real-stereo-cpu-3d-flythrough.gif \
             wre-real-stereo-cpu-textured.mtl \
             wre-real-stereo-cpu-texture.png \
             wre-real-stereo-cpu-disparity.png \
@@ -1756,8 +1828,8 @@ jobs:
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 30
-          echo "Staged all 30 real PLY/OBJ/GLB/MTL/PNG/NPY/JSON/ZIP files for artifact upload"
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 31
+          echo "Staged all 31 real PLY/OBJ/GLB/GIF/MTL/PNG/NPY/JSON/ZIP files for artifact upload"
 
       - name: Publish CPU COLMAP 3D preview and measured reprojection
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
