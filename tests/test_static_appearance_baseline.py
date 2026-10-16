@@ -233,7 +233,7 @@ def test_pinned_gsplat_config_gate_rejects_modified_source_after_pin(
     # Replacing bytes without updating the source pins must fail *before*
     # reading schema claims from an altered trainer.
     source.write_bytes(b"print('other!!')\n")
-    with pytest.raises(GsplatStaticAppearancePreflightError, match="Git blob differs|byte length"):
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="Git blob differs"):
         verify_gsplat_reference_trainer_config_fields(root, GsplatStaticAppearanceTrainingProfile())
 
 
