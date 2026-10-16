@@ -1782,7 +1782,10 @@ def verify_gsplat_reference_trainer_config_fields(
     for node in parsed.body:
         if isinstance(node, ast.ImportFrom) and node.level == 0 and node.module is not None:
             imported.setdefault(node.module, set()).update(alias.name for alias in node.names)
-    if any(not required <= imported.get(module, set()) for module, required in required_imports.items()):
+    if any(
+        not required <= imported.get(module, set())
+        for module, required in required_imports.items()
+    ):
         raise GsplatStaticAppearancePreflightError(
             "gsplat trainer is missing reviewed direct integration imports"
         )
