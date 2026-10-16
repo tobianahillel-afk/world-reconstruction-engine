@@ -1122,6 +1122,43 @@ def test_external_gsplat_runner_spawns_real_process_and_assembles_appearance(
     assert b"CPU subprocess smoke" in (output / "wre-reference-training.log").read_bytes()
 
 
+@pytest.mark.parametrize("mutation", ("missing_revision", "wrong_configuration"))
+def test_external_gsplat_runner_rejects_false_producer_before_gpu_start(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mutation: str
+) -> None:
+    request, source, staged, output, profile, ref, producer = _retained_gsplat_fixture(
+        tmp_path
+    )
+    if mutation == "missing_revision":
+        producer = replace(producer, producer=replace(producer.producer, revision=None))
+    else:
+        producer = replace(
+            producer, configuration=ConfigurationIdentity(sha256=Sha256Digest("0" * 64))
+        )
+    monkeypatch.setattr(
+        baseline_module.subprocess,
+        "run",
+        lambda *_args, **_kwargs: pytest.fail("invalid producer launched external GPU trainer"),
+    )
+    previous_ply = (output / profile.expected_ply_relative_path).read_bytes()
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="producer"):
+        run_gsplat_reference_training(
+            request=request,
+            source=source,
+            staged=staged,
+            profile=profile,
+            source_root=tmp_path / "does-not-exist",
+            python_executable=tmp_path / "does-not-exist-python",
+            output_root=output,
+            artifact_ref=ref,
+            producer=producer,
+            cuda_device_index=0,
+            timeout_seconds=30,
+        )
+    assert (output / profile.expected_ply_relative_path).read_bytes() == previous_ply
+    assert not (output / "wre-reference-training.log").exists()
+
+
 @pytest.mark.parametrize("return_code", (1, 0))
 def test_external_gsplat_runner_rejects_failure_or_missing_output(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, return_code: int
