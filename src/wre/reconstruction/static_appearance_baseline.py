@@ -11,6 +11,8 @@ import ast
 import hashlib
 import json
 import math
+import os
+import subprocess
 import shutil
 import struct
 import tempfile
@@ -1786,6 +1788,111 @@ def build_gsplat_reference_trainer_path_overrides(
     result["data_dir"] = str(dataset)
     result["result_dir"] = str(destination)
     return result
+
+
+
+# The external interpreter is an explicit, caller-owned CUDA environment.
+# -I prevents user site/PYTHONPATH injection; only the pinned examples directory
+# is prepended in the child. The parent never imports torch or CUDA modules.
+_GSPLAT_TRAINER_CHILD = """import json
+import sys
+import torch
+
+if not torch.cuda.is_available() or torch.cuda.device_count() != 1:
+    raise RuntimeError("gsplat reference training requires exactly one visible CUDA GPU")
+sys.path.insert(0, sys.argv[1])
+from simple_trainer import Config, main
+
+cfg = Config(**json.load(sys.stdin))
+main(0, 0, 1, cfg)
+"""
+
+
+def run_gsplat_reference_training(
+    *,
+    request: StaticAppearanceCandidateRequest,
+    source: GsplatStaticAppearancePreflightSource,
+    staged: GsplatStaticAppearanceStagedDataset,
+    profile: GsplatStaticAppearanceTrainingProfile,
+    source_root: Path,
+    python_executable: Path,
+    output_root: Path,
+    artifact_ref: ArtifactRef,
+    cuda_device_index: int,
+    timeout_seconds: int,
+) -> ArtifactMaterializationMetadata:
+    """Run the exact reference trainer on an EXPLICIT external CUDA environment.
+
+    This optional runtime path never loads torch in WRE itself. It verifies the
+    source checkout and full staged input first, launches the upstream Config
+    and main in one non-shell subprocess, then audits the actual PLY bytes.
+    The caller must provision/pin a compatible Python/Torch/CUDA environment;
+    CPU-only CI exercises orchestration only, not GPU execution or training.
+    """
+
+    if type(cuda_device_index) is not int or cuda_device_index < 0:
+        raise ValueError("gsplat CUDA device index must be a nonnegative integer")
+    if type(timeout_seconds) is not int or timeout_seconds <= 0:
+        raise ValueError("gsplat training timeout_seconds must be positive")
+    if not isinstance(python_executable, Path) or not python_executable.is_absolute():
+        raise TypeError("gsplat runtime requires an absolute external Python executable path")
+    if not python_executable.is_file():
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat external Python executable does not exist"
+        )
+    verify_gsplat_static_appearance_staged_dataset(request, source, staged)
+    source_directory = _safe_root(source_root, "gsplat pinned reference checkout")
+    verify_gsplat_reference_trainer_config_fields(source_directory, profile)
+    overrides = build_gsplat_reference_trainer_path_overrides(
+        profile=profile, dataset_root=staged.dataset_root, output_root=output_root
+    )
+    if not isinstance(artifact_ref, ArtifactRef):
+        raise TypeError("gsplat output artifact_ref must be ArtifactRef")
+    if artifact_ref.artifact_kind != APPEARANCE_MODEL_ARTIFACT_KIND:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat external trainer output must be an appearance artifact"
+        )
+    # Ownership is intentionally explicit: only WRE's new private output
+    # directory is created, and is not removed when a run fails.
+    output_root.mkdir(mode=0o700)
+    log_path = output_root / "wre-reference-training.log"
+    env = os.environ.copy()
+    env["CUDA_VISIBLE_DEVICES"] = str(cuda_device_index)
+    env["PYTHONNOUSERSITE"] = "1"
+    env["PIP_NO_INDEX"] = "1"
+    try:
+        with log_path.open("xb") as log:
+            completed = subprocess.run(
+                [
+                    str(python_executable),
+                    "-I",
+                    "-c",
+                    _GSPLAT_TRAINER_CHILD,
+                    str(source_directory / "examples"),
+                ],
+                input=json.dumps(overrides, allow_nan=False).encode("utf-8"),
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                cwd=source_directory / "examples",
+                env=env,
+                timeout=timeout_seconds,
+                check=False,
+            )
+    except subprocess.TimeoutExpired as exc:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat reference training timed out; inspect the private training log"
+        ) from exc
+    except OSError as exc:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat external Python process could not be launched"
+        ) from exc
+    if completed.returncode != 0:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat reference training failed; inspect the private training log"
+        )
+    return materialize_verified_gsplat_ply(
+        artifact_ref=artifact_ref, output_root=output_root, profile=profile
+    )
 
 
 def verify_gsplat_reference_trainer_config_fields(
