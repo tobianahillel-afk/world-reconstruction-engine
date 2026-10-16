@@ -827,9 +827,7 @@ def test_gsplat_ply_rotation_requires_stable_float32_squared_norm(
     data = bytearray(_gsplat_ply(vertices=2))
     stride = 59 * 4
     first_rotation = len(data) - 2 * stride + stride - 4 * 4
-    data[first_rotation : first_rotation + 16] = struct.pack(
-        "<4f", component, 0.0, 0.0, 0.0
-    )
+    data[first_rotation : first_rotation + 16] = struct.pack("<4f", component, 0.0, 0.0, 0.0)
     root, profile, ref = _gsplat_output(tmp_path, bytes(data))
     if should_reject:
         with pytest.raises(
