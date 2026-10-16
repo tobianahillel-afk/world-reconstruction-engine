@@ -520,6 +520,19 @@ jobs:
           # supporting POINTS and animations. This is NOT dynamic 4D evidence.
           # Center the orbit on the measured cloud rather than world origin.
           checked_center = checked_positions.astype(np.float64).mean(axis=0).astype("<f4")
+          # Include a standard perspective camera so viewers supporting glTF
+          # cameras can frame the measured geometry without guessing a pose.
+          # glTF -Z looks forward and the cloud already uses Y-up/Z-back.
+          cloud_radius = float(np.linalg.norm(
+              checked_positions.astype(np.float64) - checked_center, axis=1
+          ).max())
+          assert np.isfinite(cloud_radius) and cloud_radius > 0
+          camera_distance = max(3.5 * cloud_radius, 1.0)
+          camera_position = checked_center.astype(np.float64) + [
+              0.0, 0.0, camera_distance
+          ]
+          camera_near = max(0.001, camera_distance * 0.0001)
+          camera_far = camera_distance + 2.0 * cloud_radius + 1.0
           orbit_times = np.asarray([0, 2, 4, 6, 8], dtype="<f4")
           half_angles = np.arange(5, dtype=np.float64) * np.pi / 4
           orbit_rotations = np.zeros((5, 4), dtype="<f4")
@@ -535,12 +548,17 @@ jobs:
               })
           point_document = {
               "asset": {"version": "2.0", "generator": "WRE LR-checked real stereo CPU"},
-              "scene": 0, "scenes": [{"nodes": [0]}],
+              "scene": 0, "scenes": [{"nodes": [0, 2]}],
               "nodes": [
                   {"name": "RGB cloud orbit", "translation": checked_center.tolist(), "children": [1]},
                   {"mesh": 0, "name": "Two-view consistent RGB points",
                    "translation": (-checked_center).tolist()},
+                  {"camera": 0, "name": "Static 3D cloud framing camera",
+                   "translation": camera_position.tolist()},
               ],
+              "cameras": [{"type": "perspective", "name": "3D cloud overview",
+                           "perspective": {"yfov": float(np.pi / 3),
+                                           "znear": camera_near, "zfar": camera_far}}],
               "animations": [{
                   "name": "Eight-second RGB point-cloud orbit (static scene)",
                   "samplers": [{"input": 2, "output": 3, "interpolation": "LINEAR"}],
@@ -598,6 +616,14 @@ jobs:
           assert parsed["accessors"][1]["normalized"] is True
           assert parsed["nodes"][0]["children"] == [1]
           assert parsed["nodes"][1]["mesh"] == 0
+          assert parsed["scenes"][0]["nodes"] == [0, 2]
+          assert parsed["nodes"][2]["camera"] == 0
+          assert parsed["cameras"][0]["type"] == "perspective"
+          assert parsed["animations"][0]["channels"][0]["target"]["node"] == 0
+          assert np.allclose(parsed["nodes"][2]["translation"], camera_position)
+          assert parsed["nodes"][2]["translation"][2] > checked_center[2] + cloud_radius
+          assert camera_near < camera_distance - cloud_radius
+          assert camera_far > camera_distance + cloud_radius
           assert parsed["animations"][0]["samplers"] == [
               {"input": 2, "output": 3, "interpolation": "LINEAR"}
           ]
