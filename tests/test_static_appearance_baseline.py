@@ -289,9 +289,7 @@ def test_gsplat_trainer_config_rejects_symlinked_runtime_dataset_files(
 ) -> None:
     staged = _plausible_gsplat_runtime_tree(tmp_path)
     target = (
-        staged / "images" / linked
-        if linked.endswith(".png")
-        else staged / "sparse" / "0" / linked
+        staged / "images" / linked if linked.endswith(".png") else staged / "sparse" / "0" / linked
     )
     real_file = tmp_path / "other-file"
     target.rename(real_file)
