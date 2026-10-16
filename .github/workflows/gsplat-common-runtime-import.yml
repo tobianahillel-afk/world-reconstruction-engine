@@ -238,6 +238,120 @@ jobs:
           photometric_mae = float(np.mean(residual[valid]))
           assert np.isfinite(photometric_mae)
 
+          # NEW INDEPENDENT CALIBRATED REAL-PHOTO CPU PATH. Middlebury 2006
+          # Aloe: full-size focal=3740px, baseline=160mm, dmin=270px.
+          # https://vision.middlebury.edu/stereo/data/scenes2006/
+          # https://vision.middlebury.edu/stereo/data/scenes2006/FullSize/Aloe/dmin.txt
+          # Current OpenCV sample pair is half resolution; retain the older
+          # arbitrary-scale previews unchanged until this new route is proven.
+          url = (
+              "https://raw.githubusercontent.com/opencv/opencv/"
+              f"{opencv_sha}/samples/data/aloeGT.png"
+          )
+          for attempt in range(3):
+              try:
+                  with urllib.request.urlopen(url, timeout=45) as response:
+                      reference_bytes = response.read(150_001)
+                  break
+              except urllib.error.HTTPError as exc:
+                  if exc.code not in (429, 500, 502, 503, 504) or attempt == 2:
+                      raise
+              except (urllib.error.URLError, TimeoutError):
+                  if attempt == 2:
+                      raise
+              time.sleep(2 * (attempt + 1))
+          reference_blob = hashlib.sha1(
+              f"blob {len(reference_bytes)}\0".encode("ascii") + reference_bytes
+          ).hexdigest()
+          assert reference_blob == "43e62ebfe910f6be8c440d57b6ad300743768934"
+          reference_full = cv2.imdecode(
+              np.frombuffer(reference_bytes, np.uint8), cv2.IMREAD_GRAYSCALE
+          )
+          assert reference_full is not None and reference_full.shape == (height * 2, width * 2)
+          reference = cv2.resize(
+              reference_full, (width, height), interpolation=cv2.INTER_NEAREST
+          )
+          reference_known = reference > 0
+          reference_disparity = (reference.astype(np.float32) + 270.0) / 2.0
+          calibrated_matcher = cv2.StereoSGBM_create(
+              minDisparity=128, numDisparities=160, blockSize=block,
+              P1=8 * 3 * block * block, P2=32 * 3 * block * block,
+              uniquenessRatio=8, speckleWindowSize=70, speckleRange=2,
+              disp12MaxDiff=1,
+          )
+          calibrated_disp = calibrated_matcher.compute(left, right).astype(np.float32) / 16.0
+          calibrated_valid = np.isfinite(calibrated_disp) & (calibrated_disp > 135.0) & (calibrated_disp < 288.0)
+          compared = calibrated_valid & reference_known
+          compared_count = int(compared.sum())
+          assert compared_count >= 500, f"Calibrated/GT overlap too small: {compared_count}"
+          abs_error = np.abs(calibrated_disp[compared] - reference_disparity[compared])
+          mae = float(np.mean(abs_error))
+          rmse = float(np.sqrt(np.mean(abs_error**2)))
+          assert np.isfinite(mae) and np.isfinite(rmse)
+          baseline_compared = valid & reference_known
+          baseline_mae = (
+              float(np.mean(np.abs(disparity[baseline_compared] - reference_disparity[baseline_compared])))
+              if baseline_compared.any() else None
+          )
+          y, x = np.where(calibrated_valid[::3, ::3])
+          y, x = y * 3, x * 3
+          step = max(1, len(x) // 20000)
+          y, x = y[::step][:20000], x[::step][:20000]
+          assert len(x) >= 500
+          focal_px = 3740.0 / 2.0
+          baseline_mm = 160.0
+          z = focal_px * baseline_mm / calibrated_disp[y, x]
+          xyz_mm = np.column_stack((
+              (x - (width - 1) / 2) * z / focal_px,
+              (y - (height - 1) / 2) * z / focal_px,
+              z,
+          ))
+          assert np.isfinite(xyz_mm).all()
+          rgb_mm = left[y, x, ::-1]
+          calibrated_dir = Path(os.environ["RUNNER_TEMP"])
+          calibrated_name = "wre-real-stereo-cpu-middlebury-calibrated"
+          with (calibrated_dir / f"{calibrated_name}.ply").open(
+              "w", encoding="ascii", newline="\n"
+          ) as file:
+              file.write(
+                  "ply\nformat ascii 1.0\n"
+                  f"element vertex {len(xyz_mm)}\n"
+                  "property float x\nproperty float y\nproperty float z\n"
+                  "property uchar red\nproperty uchar green\n"
+                  "property uchar blue\nend_header\n"
+              )
+              for xyz_point, color in zip(xyz_mm, rgb_mm):
+                  file.write(
+                      f"{xyz_point[0]:.7g} {xyz_point[1]:.7g} {xyz_point[2]:.7g} "
+                      f"{int(color[0])} {int(color[1])} {int(color[2])}\n"
+                  )
+          preview = cv2.applyColorMap(
+              np.uint8(np.clip((calibrated_disp - 128) / 160 * 255, 0, 255)),
+              cv2.COLORMAP_TURBO,
+          )
+          preview[~calibrated_valid] = 0
+          assert cv2.imwrite(str(calibrated_dir / f"{calibrated_name}.png"), preview)
+          (calibrated_dir / f"{calibrated_name}.json").write_text(
+              json.dumps({
+                  "source": "Middlebury 2006 Aloe, pinned OpenCV photographs",
+                  "reference_git_blob": reference_blob,
+                  "official_dmin_full_px": 270,
+                  "official_focal_full_px": 3740,
+                  "official_baseline_mm": baseline_mm,
+                  "reference_downscale_factor": 2,
+                  "matcher_disparity_search_px": [128, 288],
+                  "reference_compared_pixels": compared_count,
+                  "calibrated_mae_px": mae,
+                  "calibrated_rmse_px": rmse,
+                  "legacy_mae_px": baseline_mae,
+                  "reconstructed_xyz_count": int(len(xyz_mm)),
+                  "xyz_units": "mm under assumed Middlebury view alignment",
+                  "source_pair_view_alignment_independently_verified": False,
+                  "gpu_training": False, "dynamic_4d": False,
+              }, sort_keys=True, indent=2) + "\n", encoding="utf-8"
+          )
+          print(f"Calibrated Aloe 3D: {len(xyz_mm)} points; GT MAE={mae:.3f}px, RMSE={rmse:.3f}px")
+
           # Reuse the existing reverse OpenCV matcher early to cross-check
           # left-image 3D points against observed right-image geometry.
           right_matcher = cv2.StereoSGBM_create(
@@ -1130,7 +1244,7 @@ jobs:
       # Run the actual-photo CPU reconstruction BEFORE expensive native CUDA
       # compilation. Keep the original photo pipeline in one place and make
       # its real 3D/preview outputs inspectable even while CUDA builds run.
-      - name: Stage twenty real-photo CPU 3D, animated mesh, GLB and COLMAP outputs early
+      - name: Stage twenty-three real-photo CPU 3D, animated mesh, GLB and COLMAP outputs early
         shell: bash
         run: |
           set -euo pipefail
@@ -1138,6 +1252,9 @@ jobs:
           mkdir -p "$destination"
           for file in \
             wre-real-stereo-cpu-reconstruction.ply \
+            wre-real-stereo-cpu-middlebury-calibrated.ply \
+            wre-real-stereo-cpu-middlebury-calibrated.png \
+            wre-real-stereo-cpu-middlebury-calibrated.json \
             wre-real-stereo-cpu-lr-consistent.ply \
             wre-real-stereo-cpu-lr-consistent.glb \
             wre-real-stereo-cpu-surface.ply \
@@ -1161,7 +1278,7 @@ jobs:
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 20
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 23
 
       - name: Publish real-photo CPU 3D plus COLMAP before native CUDA builds
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -2152,6 +2269,9 @@ jobs:
             wre-sift-cpu-view-1.png \
             wre-sift-cpu-view-2.png \
             wre-real-stereo-cpu-reconstruction.ply \
+            wre-real-stereo-cpu-middlebury-calibrated.ply \
+            wre-real-stereo-cpu-middlebury-calibrated.png \
+            wre-real-stereo-cpu-middlebury-calibrated.json \
             wre-real-stereo-cpu-lr-consistent.ply \
             wre-real-stereo-cpu-lr-consistent.glb \
             wre-real-stereo-cpu-surface.ply \
@@ -2173,8 +2293,8 @@ jobs:
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 36
-          echo "Staged all 36 real PLY/OBJ/GLB/GIF/MTL/PNG/NPY/JSON/ZIP files for artifact upload"
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 39
+          echo "Staged all 39 real PLY/OBJ/GLB/GIF/MTL/PNG/NPY/JSON/ZIP files for artifact upload"
 
       - name: Publish CPU COLMAP 3D preview and measured reprojection
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
