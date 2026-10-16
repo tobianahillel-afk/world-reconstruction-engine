@@ -672,23 +672,42 @@ jobs:
           print("Synthetic scene only; no real-photo SfM, GPU or Gaussian training.")
           PY
 
+      - name: Stage complete 3D CPU preview bundle for upload
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Container RUNNER_TEMP (/__w/_temp) is NOT the host
+          # runner.temp (/home/runner/work/_temp). The former led the
+          # previous artifact upload to include only one unintended file.
+          # Copy exact outputs into the shared checked-out workspace and
+          # let upload-artifact resolve one relative directory.
+          destination="$GITHUB_WORKSPACE/wre-cpu-3d-artifacts"
+          mkdir -p "$destination"
+          for file in \
+            wre-colmap-cpu-preview.ply \
+            wre-colmap-cpu-triangulated.ply \
+            wre-colmap-cpu-views.png \
+            wre-colmap-cpu-metrics.json \
+            wre-colmap-cpu-render.png \
+            wre-colmap-cpu-depth.png \
+            wre-colmap-cpu-depth.npy \
+            wre-sift-cpu-image-triangulated.ply \
+            wre-sift-cpu-feature-correspondences.png \
+            wre-sift-cpu-metrics.json \
+            wre-sift-cpu-view-0.png \
+            wre-sift-cpu-view-1.png \
+            wre-sift-cpu-view-2.png
+          do
+            test -s "$RUNNER_TEMP/$file"
+            cp "$RUNNER_TEMP/$file" "$destination/$file"
+          done
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 13
+          echo "Staged all 13 real PLY/PNG/NPY/JSON files for artifact upload"
+
       - name: Publish CPU COLMAP 3D preview and measured reprojection
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: wre-colmap-cpu-3d-preview
-          path: |
-            ${{ runner.temp }}/wre-colmap-cpu-preview.ply
-            ${{ runner.temp }}/wre-colmap-cpu-triangulated.ply
-            ${{ runner.temp }}/wre-colmap-cpu-views.png
-            ${{ runner.temp }}/wre-colmap-cpu-metrics.json
-            ${{ runner.temp }}/wre-colmap-cpu-render.png
-            ${{ runner.temp }}/wre-colmap-cpu-depth.png
-            ${{ runner.temp }}/wre-colmap-cpu-depth.npy
-            ${{ runner.temp }}/wre-sift-cpu-image-triangulated.ply
-            ${{ runner.temp }}/wre-sift-cpu-feature-correspondences.png
-            ${{ runner.temp }}/wre-sift-cpu-metrics.json
-            ${{ runner.temp }}/wre-sift-cpu-view-0.png
-            ${{ runner.temp }}/wre-sift-cpu-view-1.png
-            ${{ runner.temp }}/wre-sift-cpu-view-2.png
+          path: wre-cpu-3d-artifacts/
           if-no-files-found: error
           retention-days: 7
