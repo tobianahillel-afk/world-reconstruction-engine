@@ -1744,6 +1744,15 @@ def materialize_verified_gsplat_ply(
 
     root = _safe_root(output_root, "gsplat output_root")
     ply_directory = root / "ply"
+    # Verify ancestry as well as the leaf: replacing the ply/ directory after
+    # it was checked can otherwise redirect an identical, valid-looking file.
+    try:
+        root_before = root.lstat()
+        directory_before = ply_directory.lstat()
+    except OSError as exc:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat output directory changed or disappeared"
+        ) from exc
     if ply_directory.is_symlink() or not ply_directory.is_dir():
         raise GsplatStaticAppearancePreflightError(
             "gsplat output PLY directory must be a real directory"
@@ -1756,11 +1765,22 @@ def materialize_verified_gsplat_ply(
 
     # Tie the checked path to the actual descriptor: replacing a pathname
     # between the symlink check and open must not change the bytes we certify.
-    before = file_path.lstat()
+    try:
+        before = file_path.lstat()
+    except OSError as exc:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat PLY changed or disappeared before opening"
+        ) from exc
     if not stat.S_ISREG(before.st_mode):
         raise GsplatStaticAppearancePreflightError("gsplat PLY must be a regular file")
     digest = hashlib.sha256()
-    with file_path.open("rb") as stream:
+    try:
+        opened_stream = file_path.open("rb")
+    except OSError as exc:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat PLY changed or disappeared before opening"
+        ) from exc
+    with opened_stream as stream:
         opened = os.fstat(stream.fileno())
         identity = (opened.st_dev, opened.st_ino)
         if identity != (before.st_dev, before.st_ino):
@@ -1912,7 +1932,23 @@ def materialize_verified_gsplat_ply(
             raise GsplatStaticAppearancePreflightError(
                 "gsplat PLY changed during materialization verification"
             )
-    final_path = file_path.lstat()
+    try:
+        final_path = file_path.lstat()
+        root_after = root.lstat()
+        directory_after = ply_directory.lstat()
+    except OSError as exc:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat PLY or parent directory changed during verification"
+        ) from exc
+    for old, new in ((root_before, root_after), (directory_before, directory_after)):
+        if (
+            not stat.S_ISDIR(old.st_mode)
+            or not stat.S_ISDIR(new.st_mode)
+            or (old.st_dev, old.st_ino) != (new.st_dev, new.st_ino)
+        ):
+            raise GsplatStaticAppearancePreflightError(
+                "gsplat PLY parent directory changed during verification"
+            )
     if (
         final_path.st_dev,
         final_path.st_ino,
