@@ -975,8 +975,15 @@ def test_gsplat_ply_rejects_zero_norm_rotation_quaternion(tmp_path: Path) -> Non
 
 @pytest.mark.parametrize(
     ("log_scale", "should_reject"),
-    ((100.0, True), (-100.0, True), (45.0, True), (-45.0, True),
-     (0.0, False), (40.0, False), (-40.0, False)),
+    (
+        (100.0, True),
+        (-100.0, True),
+        (45.0, True),
+        (-45.0, True),
+        (0.0, False),
+        (40.0, False),
+        (-40.0, False),
+    ),
 )
 def test_gsplat_ply_rejects_float32_overflowing_log_scales(
     tmp_path: Path, log_scale: float, should_reject: bool
@@ -990,7 +997,9 @@ def test_gsplat_ply_rejects_float32_overflowing_log_scales(
     data[first_scale_offset : first_scale_offset + 4] = struct.pack("<f", log_scale)
     root, profile, ref = _gsplat_output(tmp_path, bytes(data))
     if should_reject:
-        with pytest.raises(GsplatStaticAppearancePreflightError, match="numerically unstable log scale"):
+        with pytest.raises(
+            GsplatStaticAppearancePreflightError, match="numerically unstable log scale"
+        ):
             materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
     else:
         result = materialize_verified_gsplat_ply(
