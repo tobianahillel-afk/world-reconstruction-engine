@@ -777,9 +777,7 @@ def test_gsplat_ply_rejects_pathological_decimal_vertex_count(tmp_path: Path) ->
     # The PLY header is below the 16-KiB bound but Python 3.12 cannot
     # convert this 5,000-digit decimal without exceeding its int guard.
     # Reject it as an invalid PLY header rather than leaking ValueError.
-    data = _gsplat_ply().replace(
-        b"element vertex 1\n", b"element vertex " + b"9" * 5000 + b"\n"
-    )
+    data = _gsplat_ply().replace(b"element vertex 1\n", b"element vertex " + b"9" * 5000 + b"\n")
     root, profile, ref = _gsplat_output(tmp_path, data)
     with pytest.raises(GsplatStaticAppearancePreflightError, match="non-empty vertex"):
         materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
