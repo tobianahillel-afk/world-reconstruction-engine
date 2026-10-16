@@ -1849,6 +1849,8 @@ def run_gsplat_reference_training(
     source: GsplatStaticAppearancePreflightSource,
     staged: GsplatStaticAppearanceStagedDataset,
     profile: GsplatStaticAppearanceTrainingProfile,
+    features: ColmapFeatureExtractionResult,
+    expected_environment: ColmapEnvironmentIdentity,
     source_root: Path,
     python_executable: Path,
     output_root: Path,
@@ -1878,6 +1880,15 @@ def run_gsplat_reference_training(
         raise GsplatStaticAppearancePreflightError(
             "gsplat external Python executable does not exist"
         )
+    # The trainer consumes native COLMAP camera/point coordinates verbatim.
+    # Only the exact canonical native geometry is presently supported; a
+    # refined/transformed WRE frame must not masquerade as this trainer output.
+    verify_gsplat_static_appearance_native_geometry(
+        request,
+        source,
+        features=features,
+        expected_environment=expected_environment,
+    )
     verify_gsplat_static_appearance_staged_dataset(request, source, staged)
     source_directory = _safe_root(source_root, "gsplat pinned reference checkout")
     verify_gsplat_reference_trainer_config_fields(source_directory, profile)
