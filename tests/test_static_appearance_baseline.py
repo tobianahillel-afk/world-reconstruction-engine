@@ -1140,8 +1140,8 @@ def test_external_gsplat_runner_spawns_real_process_and_assembles_appearance(
 def test_external_gsplat_runner_rejects_native_frame_mismatch_before_training(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    request, source, staged, output, profile, artifact_ref, producer = (
-        _retained_gsplat_fixture(tmp_path)
+    request, source, staged, output, profile, artifact_ref, producer = _retained_gsplat_fixture(
+        tmp_path
     )
     (output / profile.expected_ply_relative_path).unlink()
     (output / "ply").rmdir()
@@ -1158,7 +1158,8 @@ def test_external_gsplat_runner_rejects_native_frame_mismatch_before_training(
         )
 
     monkeypatch.setattr(
-        baseline_module, "verify_gsplat_static_appearance_native_geometry",
+        baseline_module,
+        "verify_gsplat_static_appearance_native_geometry",
         reject_native_geometry,
     )
     monkeypatch.setattr(
