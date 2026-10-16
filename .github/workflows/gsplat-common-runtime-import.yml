@@ -672,6 +672,190 @@ jobs:
           print("Synthetic scene only; no real-photo SfM, GPU or Gaussian training.")
           PY
 
+      - name: Estimate camera poses from matched pixels and reconstruct scale-free RGB 3D
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$COMMON_PYTHON" - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          import cv2
+          import numpy as np
+
+          output = Path(os.environ["RUNNER_TEMP"])
+          views = [
+              cv2.imread(str(output / f"wre-sift-cpu-view-{index}.png"))
+              for index in range(3)
+          ]
+          assert all(frame is not None and frame.shape == (240, 320, 3) for frame in views)
+          sift = cv2.SIFT_create(nfeatures=700, contrastThreshold=0.02)
+          features = [
+              sift.detectAndCompute(cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY), None)
+              for frame in views
+          ]
+          assert all(descriptors is not None for _keypoints, descriptors in features)
+          matcher = cv2.BFMatcher(cv2.NORM_L2)
+
+          # Mutual Lowe matches on ACTUAL pixels. Unlike the preceding calibrated
+          # rig benchmark, no row, disparity sign, camera pose or 3D track is
+          # passed to the relative-pose or triangulation solvers.
+          def mutual_ratio_matches(other_index):
+              forward = matcher.knnMatch(features[0][1], features[other_index][1], k=2)
+              backward = matcher.knnMatch(features[other_index][1], features[0][1], k=2)
+              inverse = {
+                  m.queryIdx: m.trainIdx
+                  for m, next_best in backward
+                  if m.distance < 0.7 * next_best.distance
+              }
+              return {
+                  m.queryIdx: m.trainIdx
+                  for m, next_best in forward
+                  if m.distance < 0.7 * next_best.distance
+                  and inverse.get(m.trainIdx) == m.queryIdx
+              }
+
+          pair01 = mutual_ratio_matches(1)
+          pair02 = mutual_ratio_matches(2)
+          assert len(pair01) >= 80 and len(pair02) >= 80
+          keys = sorted(pair01)
+          points0 = np.array([features[0][0][k].pt for k in keys], dtype=np.float64)
+          points1 = np.array(
+              [features[1][0][pair01[k]].pt for k in keys], dtype=np.float64
+          )
+          # Known calibration is a standard SfM prerequisite; EXTRINSIC poses
+          # and absolute scale are deliberately not supplied to the solver.
+          K = np.array(
+              [[210.0, 0.0, 160.0], [0.0, 210.0, 120.0], [0.0, 0.0, 1.0]]
+          )
+          essential, ransac_mask = cv2.findEssentialMat(
+              points0, points1, K, cv2.RANSAC, 0.999, 0.6
+          )
+          assert essential is not None and essential.shape == (3, 3)
+          inliers, rotation, translation, cheirality = cv2.recoverPose(
+              essential, points0, points1, K, mask=ransac_mask
+          )
+          assert inliers >= 80
+          selected = cheirality.reshape(-1) != 0
+          first = K @ np.column_stack((np.eye(3), np.zeros(3)))
+          second = K @ np.column_stack((rotation, translation))
+          homogeneous = cv2.triangulatePoints(
+              first, second, points0[selected].T, points1[selected].T
+          )
+          denom = homogeneous[3]
+          assert np.all(np.abs(denom) > 1e-9)
+          xyz = (homogeneous[:3] / denom).T
+          assert np.isfinite(xyz).all() and (xyz[:, 2] > 0).all()
+          recovered = dict(zip(np.asarray(keys)[selected].tolist(), xyz))
+          assert len(recovered) >= 80
+
+          # Recover the THIRD camera with PnP using only some of the independently
+          # matched image-2 pixels; the remaining pixels are held out for an
+          # honest third-view reprojection measurement.
+          third = sorted(set(recovered) & set(pair02))
+          assert len(third) >= 60
+          world = np.asarray([recovered[k] for k in third], dtype=np.float64)
+          image2 = np.asarray(
+              [features[2][0][pair02[k]].pt for k in third], dtype=np.float64
+          )
+          indices = np.arange(len(third))
+          train, test = indices[indices % 3 != 0], indices[indices % 3 == 0]
+          assert len(train) > 30 and len(test) > 15
+          success, rvec2, tvec2, pnp_inliers = cv2.solvePnPRansac(
+              world[train], image2[train], K, None,
+              iterationsCount=300, reprojectionError=1.5, confidence=0.999,
+              flags=cv2.SOLVEPNP_ITERATIVE,
+          )
+          assert success and pnp_inliers is not None and len(pnp_inliers) > 30
+          projected, _jacobian = cv2.projectPoints(
+              world[test], rvec2, tvec2, K, None
+          )
+          third_errors = np.linalg.norm(
+              projected.reshape(-1, 2) - image2[test], axis=1
+          )
+          third_rmse = float(np.sqrt(np.mean(third_errors ** 2)))
+          assert third_rmse < 0.4, third_rmse
+
+          # Benchmark-only comparison to the known synthetic scene: these
+          # constants never enter essential-matrix, triangulation or PnP calls.
+          pose_angle = float(np.degrees(np.arccos(
+              np.clip((np.trace(rotation) - 1.0) / 2.0, -1.0, 1.0)
+          )))
+          direction_error = float(np.degrees(np.arccos(
+              np.clip(float(-translation[0, 0]), -1.0, 1.0)
+          )))
+          assert pose_angle < 5.0 and direction_error < 5.0
+          recovered_keys = list(recovered)
+          depths = np.array([recovered[k][2] for k in recovered_keys])
+          y_coords = np.array([features[0][0][k].pt[1] for k in recovered_keys])
+          upper_depth = float(np.median(depths[y_coords < 120]))
+          lower_depth = float(np.median(depths[y_coords > 120]))
+          assert abs(upper_depth - 15.0) < 1.0
+          assert abs(lower_depth - 30.0) < 1.0
+
+          # Standard viewable RGB point PLY, in the UNKNOWN-SCALE coordinate
+          # system of the recovered first-to-second translation (length=1).
+          ply = output / "wre-sift-cpu-relative-pose.ply"
+          header = (
+              "ply\nformat ascii 1.0\n"
+              f"element vertex {len(recovered)}\n"
+              "property float x\nproperty float y\nproperty float z\n"
+              "property uchar red\nproperty uchar green\nproperty uchar blue\n"
+              "end_header\n"
+          )
+          rows = []
+          for key, point in recovered.items():
+              x, y = (int(round(v)) for v in features[0][0][key].pt)
+              bgr = views[0][y, x]
+              rows.append(
+                  f"{point[0]:.9g} {point[1]:.9g} {point[2]:.9g} "
+                  f"{int(bgr[2])} {int(bgr[1])} {int(bgr[0])}"
+              )
+          ply.write_text(header + "\n".join(rows) + "\n", encoding="ascii")
+          assert ply.stat().st_size > 200
+          report = {
+              "algorithm": "OpenCV SIFT mutual BF + essential RANSAC + recoverPose + triangulatePoints + PnPRansac",
+              "input": "synthetic textured RGB views, NOT real photos",
+              "intrinsics_calibrated": True,
+              "external_camera_poses_supplied_to_solver": False,
+              "colmap_track_ids_supplied_to_solver": False,
+              "absolute_scale_recovered": False,
+              "pose01_ransac_cheirality_inliers": int(inliers),
+              "reconstructed_rgb_points": len(recovered),
+              "third_camera_pose_estimated_from_matched_pixels": True,
+              "third_camera_pose_training_matches": len(train),
+              "third_camera_heldout_reprojection_samples": len(test),
+              "third_camera_heldout_reprojection_rmse_px": third_rmse,
+              "reference_rotation_error_degrees": pose_angle,
+              "reference_translation_direction_error_degrees": direction_error,
+              "reference_upper_plane_depth_unknown_scale": upper_depth,
+              "reference_lower_plane_depth_unknown_scale": lower_depth,
+              "real_photo_benchmark": False,
+              "real_cuda_execution": False,
+              "real_gaussian_training": False,
+              "real_4d_reconstruction": False,
+          }
+          (output / "wre-sift-cpu-relative-pose-metrics.json").write_text(
+              json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          preview_matches = [
+              cv2.DMatch(int(k), int(pair01[k]), 0.0)
+              for k in recovered_keys[:45]
+          ]
+          preview = cv2.drawMatches(
+              views[0], features[0][0], views[1], features[1][0],
+              preview_matches, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS,
+          )
+          assert cv2.imwrite(str(output / "wre-sift-cpu-relative-pose-matches.png"), preview)
+          print(
+              f"Recovered 2-view relative pose and {len(recovered)} RGB XYZ; "
+              f"third-view heldout PnP reprojection RMSE={third_rmse:.6f}px"
+          )
+          print("Synthetic images and calibrated intrinsics; no known extrinsics/scale in solver.")
+          print("No real photos, CUDA execution, Gaussian optimization or 4D.")
+          PY
+
       - name: Stage complete 3D CPU preview bundle for upload
         shell: bash
         run: |
@@ -696,13 +880,16 @@ jobs:
             wre-sift-cpu-metrics.json \
             wre-sift-cpu-view-0.png \
             wre-sift-cpu-view-1.png \
-            wre-sift-cpu-view-2.png
+            wre-sift-cpu-view-2.png \
+            wre-sift-cpu-relative-pose.ply \
+            wre-sift-cpu-relative-pose-metrics.json \
+            wre-sift-cpu-relative-pose-matches.png
           do
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 13
-          echo "Staged all 13 real PLY/PNG/NPY/JSON files for artifact upload"
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 16
+          echo "Staged all 16 real PLY/PNG/NPY/JSON files for artifact upload"
 
       - name: Publish CPU COLMAP 3D preview and measured reprojection
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
