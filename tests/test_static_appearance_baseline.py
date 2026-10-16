@@ -1551,7 +1551,7 @@ def test_native_colmap_xyz_preview_does_not_overwrite_existing_file(
     )
     destination = tmp_path / "already-exists.ply"
     destination.write_bytes(b"do not overwrite")
-    with pytest.raises(GsplatStaticAppearancePreflightError, match="new .ply"):
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="requires a new"):
         export_verified_gsplat_native_colmap_xyz_ply(
             request,
             source,
