@@ -709,6 +709,72 @@ def test_gsplat_ply_materialization_hashes_real_output_and_retains_path(tmp_path
     )
 
 
+def test_gsplat_ply_rejects_parent_directory_swap(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data = _gsplat_ply()
+    root, profile, ref = _gsplat_output(tmp_path, data)
+    target = root / profile.expected_ply_relative_path
+    directory = root / "ply"
+    replacement = tmp_path / "new-ply"
+    replacement.mkdir()
+    (replacement / target.name).write_bytes(data)
+    original_lstat = Path.lstat
+    replaced = False
+
+    def swap_parent_before_leaf_stat(path: Path, *args: Any, **kwargs: Any) -> Any:
+        nonlocal replaced
+        if path == target and not replaced:
+            directory.rename(root / "old-ply")
+            replacement.rename(directory)
+            replaced = True
+        return original_lstat(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "lstat", swap_parent_before_leaf_stat)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="parent directory changed"):
+        materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
+    assert replaced
+
+
+def test_gsplat_ply_rejects_disappearance_during_streamed_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data = _gsplat_ply()
+    root, profile, ref = _gsplat_output(tmp_path, data)
+    target = root / profile.expected_ply_relative_path
+    original_open = Path.open
+
+    class UnlinkOnRead:
+        def __init__(self, stream: Any) -> None:
+            self.stream = stream
+            self.unlinked = False
+
+        def __enter__(self) -> UnlinkOnRead:
+            return self
+
+        def __exit__(self, *args: Any) -> Any:
+            return self.stream.__exit__(*args)
+
+        def __getattr__(self, name: str) -> Any:
+            return getattr(self.stream, name)
+
+        def read(self, *args: Any) -> bytes:
+            result = self.stream.read(*args)
+            if not self.unlinked:
+                target.unlink()
+                self.unlinked = True
+            return result
+
+    def unlink_during_read(path: Path, mode: str = "r", *args: Any, **kwargs: Any) -> Any:
+        stream = original_open(path, mode, *args, **kwargs)
+        return UnlinkOnRead(stream) if path == target and mode == "rb" else stream
+
+    monkeypatch.setattr(Path, "open", unlink_during_read)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="changed during verification"):
+        materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
+    assert not target.exists()
+
+
 def test_gsplat_ply_rejects_replacement_between_path_check_and_open(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
