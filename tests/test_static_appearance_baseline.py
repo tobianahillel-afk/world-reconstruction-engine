@@ -1255,9 +1255,7 @@ def test_verified_gsplat_gaussian_centers_export_real_viewable_rgb_ply(
     second[-4] = 1.0
     template = _gsplat_ply(vertices=2)
     header_end = template.index(b"end_header\n") + len(b"end_header\n")
-    real_splats = template[:header_end] + struct.pack("<59f", *first) + struct.pack(
-        "<59f", *second
-    )
+    real_splats = template[:header_end] + struct.pack("<59f", *first) + struct.pack("<59f", *second)
     root, profile, ref = _gsplat_output(tmp_path, real_splats)
     preview_parent = tmp_path / "viewer"
     preview_parent.mkdir()
