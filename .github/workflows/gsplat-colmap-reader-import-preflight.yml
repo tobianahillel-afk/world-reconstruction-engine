@@ -76,7 +76,7 @@ jobs:
           # Actual upstream examples/datasets/colmap.py and normalize.py imports.
           pending = {
               "opencv-python", "imageio", "numpy", "torch", "pillow",
-              "tqdm", "typing-extensions",
+              "tqdm", "typing-extensions", "scipy",
           }
           selected = set()
           while pending:
