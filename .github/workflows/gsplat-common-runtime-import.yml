@@ -544,6 +544,13 @@ jobs:
           import torch
           from scipy.spatial.transform import Rotation
 
+          # This Python invocation is separate from the earlier pinned
+          # co-import smoke. It needs the same upstream examples package path.
+          sys.path.insert(
+              0, str(Path(os.environ["COMMON_SOURCES"]) / "gsplat" / "examples")
+          )
+          from datasets.colmap import Dataset, Parser
+
           # One deterministic, textured synthetic two-depth scene. Matching is
           # performed on REAL image pixels using pinned OpenCV SIFT/knnMatch.
           # No ground-truth 2D track IDs or 3D points enter triangulatePoints.
@@ -739,8 +746,6 @@ jobs:
           # and construct a real standard COLMAP dataset, then round-trip it
           # through the pinned gsplat Parser and Dataset. No supplied 3D
           # ground-truth xyz or camera extrinsics enter these binary files.
-          from datasets.colmap import Dataset, Parser
-
           estimated_root = output / "wre-sift-estimated-colmap"
           estimated_images = estimated_root / "images"
           estimated_sparse = estimated_root / "sparse" / "0"
@@ -829,7 +834,6 @@ jobs:
 
           # This is a true on-disk handoff, not mock data: actual gsplat CPU
           # COLMAP parser and torch-backed Dataset load image pixels/poses/3D.
-          sys.path.insert(0, str(Path(os.environ["COMMON_SOURCES"]) / "gsplat" / "examples"))
           parsed_estimated = Parser(
               str(estimated_root), factor=1, normalize=False, test_every=8
           )
