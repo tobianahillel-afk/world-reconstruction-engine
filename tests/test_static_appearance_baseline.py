@@ -783,6 +783,26 @@ def test_gsplat_ply_rejects_pathological_decimal_vertex_count(tmp_path: Path) ->
         materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
 
 
+@pytest.mark.parametrize(
+    ("vertex_count", "reason"),
+    (
+        (b"100000000", "payload is truncated"),
+        (b"100000001", "outside the audited bounded profile"),
+    ),
+)
+def test_gsplat_ply_decimal_vertex_boundaries(
+    tmp_path: Path, vertex_count: bytes, reason: str
+) -> None:
+    # The accepted limit still needs a corresponding payload; the following
+    # count is rejected before any attempted payload allocation or read.
+    original = _gsplat_ply()
+    data = original.replace(b"element vertex 1\n", b"element vertex " + vertex_count + b"\n")
+    assert data != original
+    root, profile, ref = _gsplat_output(tmp_path, data)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match=reason):
+        materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
+
+
 def test_gsplat_ply_rejects_zero_norm_rotation_quaternion(tmp_path: Path) -> None:
     # A finite all-zero quaternion cannot specify a rotation. The hash and
     # vertex count are otherwise valid, so this must fail on payload semantics.
