@@ -192,10 +192,19 @@ def test_gsplat_reference_source_gate_verifies_exact_bytes_without_import(
     assert result == verify_gsplat_static_appearance_reference_sources(root)
 
 
-def test_gsplat_trainer_config_uses_explicit_isolated_paths(tmp_path: Path) -> None:
+def _plausible_gsplat_runtime_tree(tmp_path: Path) -> Path:
+    """Only path-level fixture: not audited COLMAP bytes or a decodable PNG."""
     staged = tmp_path / "staged-colmap"
     (staged / "images").mkdir(parents=True)
     (staged / "sparse" / "0").mkdir(parents=True)
+    (staged / "images" / "frame.png").write_bytes(b"synthetic image")
+    for name in ("cameras.bin", "images.bin", "points3D.bin"):
+        (staged / "sparse" / "0" / name).write_bytes(b"synthetic model")
+    return staged
+
+
+def test_gsplat_trainer_config_uses_explicit_isolated_paths(tmp_path: Path) -> None:
+    staged = _plausible_gsplat_runtime_tree(tmp_path)
     output = tmp_path / "private-results"
     profile = GsplatStaticAppearanceTrainingProfile(max_steps=20)
     expected_identity = profile.configuration_sha256
@@ -221,9 +230,7 @@ def test_gsplat_trainer_config_uses_explicit_isolated_paths(tmp_path: Path) -> N
 def test_gsplat_trainer_config_rejects_unsafe_runtime_paths(
     tmp_path: Path, invalid_case: str
 ) -> None:
-    staged = tmp_path / "staged-colmap"
-    (staged / "images").mkdir(parents=True)
-    (staged / "sparse" / "0").mkdir(parents=True)
+    staged = _plausible_gsplat_runtime_tree(tmp_path)
     destination = tmp_path / "results"
     if invalid_case == "relative":
         destination = Path("results")
@@ -232,8 +239,11 @@ def test_gsplat_trainer_config_rejects_unsafe_runtime_paths(
     elif invalid_case == "overlap":
         destination = staged / "new-results"
     elif invalid_case == "missing_images":
+        (staged / "images" / "frame.png").unlink()
         (staged / "images").rmdir()
     elif invalid_case == "missing_colmap":
+        for name in ("cameras.bin", "images.bin", "points3D.bin"):
+            (staged / "sparse" / "0" / name).unlink()
         (staged / "sparse" / "0").rmdir()
     elif invalid_case == "symlink":
         destination.symlink_to(staged, target_is_directory=True)
@@ -243,6 +253,56 @@ def test_gsplat_trainer_config_rejects_unsafe_runtime_paths(
             profile=GsplatStaticAppearanceTrainingProfile(),
             dataset_root=staged,
             output_root=destination,
+        )
+
+
+@pytest.mark.parametrize(
+    ("missing", "expected_message"),
+    (
+        ("cameras.bin", "real COLMAP binary model files"),
+        ("images.bin", "real COLMAP binary model files"),
+        ("points3D.bin", "real COLMAP binary model files"),
+        ("frame.png", "regular PNG image"),
+    ),
+)
+def test_gsplat_trainer_config_rejects_missing_runtime_dataset_files(
+    tmp_path: Path, missing: str, expected_message: str
+) -> None:
+    staged = _plausible_gsplat_runtime_tree(tmp_path)
+    target = (
+        staged / "images" / missing
+        if missing.endswith(".png")
+        else staged / "sparse" / "0" / missing
+    )
+    target.unlink()
+    with pytest.raises(GsplatStaticAppearancePreflightError, match=expected_message):
+        build_gsplat_reference_trainer_path_overrides(
+            profile=GsplatStaticAppearanceTrainingProfile(),
+            dataset_root=staged,
+            output_root=tmp_path / "results",
+        )
+
+
+@pytest.mark.parametrize("linked", ("cameras.bin", "frame.png"))
+def test_gsplat_trainer_config_rejects_symlinked_runtime_dataset_files(
+    tmp_path: Path, linked: str
+) -> None:
+    staged = _plausible_gsplat_runtime_tree(tmp_path)
+    target = (
+        staged / "images" / linked
+        if linked.endswith(".png")
+        else staged / "sparse" / "0" / linked
+    )
+    real_file = tmp_path / "other-file"
+    target.rename(real_file)
+    target.symlink_to(real_file)
+    assert target.is_file() and target.is_symlink()
+    expected_message = "regular PNG image" if linked.endswith(".png") else "real COLMAP"
+    with pytest.raises(GsplatStaticAppearancePreflightError, match=expected_message):
+        build_gsplat_reference_trainer_path_overrides(
+            profile=GsplatStaticAppearanceTrainingProfile(),
+            dataset_root=staged,
+            output_root=tmp_path / "results",
         )
 
 
