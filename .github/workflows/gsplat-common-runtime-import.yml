@@ -266,7 +266,16 @@ jobs:
           assert gt_git_blob == "43e62ebfe910f6be8c440d57b6ad300743768934"
           gt = cv2.imdecode(np.frombuffer(gt_bytes, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
           assert gt is not None and gt.ndim == 2 and gt.dtype == np.uint8
-          assert gt.shape == (height, width), (gt.shape, (height, width))
+          reference_original_shape = tuple(int(v) for v in gt.shape)
+          # Real CI proved OpenCV aloeGT.png is FULL-size 1110x1282,
+          # whereas the pinned sample JPEGs are HALF-size 555x641.
+          # Align the GT mask to the photo pixel grid via nearest-neighbor,
+          # preserving original encoded sample values (not averaging GT).
+          assert gt.shape == (height * 2, width * 2), (
+              gt.shape, (height, width)
+          )
+          gt = cv2.resize(gt, (width, height), interpolation=cv2.INTER_NEAREST)
+          assert gt.shape == (height, width)
           gt_known = gt > 0
           overlap = gt_known & valid
           overlap_count = int(np.count_nonzero(overlap))
@@ -671,6 +680,8 @@ jobs:
               "right_reprojection_evaluation": "in-sample against observed right photo",
               "right_reprojection_is_independent_ground_truth": False,
               "reference_groundtruth_opencv_git_blob": gt_git_blob,
+              "reference_original_height_width": list(reference_original_shape),
+              "reference_resample_method": "2x full-size to half-size nearest-neighbor",
               "reference_known_pixels": int(np.count_nonzero(gt_known)),
               "reference_prediction_overlap_pixels": overlap_count,
               "reference_encoded_intensity_vs_estimated_disparity_correlation": gt_raw_intensity_correlation,
