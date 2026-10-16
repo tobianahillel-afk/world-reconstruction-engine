@@ -541,6 +541,7 @@ jobs:
 
           import cv2
           import numpy as np
+          import torch
           from scipy.spatial.transform import Rotation
 
           # One deterministic, textured synthetic two-depth scene. Matching is
@@ -837,8 +838,17 @@ jobs:
           assert np.allclose(
               np.asarray(parsed_estimated.points), reconstructed, rtol=0, atol=1e-5
           )
-          assert len(Dataset(parsed_estimated, split="train")) == 2
-          assert len(Dataset(parsed_estimated, split="test")) == 1
+          loaded_train = Dataset(parsed_estimated, split="train")
+          loaded_test = Dataset(parsed_estimated, split="test")
+          assert len(loaded_train) == 2 and len(loaded_test) == 1
+          for batch in (loaded_train[0], loaded_train[1], loaded_test[0]):
+              assert isinstance(batch["image"], torch.Tensor)
+              assert batch["image"].shape == (240, 320, 3)
+              assert batch["image"].device.type == "cpu"
+              assert batch["K"].shape == (3, 3)
+              assert batch["camtoworld"].shape == (4, 4)
+              assert torch.isfinite(batch["image"]).all()
+              assert torch.isfinite(batch["camtoworld"]).all()
           reprojection_errors = []
           for image_index, pixels in enumerate(observed):
               camera_to_world = parsed_estimated.camtoworlds[image_index]
