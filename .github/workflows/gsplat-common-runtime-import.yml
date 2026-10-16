@@ -238,6 +238,98 @@ jobs:
           photometric_mae = float(np.mean(residual[valid]))
           assert np.isfinite(photometric_mae)
 
+          # NEW INDEPENDENT CALIBRATED REAL-PHOTO CPU PATH. Middlebury 2006
+          # Aloe: full-size focal=3740px, baseline=160mm, dmin=270px.
+          # https://vision.middlebury.edu/stereo/data/scenes2006/
+          # https://vision.middlebury.edu/stereo/data/scenes2006/FullSize/Aloe/dmin.txt
+          # Current OpenCV sample pair is half resolution; retain the older
+          # arbitrary-scale previews unchanged until this new route is proven.
+          url = (
+              "https://raw.githubusercontent.com/opencv/opencv/"
+              f"{opencv_sha}/samples/data/aloeGT.png"
+          )
+          for attempt in range(3):
+              try:
+                  with urllib.request.urlopen(url, timeout=45) as response:
+                      reference_bytes = response.read(150_001)
+                  break
+              except urllib.error.HTTPError as exc:
+                  if exc.code not in (429, 500, 502, 503, 504) or attempt == 2:
+                      raise
+              except (urllib.error.URLError, TimeoutError):
+                  if attempt == 2:
+                      raise
+              time.sleep(2 * (attempt + 1))
+          reference_blob = hashlib.sha1(
+              f"blob {len(reference_bytes)}\0".encode("ascii") + reference_bytes
+          ).hexdigest()
+          assert reference_blob == "43e62ebfe910f6be8c440d57b6ad300743768934"
+          reference_full = cv2.imdecode(
+              np.frombuffer(reference_bytes, np.uint8), cv2.IMREAD_GRAYSCALE
+          )
+          assert reference_full is not None and reference_full.shape == (height * 2, width * 2)
+          reference = cv2.resize(
+              reference_full, (width, height), interpolation=cv2.INTER_NEAREST
+          )
+          reference_known = reference > 0
+          reference_disparity = (reference.astype(np.float32) + 270.0) / 2.0
+          calibrated_matcher = cv2.StereoSGBM_create(
+              minDisparity=128, numDisparities=160, blockSize=block,
+              P1=8 * 3 * block * block, P2=32 * 3 * block * block,
+              uniquenessRatio=8, speckleWindowSize=70, speckleRange=2,
+              disp12MaxDiff=1,
+          )
+          calibrated_disp = calibrated_matcher.compute(left, right).astype(np.float32) / 16.0
+          calibrated_valid = np.isfinite(calibrated_disp) & (calibrated_disp > 135.0) & (calibrated_disp < 288.0)
+          compared = calibrated_valid & reference_known
+          compared_count = int(compared.sum())
+          assert compared_count >= 500, f"Calibrated/GT overlap too small: {compared_count}"
+          abs_error = np.abs(calibrated_disp[compared] - reference_disparity[compared])
+          mae = float(np.mean(abs_error))
+          rmse = float(np.sqrt(np.mean(abs_error**2)))
+          assert np.isfinite(mae) and np.isfinite(rmse)
+          baseline_compared = valid & reference_known
+          baseline_mae = (
+              float(np.mean(np.abs(disparity[baseline_compared] - reference_disparity[baseline_compared])))
+              if baseline_compared.any() else None
+          )
+          # Empirical reference mismatch is a DIAGNOSTIC, not verified metric
+          # calibration. The original JPEG pair may not match official GT
+          # view1/view5/offset. Never export claimed millimetres from this gate.
+          calibrated_dir = Path(os.environ["RUNNER_TEMP"])
+          check_name = "wre-real-stereo-cpu-middlebury-reference-check"
+          preview = cv2.applyColorMap(
+              np.uint8(np.clip((calibrated_disp - 128) / 160 * 255, 0, 255)),
+              cv2.COLORMAP_TURBO,
+          )
+          preview[~calibrated_valid] = 0
+          assert cv2.imwrite(str(calibrated_dir / f"{check_name}.png"), preview)
+          (calibrated_dir / f"{check_name}.json").write_text(
+              json.dumps({
+                  "source": "Middlebury 2006 Aloe, pinned OpenCV photographs",
+                  "reference_git_blob": reference_blob,
+                  "official_dmin_full_px": 270,
+                  "official_focal_full_px": 3740,
+                  "official_baseline_mm": 160,
+                  "reference_downscale_factor": 2,
+                  "matcher_disparity_search_px": [128, 288],
+                  "reference_compared_pixels": compared_count,
+                  "reference_hypothesis_mae_px": mae,
+                  "reference_hypothesis_rmse_px": rmse,
+                  "legacy_window_reference_mae_px": baseline_mae,
+                  "reference_alignment_independently_verified": False,
+                  "metric_calibration_validated": False,
+                  "reference_disparity_encoding_calibration_verified": False,
+                  "physical_scale_output_authorized": False,
+                  "gpu_training": False,
+                  "dynamic_4d": False,
+              }, sort_keys=True, indent=2) + "\n", encoding="utf-8"
+          )
+          print(
+              f"Middlebury reference hypothesis only: overlap {compared_count}, "
+              f"MAE {mae:.3f}px, RMSE {rmse:.3f}px; NOT metric-calibrated."
+          )
+
           # Reuse the existing reverse OpenCV matcher early to cross-check
           # left-image 3D points against observed right-image geometry.
           right_matcher = cv2.StereoSGBM_create(
@@ -317,6 +409,30 @@ jobs:
                       f"{int(color[0])} {int(color[1])} {int(color[2])}\n"
                   )
           assert checked_cloud.stat().st_size > 100
+          # Functional CPU refinement of *already reconstructed* real-photo
+          # geometry: accept only both left-right disparity consistency and
+          # low observed-image reprojection error; preserve all original clouds.
+          photometric_limit = 8.0  # Mean RGB absolute error on 0..255.
+          quality_selected = (
+              chosen & (residual[yy_selected, xx_selected] <= photometric_limit)
+          )
+          quality_xyz, quality_rgb = xyz[quality_selected], rgb[quality_selected]
+          assert len(quality_xyz) >= 100
+          quality_mae = float(
+              np.mean(residual[yy_selected[quality_selected], xx_selected[quality_selected]])
+          )
+          quality_name = "wre-real-stereo-cpu-photometric-consistent.ply"
+          with (output / quality_name).open("w", encoding="ascii", newline="\n") as file:
+              file.write(header.replace(
+                  f"element vertex {len(xyz)}",
+                  f"element vertex {len(quality_xyz)}",
+              ))
+              for xyz_point, color in zip(quality_xyz, quality_rgb):
+                  file.write(
+                      f"{xyz_point[0]:.7g} {xyz_point[1]:.7g} {xyz_point[2]:.7g} "
+                      f"{int(color[0])} {int(color[1])} {int(color[2])}\n"
+                  )
+          assert (output / quality_name).stat().st_size > 100
           # Green = two-way geometry consistent, red = one-way-only pixel.
           diagnostic = np.zeros_like(left)
           diagnostic[valid & ~checked] = (0, 0, 255)
@@ -650,6 +766,67 @@ jobs:
               offset = view["byteOffset"]
               assert actual_binary[offset:offset + view["byteLength"]] == expected
 
+          # Export the higher-consistency REAL RGB 3D cloud as a standalone glTF
+          # POINTS preview. Reuse the existing checked-cloud viewer schema, camera
+          # and static-scene orbit instead of implementing another serializer.
+          quality_glb_name = "wre-real-stereo-cpu-photometric-consistent.glb"
+          quality_positions = np.ascontiguousarray(quality_xyz, dtype="<f4")
+          quality_positions[:, 1:] *= -1.0
+          quality_colors = np.ascontiguousarray(quality_rgb, dtype="u1")
+          assert quality_positions.shape == quality_colors.shape
+          assert np.all(np.isfinite(quality_positions))
+          quality_parts = (
+              quality_positions.tobytes(), quality_colors.tobytes(),
+              orbit_times.tobytes(), orbit_rotations.tobytes(),
+          )
+          quality_bin = bytearray()
+          quality_views = []
+          for index, blob in enumerate(quality_parts):
+              view = {"buffer": 0, "byteOffset": len(quality_bin), "byteLength": len(blob)}
+              if index < 2:
+                  view["target"] = 34962
+              quality_views.append(view)
+              quality_bin.extend(blob)
+              quality_bin.extend(b"\0" * (-len(quality_bin) % 4))
+          quality_document = json.loads(json.dumps(point_document))
+          quality_document["asset"]["generator"] = "WRE observed photo-consistent 3D"
+          quality_document["nodes"][1]["name"] = "Photometric-consistent real-photo points"
+          quality_document["bufferViews"] = quality_views
+          quality_document["buffers"][0]["byteLength"] = len(quality_bin)
+          quality_document["accessors"][0].update({
+              "count": len(quality_positions),
+              "min": quality_positions.min(axis=0).tolist(),
+              "max": quality_positions.max(axis=0).tolist(),
+          })
+          quality_document["accessors"][1]["count"] = len(quality_colors)
+          quality_json = json.dumps(quality_document, separators=(",", ":")).encode("utf-8")
+          quality_json += b" " * (-len(quality_json) % 4)
+          quality_glb_bytes = (
+              struct.pack("<4sII", b"glTF", 2, 12 + 8 + len(quality_json) + 8 + len(quality_bin))
+              + struct.pack("<I4s", len(quality_json), b"JSON") + quality_json
+              + struct.pack("<I4s", len(quality_bin), b"BIN\0") + quality_bin
+          )
+          quality_glb_path = output / quality_glb_name
+          quality_glb_path.write_bytes(quality_glb_bytes)
+          quality_readback = quality_glb_path.read_bytes()
+          assert struct.unpack_from("<4sII", quality_readback) == (
+              b"glTF", 2, len(quality_readback)
+          )
+          quality_json_size, chunk_type = struct.unpack_from("<I4s", quality_readback, 12)
+          assert chunk_type == b"JSON"
+          quality_parsed = json.loads(quality_readback[20:20 + quality_json_size])
+          assert quality_parsed["meshes"][0]["primitives"][0]["mode"] == 0
+          assert quality_parsed["accessors"][0]["count"] == len(quality_xyz)
+          assert quality_parsed["accessors"][1]["count"] == len(quality_rgb)
+          assert quality_parsed["accessors"][1]["normalized"] is True
+          q_offset = 20 + quality_json_size
+          q_size, chunk_type = struct.unpack_from("<I4s", quality_readback, q_offset)
+          assert chunk_type == b"BIN\0" and q_offset + 8 + q_size == len(quality_readback)
+          quality_payload = quality_readback[q_offset + 8:]
+          for view, expected in zip(quality_parsed["bufferViews"], quality_parts):
+              offset = view["byteOffset"]
+              assert quality_payload[offset:offset + view["byteLength"]] == expected
+
           # Render ACTUAL measured 3D mesh vertices/faces from a smoothly
           # moving virtual camera, rather than warping a flat photograph.
           # Use OpenCV's existing triangle fill and Pillow's animated GIF
@@ -936,6 +1113,13 @@ jobs:
               "left_right_consistent_pixels": checked_count,
               "left_right_consistent_fraction_of_valid": checked_count / int(valid.sum()),
               "left_right_consistent_exported_points": int(len(checked_xyz)),
+              "photo_consistent_3d_points": int(len(quality_xyz)),
+              "photo_consistent_glb": quality_glb_name,
+              "photo_consistent_glb_is_dynamic_4d_scene": False,
+              "photo_consistent_mae_threshold_rgb_0_255": photometric_limit,
+              "photo_consistent_measured_mae_rgb_0_255": quality_mae,
+              "photo_consistent_independent_depth_truth": False,
+              "photo_consistent_physical_scale_calibrated": False,
               "left_right_consistent_glb": checked_glb_name,
               "left_right_consistent_glb_primitive": "glTF 2.0 POINTS (observed RGB)",
               "left_right_consistent_glb_animation": "8s node rotation around cloud centroid",
@@ -1130,7 +1314,7 @@ jobs:
       # Run the actual-photo CPU reconstruction BEFORE expensive native CUDA
       # compilation. Keep the original photo pipeline in one place and make
       # its real 3D/preview outputs inspectable even while CUDA builds run.
-      - name: Stage twenty real-photo CPU 3D, animated mesh, GLB and COLMAP outputs early
+      - name: Stage twenty-four real-photo CPU 3D, animated mesh, GLB and COLMAP outputs early
         shell: bash
         run: |
           set -euo pipefail
@@ -1138,6 +1322,10 @@ jobs:
           mkdir -p "$destination"
           for file in \
             wre-real-stereo-cpu-reconstruction.ply \
+            wre-real-stereo-cpu-photometric-consistent.ply \
+            wre-real-stereo-cpu-photometric-consistent.glb \
+            wre-real-stereo-cpu-middlebury-reference-check.png \
+            wre-real-stereo-cpu-middlebury-reference-check.json \
             wre-real-stereo-cpu-lr-consistent.ply \
             wre-real-stereo-cpu-lr-consistent.glb \
             wre-real-stereo-cpu-surface.ply \
@@ -1161,7 +1349,7 @@ jobs:
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 20
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 24
 
       - name: Publish real-photo CPU 3D plus COLMAP before native CUDA builds
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -2152,6 +2340,10 @@ jobs:
             wre-sift-cpu-view-1.png \
             wre-sift-cpu-view-2.png \
             wre-real-stereo-cpu-reconstruction.ply \
+            wre-real-stereo-cpu-photometric-consistent.ply \
+            wre-real-stereo-cpu-photometric-consistent.glb \
+            wre-real-stereo-cpu-middlebury-reference-check.png \
+            wre-real-stereo-cpu-middlebury-reference-check.json \
             wre-real-stereo-cpu-lr-consistent.ply \
             wre-real-stereo-cpu-lr-consistent.glb \
             wre-real-stereo-cpu-surface.ply \
@@ -2173,8 +2365,8 @@ jobs:
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 36
-          echo "Staged all 36 real PLY/OBJ/GLB/GIF/MTL/PNG/NPY/JSON/ZIP files for artifact upload"
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 40
+          echo "Staged all 40 real PLY/OBJ/GLB/GIF/MTL/PNG/NPY/JSON/ZIP files for artifact upload"
 
       - name: Publish CPU COLMAP 3D preview and measured reprojection
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
