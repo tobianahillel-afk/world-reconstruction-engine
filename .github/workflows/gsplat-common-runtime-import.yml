@@ -527,6 +527,151 @@ jobs:
               print("No CUDA kernels, Gaussian reconstruction or GPU training occurred.")
           PY
           
+      - name: Detect image features, match three views and triangulate CPU geometry
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$COMMON_PYTHON" - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          import cv2
+          import numpy as np
+
+          # One deterministic, textured synthetic two-depth scene. Matching is
+          # performed on REAL image pixels using pinned OpenCV SIFT/knnMatch.
+          # No ground-truth 2D track IDs or 3D points enter triangulatePoints.
+          rng = np.random.default_rng(20261016)
+          texture = rng.integers(0, 256, size=(240, 360, 3), dtype=np.uint8)
+          views = []
+          output = Path(os.environ["RUNNER_TEMP"])
+          for view_index in range(3):
+              rgb = np.empty((240, 320, 3), dtype=np.uint8)
+              rgb[:120] = texture[:120, 14 * view_index : 320 + 14 * view_index]
+              rgb[120:] = texture[120:, 7 * view_index : 320 + 7 * view_index]
+              views.append(rgb)
+              assert cv2.imwrite(str(output / f"wre-sift-cpu-view-{view_index}.png"), rgb)
+
+          sift = cv2.SIFT_create(nfeatures=700, contrastThreshold=0.02)
+          features = [
+              sift.detectAndCompute(cv2.cvtColor(image, cv2.COLOR_BGR2GRAY), None)
+              for image in views
+          ]
+          assert all(descriptor is not None for _, descriptor in features)
+          matcher = cv2.BFMatcher(cv2.NORM_L2)
+          correspondences = []
+          for view_index in (1, 2):
+              good_matches = {}
+              for candidate, runner_up in matcher.knnMatch(
+                  features[0][1], features[view_index][1], k=2
+              ):
+                  if candidate.distance >= 0.7 * runner_up.distance:
+                      continue
+                  point0 = features[0][0][candidate.queryIdx].pt
+                  point1 = features[view_index][0][candidate.trainIdx].pt
+                  # Calibrated parallel camera rig: matching image rows and
+                  # positive left-right disparity. These are NOT supplied tracks.
+                  if (
+                      abs(point0[1] - point1[1]) < 1.0
+                      and abs(point0[1] - 120.0) > 14.0
+                      and 2.0 < point0[0] - point1[0] < 60.0
+                  ):
+                      good_matches[candidate.queryIdx] = candidate
+              correspondences.append(good_matches)
+
+          shared = sorted(set(correspondences[0]) & set(correspondences[1]))
+          assert len(shared) >= 60, f"Only {len(shared)} three-view SIFT tracks"
+          points0 = np.asarray(
+              [features[0][0][idx].pt for idx in shared], dtype=np.float64
+          )
+          points1 = np.asarray(
+              [features[1][0][correspondences[0][idx].trainIdx].pt for idx in shared],
+              dtype=np.float64,
+          )
+          observed_third = np.asarray(
+              [features[2][0][correspondences[1][idx].trainIdx].pt for idx in shared],
+              dtype=np.float64,
+          )
+          focal, baseline = 210.0, 0.2
+          intrinsic = np.array(
+              [[focal, 0.0, 160.0], [0.0, focal, 120.0], [0.0, 0.0, 1.0]]
+          )
+          projections = [
+              intrinsic
+              @ np.column_stack((np.eye(3), [-baseline * index, 0.0, 0.0]))
+              for index in range(3)
+          ]
+          homogeneous = cv2.triangulatePoints(
+              projections[0], projections[1], points0.T, points1.T
+          )
+          xyz = (homogeneous[:3] / homogeneous[3]).T
+          assert np.all(np.isfinite(xyz)) and np.all(xyz[:, 2] > 0.0)
+          camera_third = projections[2] @ np.column_stack(
+              (xyz, np.ones(len(xyz)))
+          ).T
+          heldout_xy = (camera_third[:2] / camera_third[2]).T
+          heldout_rmse = float(np.sqrt(np.mean(
+              np.sum(np.square(heldout_xy - observed_third), axis=1)
+          )))
+          upper, lower = points0[:, 1] < 120, points0[:, 1] > 120
+          assert int(upper.sum()) >= 15 and int(lower.sum()) >= 15
+          upper_depth = float(np.median(xyz[upper, 2]))
+          lower_depth = float(np.median(xyz[lower, 2]))
+          assert abs(upper_depth - 3.0) < 0.15, upper_depth
+          assert abs(lower_depth - 6.0) < 0.15, lower_depth
+          assert heldout_rmse < 0.25, heldout_rmse
+
+          # Viewable standards-compliant XYZ + sampled image RGB point cloud.
+          cloud = output / "wre-sift-cpu-image-triangulated.ply"
+          header = (
+              "ply\nformat ascii 1.0\n"
+              f"element vertex {len(xyz)}\n"
+              "property float x\nproperty float y\nproperty float z\n"
+              "property uchar red\nproperty uchar green\nproperty uchar blue\n"
+              "end_header\n"
+          )
+          rows = []
+          for point, pixel in zip(xyz, points0):
+              x, y = (int(round(value)) for value in pixel)
+              bgr = views[0][y, x]
+              rows.append(
+                  f"{point[0]:.9g} {point[1]:.9g} {point[2]:.9g} "
+                  f"{int(bgr[2])} {int(bgr[1])} {int(bgr[0])}"
+              )
+          cloud.write_text(header + "\n".join(rows) + "\n", encoding="ascii")
+          matches = [correspondences[0][idx] for idx in shared[:45]]
+          preview = cv2.drawMatches(
+              views[0], features[0][0], views[1], features[1][0],
+              matches, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS,
+          )
+          assert cv2.imwrite(
+              str(output / "wre-sift-cpu-feature-correspondences.png"), preview
+          )
+          report = {
+              "algorithm": "pinned OpenCV SIFT + BFMatcher + cv2.triangulatePoints",
+              "input": "deterministic synthetic textured RGB images",
+              "correspondences_from_pixel_features": True,
+              "ground_truth_tracks_supplied_to_solver": False,
+              "two_view_triangulated_points": len(xyz),
+              "upper_plane_median_depth_model_units": upper_depth,
+              "lower_plane_median_depth_model_units": lower_depth,
+              "third_view_heldout_reprojection_rmse_px": heldout_rmse,
+              "real_scene_reconstruction_benchmark": False,
+              "real_cuda_execution": False,
+              "real_gaussian_training": False,
+          }
+          (output / "wre-sift-cpu-metrics.json").write_text(
+              json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          print(
+              f"Real SIFT pixel matches: {len(xyz)} 3D points; "
+              f"held-out reprojection RMSE {heldout_rmse:.5f} px; "
+              f"depths {upper_depth:.3f}/{lower_depth:.3f} model units."
+          )
+          print("Synthetic scene only; no real-photo SfM, GPU or Gaussian training.")
+          PY
+
       - name: Publish CPU COLMAP 3D preview and measured reprojection
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -539,5 +684,11 @@ jobs:
             ${{ runner.temp }}/wre-colmap-cpu-render.png
             ${{ runner.temp }}/wre-colmap-cpu-depth.png
             ${{ runner.temp }}/wre-colmap-cpu-depth.npy
+            ${{ runner.temp }}/wre-sift-cpu-image-triangulated.ply
+            ${{ runner.temp }}/wre-sift-cpu-feature-correspondences.png
+            ${{ runner.temp }}/wre-sift-cpu-metrics.json
+            ${{ runner.temp }}/wre-sift-cpu-view-0.png
+            ${{ runner.temp }}/wre-sift-cpu-view-1.png
+            ${{ runner.temp }}/wre-sift-cpu-view-2.png
           if-no-files-found: error
           retention-days: 7
