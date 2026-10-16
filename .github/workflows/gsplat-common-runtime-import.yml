@@ -739,6 +739,9 @@ jobs:
           # and construct a real standard COLMAP dataset, then round-trip it
           # through the pinned gsplat Parser and Dataset. No supplied 3D
           # ground-truth xyz or camera extrinsics enter these binary files.
+          # This step is a fresh Python process, so the previous step's
+          # sys.path change does not persist across steps.
+          sys.path.insert(0, str(Path(os.environ["COMMON_SOURCES"]) / "gsplat" / "examples"))
           from datasets.colmap import Dataset, Parser
 
           estimated_root = output / "wre-sift-estimated-colmap"
@@ -829,7 +832,6 @@ jobs:
 
           # This is a true on-disk handoff, not mock data: actual gsplat CPU
           # COLMAP parser and torch-backed Dataset load image pixels/poses/3D.
-          sys.path.insert(0, str(Path(os.environ["COMMON_SOURCES"]) / "gsplat" / "examples"))
           parsed_estimated = Parser(
               str(estimated_root), factor=1, normalize=False, test_every=8
           )
