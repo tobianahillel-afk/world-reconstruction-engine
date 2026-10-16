@@ -1797,6 +1797,14 @@ _GSPLAT_TRAINER_CHILD = """import json
 import sys
 import torch
 
+# Upstream constructs LPIPS/AlexNet even when evaluation is disabled.
+# Require pretrained weights to be provisioned in this runtime's torch cache.
+# torch.hub.load_state_dict_from_url uses this hook on cache misses.
+def reject_implicit_download(*args, **kwargs):
+    raise RuntimeError("gsplat LPIPS weights must be cached; implicit download forbidden")
+
+torch.hub.download_url_to_file = reject_implicit_download
+
 if not torch.cuda.is_available() or torch.cuda.device_count() != 1:
     raise RuntimeError("gsplat reference training requires exactly one visible CUDA GPU")
 sys.path.insert(0, sys.argv[1])
