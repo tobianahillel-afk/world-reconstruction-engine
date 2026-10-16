@@ -1063,6 +1063,52 @@ def test_external_gsplat_runner_builds_complete_canonical_candidate_with_process
 
 
 @pytest.mark.skipif(os.name != "posix", reason="smoke executable uses POSIX shebang")
+@pytest.mark.parametrize(
+    ("runtime_version", "visible_cuda", "should_run"),
+    (("1.5.3", True, True), ("0.9.0", True, False), ("1.5.3", False, False)),
+)
+def test_reference_trainer_child_enforces_runtime_version_and_cuda(
+    tmp_path: Path, runtime_version: str, visible_cuda: bool, should_run: bool
+) -> None:
+    """Real CPU Python subprocess exercising child logic with fake GPU modules.
+
+    No PyTorch, gsplat binary, CUDA kernels, or reference trainer are executed.
+    """
+    script = (
+        "import sys, types\n"
+        "torch = types.ModuleType('torch')\n"
+        f"torch.cuda = types.SimpleNamespace(is_available=lambda: {visible_cuda!r}, "
+        f"device_count=lambda: {1 if visible_cuda else 0})\n"
+        "torch.hub = types.SimpleNamespace(download_url_to_file=lambda *a, **kw: None)\n"
+        "sys.modules['torch'] = torch\n"
+        "gsplat = types.ModuleType('gsplat')\n"
+        f"gsplat.__version__ = {runtime_version!r}\n"
+        "sys.modules['gsplat'] = gsplat\n"
+        "trainer = types.ModuleType('simple_trainer')\n"
+        "trainer.Config = lambda **kw: kw\n"
+        "trainer.main = lambda *a: print('runner-stub-executed')\n"
+        "sys.modules['simple_trainer'] = trainer\n"
+        f"exec({baseline_module._GSPLAT_TRAINER_CHILD!r})\n"
+    )
+    completed = baseline_module.subprocess.run(
+        [sys.executable, "-I", "-c", script, str(tmp_path)],
+        input=b"{}",
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+    if should_run:
+        assert completed.returncode == 0, completed.stderr.decode("utf-8")
+        assert b"runner-stub-executed" in completed.stdout
+    else:
+        assert completed.returncode != 0
+        assert b"runner-stub-executed" not in completed.stdout
+        assert (
+            b"runtime version differs" in completed.stderr
+            or b"requires exactly one visible CUDA GPU" in completed.stderr
+        )
+
+
 def test_external_gsplat_runner_spawns_real_process_and_assembles_appearance(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
