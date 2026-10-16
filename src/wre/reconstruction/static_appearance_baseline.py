@@ -2312,7 +2312,7 @@ def export_verified_gsplat_rgb_centers_ply(
                 raise GsplatStaticAppearancePreflightError(
                     "gsplat source PLY identity changed during RGB export"
                 )
-    except BaseException:
+    except Exception:
         if created:
             destination.unlink(missing_ok=True)
         raise
