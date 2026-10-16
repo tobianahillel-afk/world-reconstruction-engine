@@ -152,6 +152,8 @@ jobs:
           import hashlib
           import json
           import os
+          import time
+          import urllib.error
           import urllib.request
           from pathlib import Path
 
@@ -173,8 +175,20 @@ jobs:
                   "https://raw.githubusercontent.com/opencv/opencv/"
                   f"{opencv_sha}/samples/data/{name}"
               )
-              with urllib.request.urlopen(url, timeout=30) as response:
-                  data = response.read(1_000_001)
+              # The pinned upstream raw endpoint can return transient 503.
+              # Retry transport failures only; never retry a mismatched Git blob.
+              for attempt in range(3):
+                  try:
+                      with urllib.request.urlopen(url, timeout=45) as response:
+                          data = response.read(1_000_001)
+                      break
+                  except urllib.error.HTTPError as exc:
+                      if exc.code not in (429, 500, 502, 503, 504) or attempt == 2:
+                          raise
+                  except (urllib.error.URLError, TimeoutError):
+                      if attempt == 2:
+                          raise
+                  time.sleep(2 * (attempt + 1))
               assert 0 < len(data) <= 1_000_000, "Stereo photo size exceeds bound"
               git_blob = hashlib.sha1(
                   f"blob {len(data)}\0".encode("ascii") + data
