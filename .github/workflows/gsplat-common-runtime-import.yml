@@ -108,9 +108,13 @@ jobs:
         run: |
           set -euo pipefail
           apt-get update -qq
-          # The pinned opencv-python wheel needs libGL.so.1 when COLMAP imports cv2.
-          # CUDA's minimal container does not provide the GL runtime library.
-          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git ca-certificates libgl1
+          # The pinned opencv-python wheel needs both libGL.so.1 and
+          # libgthread-2.0.so.0 when the real COLMAP reader imports cv2.
+          # Neither is included in the minimal Ubuntu 22.04 CUDA container.
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            git ca-certificates libgl1 libglib2.0-0
+          ldconfig -p | grep -F 'libGL.so.1'
+          ldconfig -p | grep -F 'libgthread-2.0.so.0'
 
       - name: Materialize exact gsplat, fused-ssim, nerfview and legacy COLMAP sources
         shell: bash
