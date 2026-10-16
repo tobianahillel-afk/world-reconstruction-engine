@@ -293,64 +293,42 @@ jobs:
               float(np.mean(np.abs(disparity[baseline_compared] - reference_disparity[baseline_compared])))
               if baseline_compared.any() else None
           )
-          y, x = np.where(calibrated_valid[::3, ::3])
-          y, x = y * 3, x * 3
-          step = max(1, len(x) // 20000)
-          y, x = y[::step][:20000], x[::step][:20000]
-          assert len(x) >= 500
-          focal_px = 3740.0 / 2.0
-          baseline_mm = 160.0
-          z = focal_px * baseline_mm / calibrated_disp[y, x]
-          xyz_mm = np.column_stack((
-              (x - (width - 1) / 2) * z / focal_px,
-              (y - (height - 1) / 2) * z / focal_px,
-              z,
-          ))
-          assert np.isfinite(xyz_mm).all()
-          rgb_mm = left[y, x, ::-1]
+          # Empirical reference mismatch is a DIAGNOSTIC, not verified metric
+          # calibration. The original JPEG pair may not match official GT
+          # view1/view5/offset. Never export claimed millimetres from this gate.
           calibrated_dir = Path(os.environ["RUNNER_TEMP"])
-          calibrated_name = "wre-real-stereo-cpu-middlebury-calibrated"
-          with (calibrated_dir / f"{calibrated_name}.ply").open(
-              "w", encoding="ascii", newline="\n"
-          ) as file:
-              file.write(
-                  "ply\nformat ascii 1.0\n"
-                  f"element vertex {len(xyz_mm)}\n"
-                  "property float x\nproperty float y\nproperty float z\n"
-                  "property uchar red\nproperty uchar green\n"
-                  "property uchar blue\nend_header\n"
-              )
-              for xyz_point, color in zip(xyz_mm, rgb_mm):
-                  file.write(
-                      f"{xyz_point[0]:.7g} {xyz_point[1]:.7g} {xyz_point[2]:.7g} "
-                      f"{int(color[0])} {int(color[1])} {int(color[2])}\n"
-                  )
+          check_name = "wre-real-stereo-cpu-middlebury-reference-check"
           preview = cv2.applyColorMap(
               np.uint8(np.clip((calibrated_disp - 128) / 160 * 255, 0, 255)),
               cv2.COLORMAP_TURBO,
           )
           preview[~calibrated_valid] = 0
-          assert cv2.imwrite(str(calibrated_dir / f"{calibrated_name}.png"), preview)
-          (calibrated_dir / f"{calibrated_name}.json").write_text(
+          assert cv2.imwrite(str(calibrated_dir / f"{check_name}.png"), preview)
+          (calibrated_dir / f"{check_name}.json").write_text(
               json.dumps({
                   "source": "Middlebury 2006 Aloe, pinned OpenCV photographs",
                   "reference_git_blob": reference_blob,
                   "official_dmin_full_px": 270,
                   "official_focal_full_px": 3740,
-                  "official_baseline_mm": baseline_mm,
+                  "official_baseline_mm": 160,
                   "reference_downscale_factor": 2,
                   "matcher_disparity_search_px": [128, 288],
                   "reference_compared_pixels": compared_count,
-                  "calibrated_mae_px": mae,
-                  "calibrated_rmse_px": rmse,
-                  "legacy_mae_px": baseline_mae,
-                  "reconstructed_xyz_count": int(len(xyz_mm)),
-                  "xyz_units": "mm under assumed Middlebury view alignment",
-                  "source_pair_view_alignment_independently_verified": False,
-                  "gpu_training": False, "dynamic_4d": False,
+                  "reference_hypothesis_mae_px": mae,
+                  "reference_hypothesis_rmse_px": rmse,
+                  "legacy_window_reference_mae_px": baseline_mae,
+                  "reference_alignment_independently_verified": False,
+                  "metric_calibration_validated": False,
+                  "reference_disparity_encoding_calibration_verified": False,
+                  "physical_scale_output_authorized": False,
+                  "gpu_training": False,
+                  "dynamic_4d": False,
               }, sort_keys=True, indent=2) + "\n", encoding="utf-8"
           )
-          print(f"Calibrated Aloe 3D: {len(xyz_mm)} points; GT MAE={mae:.3f}px, RMSE={rmse:.3f}px")
+          print(
+              f"Middlebury reference hypothesis only: overlap {compared_count}, "
+              f"MAE {mae:.3f}px, RMSE {rmse:.3f}px; NOT metric-calibrated."
+          )
 
           # Reuse the existing reverse OpenCV matcher early to cross-check
           # left-image 3D points against observed right-image geometry.
@@ -431,6 +409,30 @@ jobs:
                       f"{int(color[0])} {int(color[1])} {int(color[2])}\n"
                   )
           assert checked_cloud.stat().st_size > 100
+          # Functional CPU refinement of *already reconstructed* real-photo
+          # geometry: accept only both left-right disparity consistency and
+          # low observed-image reprojection error; preserve all original clouds.
+          photometric_limit = 8.0  # Mean RGB absolute error on 0..255.
+          quality_selected = (
+              chosen & (residual[yy_selected, xx_selected] <= photometric_limit)
+          )
+          quality_xyz, quality_rgb = xyz[quality_selected], rgb[quality_selected]
+          assert len(quality_xyz) >= 100
+          quality_mae = float(
+              np.mean(residual[yy_selected[quality_selected], xx_selected[quality_selected]])
+          )
+          quality_name = "wre-real-stereo-cpu-photometric-consistent.ply"
+          with (output / quality_name).open("w", encoding="ascii", newline="\n") as file:
+              file.write(header.replace(
+                  f"element vertex {len(xyz)}",
+                  f"element vertex {len(quality_xyz)}",
+              ))
+              for xyz_point, color in zip(quality_xyz, quality_rgb):
+                  file.write(
+                      f"{xyz_point[0]:.7g} {xyz_point[1]:.7g} {xyz_point[2]:.7g} "
+                      f"{int(color[0])} {int(color[1])} {int(color[2])}\n"
+                  )
+          assert (output / quality_name).stat().st_size > 100
           # Green = two-way geometry consistent, red = one-way-only pixel.
           diagnostic = np.zeros_like(left)
           diagnostic[valid & ~checked] = (0, 0, 255)
@@ -1050,6 +1052,11 @@ jobs:
               "left_right_consistent_pixels": checked_count,
               "left_right_consistent_fraction_of_valid": checked_count / int(valid.sum()),
               "left_right_consistent_exported_points": int(len(checked_xyz)),
+              "photo_consistent_3d_points": int(len(quality_xyz)),
+              "photo_consistent_mae_threshold_rgb_0_255": photometric_limit,
+              "photo_consistent_measured_mae_rgb_0_255": quality_mae,
+              "photo_consistent_independent_depth_truth": False,
+              "photo_consistent_physical_scale_calibrated": False,
               "left_right_consistent_glb": checked_glb_name,
               "left_right_consistent_glb_primitive": "glTF 2.0 POINTS (observed RGB)",
               "left_right_consistent_glb_animation": "8s node rotation around cloud centroid",
@@ -1252,9 +1259,9 @@ jobs:
           mkdir -p "$destination"
           for file in \
             wre-real-stereo-cpu-reconstruction.ply \
-            wre-real-stereo-cpu-middlebury-calibrated.ply \
-            wre-real-stereo-cpu-middlebury-calibrated.png \
-            wre-real-stereo-cpu-middlebury-calibrated.json \
+            wre-real-stereo-cpu-photometric-consistent.ply \
+            wre-real-stereo-cpu-middlebury-reference-check.png \
+            wre-real-stereo-cpu-middlebury-reference-check.json \
             wre-real-stereo-cpu-lr-consistent.ply \
             wre-real-stereo-cpu-lr-consistent.glb \
             wre-real-stereo-cpu-surface.ply \
@@ -2269,9 +2276,9 @@ jobs:
             wre-sift-cpu-view-1.png \
             wre-sift-cpu-view-2.png \
             wre-real-stereo-cpu-reconstruction.ply \
-            wre-real-stereo-cpu-middlebury-calibrated.ply \
-            wre-real-stereo-cpu-middlebury-calibrated.png \
-            wre-real-stereo-cpu-middlebury-calibrated.json \
+            wre-real-stereo-cpu-photometric-consistent.ply \
+            wre-real-stereo-cpu-middlebury-reference-check.png \
+            wre-real-stereo-cpu-middlebury-reference-check.json \
             wre-real-stereo-cpu-lr-consistent.ply \
             wre-real-stereo-cpu-lr-consistent.glb \
             wre-real-stereo-cpu-surface.ply \
