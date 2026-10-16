@@ -1011,6 +1011,11 @@ def test_external_gsplat_runner_builds_complete_canonical_candidate_with_process
     runtime = tmp_path / "external-python"
     runtime.write_bytes(b"stub: external runtime explicitly provided")
     monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_native_geometry",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
         baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
     )
     calls: list[tuple[list[str], dict[str, Any]]] = []
@@ -1027,6 +1032,8 @@ def test_external_gsplat_runner_builds_complete_canonical_candidate_with_process
         source=source,
         staged=staged,
         profile=profile,
+        features=cast(ColmapFeatureExtractionResult, object()),
+        expected_environment=cast(ColmapEnvironmentIdentity, object()),
         source_root=source_root,
         python_executable=runtime,
         output_root=output,
@@ -1102,6 +1109,11 @@ def test_external_gsplat_runner_spawns_real_process_and_assembles_appearance(
     )
     runtime.chmod(0o700)
     monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_native_geometry",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
         baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
     )
     result = run_gsplat_reference_training(
@@ -1109,6 +1121,8 @@ def test_external_gsplat_runner_spawns_real_process_and_assembles_appearance(
         source=source,
         staged=staged,
         profile=profile,
+        features=cast(ColmapFeatureExtractionResult, object()),
+        expected_environment=cast(ColmapEnvironmentIdentity, object()),
         source_root=source_root,
         python_executable=runtime,
         output_root=output,
@@ -1121,6 +1135,53 @@ def test_external_gsplat_runner_spawns_real_process_and_assembles_appearance(
     assert result.candidate.source_geometry is request.source_geometry
     assert result.materialization.entries[0].sha256 == _digest(_gsplat_ply(vertices=2))
     assert b"CPU subprocess smoke" in (output / "wre-reference-training.log").read_bytes()
+
+
+def test_external_gsplat_runner_rejects_native_frame_mismatch_before_training(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    request, source, staged, output, profile, artifact_ref, producer = (
+        _retained_gsplat_fixture(tmp_path)
+    )
+    (output / profile.expected_ply_relative_path).unlink()
+    (output / "ply").rmdir()
+    output.rmdir()
+    checks = 0
+
+    def reject_native_geometry(*_args: Any, **_kwargs: Any) -> None:
+        nonlocal checks
+        checks += 1
+        raise GsplatStaticAppearancePreflightError(
+            "native COLMAP camera poses, calibration, points, frame or scale do not match"
+        )
+
+    monkeypatch.setattr(
+        baseline_module, "verify_gsplat_static_appearance_native_geometry",
+        reject_native_geometry,
+    )
+    monkeypatch.setattr(
+        baseline_module.subprocess,
+        "run",
+        lambda *_a, **_kw: pytest.fail("incompatible native frame started training"),
+    )
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="native COLMAP"):
+        run_gsplat_reference_training(
+            request=request,
+            source=source,
+            staged=staged,
+            profile=profile,
+            features=cast(ColmapFeatureExtractionResult, object()),
+            expected_environment=cast(ColmapEnvironmentIdentity, object()),
+            source_root=tmp_path / "unavailable-source",
+            python_executable=tmp_path / "unavailable-python",
+            output_root=output,
+            artifact_ref=artifact_ref,
+            producer=producer,
+            cuda_device_index=0,
+            timeout_seconds=30,
+        )
+    assert checks == 1
+    assert not output.exists()
 
 
 @pytest.mark.parametrize("mutation", ("missing_revision", "wrong_configuration"))
@@ -1146,6 +1207,8 @@ def test_external_gsplat_runner_rejects_false_producer_before_gpu_start(
             source=source,
             staged=staged,
             profile=profile,
+            features=cast(ColmapFeatureExtractionResult, object()),
+            expected_environment=cast(ColmapEnvironmentIdentity, object()),
             source_root=tmp_path / "does-not-exist",
             python_executable=tmp_path / "does-not-exist-python",
             output_root=output,
@@ -1171,6 +1234,11 @@ def test_external_gsplat_runner_rejects_failure_or_missing_output(
     runtime = tmp_path / "external-python"
     runtime.write_bytes(b"stub")
     monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_native_geometry",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
         baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
     )
     monkeypatch.setattr(
@@ -1184,6 +1252,8 @@ def test_external_gsplat_runner_rejects_failure_or_missing_output(
             source=source,
             staged=staged,
             profile=profile,
+            features=cast(ColmapFeatureExtractionResult, object()),
+            expected_environment=cast(ColmapEnvironmentIdentity, object()),
             source_root=source_root,
             python_executable=runtime,
             output_root=output,
