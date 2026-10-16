@@ -1851,9 +1851,20 @@ def materialize_verified_gsplat_ply(
                     raise GsplatStaticAppearancePreflightError(
                         "gsplat PLY contains non-finite Gaussian parameters"
                     )
-                if not any(value != 0.0 for value in record[-4:]):
+                rotation = record[-4:]
+                if not any(value != 0.0 for value in rotation):
                     raise GsplatStaticAppearancePreflightError(
                         "gsplat PLY contains a zero-norm rotation quaternion"
+                    )
+                # gsplat's rasterizer uses float32 quaternion operations.
+                # A finite nonzero tuple may still produce a subnormal or
+                # overflowing squared norm after float32 multiplication.
+                norm_squared = sum(value * value for value in rotation)
+                float32_min_normal = 2.0**-126
+                float32_max = (2.0 - 2.0**-23) * 2.0**127
+                if not float32_min_normal <= norm_squared <= float32_max:
+                    raise GsplatStaticAppearancePreflightError(
+                        "gsplat PLY contains a numerically unstable rotation quaternion"
                     )
             digest.update(chunk)
             remaining -= len(chunk)
