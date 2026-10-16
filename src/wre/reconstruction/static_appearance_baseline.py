@@ -1817,14 +1817,16 @@ def run_gsplat_reference_training(
     python_executable: Path,
     output_root: Path,
     artifact_ref: ArtifactRef,
+    producer: ArtifactProducerIdentity,
     cuda_device_index: int,
     timeout_seconds: int,
-) -> ArtifactMaterializationMetadata:
+) -> StaticAppearanceCandidateResult:
     """Run the exact reference trainer on an EXPLICIT external CUDA environment.
 
     This optional runtime path never loads torch in WRE itself. It verifies the
     source checkout and full staged input first, launches the upstream Config
-    and main in one non-shell subprocess, then audits the actual PLY bytes.
+    and main in one non-shell subprocess, then assembles the actual produced
+    PLY bytes into one canonical appearance candidate with source ancestry.
     The caller must provision/pin a compatible Python/Torch/CUDA environment;
     CPU-only CI exercises orchestration only, not GPU execution or training.
     """
@@ -1851,6 +1853,8 @@ def run_gsplat_reference_training(
         raise GsplatStaticAppearancePreflightError(
             "gsplat external trainer output must be an appearance artifact"
         )
+    if not isinstance(producer, ArtifactProducerIdentity):
+        raise TypeError("gsplat external trainer requires an explicit producer identity")
     # Ownership is intentionally explicit: only WRE's new private output
     # directory is created, and is not removed when a run fails.
     output_root.mkdir(mode=0o700)
@@ -1889,8 +1893,14 @@ def run_gsplat_reference_training(
         raise GsplatStaticAppearancePreflightError(
             "gsplat reference training failed; inspect the private training log"
         )
-    return materialize_verified_gsplat_ply(
-        artifact_ref=artifact_ref, output_root=output_root, profile=profile
+    return assemble_verified_gsplat_static_appearance_result(
+        request=request,
+        source=source,
+        staged=staged,
+        artifact_ref=artifact_ref,
+        output_root=output_root,
+        profile=profile,
+        producer=producer,
     )
 
 
