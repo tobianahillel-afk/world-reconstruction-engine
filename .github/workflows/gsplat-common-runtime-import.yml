@@ -890,6 +890,51 @@ jobs:
               "parsed by actual upstream gsplat dataset on CPU."
           )
 
+          # View the actual SIFT-reconstructed 3D from two camera positions
+          # absent from the input dataset. This is a sparse colored point
+          # projection, NOT a Gaussian radiance render or a quality benchmark.
+          novel_images = []
+          novel_visible = []
+          for fraction in (0.5, 1.5):
+              novel_rotation = Rotation.from_rotvec(
+                  Rotation.from_matrix(recovered_rotation).as_rotvec() * fraction
+              ).as_matrix()
+              novel_translation = recovered_translation.reshape(3) * fraction
+              camera_xyz = (novel_rotation @ reconstructed.T).T + novel_translation
+              projected = (intrinsic @ camera_xyz.T).T
+              frame = np.full((240, 320, 3), 16, dtype=np.uint8)
+              inside_count = 0
+              # Painter's algorithm: farthest points first so near points
+              # replace them on overlapping pixels; bounded by point count.
+              for point_index in np.argsort(camera_xyz[:, 2])[::-1]:
+                  if camera_xyz[point_index, 2] <= 0:
+                      continue
+                  xy = projected[point_index, :2] / projected[point_index, 2]
+                  if not np.all(np.isfinite(xy)):
+                      continue
+                  x, y = (int(round(float(value))) for value in xy)
+                  if not (2 <= x < 318 and 2 <= y < 238):
+                      continue
+                  r, g, b = colors[int(point_index)]
+                  cv2.circle(frame, (x, y), 2, (b, g, r), -1)
+                  inside_count += 1
+              assert inside_count >= 30, (fraction, inside_count)
+              novel_visible.append(inside_count)
+              cv2.putText(
+                  frame, f"NOVEL CAMERA {fraction:g}x", (8, 18),
+                  cv2.FONT_HERSHEY_SIMPLEX, 0.44, (255, 255, 255), 1,
+                  cv2.LINE_AA,
+              )
+              novel_images.append(frame)
+          novel_strip = cv2.hconcat(novel_images)
+          assert cv2.imwrite(
+              str(output / "wre-sift-cpu-estimated-novel-views.png"), novel_strip
+          )
+          print(
+              f"Two real CPU projections of estimated 3D at unsampled poses: "
+              f"{novel_visible} sparse points visible; no Gaussian renderer."
+          )
+
           projections = [
               intrinsic
               @ np.column_stack((np.eye(3), [-baseline * index, 0.0, 0.0]))
@@ -1019,6 +1064,7 @@ jobs:
             wre-sift-cpu-estimated-cameras.json \
             wre-sift-estimated-colmap-model.zip \
             wre-sift-estimated-colmap-handoff.json \
+            wre-sift-cpu-estimated-novel-views.png \
             wre-sift-cpu-feature-correspondences.png \
             wre-sift-cpu-metrics.json \
             wre-sift-cpu-view-0.png \
@@ -1028,8 +1074,8 @@ jobs:
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 17
-          echo "Staged all 17 real PLY/PNG/NPY/JSON/ZIP files for artifact upload"
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 18
+          echo "Staged all 18 real PLY/PNG/NPY/JSON/ZIP files for artifact upload"
 
       - name: Publish CPU COLMAP 3D preview and measured reprojection
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
