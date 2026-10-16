@@ -89,13 +89,19 @@ next_action: >-
   together under CPython 3.10.21 with 58 exact pinned wheels. GitHub Actions
   run 38899832367 retained artifact 12044988754, digest SHA-256
   fdb0438d0cb607da377914dec046e1b26cc0caa7676a33aafd79a091ad7dc680.
-  Donor PRs #225 and #227 were closed without merging to preserve only one
-  optional import workflow. Independent L2 on that snapshot returned
-  CHANGES_REQUIRED: the CPU-only workflow's eligibility under V2L18.3
-  'only if needed to execute ... on supported hardware' remains disputed,
-  Dependency Graph HTTP 404 leaves the old dependency-review effectively skipped,
-  and provenance/registry consistency require correction. Do not merge #224 on
-  CI success alone. Real dataset loading, native gsplat/fused-ssim co-import,
+  Donor PRs #225 and #227 were closed without merging; the additional
+  CPU-only optional import workflow proposed in PR #224 has now also been REMOVED
+  from its diff because V2L18.3 permits a focused optional external workflow
+  only if needed to execute the baseline on supported hardware. The prior
+  successful GitHub Actions run remains HISTORICAL evidence with its immutable
+  commit, artifact ID and digest above, not a lasting CI gate and not proof of
+  full trainer, GPU execution or source redistribution. L2 on the previous
+  workflow-containing SHA returned CHANGES_REQUIRED: disputed scope, the
+  dependency-review skip on Dependency Graph HTTP 404, and proof consistency.
+  Source/registry evidence was corrected separately, but the repository-wide
+  dependency-review block remains OPEN in PR #226. The new PR #224 snapshot,
+  with only registry/PROJECT_STATE evidence changes, requires its OWN L2;
+  do not merge based on prior passing CI or historical L2. Real dataset loading, native gsplat/fused-ssim co-import,
   full trainer ABI and GPU appearance training remain UNVERIFIED. The next
   separately evidenced gate is a complete full-trainer/native ABI import using
   the corrected exact 76-wheel Python lock,
