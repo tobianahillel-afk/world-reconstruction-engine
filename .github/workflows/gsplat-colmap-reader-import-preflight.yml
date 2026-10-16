@@ -1,0 +1,246 @@
+name: gsplat-colmap-reader-import-preflight
+
+# V2L18.3: real source-bound gsplat Parser / legacy SceneManager import.
+# This is NOT a full trainer import, GPU kernel, or appearance training.
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/gsplat-colmap-reader-import-preflight.yml"
+      - "registry/dependencies.yaml"
+      - "PROJECT_STATE.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reader-import:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      PYTHON_TARGET: "3.10.21"
+      GSPLAT_REV: 937e29912570c372bed6747a5c9bf85fed877bae
+      GSPLAT_TREE: 90c3f0b2352e6d2725bcba1ef0407168f922c0fa
+      READER_REV: cc7ea4b7301720ac29287dbe450952511b32125e
+      READER_TREE: b4fe292e93a8f6ca77a52912fcda5ff9b42ea3d7
+      PYTHONPATH: ""
+
+    steps:
+      - name: Checkout reviewed WRE lock
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Bootstrap exact Python and uv
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.13"
+          python-version: "3.10.21"
+          enable-cache: false
+
+      - name: Create disposable unseeded import environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv venv --python "$PYTHON_TARGET" "$RUNNER_TEMP/colmap-reader-venv"
+          echo "IMPORT_PYTHON=$RUNNER_TEMP/colmap-reader-venv/bin/python" >> "$GITHUB_ENV"
+
+      - name: Derive exact hash-locked import wheel closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run --no-project --with "pyyaml==6.0.2" --with "packaging==26.0" python - <<'PY'
+          from __future__ import annotations
+
+          import json
+          import os
+          import re
+          from pathlib import Path
+          from urllib.parse import urlsplit
+
+          import yaml
+          from packaging.requirements import Requirement
+          from packaging.utils import canonicalize_name
+
+          lock = yaml.safe_load(Path("registry/dependencies.yaml").read_text(encoding="utf-8"))[
+              "dependencies"
+          ]["gsplat_static_appearance"]["runtime_python_lock"]
+          assert lock["target"]["python"] == "3.10.21"
+          assert lock["target"]["torch_cuda"] == "12.4"
+          assert lock["gpu_execution_evidence"] is False
+          packages = {canonicalize_name(p["name"]): p for p in lock["packages"]}
+          assert len(packages) == len(lock["packages"]) == 76
+          assert packages["torch"]["version"] == "2.4.0+cu124"
+          assert packages["numpy"]["version"] == "1.26.4"
+
+          # Actual upstream examples/datasets/colmap.py and normalize.py imports.
+          pending = {
+              "opencv-python", "imageio", "numpy", "torch", "pillow",
+              "tqdm", "typing-extensions",
+          }
+          selected = set()
+          while pending:
+              name = pending.pop()
+              if name in selected:
+                  continue
+              item = packages.get(name)
+              if item is None:
+                  raise SystemExit(f"unlocked parser import: {name}")
+              selected.add(name)
+              for raw in item["requires_dist"]:
+                  req = Requirement(raw)
+                  if req.marker is not None and not req.marker.evaluate({
+                      "extra": "", "python_version": "3.10",
+                      "python_full_version": "3.10.21",
+                  }):
+                      continue
+                  dep = canonicalize_name(req.name)
+                  other = packages.get(dep)
+                  if other is None or not req.specifier.contains(
+                      other["version"], prereleases=True
+                  ):
+                      raise SystemExit(f"unlocked/incompatible {name} -> {dep}")
+                  pending.add(dep)
+
+          lines, manifest = [], []
+          for name in sorted(selected):
+              item = packages[name]
+              url, sha = item["url"], item["sha256"]
+              u = urlsplit(url)
+              if (u.scheme != "https" or u.hostname not in {
+                  "files.pythonhosted.org", "download.pytorch.org",
+                  "download-r2.pytorch.org", "pypi.nvidia.com",
+              } or u.fragment or u.username or u.password):
+                  raise SystemExit(f"unexpected wheel host for {name}")
+              if not re.fullmatch("[a-f0-9]{64}", sha):
+                  raise SystemExit(f"invalid SHA-256 for {name}")
+              lines.append(f"{item['name']} @ {url}#sha256={sha}")
+              manifest.append({
+                  "name": item["name"], "version": item["version"],
+                  "url": url, "sha256": sha,
+              })
+          temp = Path(os.environ["RUNNER_TEMP"])
+          (temp / "parser-pinned-wheels.txt").write_text(
+              "\n".join(lines) + "\n", encoding="utf-8"
+          )
+          (temp / "parser-wheel-manifest.json").write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          print(f"Selected {len(manifest)} exact wheels for Parser eager imports.")
+          PY
+
+      - name: Install strictly reviewed wheel subset
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv pip install --python "$IMPORT_PYTHON" --no-index --no-deps --no-cache \
+            --require-hashes -r "$RUNNER_TEMP/parser-pinned-wheels.txt"
+          uv pip check --python "$IMPORT_PYTHON"
+
+      - name: Fetch exact immutable upstream source trees
+        shell: bash
+        run: |
+          set -euo pipefail
+          for spec in \
+            "gsplat|https://github.com/nerfstudio-project/gsplat.git|$GSPLAT_REV|$GSPLAT_TREE" \
+            "reader|https://github.com/rmbrualla/pycolmap.git|$READER_REV|$READER_TREE"; do
+            IFS='|' read -r name remote revision tree <<< "$spec"
+            dir="$RUNNER_TEMP/$name"
+            git init -q "$dir"
+            git -C "$dir" remote add origin "$remote"
+            git -C "$dir" fetch --quiet --depth=1 origin "$revision"
+            git -C "$dir" checkout --quiet --detach FETCH_HEAD
+            test "$(git -C "$dir" rev-parse HEAD)" = "$revision"
+            test "$(git -C "$dir" rev-parse HEAD^{tree})" = "$tree"
+            test -z "$(git -C "$dir" status --porcelain)"
+          done
+          test -f "$RUNNER_TEMP/gsplat/examples/datasets/colmap.py"
+          test -f "$RUNNER_TEMP/reader/pycolmap/scene_manager.py"
+
+      - name: Import pinned real COLMAP parser and source reader
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$IMPORT_PYTHON" - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import json
+          import os
+          import re
+          import sys
+          from importlib import metadata
+          from pathlib import Path
+
+          root = Path(os.environ["RUNNER_TEMP"])
+          raw = (root / "parser-wheel-manifest.json").read_bytes()
+          declared = json.loads(raw)
+          canon = lambda name: re.sub(r"[-_.]+", "-", name).lower()
+          expected = {canon(row["name"]): row["version"] for row in declared}
+          assert len(expected) == len(declared), "duplicate locked package name"
+          installed = {}
+          for dist in metadata.distributions():
+              name = canon(dist.metadata["Name"])
+              assert name not in installed, f"duplicate installed package {name}"
+              installed[name] = dist.version
+          assert installed == expected, (
+              f"unexpected installed closure: missing={sorted(expected.keys() - installed.keys())}, "
+              f"extra={sorted(installed.keys() - expected.keys())}, "
+              f"wrong_versions={sorted(n for n in expected.keys() & installed.keys() if expected[n] != installed[n])}"
+          )
+
+          gsplat_root, reader_root = root / "gsplat", root / "reader"
+          sys.path[:0] = [str(gsplat_root / "examples"), str(reader_root)]
+          import cv2
+          import numpy
+          import torch
+          import pycolmap
+          from pycolmap import SceneManager
+          from datasets.colmap import Dataset, Parser
+
+          parser_path = (gsplat_root / "examples" / "datasets" / "colmap.py").resolve()
+          reader_path = (reader_root / "pycolmap" / "scene_manager.py").resolve()
+          assert Path(sys.modules[Parser.__module__].__file__).resolve() == parser_path
+          assert Path(sys.modules[SceneManager.__module__].__file__).resolve() == reader_path
+          assert Path(pycolmap.__file__).resolve() == (reader_root / "pycolmap" / "__init__.py").resolve()
+          assert numpy.__version__ == "1.26.4"
+          assert torch.__version__ == "2.4.0+cu124"
+          assert torch.version.cuda == "12.4"
+          assert not torch.cuda.is_available()
+          assert callable(Parser) and callable(Dataset) and callable(SceneManager)
+          result = {
+              "schema": 1,
+              "kind": "gsplat_colmap_parser_eager_import_cpu_only",
+              "gsplat_revision": os.environ["GSPLAT_REV"],
+              "gsplat_tree": os.environ["GSPLAT_TREE"],
+              "reader_revision": os.environ["READER_REV"],
+              "reader_tree": os.environ["READER_TREE"],
+              "parser_sha256": hashlib.sha256(parser_path.read_bytes()).hexdigest(),
+              "scene_manager_sha256": hashlib.sha256(reader_path.read_bytes()).hexdigest(),
+              "wheel_manifest_sha256": hashlib.sha256(raw).hexdigest(),
+              "locked_installed_distributions": installed,
+              "python": ".".join(map(str, sys.version_info[:3])),
+              "numpy": numpy.__version__,
+              "torch": torch.__version__,
+              "opencv": cv2.__version__,
+              "real_reader_and_parser_import": True,
+              "dataset_load": False,
+              "full_trainer_import": False,
+              "native_abi": False,
+              "gpu_kernel_execution": False,
+              "training_execution": False,
+              "redistribution_review": "pending",
+          }
+          (Path(os.environ["GITHUB_WORKSPACE"]) / "colmap-reader-import-evidence.json").write_text(
+              json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          print("Real gsplat COLMAP Parser + legacy SceneManager imported; no dataset/GPU/trainer execution.")
+          PY
+
+      - name: Upload exact-source import evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v2l18-3-colmap-reader-import
+          path: colmap-reader-import-evidence.json
+          if-no-files-found: error
+          retention-days: 30
