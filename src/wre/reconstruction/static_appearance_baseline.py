@@ -1788,6 +1788,7 @@ def materialize_verified_gsplat_ply(
             or not parts[2].isascii()
             or not parts[2].isdecimal()
             or parts[2].startswith("0")
+            or len(parts[2]) > len(str(_MAX_GSPLAT_PLY_VERTICES))
         ):
             raise GsplatStaticAppearancePreflightError(
                 "gsplat PLY must declare one non-empty vertex element"
