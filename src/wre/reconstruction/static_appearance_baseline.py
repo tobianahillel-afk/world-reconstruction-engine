@@ -1788,7 +1788,12 @@ def materialize_verified_gsplat_ply(
             "gsplat PLY changed or disappeared before opening"
         ) from exc
     with opened_stream as stream:
-        opened = os.fstat(stream.fileno())
+        try:
+            opened = os.fstat(stream.fileno())
+        except OSError as exc:
+            raise GsplatStaticAppearancePreflightError(
+                "gsplat PLY descriptor could not be inspected before verification"
+            ) from exc
         identity = (opened.st_dev, opened.st_ino)
         if identity != (before.st_dev, before.st_ino):
             raise GsplatStaticAppearancePreflightError(
@@ -1957,7 +1962,12 @@ def materialize_verified_gsplat_ply(
             remaining -= len(chunk)
         if read_checked(1):
             raise GsplatStaticAppearancePreflightError("gsplat PLY contains trailing bytes")
-        final_handle = os.fstat(stream.fileno())
+        try:
+            final_handle = os.fstat(stream.fileno())
+        except OSError as exc:
+            raise GsplatStaticAppearancePreflightError(
+                "gsplat PLY descriptor could not be inspected after verification"
+            ) from exc
         if (
             final_handle.st_dev,
             final_handle.st_ino,
