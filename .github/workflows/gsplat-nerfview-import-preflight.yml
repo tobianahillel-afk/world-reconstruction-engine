@@ -28,12 +28,14 @@ jobs:
       NERFVIEW_REVISION: 4538024fe0d15fd1a0e4d760f3695fc44ca72787
       NERFVIEW_TREE: e333400e39605978a3d1f9cf6d73ddf577a8c8e3
       PYTHONPATH: ""
+      REVIEWED_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
 
     steps:
       - name: Checkout reviewed WRE registry
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Bootstrap pinned Python and uv
         uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
@@ -170,6 +172,7 @@ jobs:
           import json
           import os
           import re
+          import subprocess
           import sys
           from importlib import metadata
           from pathlib import Path
@@ -215,8 +218,21 @@ jobs:
               f"version_mismatch={sorted(name for name in expected.keys() & installed.keys() if expected[name] != installed[name])}"
           )
           assert metadata.version("splines") == "0.3.3"
+          checkout_sha = subprocess.check_output(
+              ["git", "rev-parse", "HEAD"], cwd=os.environ["GITHUB_WORKSPACE"], text=True
+          ).strip()
+          assert checkout_sha == os.environ["REVIEWED_HEAD_SHA"]
           evidence = {
               "schema_version": 1,
+              "wre_repository": os.environ["GITHUB_REPOSITORY"],
+              "wre_source_commit": checkout_sha,
+              "github_run_id": os.environ["GITHUB_RUN_ID"],
+              "github_run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
+              "github_workflow_ref": os.environ["GITHUB_WORKFLOW_REF"],
+              "github_run_url": (
+                  f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/"
+                  f"{os.environ['GITHUB_RUN_ID']}"
+              ),
               "evidence_kind": "pinned_nerfview_eager_import_cpu_host_only",
               "nerfview_revision": os.environ["NERFVIEW_REVISION"],
               "nerfview_source_tree": os.environ["NERFVIEW_TREE"],
@@ -244,9 +260,32 @@ jobs:
           PY
 
       - name: Retain verified import evidence
+        id: import-evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: v2l18-3-nerfview-eager-import
           path: nerfview-import-evidence.json
           if-no-files-found: error
           retention-days: 30
+
+      - name: Report SHA-bound provenance and finite artifact retention
+        shell: bash
+        env:
+          ARTIFACT_DIGEST: ${{ steps.import-evidence.outputs.artifact-digest }}
+          ARTIFACT_URL: ${{ steps.import-evidence.outputs.artifact-url }}
+        run: |
+          set -euo pipefail
+          test -n "$ARTIFACT_DIGEST"
+          test -n "$ARTIFACT_URL"
+          {
+            echo "### WRE V2L18.3 exact nerfview import evidence"
+            echo "Reviewed HEAD: \\`$REVIEWED_HEAD_SHA\\`"
+            echo "GitHub run: https://github.com/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo "Attempt: $GITHUB_RUN_ATTEMPT"
+            echo "Evidence JSON SHA-256:"
+            sha256sum nerfview-import-evidence.json
+            echo "Artifact SHA-256 digest: $ARTIFACT_DIGEST"
+            echo "Artifact URL: $ARTIFACT_URL"
+            echo "Retention: 30 days; keep the run and digest in the reviewed registry before expiry."
+            echo "This evidence proves eager imports only; no GPU, native ABI or training."
+          } >> "$GITHUB_STEP_SUMMARY"
