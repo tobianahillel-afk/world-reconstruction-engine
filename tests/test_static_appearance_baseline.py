@@ -246,6 +246,28 @@ def test_gsplat_trainer_config_rejects_unsafe_runtime_paths(
         )
 
 
+@pytest.mark.parametrize("alias_part", ("images", "sparse", "sparse/0"))
+def test_gsplat_trainer_config_rejects_symlinked_colmap_subdirectories(
+    tmp_path: Path, alias_part: str
+) -> None:
+    staged = tmp_path / "staged-colmap"
+    (staged / "images").mkdir(parents=True)
+    (staged / "sparse" / "0").mkdir(parents=True)
+    linked = staged.joinpath(*alias_part.split("/"))
+    original = tmp_path / "real-subdirectory"
+    linked.rename(original)
+    linked.symlink_to(original, target_is_directory=True)
+    assert linked.is_dir()  # A plain is_dir check would follow and accept the alias.
+    assert linked.is_symlink()
+
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="real staged images"):
+        build_gsplat_reference_trainer_path_overrides(
+            profile=GsplatStaticAppearanceTrainingProfile(),
+            dataset_root=staged,
+            output_root=tmp_path / "results",
+        )
+
+
 @pytest.mark.parametrize(
     "mutation",
     (
