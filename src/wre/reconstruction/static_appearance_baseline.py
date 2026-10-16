@@ -290,19 +290,24 @@ def verify_gsplat_static_appearance_reference_sources(
             raise GsplatStaticAppearancePreflightError(
                 f"gsplat reference source path invalid: {relative}"
             )
-        if resolved.stat().st_size != expected_size:
+        try:
+            if resolved.stat().st_size != expected_size:
+                raise GsplatStaticAppearancePreflightError(
+                    f"gsplat reference source byte length differs: {relative}"
+                )
+            data = resolved.read_bytes()
+            if len(data) != expected_size or _git_blob_sha1(data) != expected_git_blob:
+                raise GsplatStaticAppearancePreflightError(
+                    f"gsplat reference source Git blob differs: {relative}"
+                )
+            if resolved.stat().st_size != expected_size:
+                raise GsplatStaticAppearancePreflightError(
+                    f"gsplat reference source changed during verification: {relative}"
+                )
+        except OSError as exc:
             raise GsplatStaticAppearancePreflightError(
-                f"gsplat reference source byte length differs: {relative}"
-            )
-        data = resolved.read_bytes()
-        if len(data) != expected_size or _git_blob_sha1(data) != expected_git_blob:
-            raise GsplatStaticAppearancePreflightError(
-                f"gsplat reference source Git blob differs: {relative}"
-            )
-        if resolved.stat().st_size != expected_size:
-            raise GsplatStaticAppearancePreflightError(
-                f"gsplat reference source changed during verification: {relative}"
-            )
+                f"gsplat reference source disappeared during verification: {relative}"
+            ) from exc
         entries.append(
             ArtifactMaterializationEntry(
                 relative_path=relative,
@@ -1728,7 +1733,12 @@ def verify_gsplat_reference_trainer_config_fields(
     source_file = (
         _safe_root(source_root, "gsplat trainer source_root") / "examples/simple_trainer.py"
     )
-    payload = source_file.read_bytes()
+    try:
+        payload = source_file.read_bytes()
+    except OSError as exc:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat trainer source disappeared during Config schema verification"
+        ) from exc
     pinned = next(
         (size, blob)
         for path, size, blob in _GSPLAT_REFERENCE_SOURCE_FILES
