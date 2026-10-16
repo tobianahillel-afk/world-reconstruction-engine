@@ -2395,6 +2395,7 @@ __all__ = [
     "GsplatStaticAppearanceVerifiedImage",
     "assemble_verified_gsplat_static_appearance_result",
     "inspect_gsplat_static_appearance_shared_track_pixels",
+    "export_verified_gsplat_rgb_centers_ply",
     "materialize_verified_gsplat_ply",
     "preflight_gsplat_static_appearance_inputs",
     "run_gsplat_reference_training",
