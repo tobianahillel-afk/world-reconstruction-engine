@@ -955,7 +955,13 @@ dependencies:
     reference_combined_eager_import_artifact_id: 12044988754
     reference_combined_eager_import_artifact_digest_sha256: fdb0438d0cb607da377914dec046e1b26cc0caa7676a33aafd79a091ad7dc680
     reference_combined_eager_import_qualifies: nerfview_trainer_helpers_colmap_legacy_reader_cpu_eager_import_only
+    # Earlier consolidated workflow SHA (not this candidate registry-only HEAD):
+    reference_combined_eager_import_l2_reviewed_commit: 07d3eeebdd0bdebf96a81a4853e9322f7debf88f
     reference_combined_eager_import_l2_verdict: changes_required
+    # Subsequent registry-only snapshot was also reviewed, but security scanning
+    # and custom-registry inventory coverage remain unresolved repository gates.
+    reference_import_evidence_scope_l2_reviewed_commit: 5d5e06cbaccd91ee7b4a2c273c102df007db6423
+    reference_import_evidence_scope_l2_verdict: changes_required
     reference_combined_eager_import_full_trainer_execution: false
     reference_combined_eager_import_gpu_execution: false
     reference_fused_bilagrid_source_revision: 90f9788e57d3545e3a033c1038bb9986549632fe
