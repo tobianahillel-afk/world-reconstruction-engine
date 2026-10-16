@@ -199,10 +199,7 @@ def test_pinned_gsplat_trainer_config_fields_without_runtime_import(
     root, data = _reviewed_source_fixture(tmp_path, monkeypatch)
     profile = GsplatStaticAppearanceTrainingProfile(max_steps=20)
     overrides = sorted(profile.reference_overrides())
-    fields = [
-        name for name in overrides
-        if mutation != "missing_field" or name != "save_ply"
-    ]
+    fields = [name for name in overrides if mutation != "missing_field" or name != "save_ply"]
     decorator = "" if mutation == "missing_dataclass" else "@dataclass\n"
     source = decorator + "class Config:\n"
     source += "".join(f"    {name}: object = None\n" for name in fields)
