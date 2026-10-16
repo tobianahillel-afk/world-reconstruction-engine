@@ -108,6 +108,7 @@ from wre.reconstruction.static_appearance_baseline import (
     GsplatStaticAppearancePreflightSource,
     GsplatStaticAppearanceTrainingProfile,
     assemble_verified_gsplat_static_appearance_result,
+    build_gsplat_reference_trainer_path_overrides,
     inspect_gsplat_static_appearance_shared_track_pixels,
     materialize_verified_gsplat_ply,
     preflight_gsplat_static_appearance_inputs,
@@ -189,6 +190,57 @@ def test_gsplat_reference_source_gate_verifies_exact_bytes_without_import(
         assert entry.byte_length == len(payload)
         assert entry.sha256 == _digest(payload)
     assert result == verify_gsplat_static_appearance_reference_sources(root)
+
+
+def test_gsplat_trainer_config_uses_explicit_isolated_paths(tmp_path: Path) -> None:
+    staged = tmp_path / "staged-colmap"
+    (staged / "images").mkdir(parents=True)
+    (staged / "sparse" / "0").mkdir(parents=True)
+    output = tmp_path / "private-results"
+    profile = GsplatStaticAppearanceTrainingProfile(max_steps=20)
+    expected_identity = profile.configuration_sha256
+
+    overrides = build_gsplat_reference_trainer_path_overrides(
+        profile=profile, dataset_root=staged, output_root=output
+    )
+    assert overrides["data_dir"] == str(staged)
+    assert overrides["result_dir"] == str(output)
+    assert {key: value for key, value in overrides.items() if key not in ("data_dir", "result_dir")} == profile.reference_overrides()
+    assert overrides["ply_steps"] == [20]
+    assert profile.configuration_sha256 == expected_identity
+    assert not output.exists()
+
+
+@pytest.mark.parametrize(
+    "invalid_case",
+    ("relative", "existing", "overlap", "missing_images", "missing_colmap", "symlink"),
+)
+def test_gsplat_trainer_config_rejects_unsafe_runtime_paths(
+    tmp_path: Path, invalid_case: str
+) -> None:
+    staged = tmp_path / "staged-colmap"
+    (staged / "images").mkdir(parents=True)
+    (staged / "sparse" / "0").mkdir(parents=True)
+    destination = tmp_path / "results"
+    if invalid_case == "relative":
+        destination = Path("results")
+    elif invalid_case == "existing":
+        destination.mkdir()
+    elif invalid_case == "overlap":
+        destination = staged / "new-results"
+    elif invalid_case == "missing_images":
+        (staged / "images").rmdir()
+    elif invalid_case == "missing_colmap":
+        (staged / "sparse" / "0").rmdir()
+    elif invalid_case == "symlink":
+        destination.symlink_to(staged, target_is_directory=True)
+
+    with pytest.raises(GsplatStaticAppearancePreflightError):
+        build_gsplat_reference_trainer_path_overrides(
+            profile=GsplatStaticAppearanceTrainingProfile(),
+            dataset_root=staged,
+            output_root=destination,
+        )
 
 
 @pytest.mark.parametrize(
