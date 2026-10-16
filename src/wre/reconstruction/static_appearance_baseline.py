@@ -1886,6 +1886,12 @@ def materialize_verified_gsplat_ply(
             raise GsplatStaticAppearancePreflightError(
                 "gsplat PLY payload is truncated or contains unexpected bytes"
             )
+        # gsplat stores Gaussian scales as log-scale floats and applies
+        # torch.exp before its float32 covariance computation. Bound the
+        # log-scale so exp(scale)**2 stays finite AND normal in float32.
+        # This is a numeric preflight, not proof of GPU execution.
+        min_log_covariance_scale = -63.0 * math.log(2.0)
+        max_log_covariance_scale = 0.5 * math.log((2.0 - 2.0**-23) * 2.0**127)
         # Check the whole record stream, not just a header, and hash the same
         # bytes we have inspected. The bounded read limits transient memory.
         remaining = count * stride
@@ -1899,6 +1905,13 @@ def materialize_verified_gsplat_ply(
                 if any(not math.isfinite(value) for value in record):
                     raise GsplatStaticAppearancePreflightError(
                         "gsplat PLY contains non-finite Gaussian parameters"
+                    )
+                if any(
+                    not min_log_covariance_scale <= value <= max_log_covariance_scale
+                    for value in record[-7:-4]
+                ):
+                    raise GsplatStaticAppearancePreflightError(
+                        "gsplat PLY contains a numerically unstable log scale"
                     )
                 rotation = record[-4:]
                 if not any(value != 0.0 for value in rotation):
