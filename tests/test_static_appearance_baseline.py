@@ -1177,9 +1177,7 @@ def test_external_gsplat_runner_spawns_real_process_and_assembles_appearance(
     assert b"element vertex 2\n" in encoded[:header_end]
     assert b"property uchar red\n" in encoded[:header_end]
     assert len(encoded[header_end:]) == 2 * struct.calcsize("<3f3B")
-    assert (output / profile.expected_ply_relative_path).read_bytes() == _gsplat_ply(
-        vertices=2
-    )
+    assert (output / profile.expected_ply_relative_path).read_bytes() == _gsplat_ply(vertices=2)
 
 
 @pytest.mark.parametrize("mutation", ("missing_revision", "wrong_configuration"))
