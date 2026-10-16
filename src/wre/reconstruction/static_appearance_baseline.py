@@ -1884,7 +1884,16 @@ def materialize_verified_gsplat_ply(
                 norm_squared = sum(value * value for value in rotation)
                 float32_min_normal = 2.0**-126
                 float32_max = (2.0 - 2.0**-23) * 2.0**127
-                if not float32_min_normal <= norm_squared <= float32_max:
+                # The pinned gsplat CUDA quat_to_rotmat computes rsqrt of the
+                # sum of four individual float32 squares. On FTZ hardware,
+                # every subnormal square can become zero even when their
+                # double-precision sum exceeds float32_min_normal.
+                # At least one squared component must itself be normal.
+                min_normal_component = 2.0**-63
+                if (
+                    max(abs(value) for value in rotation) < min_normal_component
+                    or not float32_min_normal <= norm_squared <= float32_max
+                ):
                     raise GsplatStaticAppearancePreflightError(
                         "gsplat PLY contains a numerically unstable rotation quaternion"
                     )

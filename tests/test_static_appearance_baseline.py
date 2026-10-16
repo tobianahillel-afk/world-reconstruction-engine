@@ -905,6 +905,38 @@ def test_gsplat_ply_rotation_requires_stable_float32_squared_norm(
         assert result.entries[0].sha256 == _digest(bytes(data))
 
 
+@pytest.mark.parametrize(
+    ("component", "should_reject"),
+    ((6.0e-20, True), (1.0e-19, True), (2.0e-19, False)),
+)
+def test_gsplat_ply_rejects_cuda_flush_to_zero_rotation(
+    tmp_path: Path, component: float, should_reject: bool
+) -> None:
+    # The old double-precision squared-norm check passes EVERY case below.
+    # CUDA gsplat squares each float32 component before summing; with FTZ
+    # enabled four subnormal squares can all become zero before rsqrt.
+    original = _gsplat_ply(vertices=2)
+    data = bytearray(original)
+    stride = 59 * 4
+    first_rotation = len(data) - 2 * stride + stride - 16
+    raw_rotation = struct.pack("<4f", component, component, component, component)
+    decoded_rotation = struct.unpack("<4f", raw_rotation)
+    assert sum(value * value for value in decoded_rotation) >= 2.0**-126
+    data[first_rotation : first_rotation + 16] = raw_rotation
+    assert bytes(data) != original
+    root, profile, ref = _gsplat_output(tmp_path, bytes(data))
+    if should_reject:
+        with pytest.raises(
+            GsplatStaticAppearancePreflightError, match="numerically unstable rotation"
+        ):
+            materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
+    else:
+        verified = materialize_verified_gsplat_ply(
+            artifact_ref=ref, output_root=root, profile=profile
+        )
+        assert verified.entries[0].sha256 == _digest(bytes(data))
+
+
 def test_gsplat_ply_materialization_rejects_zero_gaussians_and_forged_header(
     tmp_path: Path,
 ) -> None:
