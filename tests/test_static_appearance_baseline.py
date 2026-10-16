@@ -205,7 +205,9 @@ def test_gsplat_trainer_config_uses_explicit_isolated_paths(tmp_path: Path) -> N
     )
     assert overrides["data_dir"] == str(staged)
     assert overrides["result_dir"] == str(output)
-    stable = {key: value for key, value in overrides.items() if key not in ("data_dir", "result_dir")}
+    stable = {
+        key: value for key, value in overrides.items() if key not in ("data_dir", "result_dir")
+    }
     assert stable == profile.reference_overrides()
     assert overrides["ply_steps"] == [20]
     assert profile.configuration_sha256 == expected_identity
