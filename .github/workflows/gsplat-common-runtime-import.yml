@@ -617,6 +617,81 @@ jobs:
               photo_gif.seek(15)
               assert photo_gif.convert("RGB").tobytes() != first_photo_frame
 
+          # Two REAL observed photographs can fill more intermediate-view
+          # pixels than the left source alone. Reuse native OpenCV SGBM with
+          # its signed disparity interval reversed for the right camera.
+          # Positive right disparity is x_left - x_right, so its observed
+          # pixel projects to x_right + (1 - camera_x) * right_disparity.
+          # Never synthesize unknown colors or overwrite visible left pixels.
+          right_matcher = cv2.StereoSGBM_create(
+              minDisparity=-128, numDisparities=128, blockSize=block,
+              P1=8 * 3 * block * block, P2=32 * 3 * block * block,
+              uniquenessRatio=8, speckleWindowSize=70, speckleRange=2,
+              disp12MaxDiff=1,
+          )
+          right_disparity = -right_matcher.compute(right, left).astype(np.float32) / 16.0
+          right_valid = (
+              np.isfinite(right_disparity)
+              & (right_disparity > 2.0)
+              & (right_disparity < 128.0)
+          )
+          assert int(right_valid.sum()) >= 500
+
+          def warp_right_observed_pixels(camera_x):
+              projected_x = np.rint(
+                  np.where(right_valid, xx + (1.0 - camera_x) * right_disparity, -1.0)
+              ).astype(np.int32)
+              inside = right_valid & (projected_x >= 0) & (projected_x < width)
+              target_pixels = yy[inside].astype(np.int32) * width + projected_x[inside]
+              order = np.lexsort((-right_disparity[inside], target_pixels))
+              _, first = np.unique(target_pixels[order], return_index=True)
+              nearest = order[first]
+              pixels = np.zeros_like(right)
+              pixels.reshape(-1, 3)[target_pixels[nearest]] = right[inside][nearest]
+              mask = np.zeros(height * width, dtype=bool)
+              mask[target_pixels[nearest]] = True
+              return pixels, mask.reshape(height, width)
+
+          dual_gif_name = "wre-real-stereo-cpu-dual-photo-flythrough.gif"
+          dual_frames = []
+          dual_observed_counts = []
+          dual_right_added_counts = []
+          for shift in photo_shifts:
+              left_frame, left_count, left_mask = warp_observed_pixels(float(shift))
+              right_frame, right_mask = warp_right_observed_pixels(float(shift))
+              from_right_only = right_mask & ~left_mask
+              merged = left_frame.copy()
+              merged[from_right_only] = right_frame[from_right_only]
+              assert np.array_equal(merged[left_mask], left_frame[left_mask])
+              added = int(from_right_only.sum())
+              total = int((left_mask | right_mask).sum())
+              assert total == left_count + added
+              dual_right_added_counts.append(added)
+              dual_observed_counts.append(total)
+              reduced = cv2.resize(merged, gif_size, interpolation=cv2.INTER_NEAREST)
+              dual_frames.append(Image.fromarray(cv2.cvtColor(reduced, cv2.COLOR_BGR2RGB)))
+          assert len(dual_frames) == 16
+          assert max(dual_right_added_counts) > 0
+          assert all(
+              dual >= left_only
+              for dual, left_only in zip(dual_observed_counts, photo_observed_counts)
+          )
+          assert not np.array_equal(np.asarray(dual_frames[0]), np.asarray(dual_frames[-1]))
+          dual_path = output / dual_gif_name
+          dual_frames[0].save(
+              dual_path, format="GIF", save_all=True,
+              append_images=dual_frames[1:], duration=110, loop=0,
+              optimize=False, disposal=2,
+          )
+          assert 100 < dual_path.stat().st_size < 8_000_000
+          with Image.open(dual_path) as dual_gif:
+              assert dual_gif.format == "GIF" and dual_gif.n_frames == 16
+              assert dual_gif.size == gif_size
+              dual_gif.seek(0)
+              first_dual_frame = dual_gif.convert("RGB").tobytes()
+              dual_gif.seek(15)
+              assert dual_gif.convert("RGB").tobytes() != first_dual_frame
+
           # Measure a real reprojection at the observed right-camera baseline.
           # The right photo ALSO contributed to StereoSGBM: this is in-sample
           # photometric consistency, NOT an independent held-out quality score.
@@ -715,6 +790,18 @@ jobs:
               "photographic_stereo_flythrough_is_dynamic_4d_scene": False,
               "photographic_stereo_flythrough_is_gaussian_render": False,
               "photographic_stereo_flythrough_contains_inpainting": False,
+              "dual_source_stereo_flythrough_file": dual_gif_name,
+              "dual_source_stereo_flythrough_frames": len(dual_frames),
+              "dual_source_stereo_flythrough_observed_pixels": dual_observed_counts,
+              "dual_source_stereo_flythrough_right_only_pixels": dual_right_added_counts,
+              "dual_source_right_disparity_valid_fraction": float(np.mean(right_valid)),
+              "dual_source_stereo_flythrough_method": (
+                  "two real photographed RGB inputs; separate signed native "
+                  "StereoSGBM; nearest-depth projection; right only fills left holes"
+              ),
+              "dual_source_stereo_flythrough_contains_inpainting": False,
+              "dual_source_stereo_flythrough_is_dynamic_4d_scene": False,
+              "dual_source_stereo_flythrough_is_gaussian_render": False,
               "dense_cpu_warp_is_exact_depth_aware_render": False,
               "dense_cpu_warp_inpainting_or_hallucination": False,
               "dense_cpu_warp_photorealism_or_heldout_quality_proven": False,
@@ -839,7 +926,7 @@ jobs:
       # Run the actual-photo CPU reconstruction BEFORE expensive native CUDA
       # compilation. Keep the original photo pipeline in one place and make
       # its real 3D/preview outputs inspectable even while CUDA builds run.
-      - name: Stage fifteen real-photo CPU 3D, animated mesh, GLB and COLMAP outputs early
+      - name: Stage seventeen real-photo CPU 3D, animated mesh, GLB and COLMAP outputs early
         shell: bash
         run: |
           set -euo pipefail
@@ -852,6 +939,7 @@ jobs:
             wre-real-stereo-cpu-textured.glb \
             wre-real-stereo-cpu-3d-flythrough.gif \
             wre-real-stereo-cpu-photo-flythrough.gif \
+            wre-real-stereo-cpu-dual-photo-flythrough.gif \
             wre-real-stereo-cpu-textured.mtl \
             wre-real-stereo-cpu-texture.png \
             wre-real-stereo-cpu-disparity.png \
@@ -866,7 +954,7 @@ jobs:
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 16
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 17
 
       - name: Publish real-photo CPU 3D plus COLMAP before native CUDA builds
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -1862,6 +1950,7 @@ jobs:
             wre-real-stereo-cpu-textured.glb \
             wre-real-stereo-cpu-3d-flythrough.gif \
             wre-real-stereo-cpu-photo-flythrough.gif \
+            wre-real-stereo-cpu-dual-photo-flythrough.gif \
             wre-real-stereo-cpu-textured.mtl \
             wre-real-stereo-cpu-texture.png \
             wre-real-stereo-cpu-disparity.png \
@@ -1874,8 +1963,8 @@ jobs:
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 32
-          echo "Staged all 32 real PLY/OBJ/GLB/GIF/MTL/PNG/NPY/JSON/ZIP files for artifact upload"
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 33
+          echo "Staged all 33 real PLY/OBJ/GLB/GIF/MTL/PNG/NPY/JSON/ZIP files for artifact upload"
 
       - name: Publish CPU COLMAP 3D preview and measured reprojection
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
