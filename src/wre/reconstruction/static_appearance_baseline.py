@@ -1859,7 +1859,32 @@ def run_gsplat_reference_training(
     # directory is created, and is not removed when a run fails.
     output_root.mkdir(mode=0o700)
     log_path = output_root / "wre-reference-training.log"
-    env = os.environ.copy()
+    # The external interpreter executes third-party native code. Never
+    # forward unrelated credentials (e.g. CI tokens or cloud keys).
+    # Keep only the runtime paths used by Python/CUDA and temp/cache helpers.
+    runtime_environment_names = (
+        "PATH",
+        "HOME",
+        "USERPROFILE",
+        "SYSTEMROOT",
+        "WINDIR",
+        "TMP",
+        "TEMP",
+        "TMPDIR",
+        "LD_LIBRARY_PATH",
+        "DYLD_LIBRARY_PATH",
+        "CUDA_HOME",
+        "CUDA_PATH",
+        "CONDA_PREFIX",
+        "VIRTUAL_ENV",
+        "XDG_CACHE_HOME",
+        "TORCH_EXTENSIONS_DIR",
+    )
+    env = {
+        name: os.environ[name]
+        for name in runtime_environment_names
+        if name in os.environ
+    }
     env["CUDA_VISIBLE_DEVICES"] = str(cuda_device_index)
     env["PYTHONNOUSERSITE"] = "1"
     env["PIP_NO_INDEX"] = "1"
