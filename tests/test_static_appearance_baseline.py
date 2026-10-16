@@ -110,6 +110,7 @@ from wre.reconstruction.static_appearance_baseline import (
     assemble_verified_gsplat_static_appearance_result,
     build_gsplat_reference_trainer_path_overrides,
     inspect_gsplat_static_appearance_shared_track_pixels,
+    run_gsplat_reference_training,
     materialize_verified_gsplat_ply,
     preflight_gsplat_static_appearance_inputs,
     stage_verified_gsplat_static_appearance_dataset,
@@ -849,15 +850,17 @@ def test_preflight_has_no_trainer_execution_or_optional_framework_import() -> No
         "hashlib",
         "json",
         "math",
+        "os",
         "pathlib",
         "shutil",
         "struct",
+        "subprocess",
         "tempfile",
         "typing",
         "wre",
         "zlib",
     }
-    assert not {"torch", "gsplat", "numpy", "subprocess", "pycolmap"} & imported
+    assert not {"torch", "gsplat", "numpy", "pycolmap"} & imported
 
 
 def test_safe_training_profile_disables_unsafe_upstream_defaults() -> None:
@@ -981,6 +984,117 @@ def _gsplat_output(
     (output / profile.expected_ply_relative_path).write_bytes(data)
     ref = ArtifactRef(ArtifactId("appearance:gsplat:fixture"), APPEARANCE_MODEL_ARTIFACT_KIND)
     return output, profile, ref
+
+
+def test_external_gsplat_runner_hands_real_config_to_process_and_hashes_ply(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Offline process-orchestration test ONLY; CUDA training is not run."""
+    dataset = _plausible_gsplat_runtime_tree(tmp_path)
+    source = tmp_path / "pinned-source"
+    (source / "examples").mkdir(parents=True)
+    runtime = tmp_path / "external-python"
+    runtime.write_bytes(b"stub: external runtime explicitly provided")
+    output = tmp_path / "external-output"
+    artifact_ref = ArtifactRef(
+        ArtifactId("appearance:gsplat:external-process-fixture"),
+        APPEARANCE_MODEL_ARTIFACT_KIND,
+    )
+    profile = GsplatStaticAppearanceTrainingProfile(max_steps=20)
+    monkeypatch.setattr(
+        baseline_module, "verify_gsplat_static_appearance_staged_dataset", lambda *_: ()
+    )
+    monkeypatch.setattr(
+        baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
+    )
+    calls: list[tuple[list[str], dict[str, Any]]] = []
+
+    def fake_cuda_process(command: list[str], **kwargs: Any) -> SimpleNamespace:
+        calls.append((command, kwargs))
+        (output / "ply").mkdir()
+        (output / profile.expected_ply_relative_path).write_bytes(_gsplat_ply())
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(baseline_module.subprocess, "run", fake_cuda_process)
+    result = run_gsplat_reference_training(
+        request=cast(StaticAppearanceCandidateRequest, object()),
+        source=cast(GsplatStaticAppearancePreflightSource, object()),
+        staged=cast(
+            baseline_module.GsplatStaticAppearanceStagedDataset,
+            SimpleNamespace(dataset_root=dataset),
+        ),
+        profile=profile,
+        source_root=source,
+        python_executable=runtime,
+        output_root=output,
+        artifact_ref=artifact_ref,
+        cuda_device_index=2,
+        timeout_seconds=30,
+    )
+    assert len(calls) == 1
+    command, kwargs = calls[0]
+    assert command[:3] == [str(runtime), "-I", "-c"]
+    assert "from simple_trainer import Config, main" in command[3]
+    assert command[4] == str(source / "examples")
+    assert kwargs["cwd"] == source / "examples"
+    assert kwargs["env"]["CUDA_VISIBLE_DEVICES"] == "2"
+    assert kwargs["env"]["PIP_NO_INDEX"] == "1"
+    assert kwargs["timeout"] == 30
+    assert kwargs["stderr"] == baseline_module.subprocess.STDOUT
+    runtime_config = baseline_module.json.loads(kwargs["input"])
+    assert runtime_config["data_dir"] == str(dataset)
+    assert runtime_config["result_dir"] == str(output)
+    assert runtime_config["save_ply"] is True
+    assert runtime_config["disable_viewer"] is True
+    assert runtime_config["pose_opt"] is False
+    assert runtime_config["max_steps"] == 20
+    assert result.artifact_ref == artifact_ref
+    assert result.entries[0].relative_path == "ply/point_cloud_19.ply"
+    assert result.entries[0].sha256 == _digest(_gsplat_ply())
+    assert (output / "wre-reference-training.log").exists()
+
+
+@pytest.mark.parametrize("return_code", (1, 0))
+def test_external_gsplat_runner_rejects_failure_or_missing_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, return_code: int
+) -> None:
+    dataset = _plausible_gsplat_runtime_tree(tmp_path)
+    source = tmp_path / "upstream"
+    (source / "examples").mkdir(parents=True)
+    runtime = tmp_path / "external-python"
+    runtime.write_bytes(b"stub")
+    output = tmp_path / "output"
+    monkeypatch.setattr(
+        baseline_module, "verify_gsplat_static_appearance_staged_dataset", lambda *_: ()
+    )
+    monkeypatch.setattr(
+        baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
+    )
+    monkeypatch.setattr(
+        baseline_module.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(returncode=return_code),
+    )
+    with pytest.raises(GsplatStaticAppearancePreflightError):
+        run_gsplat_reference_training(
+            request=cast(StaticAppearanceCandidateRequest, object()),
+            source=cast(GsplatStaticAppearancePreflightSource, object()),
+            staged=cast(
+                baseline_module.GsplatStaticAppearanceStagedDataset,
+                SimpleNamespace(dataset_root=dataset),
+            ),
+            profile=GsplatStaticAppearanceTrainingProfile(max_steps=20),
+            source_root=source,
+            python_executable=runtime,
+            output_root=output,
+            artifact_ref=ArtifactRef(
+                ArtifactId("appearance:gsplat:failed-execution"),
+                APPEARANCE_MODEL_ARTIFACT_KIND,
+            ),
+            cuda_device_index=0,
+            timeout_seconds=30,
+        )
+    assert (output / "wre-reference-training.log").exists()
 
 
 def test_gsplat_ply_materialization_hashes_real_output_and_retains_path(tmp_path: Path) -> None:
