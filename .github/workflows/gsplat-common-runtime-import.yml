@@ -516,10 +516,36 @@ jobs:
                   "buffer": 0, "byteOffset": offset,
                   "byteLength": len(values), "target": 34962,
               })
+          # Rotate a real reconstructed RGB point cloud in any glTF viewer
+          # supporting POINTS and animations. This is NOT dynamic 4D evidence.
+          # Center the orbit on the measured cloud rather than world origin.
+          checked_center = checked_positions.astype(np.float64).mean(axis=0).astype("<f4")
+          orbit_times = np.asarray([0, 2, 4, 6, 8], dtype="<f4")
+          half_angles = np.arange(5, dtype=np.float64) * np.pi / 4
+          orbit_rotations = np.zeros((5, 4), dtype="<f4")
+          orbit_rotations[:, 1] = np.sin(half_angles)
+          orbit_rotations[:, 3] = np.cos(half_angles)
+          assert np.allclose(np.linalg.norm(orbit_rotations, axis=1), 1, atol=1e-6)
+          for values in (orbit_times.tobytes(), orbit_rotations.tobytes()):
+              offset = len(point_binary)
+              point_binary.extend(values)
+              point_binary.extend(b"\0" * (-len(point_binary) % 4))
+              point_views.append({
+                  "buffer": 0, "byteOffset": offset, "byteLength": len(values),
+              })
           point_document = {
               "asset": {"version": "2.0", "generator": "WRE LR-checked real stereo CPU"},
               "scene": 0, "scenes": [{"nodes": [0]}],
-              "nodes": [{"mesh": 0, "name": "Two-view consistent RGB points"}],
+              "nodes": [
+                  {"name": "RGB cloud orbit", "translation": checked_center.tolist(), "children": [1]},
+                  {"mesh": 0, "name": "Two-view consistent RGB points",
+                   "translation": (-checked_center).tolist()},
+              ],
+              "animations": [{
+                  "name": "Eight-second RGB point-cloud orbit (static scene)",
+                  "samplers": [{"input": 2, "output": 3, "interpolation": "LINEAR"}],
+                  "channels": [{"sampler": 0, "target": {"node": 0, "path": "rotation"}}],
+              }],
               "meshes": [{"primitives": [{
                   "attributes": {"POSITION": 0, "COLOR_0": 1}, "material": 0, "mode": 0,
               }]}],
@@ -542,6 +568,15 @@ jobs:
                       "bufferView": 1, "componentType": 5121,
                       "count": len(checked_colors), "type": "VEC3", "normalized": True,
                   },
+                  {
+                      "bufferView": 2, "componentType": 5126,
+                      "count": len(orbit_times), "type": "SCALAR",
+                      "min": [0.0], "max": [8.0],
+                  },
+                  {
+                      "bufferView": 3, "componentType": 5126,
+                      "count": len(orbit_rotations), "type": "VEC4",
+                  },
               ],
           }
           point_json = json.dumps(point_document, separators=(",", ":")).encode("utf-8")
@@ -561,12 +596,30 @@ jobs:
           assert parsed["meshes"][0]["primitives"][0]["mode"] == 0
           assert parsed["accessors"][0]["count"] == len(checked_xyz)
           assert parsed["accessors"][1]["normalized"] is True
+          assert parsed["nodes"][0]["children"] == [1]
+          assert parsed["nodes"][1]["mesh"] == 0
+          assert parsed["animations"][0]["samplers"] == [
+              {"input": 2, "output": 3, "interpolation": "LINEAR"}
+          ]
+          assert parsed["animations"][0]["channels"][0]["target"] == {
+              "node": 0, "path": "rotation"
+          }
+          assert parsed["accessors"][2]["count"] == len(orbit_times)
+          assert parsed["accessors"][3]["count"] == len(orbit_rotations)
+          assert np.allclose(
+              np.asarray(parsed["nodes"][0]["translation"])
+              + np.asarray(parsed["nodes"][1]["translation"]), 0, atol=1e-6
+          )
           binary_start = 20 + json_size
           binary_size, kind = struct.unpack_from("<I4s", readback, binary_start)
           assert kind == b"BIN\0" and binary_start + 8 + binary_size == len(readback)
           actual_binary = readback[binary_start + 8:]
           for view, expected in zip(
-              parsed["bufferViews"], (checked_positions.tobytes(), checked_colors.tobytes())
+              parsed["bufferViews"],
+              (
+                  checked_positions.tobytes(), checked_colors.tobytes(),
+                  orbit_times.tobytes(), orbit_rotations.tobytes(),
+              ),
           ):
               offset = view["byteOffset"]
               assert actual_binary[offset:offset + view["byteLength"]] == expected
