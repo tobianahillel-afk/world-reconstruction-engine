@@ -347,10 +347,103 @@ jobs:
           )
           PY
 
+      # Prepare a genuine two-image COLMAP input from the previously computed
+      # REAL-image stereo cloud. Approximate K/baseline: arbitrary scale.
+      - name: Export true photographed stereo points as registered COLMAP (CPU)
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$COMMON_PYTHON" - <<'PY'
+          import json
+          import os
+          import struct
+          import zipfile
+          from pathlib import Path
+
+          import cv2
+          import numpy as np
+
+          out = Path(os.environ["RUNNER_TEMP"])
+          summary = json.loads((out / "wre-real-stereo-cpu-metrics.json").read_text())
+          photos = cv2.imread(str(out / "wre-real-stereo-cpu-photos.png"))
+          assert photos is not None
+          h, double_w = photos.shape[:2]
+          assert double_w % 2 == 0
+          w = double_w // 2
+          assert [h, w] == summary["processed_photo_height_width"]
+          f, b = float(summary["approximate_focal_pixels"]), 1.0
+          cx, cy = (w - 1) / 2, (h - 1) / 2
+          text = (out / "wre-real-stereo-cpu-reconstruction.ply").read_text().splitlines()
+          header = text.index("end_header")
+          count = int(next(x.split()[-1] for x in text if x.startswith("element vertex ")))
+          assert 500 <= count <= 20000 and len(text) == header + 1 + count
+          values = np.array([[float(v) for v in row.split()]
+                             for row in text[header + 1:]], dtype=np.float64)
+          assert values.shape == (count, 6)
+          xyz, rgb = values[:, :3], values[:, 3:].astype(np.uint8)
+          assert np.all(np.isfinite(xyz)) and np.all(xyz[:, 2] > 0)
+          uv0 = np.column_stack((f * xyz[:, 0] / xyz[:, 2] + cx,
+                                 f * xyz[:, 1] / xyz[:, 2] + cy))
+          uv1 = uv0.copy()
+          uv1[:, 0] -= f * b / xyz[:, 2]
+          keep = ((uv0[:, 0] >= 0) & (uv0[:, 0] < w)
+                  & (uv1[:, 0] >= 0) & (uv1[:, 0] < w)
+                  & (uv0[:, 1] >= 0) & (uv0[:, 1] < h))
+          xyz, rgb, uv0, uv1 = xyz[keep], rgb[keep], uv0[keep], uv1[keep]
+          assert len(xyz) >= 500
+          root = out / "wre-real-stereo-colmap"
+          images, sparse = root / "images", root / "sparse" / "0"
+          images.mkdir(parents=True)
+          sparse.mkdir(parents=True)
+          names = ("aloe-left.png", "aloe-right.png")
+          for index, name in enumerate(names):
+              assert cv2.imwrite(str(images / name),
+                                 photos[:, index * w:(index + 1) * w])
+          (sparse / "cameras.bin").write_bytes(
+              struct.pack("<Q", 1) +
+              struct.pack("<IiQQ4d", 1, 1, w, h, f, f, cx, cy))
+          images_bin = bytearray(struct.pack("<Q", 2))
+          for image_id, (name, pixels) in enumerate(zip(names, (uv0, uv1)), 1):
+              images_bin.extend(struct.pack(
+                  "<I4d3dI", image_id, 1.0, 0.0, 0.0, 0.0,
+                  0.0 if image_id == 1 else -b, 0.0, 0.0, 1))
+              images_bin.extend(name.encode() + b"\x00")
+              images_bin.extend(struct.pack("<Q", len(xyz)))
+              for point_id, (u, v) in enumerate(pixels, 1):
+                  images_bin.extend(struct.pack("<ddq", float(u), float(v), point_id))
+          (sparse / "images.bin").write_bytes(images_bin)
+          points_bin = bytearray(struct.pack("<Q", len(xyz)))
+          for i, (point, color) in enumerate(zip(xyz, rgb)):
+              points_bin.extend(struct.pack(
+                  "<Q3d3BdQ", i + 1, *map(float, point), *map(int, color),
+                  0.0, 2))
+              for image_id in (1, 2):
+                  points_bin.extend(struct.pack("<II", image_id, i))
+          (sparse / "points3D.bin").write_bytes(points_bin)
+          assert len(xyz) <= 20000
+          with zipfile.ZipFile(out / "wre-real-stereo-colmap-dataset.zip",
+                               "w", zipfile.ZIP_DEFLATED) as archive:
+              for file in sorted(root.rglob("*")):
+                  if file.is_file():
+                      archive.write(file, file.relative_to(root))
+          info = {
+              "real_photographs": True, "input_views": 2,
+              "registered_3d_tracks": int(len(xyz)),
+              "camera_intrinsics_approximate": True,
+              "stereo_baseline_arbitrary": True,
+              "reprojection_not_independent_ground_truth": True,
+              "gpu_training_not_executed": True,
+              "actual_gsplat_parser_not_yet_executed": True,
+          }
+          (out / "wre-real-stereo-colmap-handoff.json").write_text(
+              json.dumps(info, sort_keys=True, indent=2) + "\n")
+          print(f"REAL stereo -> COLMAP: {len(xyz)} tracks / 2 photographs")
+          PY
+
       # Run the actual-photo CPU reconstruction BEFORE expensive native CUDA
       # compilation. Keep the original photo pipeline in one place and make
       # its real 3D/preview outputs inspectable even while CUDA builds run.
-      - name: Stage five real-photo CPU 3D outputs for early publication
+      - name: Stage seven real-photo CPU 3D and COLMAP outputs early
         shell: bash
         run: |
           set -euo pipefail
@@ -361,14 +454,16 @@ jobs:
             wre-real-stereo-cpu-disparity.png \
             wre-real-stereo-cpu-photos.png \
             wre-real-stereo-cpu-novel-views.png \
-            wre-real-stereo-cpu-metrics.json
+            wre-real-stereo-cpu-metrics.json \
+            wre-real-stereo-colmap-dataset.zip \
+            wre-real-stereo-colmap-handoff.json
           do
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 5
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 7
 
-      - name: Publish real-photograph CPU 3D preview before native CUDA builds
+      - name: Publish real-photo CPU 3D plus COLMAP before native CUDA builds
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: wre-real-stereo-cpu-early-preview
