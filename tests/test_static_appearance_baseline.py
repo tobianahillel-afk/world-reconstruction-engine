@@ -234,6 +234,66 @@ def test_pinned_gsplat_config_gate_rejects_modified_source_after_pin(
         verify_gsplat_reference_trainer_config_fields(root, GsplatStaticAppearanceTrainingProfile())
 
 
+def test_gsplat_reference_source_gate_rejects_unlink_during_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, _data = _reviewed_source_fixture(tmp_path, monkeypatch)
+    target = root / "examples/simple_trainer.py"
+    original_read_bytes = Path.read_bytes
+    removed = False
+
+    def unlink_before_read(path: Path) -> bytes:
+        nonlocal removed
+        if path == target and not removed:
+            target.unlink()
+            removed = True
+        return original_read_bytes(path)
+
+    monkeypatch.setattr(Path, "read_bytes", unlink_before_read)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="disappeared during"):
+        verify_gsplat_static_appearance_reference_sources(root)
+    assert removed
+    assert not target.exists()
+
+
+def test_gsplat_config_gate_rejects_unlink_after_source_verification(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, data = _reviewed_source_fixture(tmp_path, monkeypatch)
+    profile = GsplatStaticAppearanceTrainingProfile(max_steps=20)
+    payload = (
+        "@dataclass\nclass Config:\n"
+        + "".join(f"    {field}: object = None\n" for field in profile.reference_overrides())
+    ).encode("ascii")
+    target = root / "examples/simple_trainer.py"
+    target.write_bytes(payload)
+    data["examples/simple_trainer.py"] = payload
+    monkeypatch.setattr(
+        baseline_module,
+        "_GSPLAT_REFERENCE_SOURCE_FILES",
+        tuple(
+            (path, len(blob), baseline_module._git_blob_sha1(blob))
+            for path, blob in sorted(data.items())
+        ),
+    )
+    original_read_bytes = Path.read_bytes
+    reads = 0
+
+    def unlink_before_second_read(path: Path) -> bytes:
+        nonlocal reads
+        if path == target:
+            reads += 1
+            if reads == 2:
+                target.unlink()
+        return original_read_bytes(path)
+
+    monkeypatch.setattr(Path, "read_bytes", unlink_before_second_read)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="during Config schema"):
+        verify_gsplat_reference_trainer_config_fields(root, profile)
+    assert reads == 2
+    assert not target.exists()
+
+
 def test_gsplat_reference_source_gate_rejects_same_size_tampering(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
