@@ -836,6 +836,38 @@ def test_gsplat_ply_converts_stream_io_errors_to_preflight(
     assert isinstance(exc.value.__cause__, OSError)
 
 
+@pytest.mark.parametrize(
+    ("failing_call", "expected_message"),
+    ((1, "before verification"), (2, "after verification")),
+)
+def test_gsplat_ply_rejects_descriptor_stat_failure(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failing_call: int,
+    expected_message: str,
+) -> None:
+    data = _gsplat_ply(vertices=2)
+    root, profile, ref = _gsplat_output(tmp_path, data)
+    original_fstat = baseline_module.os.fstat
+    calls = 0
+    injected = False
+
+    def failing_fstat(fd: int) -> Any:
+        nonlocal calls, injected
+        calls += 1
+        if calls == failing_call:
+            injected = True
+            raise OSError("injected descriptor stat failure")
+        return original_fstat(fd)
+
+    monkeypatch.setattr(baseline_module.os, "fstat", failing_fstat)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match=expected_message) as exc:
+        materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
+    assert injected
+    assert calls == failing_call
+    assert isinstance(exc.value.__cause__, OSError)
+
+
 def test_gsplat_ply_rejects_disappearance_during_streamed_read(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
