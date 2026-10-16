@@ -1,0 +1,187 @@
+name: gsplat-common-runtime-import
+
+# One exact Python/Torch/CUDA environment for the pinned trainer's *eager imports*.
+# CPU-hosted CUDA toolkit only: no GPU kernels, reconstruction, or training.
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/gsplat-common-runtime-import.yml"
+      - "registry/dependencies.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  combined-native-import:
+    name: pinned-trainer-eager-import-one-native-environment-no-gpu
+    runs-on: ubuntu-24.04
+    container:
+      image: nvidia/cuda@sha256:da6791294b0b04d7e65d87b7451d6f2390b4d36225ab0701ee7dfec5769829f5
+    timeout-minutes: 120
+    env:
+      CUDA_HOME: /usr/local/cuda
+      TORCH_CUDA_ARCH_LIST: "7.5"
+      MAX_JOBS: "1"
+      PYTHONPATH: ""
+      GSPLAT_REVISION: 937e29912570c372bed6747a5c9bf85fed877bae
+      GSPLAT_TREE: 90c3f0b2352e6d2725bcba1ef0407168f922c0fa
+      GLM_REVISION: 33b4a621a697a305bc3a7610d290677b96beb181
+      GLM_TREE: e57f342f0fb63852d65e0da2090528fdca9b0117
+      SSIM_REVISION: 328dc9836f513d00c4b5bc38fe30478b4435cbb5
+      SSIM_TREE: ac5f1d8fe5d519f9c44b220d235bf1f198463da7
+      NERFVIEW_REVISION: 4538024fe0d15fd1a0e4d760f3695fc44ca72787
+      NERFVIEW_TREE: e333400e39605978a3d1f9cf6d73ddf577a8c8e3
+      SCENE_MANAGER_REVISION: cc7ea4b7301720ac29287dbe450952511b32125e
+
+    steps:
+      - name: Checkout exact WRE dependency registry
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned uv and Python 3.10.21
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.13"
+          python-version: "3.10.21"
+          enable-cache: false
+
+      - name: Create one native environment and hash-pinned wheel manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$CUDA_HOME/bin/nvcc"
+          "$CUDA_HOME/bin/nvcc" --version | grep 'release 12.4,'
+          uv venv --seed --python 3.10.21 "$RUNNER_TEMP/gsplat-common-venv"
+          echo "COMMON_PYTHON=$RUNNER_TEMP/gsplat-common-venv/bin/python" >> "$GITHUB_ENV"
+          uv run --no-project --with "pyyaml==6.0.2" python - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+          from urllib.parse import urlsplit
+          import yaml
+
+          record = yaml.safe_load(Path("registry/dependencies.yaml").read_text())[
+              "dependencies"
+          ]["gsplat_static_appearance"]["runtime_python_lock"]
+          assert record["target"]["python"] == "3.10.21"
+          assert record["target"]["torch_cuda"] == "12.4"
+          assert record["gpu_execution_evidence"] is False
+          wheels = record["packages"]
+          assert len(wheels) == 76
+          assert next(x for x in wheels if x["name"] == "torch")["version"] == "2.4.0+cu124"
+          lines = []
+          for item in sorted(wheels, key=lambda entry: entry["name"].lower()):
+              url, digest = item["url"], item["sha256"]
+              parts = urlsplit(url)
+              assert parts.scheme == "https" and not parts.fragment
+              assert re.fullmatch("[0-9a-f]{64}", digest)
+              lines.append(f'{item["name"]} @ {url}#sha256={digest}')
+          (Path(os.environ["RUNNER_TEMP"]) / "common-locked-wheels.txt").write_text(
+              "\n".join(lines) + "\n", encoding="utf-8"
+          )
+          print(f"One common environment requires {len(wheels)} pinned wheels")
+          PY
+
+      - name: Install all 76 reviewed wheels without resolving new dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$COMMON_PYTHON" -m pip install --no-index --no-deps --no-cache-dir \
+            --require-hashes -r "$RUNNER_TEMP/common-locked-wheels.txt"
+          "$COMMON_PYTHON" -m pip check
+          "$COMMON_PYTHON" - <<'PY'
+          import sys
+          import numpy
+          import torch
+          assert sys.version.startswith("3.10.21")
+          assert numpy.__version__ == "1.26.4"
+          assert torch.__version__ == "2.4.0+cu124"
+          assert torch.version.cuda == "12.4"
+          assert not torch.cuda.is_available()
+          print("Exact Python/Torch/CUDA wheel ABI loaded, GPU unavailable")
+          PY
+
+      - name: Install git for immutable upstream source checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git ca-certificates
+
+      - name: Materialize exact gsplat, fused-ssim, nerfview and legacy COLMAP sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/wre-common-upstream"
+          mkdir -p "$root"
+          fetch_exact() {
+            name="$1"; remote="$2"; revision="$3"; tree="$4"
+            git init -q "$root/$name"
+            git -C "$root/$name" remote add origin "$remote"
+            git -C "$root/$name" fetch --quiet --depth=1 origin "$revision"
+            git -C "$root/$name" checkout --quiet --detach FETCH_HEAD
+            test "$(git -C "$root/$name" rev-parse HEAD)" = "$revision"
+            if test "$tree" != "-"; then
+              test "$(git -C "$root/$name" rev-parse HEAD^{tree})" = "$tree"
+            fi
+          }
+          fetch_exact gsplat https://github.com/nerfstudio-project/gsplat.git \
+            "$GSPLAT_REVISION" "$GSPLAT_TREE"
+          fetch_exact ssim https://github.com/rahul-goel/fused-ssim.git \
+            "$SSIM_REVISION" "$SSIM_TREE"
+          fetch_exact nerfview https://github.com/nerfstudio-project/nerfview.git \
+            "$NERFVIEW_REVISION" "$NERFVIEW_TREE"
+          fetch_exact scene-manager https://github.com/rmbrualla/pycolmap.git \
+            "$SCENE_MANAGER_REVISION" "-"
+          test "$(git -C "$root/gsplat" ls-tree HEAD gsplat/cuda/csrc/third_party/glm | awk '{print $3}')" = "$GLM_REVISION"
+          git -C "$root/gsplat" submodule update --init --depth 1 -- gsplat/cuda/csrc/third_party/glm
+          glm="$root/gsplat/gsplat/cuda/csrc/third_party/glm"
+          test "$(git -C "$glm" rev-parse HEAD)" = "$GLM_REVISION"
+          test "$(git -C "$glm" rev-parse HEAD^{tree})" = "$GLM_TREE"
+          echo "COMMON_SOURCES=$root" >> "$GITHUB_ENV"
+
+      - name: Build BOTH upstream CUDA extensions into the SAME Python interpreter
+        shell: bash
+        run: |
+          set -euo pipefail
+          export BUILD_NO_CUDA=0
+          "$COMMON_PYTHON" -m pip install --no-deps --no-build-isolation --no-cache-dir \
+            "$COMMON_SOURCES/ssim"
+          "$COMMON_PYTHON" -m pip install --no-deps --no-build-isolation --no-cache-dir \
+            "$COMMON_SOURCES/gsplat"
+
+      - name: Actually import trainer, native extensions, viewer and COLMAP together
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$COMMON_PYTHON" -I - <<'PY'
+          import os
+          import sys
+          from pathlib import Path
+
+          root = Path(os.environ["COMMON_SOURCES"])
+          sys.path[:0] = [
+              str(root / "gsplat" / "examples"),
+              str(root / "nerfview"),
+              str(root / "scene-manager"),
+          ]
+          import torch
+          import gsplat
+          from gsplat.cuda._backend import _C
+          from fused_ssim import fused_ssim
+          from nerfview import CameraState
+          from datasets.colmap import Dataset, Parser
+          from simple_trainer import Config, main
+
+          assert gsplat.__version__ == "1.5.3"
+          assert torch.__version__ == "2.4.0+cu124"
+          assert not torch.cuda.is_available(), "CPU-hosted gate must not claim GPU"
+          assert _C is not None and callable(fused_ssim)
+          assert all(obj is not None for obj in (CameraState, Dataset, Parser, main))
+          cfg = Config()
+          assert cfg.camera_model == "pinhole"
+          print("ALL selected trainer native/viewer/COLMAP modules imported together.")
+          print("No CUDA kernel, training, reconstruction, or GPU was executed.")
+          PY
