@@ -234,6 +234,34 @@ def test_pinned_gsplat_config_gate_rejects_modified_source_after_pin(
         verify_gsplat_reference_trainer_config_fields(root, GsplatStaticAppearanceTrainingProfile())
 
 
+@pytest.mark.parametrize("registry_mutation", ("missing", "duplicate"))
+def test_gsplat_config_gate_rejects_unreviewed_trainer_pin_registry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, registry_mutation: str
+) -> None:
+    # All on-disk bytes are valid and individually pinned. Fail only because
+    # the source registry omits or duplicates the trainer Config identity.
+    root, data = _reviewed_source_fixture(tmp_path, monkeypatch)
+    profile = GsplatStaticAppearanceTrainingProfile(max_steps=20)
+    payload = (
+        "@dataclass\nclass Config:\n"
+        + "".join(f"    {name}: object = None\n" for name in profile.reference_overrides())
+    ).encode("ascii")
+    trainer_name = "examples/simple_trainer.py"
+    (root / trainer_name).write_bytes(payload)
+    data[trainer_name] = payload
+    pinned = [
+        (name, len(blob), baseline_module._git_blob_sha1(blob))
+        for name, blob in sorted(data.items())
+        if registry_mutation != "missing" or name != trainer_name
+    ]
+    if registry_mutation == "duplicate":
+        pinned.append((trainer_name, len(payload), baseline_module._git_blob_sha1(payload)))
+    monkeypatch.setattr(baseline_module, "_GSPLAT_REFERENCE_SOURCE_FILES", tuple(pinned))
+
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="exactly one pinned"):
+        verify_gsplat_reference_trainer_config_fields(root, profile)
+
+
 def test_gsplat_reference_source_gate_rejects_unlink_during_read(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
