@@ -938,8 +938,10 @@ dependencies:
     reference_nerfview_eager_import_verified: true
     reference_nerfview_eager_import_gpu_execution: false
     reference_nerfview_eager_import_full_trainer_execution: false
-    # Distinct, immutable combined CPU eager-import evidence from PR #224.
-    # This snapshot is evidence of imports, not approval of its workflow scope.
+    # Historical immutable 58-wheel combined CPU import proof from PR #224.
+    # The CPU-only optional workflow was removed from the candidate merge diff:
+    # this retained run is NOT a permanent CI gate, supported-GPU qualification,
+    # full-trainer import, L2 approval, or permission to redistribute sources.
     reference_combined_eager_import_source_commit: 07d3eeebdd0bdebf96a81a4853e9322f7debf88f
     reference_combined_eager_import_python: '3.10.21'
     reference_combined_eager_import_exact_wheels: 58
