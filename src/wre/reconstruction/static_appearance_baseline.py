@@ -1714,7 +1714,6 @@ class GsplatStaticAppearanceTrainingProfile:
         return f"ply/point_cloud_{self.max_steps - 1}.ply"
 
 
-
 def build_gsplat_reference_trainer_path_overrides(
     *,
     profile: GsplatStaticAppearanceTrainingProfile,
