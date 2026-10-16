@@ -191,7 +191,19 @@ def test_gsplat_reference_source_gate_verifies_exact_bytes_without_import(
     assert result == verify_gsplat_static_appearance_reference_sources(root)
 
 
-@pytest.mark.parametrize("mutation", ("none", "missing_field", "missing_dataclass"))
+@pytest.mark.parametrize(
+    "mutation",
+    (
+        "none",
+        "missing_field",
+        "missing_dataclass",
+        "missing_colmap",
+        "missing_fused_ssim",
+        "missing_gsplat",
+        "missing_nerfview",
+        "missing_torch",
+    ),
+)
 def test_pinned_gsplat_trainer_config_fields_without_runtime_import(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mutation: str
 ) -> None:
@@ -200,8 +212,18 @@ def test_pinned_gsplat_trainer_config_fields_without_runtime_import(
     profile = GsplatStaticAppearanceTrainingProfile(max_steps=20)
     overrides = sorted(profile.reference_overrides())
     fields = [name for name in overrides if mutation != "missing_field" or name != "save_ply"]
+    imports = (
+        ("import torch", "missing_torch"),
+        ("from datasets.colmap import Dataset, Parser", "missing_colmap"),
+        ("from fused_ssim import fused_ssim", "missing_fused_ssim"),
+        ("from gsplat import export_splats", "missing_gsplat"),
+        ("from gsplat.rendering import rasterization", "missing_gsplat"),
+        ("from gsplat_viewer import GsplatViewer", "missing_nerfview"),
+        ("from nerfview import CameraState", "missing_nerfview"),
+    )
+    source = "".join(line + "\n" for line, omission in imports if mutation != omission)
     decorator = "" if mutation == "missing_dataclass" else "@dataclass\n"
-    source = decorator + "class Config:\n"
+    source += decorator + "class Config:\n"
     source += "".join(f"    {name}: object = None\n" for name in fields)
     payload = source.encode("ascii")
     data["examples/simple_trainer.py"] = payload
@@ -218,7 +240,8 @@ def test_pinned_gsplat_trainer_config_fields_without_runtime_import(
     if mutation == "none":
         assert verify_gsplat_reference_trainer_config_fields(root, profile) == tuple(overrides)
     else:
-        with pytest.raises(GsplatStaticAppearancePreflightError, match="Config"):
+        message = "Config" if mutation in {"missing_field", "missing_dataclass"} else "import"
+        with pytest.raises(GsplatStaticAppearancePreflightError, match=message):
             verify_gsplat_reference_trainer_config_fields(root, profile)
 
 
