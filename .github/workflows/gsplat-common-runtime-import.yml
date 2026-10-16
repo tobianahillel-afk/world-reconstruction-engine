@@ -237,6 +237,66 @@ jobs:
           photometric_mae = float(np.mean(residual[valid]))
           assert np.isfinite(photometric_mae)
 
+          # An independent published reference map, rather than measuring
+          # only agreement between our left-photo prediction and source pixels.
+          # Use the EXACT SAME immutable OpenCV sample revision as aloeL/R.
+          # The 8-bit map is an encoded reference; metric pixel disparity
+          # comparisons require official crop/dmin calibration, not guessed.
+          gt_url = (
+              "https://raw.githubusercontent.com/opencv/opencv/"
+              f"{opencv_sha}/samples/data/aloeGT.png"
+          )
+          gt_bytes = None
+          for attempt in range(3):
+              try:
+                  with urllib.request.urlopen(gt_url, timeout=45) as response:
+                      gt_bytes = response.read(150_001)
+                  break
+              except urllib.error.HTTPError as exc:
+                  if exc.code not in (429, 500, 502, 503, 504) or attempt == 2:
+                      raise
+              except (urllib.error.URLError, TimeoutError):
+                  if attempt == 2:
+                      raise
+              time.sleep(2 * (attempt + 1))
+          assert gt_bytes is not None and len(gt_bytes) == 98827
+          gt_git_blob = hashlib.sha1(
+              f"blob {len(gt_bytes)}\0".encode("ascii") + gt_bytes
+          ).hexdigest()
+          assert gt_git_blob == "43e62ebfe910f6be8c440d57b6ad300743768934"
+          gt = cv2.imdecode(np.frombuffer(gt_bytes, dtype=np.uint8), cv2.IMREAD_UNCHANGED)
+          assert gt is not None and gt.ndim == 2 and gt.dtype == np.uint8
+          assert gt.shape == (height, width), (gt.shape, (height, width))
+          gt_known = gt > 0
+          overlap = gt_known & valid
+          overlap_count = int(np.count_nonzero(overlap))
+          assert overlap_count >= 1000, overlap_count
+          reference_encoded = gt.astype(np.float64)
+          estimated = disparity.astype(np.float64)
+          assert np.std(reference_encoded[overlap]) > 0.0
+          assert np.std(estimated[overlap]) > 0.0
+          gt_raw_intensity_correlation = float(np.corrcoef(
+              estimated[overlap], reference_encoded[overlap]
+          )[0, 1])
+          assert np.isfinite(gt_raw_intensity_correlation)
+          # Display-only error map against the *encoded* values. Do NOT call
+          # this a calibrated disparity-pixel accuracy metric: the reference
+          # image's scale, offset and crop conventions have not been proven.
+          encoded_absolute_difference = np.zeros((height, width), dtype=np.float32)
+          encoded_absolute_difference[overlap] = np.abs(
+              estimated[overlap] - reference_encoded[overlap]
+          )
+          encoded_visual = np.clip(
+              encoded_absolute_difference * 4.0, 0, 255
+          ).astype(np.uint8)
+          encoded_visual[~overlap] = 0
+          gt_out = Path(os.environ["RUNNER_TEMP"])
+          assert cv2.imwrite(str(gt_out / "wre-real-stereo-cpu-reference-gt.png"), gt)
+          assert cv2.imwrite(
+              str(gt_out / "wre-real-stereo-cpu-reference-intensity-difference.png"),
+              cv2.applyColorMap(encoded_visual, cv2.COLORMAP_TURBO),
+          )
+
           focal_guess = float(width)
           baseline_gauge = 1.0
           principal_x, principal_y = (width - 1) / 2.0, (height - 1) / 2.0
@@ -610,6 +670,12 @@ jobs:
               "right_reprojection_method": "CPU left-image observed-pixel forward z-buffer",
               "right_reprojection_evaluation": "in-sample against observed right photo",
               "right_reprojection_is_independent_ground_truth": False,
+              "reference_groundtruth_opencv_git_blob": gt_git_blob,
+              "reference_known_pixels": int(np.count_nonzero(gt_known)),
+              "reference_prediction_overlap_pixels": overlap_count,
+              "reference_encoded_intensity_vs_estimated_disparity_correlation": gt_raw_intensity_correlation,
+              "reference_value_units": "unverified 8bit reference encoding",
+              "certified_groundtruth_disparity_pixel_error": False,
               "photos_are_real": True,
               "two_view_stereo_only": True,
               "ground_truth_accuracy_benchmark": False,
@@ -725,7 +791,7 @@ jobs:
       # Run the actual-photo CPU reconstruction BEFORE expensive native CUDA
       # compilation. Keep the original photo pipeline in one place and make
       # its real 3D/preview outputs inspectable even while CUDA builds run.
-      - name: Stage fourteen real-photo CPU 3D, GLB, measured reprojection and COLMAP outputs early
+      - name: Stage sixteen real-photo CPU 3D, reference map, GLB and COLMAP outputs early
         shell: bash
         run: |
           set -euo pipefail
@@ -744,13 +810,15 @@ jobs:
             wre-real-stereo-cpu-dense-warps.png \
             wre-real-stereo-cpu-right-reprojection.png \
             wre-real-stereo-cpu-metrics.json \
+            wre-real-stereo-cpu-reference-gt.png \
+            wre-real-stereo-cpu-reference-intensity-difference.png \
             wre-real-stereo-colmap-dataset.zip \
             wre-real-stereo-colmap-handoff.json
           do
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 14
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 16
 
       - name: Publish real-photo CPU 3D plus COLMAP before native CUDA builds
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
