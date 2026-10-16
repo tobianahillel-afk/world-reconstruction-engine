@@ -1843,10 +1843,17 @@ def materialize_verified_gsplat_ply(
             chunk = stream.read(min(remaining, stride * max(1, 4096 // stride)))
             if not chunk or len(chunk) % stride:
                 raise GsplatStaticAppearancePreflightError("gsplat PLY vertex data is incomplete")
-            if any(not math.isfinite(value) for (value,) in struct.iter_unpack("<f", chunk)):
-                raise GsplatStaticAppearancePreflightError(
-                    "gsplat PLY contains non-finite Gaussian parameters"
-                )
+            # Inspect whole Gaussian records: finite floats alone do not make
+            # an all-zero quaternion a valid 3D rotation.
+            for record in struct.iter_unpack(f"<{len(properties)}f", chunk):
+                if any(not math.isfinite(value) for value in record):
+                    raise GsplatStaticAppearancePreflightError(
+                        "gsplat PLY contains non-finite Gaussian parameters"
+                    )
+                if not any(value != 0.0 for value in record[-4:]):
+                    raise GsplatStaticAppearancePreflightError(
+                        "gsplat PLY contains a zero-norm rotation quaternion"
+                    )
             digest.update(chunk)
             remaining -= len(chunk)
         if stream.read(1):
