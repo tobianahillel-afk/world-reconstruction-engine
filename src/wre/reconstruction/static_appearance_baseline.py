@@ -1768,6 +1768,33 @@ def verify_gsplat_reference_trainer_config_fields(
         raise GsplatStaticAppearancePreflightError(
             "gsplat trainer does not declare the expected dataclass Config"
         )
+    # An exact source pin is not an installed environment: also check the
+    # trainer's declared direct integration edges before a future repin.
+    required_imports = {
+        "datasets.colmap": {"Parser", "Dataset"},
+        "fused_ssim": {"fused_ssim"},
+        "gsplat": {"export_splats"},
+        "gsplat.rendering": {"rasterization"},
+        "gsplat_viewer": {"GsplatViewer"},
+        "nerfview": {"CameraState"},
+    }
+    imported: dict[str, set[str]] = {}
+    for node in parsed.body:
+        if isinstance(node, ast.ImportFrom) and node.level == 0 and node.module is not None:
+            imported.setdefault(node.module, set()).update(alias.name for alias in node.names)
+    if any(not required <= imported.get(module, set()) for module, required in required_imports.items()):
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat trainer is missing reviewed direct integration imports"
+        )
+    if not any(
+        isinstance(node, ast.Import)
+        and any(alias.name == "torch" for alias in node.names)
+        for node in parsed.body
+    ):
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat trainer is missing the reviewed PyTorch import"
+        )
+
     fields = {
         node.target.id
         for node in configs[0].body
