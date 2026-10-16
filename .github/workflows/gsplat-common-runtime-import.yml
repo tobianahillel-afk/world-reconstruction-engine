@@ -585,6 +585,38 @@ jobs:
           assert cv2.imwrite(str(dense_path), dense_preview)
           assert np.array_equal(cv2.imread(str(dense_path)), dense_preview)
 
+          # Functional photometric camera fly-through from the *observed*
+          # left photo and measured stereo disparity. Reuse the depth-aware
+          # forward z-buffer above; every nonempty source pixel comes from
+          # the photographed image, not a new Gaussian renderer or inpainting.
+          # GIF palette quantization is display-only and is NOT source pixels.
+          photo_gif_name = "wre-real-stereo-cpu-photo-flythrough.gif"
+          photo_shifts = np.linspace(0.0, 1.0, 16)
+          photo_frames = []
+          photo_observed_counts = []
+          for shift in photo_shifts:
+              projected, count, mask = warp_observed_pixels(float(shift))
+              assert int(mask.sum()) == count and count >= 500
+              photo_observed_counts.append(count)
+              reduced = cv2.resize(projected, gif_size, interpolation=cv2.INTER_NEAREST)
+              photo_frames.append(Image.fromarray(cv2.cvtColor(reduced, cv2.COLOR_BGR2RGB)))
+          assert len(photo_frames) == 16
+          assert not np.array_equal(np.asarray(photo_frames[0]), np.asarray(photo_frames[-1]))
+          photo_gif_path = output / photo_gif_name
+          photo_frames[0].save(
+              photo_gif_path, format="GIF", save_all=True,
+              append_images=photo_frames[1:], duration=110, loop=0,
+              optimize=False, disposal=2,
+          )
+          assert 100 < photo_gif_path.stat().st_size < 8_000_000
+          with Image.open(photo_gif_path) as photo_gif:
+              assert photo_gif.format == "GIF" and photo_gif.n_frames == 16
+              assert photo_gif.size == gif_size
+              photo_gif.seek(0)
+              first_photo_frame = photo_gif.convert("RGB").tobytes()
+              photo_gif.seek(15)
+              assert photo_gif.convert("RGB").tobytes() != first_photo_frame
+
           # Measure a real reprojection at the observed right-camera baseline.
           # The right photo ALSO contributed to StereoSGBM: this is in-sample
           # photometric consistency, NOT an independent held-out quality score.
@@ -671,6 +703,18 @@ jobs:
               "dense_cpu_warp_valid_observed_pixels": [count for _, count, _ in dense_views],
               "dense_cpu_warp_method": "CPU source-disparity forward projection with nearest-depth z-buffer",
               "dense_cpu_warp_occlusion_policy": "nearest positive depth; unobserved holes black",
+              "photographic_stereo_flythrough_file": photo_gif_name,
+              "photographic_stereo_flythrough_frames": len(photo_frames),
+              "photographic_stereo_flythrough_camera_shifts_arbitrary_units": [
+                  float(value) for value in photo_shifts
+              ],
+              "photographic_stereo_flythrough_observed_pixels": photo_observed_counts,
+              "photographic_stereo_flythrough_method": (
+                  "source-photo pixels via CPU disparity forward z-buffer; GIF palette display"
+              ),
+              "photographic_stereo_flythrough_is_dynamic_4d_scene": False,
+              "photographic_stereo_flythrough_is_gaussian_render": False,
+              "photographic_stereo_flythrough_contains_inpainting": False,
               "dense_cpu_warp_is_exact_depth_aware_render": False,
               "dense_cpu_warp_inpainting_or_hallucination": False,
               "dense_cpu_warp_photorealism_or_heldout_quality_proven": False,
@@ -807,6 +851,7 @@ jobs:
             wre-real-stereo-cpu-textured.obj \
             wre-real-stereo-cpu-textured.glb \
             wre-real-stereo-cpu-3d-flythrough.gif \
+            wre-real-stereo-cpu-photo-flythrough.gif \
             wre-real-stereo-cpu-textured.mtl \
             wre-real-stereo-cpu-texture.png \
             wre-real-stereo-cpu-disparity.png \
@@ -821,7 +866,7 @@ jobs:
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 15
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 16
 
       - name: Publish real-photo CPU 3D plus COLMAP before native CUDA builds
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -1816,6 +1861,7 @@ jobs:
             wre-real-stereo-cpu-textured.obj \
             wre-real-stereo-cpu-textured.glb \
             wre-real-stereo-cpu-3d-flythrough.gif \
+            wre-real-stereo-cpu-photo-flythrough.gif \
             wre-real-stereo-cpu-textured.mtl \
             wre-real-stereo-cpu-texture.png \
             wre-real-stereo-cpu-disparity.png \
@@ -1828,8 +1874,8 @@ jobs:
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 31
-          echo "Staged all 31 real PLY/OBJ/GLB/GIF/MTL/PNG/NPY/JSON/ZIP files for artifact upload"
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 32
+          echo "Staged all 32 real PLY/OBJ/GLB/GIF/MTL/PNG/NPY/JSON/ZIP files for artifact upload"
 
       - name: Publish CPU COLMAP 3D preview and measured reprojection
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
