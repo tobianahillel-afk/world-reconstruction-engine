@@ -795,6 +795,34 @@ def test_gsplat_ply_rejects_zero_norm_rotation_quaternion(tmp_path: Path) -> Non
         materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
 
 
+@pytest.mark.parametrize(
+    ("component", "should_reject"),
+    ((1.0e-30, True), (1.0e30, True), (1.0e-18, False), (1.0e18, False)),
+)
+def test_gsplat_ply_rotation_requires_stable_float32_squared_norm(
+    tmp_path: Path, component: float, should_reject: bool
+) -> None:
+    # Exercise the true 59-float layout with one modified quaternion only.
+    # The file remains finite, fully sized and hashable in every case.
+    data = bytearray(_gsplat_ply(vertices=2))
+    stride = 59 * 4
+    first_rotation = len(data) - 2 * stride + stride - 4 * 4
+    data[first_rotation : first_rotation + 16] = struct.pack(
+        "<4f", component, 0.0, 0.0, 0.0
+    )
+    root, profile, ref = _gsplat_output(tmp_path, bytes(data))
+    if should_reject:
+        with pytest.raises(
+            GsplatStaticAppearancePreflightError, match="numerically unstable rotation"
+        ):
+            materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
+    else:
+        result = materialize_verified_gsplat_ply(
+            artifact_ref=ref, output_root=root, profile=profile
+        )
+        assert result.entries[0].sha256 == _digest(bytes(data))
+
+
 def test_gsplat_ply_materialization_rejects_zero_gaussians_and_forged_header(
     tmp_path: Path,
 ) -> None:
