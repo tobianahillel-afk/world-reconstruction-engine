@@ -2330,7 +2330,6 @@ def export_verified_gsplat_rgb_centers_ply(
     return Sha256Digest(output_hash.hexdigest())
 
 
-
 def export_verified_gsplat_rgb_centers_glb(
     *,
     artifact_ref: ArtifactRef,
@@ -2417,28 +2416,43 @@ def export_verified_gsplat_rgb_centers_glb(
                     "scene": 0,
                     "scenes": [{"nodes": [0]}],
                     "nodes": [{"mesh": 0}],
-                    "meshes": [{
-                        "primitives": [{
-                            "attributes": {"POSITION": 0, "COLOR_0": 1},
-                            "mode": 0,
-                        }]
-                    }],
+                    "meshes": [
+                        {
+                            "primitives": [
+                                {
+                                    "attributes": {"POSITION": 0, "COLOR_0": 1},
+                                    "mode": 0,
+                                }
+                            ]
+                        }
+                    ],
                     "buffers": [{"byteLength": bin_length}],
-                    "bufferViews": [{
-                        "buffer": 0,
-                        "byteOffset": 0,
-                        "byteLength": bin_length,
-                        "byteStride": 16,
-                        "target": 34962,
-                    }],
+                    "bufferViews": [
+                        {
+                            "buffer": 0,
+                            "byteOffset": 0,
+                            "byteLength": bin_length,
+                            "byteStride": 16,
+                            "target": 34962,
+                        }
+                    ],
                     "accessors": [
                         {
-                            "bufferView": 0, "byteOffset": 0, "componentType": 5126,
-                            "count": count, "type": "VEC3", "min": minimum, "max": maximum,
+                            "bufferView": 0,
+                            "byteOffset": 0,
+                            "componentType": 5126,
+                            "count": count,
+                            "type": "VEC3",
+                            "min": minimum,
+                            "max": maximum,
                         },
                         {
-                            "bufferView": 0, "byteOffset": 12, "componentType": 5121,
-                            "normalized": True, "count": count, "type": "VEC3",
+                            "bufferView": 0,
+                            "byteOffset": 12,
+                            "componentType": 5121,
+                            "normalized": True,
+                            "count": count,
+                            "type": "VEC3",
                         },
                     ],
                 }
