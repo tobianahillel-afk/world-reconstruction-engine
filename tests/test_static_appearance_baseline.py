@@ -1836,6 +1836,7 @@ def test_exported_gsplat_glb_can_be_reopened_and_inspected_offline(tmp_path: Pat
     assert summary["shown_centers"] == 3
     assert summary["source_gaussians"] == 4
     assert summary["kind"] == "wre_gsplat_rgb_centers_only"
+    assert isinstance(summary["source_rgb_ply_sha256"], str)
     assert len(summary["source_rgb_ply_sha256"]) == 64
     assert summary["gpu_training_verified"] is False
     assert summary["metric_scale_known"] is False
