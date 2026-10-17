@@ -1850,6 +1850,7 @@ def run_gsplat_reference_training(
     *,
     request: StaticAppearanceCandidateRequest,
     source: GsplatStaticAppearancePreflightSource,
+    assessments: tuple[PhotometricCompatibilityAssessment, ...],
     staged: GsplatStaticAppearanceStagedDataset,
     profile: GsplatStaticAppearanceTrainingProfile,
     features: ColmapFeatureExtractionResult,
@@ -1873,9 +1874,14 @@ def run_gsplat_reference_training(
     PLY bytes into one canonical appearance candidate with source ancestry.
     The caller must provision/pin a compatible Python/Torch/CUDA environment;
     CPU-only CI exercises orchestration only, not GPU execution or training.
+    V2L17 assessments are mandatory; matched settings alone do not prove
+    scene-radiance equivalence or held-out rendering quality.
     """
 
     _verify_gsplat_reference_producer(profile, producer)
+    # Training consumes the original sRGB PNGs: require V2L17 identity
+    # and matching multi-view capture evidence before any CUDA process.
+    verify_gsplat_static_appearance_matching_capture_metadata(request, source, assessments)
     if type(cuda_device_index) is not int or cuda_device_index < 0:
         raise ValueError("gsplat CUDA device index must be a nonnegative integer")
     if type(timeout_seconds) is not int or timeout_seconds <= 0:
@@ -2034,6 +2040,7 @@ def reconstruct_gsplat_static_appearance(
     *,
     request: StaticAppearanceCandidateRequest,
     source: GsplatStaticAppearancePreflightSource,
+    assessments: tuple[PhotometricCompatibilityAssessment, ...],
     dataset_root: Path,
     profile: GsplatStaticAppearanceTrainingProfile,
     features: ColmapFeatureExtractionResult,
@@ -2067,6 +2074,7 @@ def reconstruct_gsplat_static_appearance(
     return run_gsplat_reference_training(
         request=request,
         source=source,
+        assessments=assessments,
         staged=staged,
         profile=profile,
         features=features,
