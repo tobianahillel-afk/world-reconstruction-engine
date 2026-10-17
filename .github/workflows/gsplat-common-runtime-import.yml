@@ -7043,9 +7043,86 @@ jobs:
               '<figcaption>Reprojection observée et différences, non vérité terrain 3D.</figcaption>'
               '</figure></div></details>'
           )
+          # Actual interactive pixel inspection of the SAME float32 PFM that
+          # the pinned OpenCV SGBM step generated. JavaScript merely reads the
+          # archived pixels: it is not a new stereo solver or physical depth.
+          pixel_inspector = """
+          <p id="wre-pixel-inspector" role="status" aria-live="polite">
+          Cliquez sur l'aperçu de disparité pour afficher une valeur observée
+          (pixels), et une profondeur relative (unités de modèle, PAS mètres).
+          </p>
+          <script>
+          (() => {
+            const picture = document.getElementById('wre-stereo-disparity');
+            const status = document.getElementById('wre-pixel-inspector');
+            picture.style.cursor = 'crosshair';
+            picture.title = 'Cliquez pour inspecter la disparité réelle à ce pixel';
+            let loading = null;
+            async function getMap() {
+              if (!loading) loading = (async () => {
+                const response = await fetch('./wre-real-stereo-cpu-disparity-f32.pfm');
+                if (!response.ok) throw Error('PFM absent de cette archive');
+                const buffer = await response.arrayBuffer();
+                if (buffer.byteLength < 24 || buffer.byteLength > 5000000) {
+                  throw Error('Taille PFM hors limites');
+                }
+                const raw = new Uint8Array(buffer);
+                let offset = 0;
+                for (let i = 0; i < 3; i++) {
+                  const end = raw.indexOf(10, offset);
+                  if (end < 0 || end > 80) throw Error('En-tête PFM incorrect');
+                  offset = end + 1;
+                }
+                const header = new TextDecoder().decode(raw.subarray(0, offset));
+                const match = /^Pf\n([0-9]+) ([0-9]+)\n-1[.]0\n$/.exec(header);
+                if (!match) throw Error('Format PFM float32 little endian incorrect');
+                const width = Number(match[1]);
+                const height = Number(match[2]);
+                if (width !== picture.naturalWidth || height !== picture.naturalHeight ||
+                    width * height * 4 + offset !== raw.byteLength) {
+                  throw Error('PFM incompatible avec cette carte de disparité');
+                }
+                return {width, height, offset, view:new DataView(buffer)};
+              })();
+              return loading;
+            }
+            picture.addEventListener('click', async (event) => {
+              event.preventDefault();  // The image is also a download link.
+              try {
+                const map = await getMap();
+                const rect = picture.getBoundingClientRect();
+                if (rect.width <= 0 || rect.height <= 0) throw Error('Image masquée');
+                const u = Math.max(0, Math.min(map.width - 1,
+                    Math.floor((event.clientX - rect.left) * map.width / rect.width)));
+                const v = Math.max(0, Math.min(map.height - 1,
+                    Math.floor((event.clientY - rect.top) * map.height / rect.height)));
+                // A grayscale PFM is stored bottom-up, one float32 per pixel.
+                const index = (map.height - 1 - v) * map.width + u;
+                const disparity = map.view.getFloat32(map.offset + 4 * index, true);
+                status.dataset.x = String(u);
+                status.dataset.y = String(v);
+                status.dataset.disparity = String(disparity);
+                if (!Number.isFinite(disparity) || disparity <= 0) {
+                  status.textContent = 'Pixel (' + u + ',' + v +
+                    ') : aucune disparité stéréo valide observée.';
+                  return;
+                }
+                // WRE's existing uncalibrated preview uses f=width, baseline=1.
+                const relativeDepth = map.width / disparity;
+                status.textContent = 'Pixel (' + u + ',' + v + ') : disparité ' +
+                  disparity.toFixed(3) + ' px ; profondeur relative ' +
+                  relativeDepth.toFixed(3) +
+                  ' unités de modèle (PAS des mètres, ni une précision certifiée).';
+              } catch (error) {
+                status.textContent = 'Inspection indisponible : ' + String(error.message);
+              }
+            });
+          })();
+          </script>
+          """
           comparison.write_text(
               page.replace(anchor,
-                  navigation + source_panel + diagnostics
+                  navigation + source_panel + diagnostics + pixel_inspector
                   + '<p><a href="./wre-real-stereo-cpu-disparity-u16.png" download>'
                   'Télécharger la disparité 16 bits sans perte</a> · '
                   'valeur PNG / 256 = disparité horizontale en pixels, '
