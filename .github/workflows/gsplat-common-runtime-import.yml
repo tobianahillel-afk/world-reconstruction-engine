@@ -7060,6 +7060,9 @@ jobs:
           <button type="button" id="wre-export-stereo-points" disabled>
             Exporter les points observés (JSON)
           </button>
+          <button type="button" id="wre-export-stereo-ply" disabled>
+            Exporter les points 3D en PLY coloré (échelle relative)
+          </button>
           <span id="wre-stereo-point-count" role="status" aria-live="polite">0 point enregistré</span>
           <figure id="wre-stereo-match" style="margin:12px 0;max-width:960px">
             <div style="position:relative">
@@ -7083,6 +7086,7 @@ jobs:
             const zoom = document.getElementById('wre-pixel-native-zoom');
             const savePoint = document.getElementById('wre-save-stereo-point');
             const exportPoints = document.getElementById('wre-export-stereo-points');
+            const exportPly = document.getElementById('wre-export-stereo-ply');
             const pointCount = document.getElementById('wre-stereo-point-count');
             const observations = [];
             let selected = null;
@@ -7091,6 +7095,46 @@ jobs:
               observations.push({...selected});
               pointCount.textContent = observations.length + ' points relatifs conservés (max 64)';
               exportPoints.disabled = false;
+              exportPly.disabled = false;
+            });
+            function downloadObserved(blob, filename) {
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = filename;
+              document.body.appendChild(link);
+              link.click();
+              link.remove();
+              setTimeout(() => URL.revokeObjectURL(url), 1000);
+            }
+            exportPly.addEventListener('click', () => {
+              if (!observations.length || !photos.complete ||
+                  photos.naturalWidth !== picture.naturalWidth * 2 ||
+                  photos.naturalHeight !== picture.naturalHeight) return;
+              // Sample actual observed left-image RGB, not disparity false color.
+              const canvas = document.createElement('canvas');
+              canvas.width = photos.naturalWidth;
+              canvas.height = photos.naturalHeight;
+              const context = canvas.getContext('2d', {willReadFrequently:true});
+              context.drawImage(photos, 0, 0);
+              const header = [
+                'ply', 'format ascii 1.0',
+                'comment WRE observed real-photo stereo points; relative scale only',
+                'comment metric_scale_known false',
+                'comment source_pfm_sha256 __WRE_VERIFIED_PFM_SHA256__',
+                'element vertex ' + observations.length,
+                'property float x', 'property float y', 'property float z',
+                'property uchar red', 'property uchar green', 'property uchar blue',
+                'end_header'
+              ];
+              const rows = observations.map(point => {
+                const [u, v] = point.left_pixel;
+                const [x, y, z] = point.xyz_relative_model_units;
+                const color = context.getImageData(u, v, 1, 1).data;
+                return [x, y, z, color[0], color[1], color[2]].join(' ');
+              });
+              downloadObserved(new Blob([[...header, ...rows, ''].join(String.fromCharCode(10))],
+                {type:'text/plain'}), 'wre-observed-relative-rgb-points.ply');
             });
             exportPoints.addEventListener('click', () => {
               if (!observations.length) return;
@@ -7105,14 +7149,7 @@ jobs:
               };
               const blob = new Blob([JSON.stringify(payload, null, 2) + String.fromCharCode(10)],
                 {type:'application/json'});
-              const url = URL.createObjectURL(blob);
-              const link = document.createElement('a');
-              link.href = url;
-              link.download = 'wre-observed-stereo-points.json';
-              document.body.appendChild(link);
-              link.click();
-              link.remove();
-              setTimeout(() => URL.revokeObjectURL(url), 1000);
+              downloadObserved(blob, 'wre-observed-stereo-points.json');
             });
             zoom.addEventListener('click', () => {
               const enabled = zoom.getAttribute('aria-pressed') !== 'true';
