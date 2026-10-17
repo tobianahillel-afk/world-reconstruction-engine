@@ -1096,6 +1096,9 @@ def test_external_gsplat_runner_builds_complete_canonical_candidate_with_process
     (source_root / "examples").mkdir(parents=True)
     runtime = tmp_path / "external-python"
     runtime.write_bytes(b"stub: external runtime explicitly provided")
+    weights = tmp_path / "trusted-local-alexnet.pth"
+    weights.write_bytes(b"offline-test-weights-only-not-a-real-pytorch-state-dict")
+    weight_digest = hashlib.sha256(weights.read_bytes()).hexdigest()
     monkeypatch.setattr(
         baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
     )
@@ -1127,6 +1130,8 @@ def test_external_gsplat_runner_builds_complete_canonical_candidate_with_process
         producer=producer,
         cuda_device_index=2,
         timeout_seconds=30,
+        lpips_alexnet_weights=weights,
+        lpips_alexnet_sha256=weight_digest,
     )
     assert len(calls) == 1
     command, kwargs = calls[0]
@@ -1136,6 +1141,12 @@ def test_external_gsplat_runner_builds_complete_canonical_candidate_with_process
     assert kwargs["cwd"] == source_root / "examples"
     assert kwargs["env"]["CUDA_VISIBLE_DEVICES"] == "2"
     assert kwargs["env"]["PIP_NO_INDEX"] == "1"
+    assert kwargs["env"]["TORCH_HOME"] == str(output / "torch-cache")
+    copied_weights = (
+        output / "torch-cache" / "hub" / "checkpoints" / "alexnet-owt-7be5be79.pth"
+    )
+    assert copied_weights.read_bytes() == weights.read_bytes()
+    assert hashlib.sha256(copied_weights.read_bytes()).hexdigest() == weight_digest
     assert "WRE_PRIVATE_CI_TOKEN" not in kwargs["env"]
     assert kwargs["timeout"] == 30
     assert kwargs["stderr"] == baseline_module.subprocess.STDOUT
@@ -1153,6 +1164,62 @@ def test_external_gsplat_runner_builds_complete_canonical_candidate_with_process
     assert result.materialization.entries[0].relative_path == "ply/point_cloud_19.ply"
     assert result.materialization.entries[0].sha256 == _digest(_gsplat_ply(vertices=2))
     assert (output / "wre-reference-training.log").exists()
+
+
+@pytest.mark.parametrize("invalid", ("mismatch", "missing_hash", "missing_file"))
+def test_external_gsplat_runner_rejects_untrusted_lpips_cache_before_process(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, invalid: str
+) -> None:
+    request, source, staged, output, profile, artifact_ref, producer = (
+        _retained_gsplat_fixture(tmp_path)
+    )
+    (output / profile.expected_ply_relative_path).unlink()
+    (output / "ply").rmdir()
+    output.rmdir()
+    reference = tmp_path / "pinned-reference"
+    (reference / "examples").mkdir(parents=True)
+    interpreter = tmp_path / "external-python"
+    interpreter.write_bytes(b"stub")
+    weight_file = tmp_path / "alexnet.pth"
+    weight_file.write_bytes(b"synthetic-fixture-not-valid-weights")
+    expected = hashlib.sha256(weight_file.read_bytes()).hexdigest()
+    if invalid == "mismatch":
+        expected = "0" * 64
+    if invalid == "missing_hash":
+        expected = None
+    if invalid == "missing_file":
+        weight_file.unlink()
+    monkeypatch.setattr(
+        baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
+    )
+    monkeypatch.setattr(
+        baseline_module, "verify_gsplat_static_appearance_native_geometry",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        baseline_module.subprocess,
+        "run",
+        lambda *_a, **_kw: pytest.fail("untrusted LPIPS weights launched CUDA subprocess"),
+    )
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="LPIPS"):
+        run_gsplat_reference_training(
+            request=request,
+            source=source,
+            staged=staged,
+            profile=profile,
+            features=cast(ColmapFeatureExtractionResult, object()),
+            expected_environment=cast(ColmapEnvironmentIdentity, object()),
+            source_root=reference,
+            python_executable=interpreter,
+            output_root=output,
+            artifact_ref=artifact_ref,
+            producer=producer,
+            cuda_device_index=0,
+            timeout_seconds=30,
+            lpips_alexnet_weights=weight_file,
+            lpips_alexnet_sha256=expected,
+        )
+    assert not (output / "wre-reference-training.log").exists()
 
 
 @pytest.mark.skipif(os.name != "posix", reason="smoke executable uses POSIX shebang")
