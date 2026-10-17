@@ -1002,9 +1002,7 @@ def test_reference_runner_rejects_missing_photometry_before_any_cuda(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A verified COLMAP source without V2L17 evidence must not reach CUDA."""
-    request, source, staged, output, profile, ref, producer = _retained_gsplat_fixture(
-        tmp_path
-    )
+    request, source, staged, output, profile, ref, producer = _retained_gsplat_fixture(tmp_path)
     python_executable = tmp_path / "external-python"
     python_executable.write_bytes(b"stub")
     previous = (output / profile.expected_ply_relative_path).read_bytes()
@@ -1089,6 +1087,7 @@ def test_reference_runner_accepts_real_two_view_capture_evidence_before_native_g
             timeout_seconds=30,
         )
     assert not output.exists()
+
 
 def test_external_gsplat_training_is_exposed_by_public_reconstruction_package() -> None:
     from wre import reconstruction
