@@ -6561,6 +6561,28 @@ jobs:
           for name in (*png_hashes, "browser-verification.json", "wre-real-3d-comparison.html"):
               shutil.copy2(proof / name, bundle / name)
           
+          # Real same-run stereo input photos, not a synthetic 3D rendering.
+          input_name = "wre-real-stereo-cpu-photos.png"
+          input_png = (bundle / input_name).read_bytes()
+          if len(input_png) < 24 or input_png[:16] != bytes.fromhex(
+              "89504e470d0a1a0a0000000d49484452"
+          ):
+              raise ValueError("Missing real input stereo photograph PNG")
+          input_width, input_height = struct.unpack_from(">II", input_png, 16)
+          provenance = json.loads(
+              (bundle / "wre-real-stereo-cpu-metrics.json").read_text(encoding="utf-8")
+          )
+          height, width = provenance["processed_photo_height_width"]
+          if (input_width, input_height) != (2 * width, height):
+              raise ValueError("Input photos disagree with CPU source dimensions")
+          source_blobs = provenance["source_git_blobs"]
+          if source_blobs != {
+              "aloeL.jpg": "4c192768e4ddd2ada20f91a5e0bd3648fbc78818",
+              "aloeR.jpg": "7ecdf48919be3ac7dd0cc6e594ab00398ac956b2",
+          }:
+              raise ValueError("Original stereo photographs have different provenance")
+          input_sha256 = hashlib.sha256(input_png).hexdigest()
+
           comparison = bundle / "wre-real-3d-comparison.html"
           page = comparison.read_text(encoding="utf-8")
           anchor = '<div class="gallery">'
@@ -6573,7 +6595,22 @@ jobs:
               '<code>python3 -m http.server 8765 --bind 127.0.0.1</code> '
               'et ouvrez <code>http://127.0.0.1:8765/wre-real-3d-comparison.html</code>.</p>'
           )
-          comparison.write_text(page.replace(anchor, navigation + anchor), encoding="utf-8")
+          # Before/after view: source pixels explicitly distinct from inferred 3D.
+          source_panel = (
+              '<details open><summary><strong>Entrées réelles 2D → reconstruction 3D</strong></summary>'
+              '<figure><a href="./' + input_name + '">'
+              '<img id="wre-source-photographs" loading="eager" '
+              'alt="Photographies originales stéréo Aloe gauche et droite" src="./'
+              + input_name + '"></a><figcaption>'
+              'Deux photos stéréo réellement utilisées, rectifiées et redimensionnées. '
+              'JPEG Git blobs épinglés ; dimensions ' + str(input_width) + ' × '
+              + str(input_height) + ' ; PNG SHA-256 ' + input_sha256
+              + '. Le rendu 3D ci-dessous est une estimation, sans garantie métrique.'
+              '</figcaption></figure></details>'
+          )
+          comparison.write_text(
+              page.replace(anchor, navigation + source_panel + anchor), encoding="utf-8"
+          )
           (bundle / "README-OPEN-OFFLINE-3D.txt").write_text(
               "WRE — 3D depuis deux photographies réelles (CPU)\n"
               "1. Décompressez entièrement cette archive dans un dossier local.\n"
@@ -6635,6 +6672,10 @@ jobs:
           manifest = {
               "source": "same GitHub Actions run, actual Chrome + real-photo CPU previews",
               "source_glb_sha256": source_hashes,
+              "source_stereo_photo_png": input_name,
+              "source_stereo_photo_png_sha256": input_sha256,
+              "source_stereo_photo_dimensions": [input_width, input_height],
+              "source_stereo_jpeg_git_blobs": source_blobs,
               "chrome_png_sha256": png_hashes,
               "camera_tour_storyboard_png": "real-stereo-3d-camera-storyboard.png",
               "real_gpu_training": False,
@@ -6647,7 +6688,7 @@ jobs:
               json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
           )
           assert all(hashlib.sha256((bundle / name).read_bytes()).hexdigest() == digest
-                     for name, digest in {**source_hashes, **png_hashes}.items())
+                     for name, digest in {**source_hashes, **png_hashes, input_name: input_sha256}.items())
           print(f"One offline 3D exploration bundle: {len(list(bundle.iterdir()))} entries, "
                 "four GLBs, six real Chrome PNGs, interactive viewer, report, receipts")
           PY
@@ -6717,6 +6758,15 @@ jobs:
               wait_for(lambda: js(
                   "return document.querySelector('a[href=\"./wre-real-stereo-cpu-viewer.html\"]') !== null"
               ))
+              # Validate the EXTRACTED ZIP gallery and its original source pixels.
+              source_photo_loaded = """return (() => {
+                  const img = document.getElementById("wre-source-photographs");
+                  return Boolean(img && img.complete && img.naturalWidth >= 640 &&
+                      img.naturalHeight >= 160 &&
+                      img.currentSrc.endsWith("/wre-real-stereo-cpu-photos.png") &&
+                      img.getBoundingClientRect().width >= 200);
+              })()"""
+              wait_for(lambda: js(source_photo_loaded))
               browser("POST", f"/session/{session}/url", {
                   "url": "http://127.0.0.1:8877/wre-real-stereo-cpu-viewer.html",
               })
@@ -6734,7 +6784,7 @@ jobs:
                   " && document.getElementById('wre-scene').getAttribute('src').includes('sift')"
               ))
               assert js("return !!document.createElement('canvas').getContext('webgl2')")
-              print("PASS: final packaged offline 3D gallery and SIFT GLB rendered in real Chrome WebGL")
+              print("PASS: archived real source photos and SIFT GLB rendered in Chrome WebGL")
           finally:
               browser("DELETE", f"/session/{session}")
           PY
