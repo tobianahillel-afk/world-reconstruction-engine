@@ -6683,8 +6683,11 @@ jobs:
           def wait_for(predicate, timeout=90):
               deadline = time.monotonic() + timeout
               while time.monotonic() < deadline:
-                  if predicate():
-                      return
+                  try:
+                      if predicate():
+                          return
+                  except (OSError, URLError, KeyError):
+                      pass  # ChromeDriver and the packaged localhost page start asynchronously.
                   time.sleep(0.25)
               raise RuntimeError("The packaged offline 3D viewer did not load in Chrome")
 
