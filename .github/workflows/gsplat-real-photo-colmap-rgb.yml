@@ -994,6 +994,9 @@ jobs:
           target.mkdir()
           (target / "observed-GAUSSIANS-UNTRAINED.ply").write_bytes(ply_data)
           (target / "observed-GAUSSIANS-UNTRAINED.splat").write_bytes(splat_data)
+          quality_ref = manifest["reprojection_quality"]
+          assert quality_ref["report_sha256"] == manifest["file_sha256"][quality_ref["report_path"]]
+          assert quality_ref["tracked_observations"] >= 300
           result = {
               "kind": "wre.experimental.real_photo_untrained_gaussian_seed",
               "source_gsplat_commit": "937e29912570c372bed6747a5c9bf85fed877bae",
@@ -1001,6 +1004,11 @@ jobs:
               "source_observed_rgb_ply_sha256": receipt["reconstruction"]["ply_sha256"],
               "source_native_colmap_geometry_sha256": receipt["reconstruction"]["source_sparse_identity_sha256"],
               "source_native_colmap_point_count": native_count,
+              "source_in_sample_reprojection_report_sha256": quality_ref["report_sha256"],
+              "source_in_sample_reprojection_rms_pixels": quality_ref["in_sample_rms_pixels"],
+              "source_in_sample_reprojection_p95_pixels": quality_ref["in_sample_p95_pixels"],
+              "source_in_sample_tracked_observations": quality_ref["tracked_observations"],
+              "held_out_quality_verified": False,
               "gaussians_original_rgb_observed": count,
               "uncolorable_native_points_excluded": native_count-count,
               "sizing": "mean squared distance to three nearest neighbors, same gsplat v1.5.3 formula",
