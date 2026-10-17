@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import hashlib
+import json
 import os
 import struct
 import sys
@@ -111,6 +112,7 @@ from wre.reconstruction.static_appearance_baseline import (
     GsplatStaticAppearanceTrainingProfile,
     assemble_verified_gsplat_static_appearance_result,
     build_gsplat_reference_trainer_path_overrides,
+    export_verified_gsplat_rgb_centers_glb,
     export_verified_gsplat_rgb_centers_ply,
     inspect_gsplat_static_appearance_shared_track_pixels,
     materialize_verified_gsplat_ply,
@@ -1293,6 +1295,87 @@ def test_verified_gsplat_gaussian_centers_export_real_viewable_rgb_ply(
         export_verified_gsplat_rgb_centers_ply(
             artifact_ref=ref, output_root=root, profile=profile, preview_path=preview
         )
+
+
+def test_verified_gsplat_rgb_centers_glb_has_real_gltf_vertex_bytes(tmp_path: Path) -> None:
+    """The generated GLB is a standards-shaped colorized 3D point cloud."""
+    first = [0.0] * 59
+    first[:6] = [1.0, 2.0, 3.0, 0.0, 0.0, 0.0]
+    first[-4] = 1.0
+    second = [0.0] * 59
+    second[:6] = [-1.0, 0.0, 2.0, 2.0, -2.0, 0.0]
+    second[-4] = 1.0
+    template = _gsplat_ply(vertices=2)
+    head = template.index(b"end_header\\n") + len(b"end_header\\n")
+    original = template[:head] + struct.pack("<59f", *first) + struct.pack("<59f", *second)
+    root, profile, ref = _gsplat_output(tmp_path, original)
+    preview_dir = tmp_path / "viewer"
+    preview_dir.mkdir()
+    output = preview_dir / "centers.glb"
+
+    digest = export_verified_gsplat_rgb_centers_glb(
+        artifact_ref=ref, output_root=root, profile=profile, preview_path=output
+    )
+    glb = output.read_bytes()
+    assert digest == _digest(glb)
+    assert struct.unpack_from("<4sII", glb) == (b"glTF", 2, len(glb))
+    json_size, json_type = struct.unpack_from("<I4s", glb, 12)
+    assert json_type == b"JSON"
+    scene = json.loads(glb[20 : 20 + json_size].decode("utf-8"))
+    assert scene["meshes"][0]["primitives"][0]["mode"] == 0  # glTF POINTS
+    assert scene["extensionsUsed"] == ["KHR_materials_unlit"]
+    assert scene["buffers"][0]["byteLength"] == 32
+    assert scene["bufferViews"][0]["byteStride"] == 16
+    assert [v["count"] for v in scene["accessors"]] == [2, 2]
+    assert scene["accessors"][0]["min"] == [-1.0, 0.0, 2.0]
+    assert scene["accessors"][0]["max"] == [1.0, 2.0, 3.0]
+    assert scene["accessors"][1]["normalized"] is True
+    assert scene["extras"]["metric_scale_known"] is False
+    assert scene["extras"]["shown_centers"] == 2
+    assert scene["extras"]["source_gaussians"] == 2
+    bin_size, bin_type = struct.unpack_from("<I4s", glb, 20 + json_size)
+    assert (bin_size, bin_type) == (32, b"BIN\\x00")
+    vertices = glb[28 + json_size :]
+    assert vertices == (
+        struct.pack("<3f3B", 1.0, 2.0, 3.0, 127, 127, 127)
+        + b"\\x00"
+        + struct.pack("<3f3B", -1.0, 0.0, 2.0, 255, 0, 127)
+        + b"\\x00"
+    )
+    assert (root / profile.expected_ply_relative_path).read_bytes() == original
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="new distinct"):
+        export_verified_gsplat_rgb_centers_glb(
+            artifact_ref=ref, output_root=root, profile=profile, preview_path=output
+        )
+
+
+def test_gsplat_rgb_glb_cli_executes_real_cpu_export(tmp_path: Path) -> None:
+    """Run the production -m CLI, not a simulated subprocess or a CUDA training job."""
+    import subprocess
+
+    root, profile, _ = _gsplat_output(tmp_path, _gsplat_ply())
+    viewer_dir = tmp_path / "viewer"
+    viewer_dir.mkdir()
+    dest = viewer_dir / "real-3d-point-preview.glb"
+    command = [
+        sys.executable,
+        "-m",
+        "wre.reconstruction.static_appearance_baseline",
+        "--output-root",
+        str(root),
+        "--max-steps",
+        str(profile.max_steps),
+        "--preview",
+        str(dest),
+    ]
+    completed = subprocess.run(
+        command, capture_output=True, text=True, check=False, timeout=30
+    )
+    assert completed.returncode == 0, completed.stderr
+    data = dest.read_bytes()
+    assert data[:4] == b"glTF"
+    assert completed.stdout.strip() == f"{_digest(data).value}  {dest}"
+    assert not (viewer_dir / "centers-rgb.ply").exists()
 
 
 def test_gsplat_rgb_preview_cli_runs_real_cpu_python_process(tmp_path: Path) -> None:
