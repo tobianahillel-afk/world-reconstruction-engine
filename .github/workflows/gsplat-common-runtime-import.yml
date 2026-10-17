@@ -3573,7 +3573,7 @@ jobs:
           for required in (
               "wre-real-stereo-cpu-viewer.html",
               "wre-model-viewer-4.1.0.min.js",
-              "wre-model-viewer-4.1.0-LICENSE",
+              "wre-model-viewer-4.1.0-LICENSE.txt",
           ):
               if not (source / required).is_file():
                   raise ValueError(f"Missing offline viewer dependency: {required}")
