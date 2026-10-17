@@ -932,7 +932,15 @@ jobs:
           # (not provided), so exact XY calibration is not established.
           focal_px = 3740.0 / 2.0
           baseline_mm = 160.0
-          chosen = np.flatnonzero(evaluated)[::max(1, math.ceil(count / 60_000))]
+          # Never use the ground-truth visibility mask to select 3D points:
+          # that would leak evaluation labels into the reconstructed model.
+          reconstructed = np.isfinite(predicted) & (predicted >= min_disparity)
+          reconstructed &= predicted > 0.0
+          reconstructed_count = int(np.count_nonzero(reconstructed))
+          assert reconstructed_count > 1000
+          chosen = np.flatnonzero(reconstructed)[
+              ::max(1, math.ceil(reconstructed_count / 60_000))
+          ]
           yy, xx = np.unravel_index(chosen, predicted.shape)
           d = predicted[yy, xx].astype(np.float64)
           depth_mm = focal_px * baseline_mm / d
@@ -986,6 +994,8 @@ jobs:
               "matcher_num_disparities": 160,
               "rgb_3d_ply_name": ply_path.name,
               "rgb_3d_point_count": int(len(points)),
+              "rgb_3d_valid_predicted_pixels": reconstructed_count,
+              "rgb_3d_uses_groundtruth_visibility_mask": False,
               "rgb_3d_coordinate_units": "estimated millimeters under official f/b and centered-cx-cy",
               "focal_px_halfsize": focal_px,
               "stereo_baseline_mm_official": baseline_mm,
