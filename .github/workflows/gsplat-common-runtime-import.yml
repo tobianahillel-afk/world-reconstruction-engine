@@ -4981,6 +4981,17 @@ jobs:
               assert len(restored_tour) == 7
               assert js("""
                 document.getElementById('wre-tour-clear').click();
+                const scene=document.getElementById('wre-scene');
+                const previous=window.__wreCameraBookmark;
+                // The tour ends at an arbitrary viewing angle. Restore the
+                // earlier real model-viewer camera before subsequent mesh picks.
+                scene.cameraOrbit=previous.orbit_radians[0]+'rad '+
+                  previous.orbit_radians[1]+'rad '+
+                  previous.orbit_radius_model_units+'m';
+                scene.cameraTarget=previous.target_model_units.map(x=>x+'m').join(' ');
+                scene.fieldOfView=previous.field_of_view_degrees+'deg';
+                scene.removeAttribute('auto-rotate');
+                scene.jumpCameraToGoal();
                 return document.getElementById('wre-tour-play').disabled &&
                   document.getElementById('wre-tour-status')
                     .textContent === 'No saved camera tour.';
@@ -5040,16 +5051,26 @@ jobs:
                 // Scan and click in the SAME WebDriver script. Camera
                 // interpolation after bookmark restore made separately
                 // sampled pixels stale, even after stopping auto-rotate.
-                const fresh=(() => {{ {measure_scan} }})();
-                if (!fresh) return {{error:'fresh measure scan found no two points'}};
-                for (const p of fresh) {{
+                // A real model-viewer camera can settle after the first
+                // surface click. Rescan the current mesh before later clicks.
+                // Never inject fabricated XYZ: use actual viewer raycasts.
+                for (let attempt=0;attempt<8;attempt++) {{
+                  if (scene.querySelectorAll('.wre-pick-marker').length===2) break;
+                  scene.jumpCameraToGoal();
+                  const fresh=(() => {{ {measure_scan} }})();
+                  if (!fresh) return {{error:'current mesh has no distinct surface points'}};
+                  const hasFirst=scene.querySelectorAll('.wre-pick-marker').length>0;
+                  const p=fresh[hasFirst?1:0];
                   const hit=originalRaycast(p.x,p.y);
-                  if (!hit || !hit.position) return {{error:'fresh click missed surface'}};
+                  if (!hit || !hit.position) continue;
                   window.__wreCapturingClick=true;
-                  scene.dispatchEvent(new MouseEvent('click', {{
-                    bubbles:true, clientX:p.x, clientY:p.y
-                  }}));
-                  window.__wreCapturingClick=false;
+                  try {{
+                    scene.dispatchEvent(new MouseEvent('click', {{
+                      bubbles:true, clientX:p.x, clientY:p.y
+                    }}));
+                  }} finally {{
+                    window.__wreCapturingClick=false;
+                  }}
                 }}
                 return {{
                   status:document.getElementById('wre-measure-result').textContent,
