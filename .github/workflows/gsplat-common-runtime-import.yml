@@ -4957,6 +4957,23 @@ jobs:
                 document.getElementById('wre-tour-play').click();
                 return document.getElementById('wre-tour-play').disabled;
               """)
+              # Observe an actual intermediate WebGL camera pose while tour plays:
+              # old hard-cut playback cannot satisfy this mid-path assertion.
+              tweened_tour = until("""
+                const scene=document.getElementById('wre-scene');
+                const status=document.getElementById('wre-tour-status').textContent;
+                const first=window.__wreRecordedFirst, second=window.__wreRecordedSecond;
+                if (!first || !second || !status.includes('Interpolating camera viewpoint'))
+                  return null;
+                const orbit=scene.getCameraOrbit(), target=scene.getCameraTarget();
+                const actual=[orbit.theta,orbit.phi,orbit.radius,target.x,target.y,target.z,
+                  scene.getFieldOfView()];
+                const lo=Math.min(first[0],second[0])+0.04;
+                const hi=Math.max(first[0],second[0])-0.04;
+                return actual[0]>lo && actual[0]<hi &&
+                  actual.every(Number.isFinite) ? actual : null;
+              """, limit=10)
+              assert len(tweened_tour) == 7, "Chrome did not render intermediate 3D camera motion"
               played_tour = until("""
                 const scene=document.getElementById('wre-scene');
                 const status=document.getElementById('wre-tour-status').textContent;
@@ -6100,6 +6117,7 @@ jobs:
                       "user_camera_tour_verified_in_chrome": True,
                       "portable_camera_tour_json_roundtrip_verified_in_chrome": True,
                       "camera_tour_keyframe_scrubbing_verified_in_chrome": True,
+                      "smooth_camera_tour_interpolation_verified_in_chrome": True,
               "current_view_png_export_verified_in_chrome": True,
                       "current_view_png_dimensions": [view_png["width"], view_png["height"]],
                       "surface_reload": True,
@@ -6248,6 +6266,8 @@ jobs:
               raise ValueError("Actual Chrome did not export and restore a real camera tour")
           if receipt.get("camera_tour_keyframe_scrubbing_verified_in_chrome") is not True:
               raise ValueError("Actual Chrome did not scrub two real 3D camera keyframes")
+          if receipt.get("smooth_camera_tour_interpolation_verified_in_chrome") is not True:
+              raise ValueError("Actual Chrome did not render smooth 3D camera interpolation")
           if receipt.get("current_view_png_export_verified_in_chrome") is not True:
               raise ValueError("Actual Chrome did not export its current real-photo 3D view as PNG")
           dimensions = receipt.get("current_view_png_dimensions")
