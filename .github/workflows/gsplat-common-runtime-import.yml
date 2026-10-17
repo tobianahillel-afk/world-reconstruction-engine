@@ -1009,6 +1009,48 @@ jobs:
               assert np.allclose(first[:3], points[0], atol=0, rtol=0)
               assert tuple(first[3:]) == tuple(int(v) for v in rgb[0])
 
+          # Conservative OPTIONAL RGB 3D output from agreement of two
+          # existing OpenCV matchers. Never use the GT mask for selection.
+          # This trades density for internal consistency, not certified accuracy.
+          consensus = reconstructed & np.isfinite(bm_predicted)
+          consensus &= bm_predicted >= min_disparity
+          consensus &= np.abs(predicted - bm_predicted) <= 2.0
+          consensus_count = int(np.count_nonzero(consensus))
+          consent = np.flatnonzero(consensus)[
+              ::max(1, math.ceil(max(1, consensus_count) / 60_000))
+          ]
+          cy, cx = np.unravel_index(consent, predicted.shape)
+          cd = predicted[cy, cx].astype(np.float64)
+          cz = focal_px * baseline_mm / cd
+          cxyz = np.column_stack((
+              (cx - (width - 1) / 2.0) * cz / focal_px,
+              (cy - (height - 1) / 2.0) * cz / focal_px,
+              cz,
+          )).astype(np.float32)
+          crgb = cv2.cvtColor(left, cv2.COLOR_BGR2RGB)[cy, cx]
+          assert len(cxyz) <= 60_000
+          assert np.isfinite(cxyz).all() and np.all(cxyz[:, 2] > 0)
+          consensus_header = ply_header.replace(
+              f"element vertex {len(points)}\n".encode(),
+              f"element vertex {len(cxyz)}\n".encode(),
+          )
+          consensus_ply = (
+              Path(os.environ["RUNNER_TEMP"]) / "wre-middlebury-half-aloe-cpu-consensus-3d.ply"
+          )
+          with consensus_ply.open("wb") as out:
+              out.write(consensus_header)
+              for xyz, color in zip(cxyz, crgb, strict=True):
+                  out.write(struct.pack(
+                      "<3f3B", float(xyz[0]), float(xyz[1]), float(xyz[2]),
+                      int(color[0]), int(color[1]), int(color[2]),
+                  ))
+          assert consensus_ply.stat().st_size == len(consensus_header) + 15 * len(cxyz)
+          with consensus_ply.open("rb") as check:
+              assert check.read(len(consensus_header)) == consensus_header
+              assert len(check.read()) == 15 * len(cxyz)
+          agreement_known = consensus & known
+          agreement_error = np.abs(predicted[agreement_known] - reference[agreement_known])
+
           report = {
               "benchmark": "Middlebury 2006 HalfSize Aloe view1/view5 disp1",
               "official_source": archive_url,
@@ -1030,6 +1072,19 @@ jobs:
               "rgb_3d_ply_name": ply_path.name,
               "rgb_3d_point_count": int(len(points)),
               "rgb_3d_valid_predicted_pixels": reconstructed_count,
+              "consensus_rgb_3d_ply_name": consensus_ply.name,
+              "consensus_rgb_3d_points": int(len(cxyz)),
+              "consensus_valid_predicted_pixels": consensus_count,
+              "consensus_matchers": ["OpenCV StereoSGBM", "OpenCV StereoBM"],
+              "consensus_abs_disparity_threshold_px": 2.0,
+              "consensus_uses_groundtruth_visibility_mask": False,
+              "consensus_gt_overlap_pixels_for_evaluation_only": int(
+                  len(agreement_error)
+              ),
+              "consensus_gt_rmse_px_for_evaluation_only": (
+                  float(np.sqrt(np.mean(agreement_error * agreement_error)))
+                  if len(agreement_error) else None
+              ),
               "rgb_3d_uses_groundtruth_visibility_mask": False,
               "rgb_3d_coordinate_units": "estimated millimeters under official f/b and centered-cx-cy",
               "focal_px_halfsize": focal_px,
@@ -1071,12 +1126,16 @@ jobs:
           set -euo pipefail
           bundle="$RUNNER_TEMP/wre-middlebury-aloe-quality-bundle"
           mkdir -p "$bundle"
-          for name in wre-middlebury-half-aloe-gt.json wre-middlebury-half-aloe-cpu-3d.ply; do
+          for name in \
+            wre-middlebury-half-aloe-gt.json \
+            wre-middlebury-half-aloe-cpu-3d.ply \
+            wre-middlebury-half-aloe-cpu-consensus-3d.ply
+          do
             test -s "$RUNNER_TEMP/$name"
             cp "$RUNNER_TEMP/$name" "$bundle/$name"
             test -s "$bundle/$name"
           done
-          test "$(find "$bundle" -maxdepth 1 -type f | wc -l)" -eq 2
+          test "$(find "$bundle" -maxdepth 1 -type f | wc -l)" -eq 3
 
       - name: Publish independently measured Middlebury stereo quality and RGB 3D
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
