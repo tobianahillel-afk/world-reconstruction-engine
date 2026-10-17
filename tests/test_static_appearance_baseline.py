@@ -1693,11 +1693,27 @@ def test_real_colmap_sparse_observations_export_viewable_rgb_glb(
     assert scene["extras"]["source_colmap_points"] == 1
     assert scene["extras"]["shown_points"] == 1
     assert scene["extras"]["metric_scale_known"] is False
+    native_source_hash = colmap_sparse_model_content_identity(source.native_model_artifact).value
+    assert scene["extras"]["source_colmap_model_sha256"] == native_source_hash
+    # A separate real PLY export of identical sources must match the lineage
+    # embedded in the portable GLB, even after the temporary PLY is deleted.
+    separate_ply = tmp_path / "same-observations.ply"
+    source_ply_digest = baseline_module.export_verified_colmap_observed_rgb_ply(
+        request,
+        source,
+        features=features,
+        expected_environment=environment,
+        module=module,
+        preview_path=separate_ply,
+    )
+    assert scene["extras"]["source_rgb_ply_sha256"] == source_ply_digest.value
     assert glb[28 + json_size :] == struct.pack("<3f3B", 1.0, 2.0, 3.0, 64, 128, 192) + b"\x00"
     summary = baseline_module.inspect_verified_gsplat_rgb_centers_glb(path=output)
     assert summary["sha256"] == digest.value
     assert summary["kind"] == "wre_colmap_observed_rgb_points"
     assert summary["source_colmap_points"] == summary["shown_points"] == 1
+    assert summary["source_colmap_model_sha256"] == native_source_hash
+    assert summary["source_rgb_ply_sha256"] == source_ply_digest.value
     assert summary["gpu_training_verified"] is False
     command = subprocess.run(
         [
@@ -1785,6 +1801,7 @@ def test_exported_gsplat_glb_can_be_reopened_and_inspected_offline(tmp_path: Pat
     assert summary["shown_centers"] == 3
     assert summary["source_gaussians"] == 4
     assert summary["kind"] == "wre_gsplat_rgb_centers_only"
+    assert len(summary["source_rgb_ply_sha256"]) == 64
     assert summary["gpu_training_verified"] is False
     assert summary["metric_scale_known"] is False
     command = subprocess.run(
