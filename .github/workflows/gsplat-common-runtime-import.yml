@@ -279,3 +279,88 @@ jobs:
           print("Controlled synthetic scene only; no real-world reconstruction "
                 "or GPU training was executed.")
           PY
+
+      # This is an actual upstream CPU exporter, not a hand-written PLY fixture.
+      # It does not execute a CUDA kernel or optimize Gaussian parameters.
+      - name: Export real pinned gsplat Gaussian bytes using CPU tensors
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$COMMON_PYTHON" -I - <<'PY'
+          import os
+          from pathlib import Path
+
+          import torch
+          from gsplat import export_splats
+
+          assert not torch.cuda.is_available()
+          assert torch.__version__ == "2.4.0+cu124"
+          root = Path(os.environ["RUNNER_TEMP"]) / "wre-upstream-exporter-smoke"
+          (root / "ply").mkdir(parents=True, exist_ok=False)
+          output = root / "ply" / "point_cloud_0.ply"
+          produced = export_splats(
+              means=torch.tensor([[0.0, 0.0, 2.0], [0.4, 0.2, 2.4]]),
+              scales=torch.zeros((2, 3), dtype=torch.float32),
+              quats=torch.tensor([[1., 0., 0., 0.], [1., 0., 0., 0.]]),
+              opacities=torch.tensor([0.0, 0.5], dtype=torch.float32),
+              sh0=torch.tensor([[[0.2, 0.1, 0.3]], [[0.1, 0.3, 0.2]]]),
+              shN=torch.zeros((2, 15, 3), dtype=torch.float32),
+              format="ply",
+              save_to=str(output),
+          )
+          assert isinstance(produced, bytes)
+          assert output.read_bytes() == produced
+          assert b"element vertex 2\n" in produced
+          print(f"Actual pinned gsplat.export_splats CPU emitted {len(produced)} PLY bytes")
+          print("Two synthetic CPU Gaussians; no GPU run or scene reconstruction.")
+          PY
+
+      # WRE domain uses Python >=3.12 (StrEnum). gsplat's selected torch
+      # runtime is pinned to Python 3.10.21. Test their real byte-level bridge.
+      - name: Ingest true upstream PLY with canonical WRE 3.12 materializer
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv python install 3.12.12
+          export PYTHONPATH="$GITHUB_WORKSPACE/src"
+          "$(uv python find 3.12.12)" - <<'PY'
+          import hashlib
+          import os
+          from pathlib import Path
+
+          from wre.domain.appearance import APPEARANCE_MODEL_ARTIFACT_KIND
+          from wre.domain.artifacts import ArtifactId, ArtifactRef
+          from wre.reconstruction.static_appearance_baseline import (
+              GsplatStaticAppearanceTrainingProfile,
+              materialize_verified_gsplat_ply,
+          )
+
+          root = Path(os.environ["RUNNER_TEMP"]) / "wre-upstream-exporter-smoke"
+          actual_ply = root / "ply" / "point_cloud_0.ply"
+          actual_bytes = actual_ply.read_bytes()
+          artifact = ArtifactRef(
+              ArtifactId("appearance:gsplat:real-upstream-cpu-export"),
+              APPEARANCE_MODEL_ARTIFACT_KIND,
+          )
+          metadata = materialize_verified_gsplat_ply(
+              artifact_ref=artifact,
+              output_root=root,
+              profile=GsplatStaticAppearanceTrainingProfile(max_steps=1),
+          )
+          assert metadata.artifact_ref == artifact
+          assert len(metadata.entries) == 1
+          entry = metadata.entries[0]
+          assert entry.relative_path == "ply/point_cloud_0.ply"
+          assert entry.byte_length == len(actual_bytes)
+          assert entry.sha256.value == hashlib.sha256(actual_bytes).hexdigest()
+          print("Canonical WRE Python 3.12 accepted the REAL gsplat CPU exporter PLY")
+          print("Cross-interpreter output hashing verified; no GPU optimization executed.")
+          PY
+
+      - name: Retain true exporter to WRE materialization artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wre-real-gsplat-exporter-to-materializer-cpu
+          path: ${{ runner.temp }}/wre-upstream-exporter-smoke/ply/point_cloud_0.ply
+          if-no-files-found: error
+          retention-days: 7
