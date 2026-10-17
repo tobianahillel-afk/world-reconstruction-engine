@@ -1984,6 +1984,11 @@ jobs:
                 step="any" inputmode="decimal" aria-label="Known reference distance in metres">
               <button id="wre-reference-apply" type="button">Calibrate from selected two-point distance</button>
               <button id="wre-reference-estimate" type="button">Show user-scaled estimate</button>
+              <label for="wre-second-reference-metres">Second known distance (metres, user supplied):</label>
+              <input id="wre-second-reference-metres" type="number" min="0" max="10000000"
+                step="any" inputmode="decimal" aria-label="Second manually known 3D distance in metres">
+              <button id="wre-reference-crosscheck" type="button">Compare a second 3D reference</button>
+              <span id="wre-reference-crosscheck-status" role="status">No second reference checked.</span>
               <button id="wre-reference-clear" type="button">Clear reference scale</button>
               <button id="wre-reference-export" type="button" disabled
                 aria-label="Download user-supplied reference calibration JSON">Save reference JSON</button>
@@ -2029,6 +2034,9 @@ jobs:
               const referenceMetres = document.getElementById("wre-reference-metres");
               const referenceApply = document.getElementById("wre-reference-apply");
               const referenceEstimate = document.getElementById("wre-reference-estimate");
+              const secondReferenceMetres = document.getElementById("wre-second-reference-metres");
+              const referenceCrosscheck = document.getElementById("wre-reference-crosscheck");
+              const referenceCrosscheckStatus = document.getElementById("wre-reference-crosscheck-status");
               const referenceClear = document.getElementById("wre-reference-clear");
               const referenceExport = document.getElementById("wre-reference-export");
               const referenceImport = document.getElementById("wre-reference-import");
@@ -2155,7 +2163,11 @@ jobs:
               let calibrationIdentity = null;
               let referenceMetresValue = null;
               let referencePoints = null;
+              function resetReferenceCrosscheck() {
+                referenceCrosscheckStatus.textContent = "No second reference checked.";
+              }
               function clearUserCalibration() {
+                resetReferenceCrosscheck();
                 metresPerModelUnit = null;
                 calibrationSource = null;
                 calibrationIdentity = null;
@@ -2226,10 +2238,49 @@ jobs:
                 referencePoints = [
                   measurement.point_a_xyz.slice(), measurement.point_b_xyz.slice()
                 ];
+                resetReferenceCrosscheck();
                 referenceExport.disabled = chooser.selectedIndex < 0;
                 showUserCalibratedEstimate();
               });
               referenceEstimate.addEventListener("click", showUserCalibratedEstimate);
+              // A second user-supplied ruler does not change the primary scale.
+              // This is a consistency check, NOT an independent metric survey.
+              referenceCrosscheck.addEventListener("click", () => {
+                const measurement = completedMeasurement;
+                const knownMetres = Number(secondReferenceMetres.value);
+                if (!scene.loaded || !Number.isFinite(metresPerModelUnit) ||
+                    calibrationSource !== scene.getAttribute("src") ||
+                    calibrationIdentity !== provenance.textContent.trim() ||
+                    !referencePoints || !secondReferenceMetres.value.trim() ||
+                    !(knownMetres > 0 && knownMetres <= 1e7) ||
+                    !measurement ||
+                    measurement.schema !== "wre.relative_3d_surface_measurement.v1") {
+                  referenceCrosscheckStatus.textContent =
+                    "Second reference refused: select another two-point distance and enter known metres.";
+                  return;
+                }
+                const a = measurement.point_a_xyz, b = measurement.point_b_xyz;
+                const matches = (p, q) => p.every((value, i) => value === q[i]);
+                if ((matches(a, referencePoints[0]) && matches(b, referencePoints[1])) ||
+                    (matches(a, referencePoints[1]) && matches(b, referencePoints[0]))) {
+                  referenceCrosscheckStatus.textContent =
+                    "Second reference refused: use two different mesh points.";
+                  return;
+                }
+                const distance = Math.hypot(...a.map((value, i) => value - b[i]));
+                const secondFactor = knownMetres / distance;
+                const disagreement = 100 * Math.abs(secondFactor / metresPerModelUnit - 1);
+                if (!(distance > 1e-9) || !Number.isFinite(disagreement) ||
+                    !(secondFactor >= 1e-12 && secondFactor <= 1e12)) {
+                  referenceCrosscheckStatus.textContent =
+                    "Second reference refused: invalid distance or scale.";
+                  return;
+                }
+                referenceCrosscheckStatus.textContent = "Second reference scale disagreement: " +
+                  disagreement.toFixed(2) + "% (" +
+                  (disagreement > 5 ? "inconsistent" : "within 5%") +
+                  " between manually supplied references; NOT certified accuracy).";
+              });
               referenceClear.addEventListener("click", clearUserCalibration);
               // Separate from canonical NONMETRIC annotation JSON. This is only
               // a user assertion, bound to a built-in GLB with pinned SHA256.
@@ -2309,6 +2360,7 @@ jobs:
                   calibrationSource = currentSource;
                   referenceMetresValue = saved.reference_length_metres;
                   referencePoints = points.map(point => point.slice());
+                  resetReferenceCrosscheck();
                   referenceMetres.value = String(referenceMetresValue);
                   referenceExport.disabled = false;
                   showUserCalibratedEstimate();
@@ -5081,6 +5133,90 @@ jobs:
                   document.querySelectorAll('.wre-pick-marker').length===0;
               """)
 
+              # Validate a SECOND real 3D ruler from different actual mesh
+              # raycasts. It must not silently replace the primary user scale.
+              secondary_a, secondary_b = area_status["clicked"][:2]
+              secondary_units = math.dist(secondary_a, secondary_b)
+              assert secondary_units > 0.001
+              primary_a, primary_b = (
+                  exported_measurement["point_a_xyz"],
+                  exported_measurement["point_b_xyz"],
+              )
+              assert not (
+                  (secondary_a == primary_a and secondary_b == primary_b) or
+                  (secondary_a == primary_b and secondary_b == primary_a)
+              ), "Second real mesh segment must differ from the initial ruler"
+              js(f"""
+                const input=document.getElementById('wre-measure-import');
+                const file=new File([JSON.stringify({json.dumps(exported_measurement)})],
+                  'first-real-mesh-reference.json', {{type:'application/json'}});
+                const files=new DataTransfer();files.items.add(file);input.files=files.files;
+                input.dispatchEvent(new Event('change', {{bubbles:true}}));
+              """)
+              assert until("""
+                return document.getElementById('wre-measure-import-status')
+                  .textContent.includes('Saved 3D distance restored');
+              """)
+              assert js("""
+                document.getElementById('wre-second-reference-metres').value='2.5';
+                document.getElementById('wre-reference-crosscheck').click();
+                return document.getElementById('wre-reference-crosscheck-status')
+                  .textContent.includes('use two different mesh points');
+              """), "Second reference accepted the original two mesh points"
+              secondary_measure = dict(
+                  exported_measurement,
+                  point_a_xyz=secondary_a,
+                  point_b_xyz=secondary_b,
+                  distance_model_units=secondary_units,
+              )
+              js(f"""
+                const input=document.getElementById('wre-measure-import');
+                const file=new File([JSON.stringify({json.dumps(secondary_measure)})],
+                  'second-real-mesh-reference.json', {{type:'application/json'}});
+                const files=new DataTransfer();files.items.add(file);input.files=files.files;
+                input.dispatchEvent(new Event('change', {{bubbles:true}}));
+              """)
+              assert until("""
+                return document.getElementById('wre-measure-import-status')
+                  .textContent.includes('Saved 3D distance restored');
+              """)
+              consistent_known = 2.5 * secondary_units / exported_measurement["distance_model_units"]
+              consistent_status = js(f"""
+                document.getElementById('wre-second-reference-metres')
+                  .value={json.dumps(str(consistent_known))};
+                document.getElementById('wre-reference-crosscheck').click();
+                return document.getElementById('wre-reference-crosscheck-status').textContent;
+              """)
+              assert "Second reference scale disagreement: 0.00%" in consistent_status
+              assert "NOT certified accuracy" in consistent_status
+              inconsistent_status = js(f"""
+                document.getElementById('wre-second-reference-metres')
+                  .value={json.dumps(str(consistent_known * 1.2))};
+                document.getElementById('wre-reference-crosscheck').click();
+                return document.getElementById('wre-reference-crosscheck-status').textContent;
+              """)
+              assert "Second reference scale disagreement: 20.00%" in inconsistent_status
+              assert "inconsistent" in inconsistent_status
+              assert js("""
+                document.getElementById('wre-reference-estimate').click();
+                const estimate=document.getElementById('wre-reference-status').textContent;
+                return estimate.includes('NOT certified accuracy') &&
+                  !document.getElementById('wre-reference-export').disabled;
+              """), "Second reference modified or removed the primary calibration"
+              # Export of canonical annotations must STILL be nonmetric.
+              js("""
+                window.__wreExportedMeasurement=null;
+                document.getElementById('wre-measure-export').click();
+              """)
+              secondary_export = json.loads(until("return window.__wreExportedMeasurement;"))
+              assert secondary_export["metric_scale_known"] is False
+              assert secondary_export["units"] == "model_units"
+              assert secondary_export["model_provenance"] == secondary_measure["model_provenance"]
+              assert secondary_export["point_a_xyz"] == secondary_a
+              assert secondary_export["point_b_xyz"] == secondary_b
+              assert abs(secondary_export["distance_model_units"] - secondary_units) < 1e-6
+              second_reference_consistency_verified_in_chrome = True
+
               # The fourth interactive mode measures the 3D chord angle at
               # the MIDDLE of three actual raycast surface points. This angle
               # is scale independent but NOT mesh curvature or a normal angle.
@@ -5311,6 +5447,7 @@ jobs:
                       "surface_triangle_fan_area_export_verified_in_chrome": True,
                       "surface_triangle_fan_area_restore_verified_in_chrome": True,
                       "user_reference_scale_verified_in_chrome": calibration_verified_in_chrome,
+                      "second_reference_consistency_verified_in_chrome": second_reference_consistency_verified_in_chrome,
                       "surface_chord_angle_export_verified_in_chrome": True,
                       "surface_chord_angle_restore_verified_in_chrome": True,
                       "relative_3d_camera_bookmark_roundtrip_verified_in_chrome": True,
@@ -5442,6 +5579,8 @@ jobs:
               raise ValueError("Actual Chrome did not restore the saved 3D polygon area")
           if receipt.get("user_reference_scale_verified_in_chrome") is not True:
               raise ValueError("Actual Chrome did not exercise user-supplied 3D scale")
+          if receipt.get("second_reference_consistency_verified_in_chrome") is not True:
+              raise ValueError("Actual Chrome did not compare two manual 3D scale references")
           if receipt.get("surface_chord_angle_export_verified_in_chrome") is not True:
               raise ValueError("Actual Chrome did not export a real-raycast 3D chord angle")
           if receipt.get("surface_chord_angle_restore_verified_in_chrome") is not True:
