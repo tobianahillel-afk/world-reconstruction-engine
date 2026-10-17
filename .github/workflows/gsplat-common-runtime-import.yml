@@ -4371,6 +4371,74 @@ jobs:
                   document.querySelectorAll('.wre-pick-marker').length === 0;
               """)
 
+              # Actually reload the earlier polyline via the public file input,
+              # using the very JSON produced by three real mesh raycasts.
+              js(f"""
+                const input=document.getElementById('wre-measure-import');
+                const file=new File([JSON.stringify({json.dumps(path_json)})],
+                  'measured-real-photo-path.json', {{type:'application/json'}});
+                const data=new DataTransfer();
+                data.items.add(file);
+                input.files=data.files;
+                input.dispatchEvent(new Event('change', {{bubbles:true}}));
+              """)
+              restored_path = until("""
+                const scene=document.getElementById('wre-scene');
+                const status=document.getElementById('wre-measure-import-status').textContent;
+                const result=document.getElementById('wre-measure-result').textContent;
+                const markers=[...scene.querySelectorAll('.wre-pick-marker')].map(m =>
+                  m.dataset.position.split(' ').map(Number));
+                return status.includes('Saved 3D path restored') &&
+                  result.includes('Restored 3D polyline length:') &&
+                  markers.length === 3 &&
+                  !document.getElementById('wre-measure-export').disabled
+                  ? {status,result,markers,autoRotate:scene.hasAttribute('auto-rotate')} : null;
+              """)
+              assert restored_path["markers"] == path_status["clicked"], restored_path
+              assert restored_path["autoRotate"] is False
+              assert "NOT geodesic or meters" in restored_path["result"]
+              # A forged segment or source must fail without changing the
+              # restored markers, and each rejection must occur on THIS file.
+              for invalid in (
+                  dict(path_json, model_provenance="different reconstructed GLB"),
+                  dict(path_json, total_length_model_units=path_json["total_length_model_units"]+4.0),
+                  dict(path_json, segment_lengths_model_units=[0.0, 0.0]),
+              ):
+                  js(f"""
+                    const status=document.getElementById('wre-measure-import-status');
+                    status.textContent='Ready for a new path input';
+                    const input=document.getElementById('wre-measure-import');
+                    const file=new File([JSON.stringify({json.dumps(invalid)})],
+                      'invalid-3d-path.json', {{type:'application/json'}});
+                    const data=new DataTransfer();
+                    data.items.add(file);
+                    input.files=data.files;
+                    input.dispatchEvent(new Event('change', {{bubbles:true}}));
+                  """)
+                  assert until("""
+                    return document.getElementById('wre-measure-import-status')
+                      .textContent.includes('restore refused');
+                  """)
+                  assert js("""
+                    return [...document.getElementById('wre-scene')
+                      .querySelectorAll('.wre-pick-marker')].map(
+                        m => m.dataset.position.split(' ').map(Number));
+                  """) == path_status["clicked"]
+              # Ensure the restored path remains re-exportable before clearing.
+              js("""
+                window.__wreExportedMeasurement=null;
+                document.getElementById('wre-measure-export').click();
+              """)
+              assert json.loads(until("return window.__wreExportedMeasurement;")) == path_json
+              assert js("""
+                const button=document.getElementById('wre-path-toggle');
+                button.click();
+                button.click();
+                return button.getAttribute('aria-pressed') === 'false' &&
+                  document.getElementById('wre-scene').hasAttribute('auto-rotate') &&
+                  document.querySelectorAll('.wre-pick-marker').length === 0;
+              """)
+              
               # Real Chrome/WebGL raycasts and Blob export of relative 3D
               # triangle-fan area on the actual photograph-derived mesh.
               assert js("""
@@ -4642,6 +4710,7 @@ jobs:
                       "surface_measurement_export_verified_in_chrome": True,
                       "surface_distance_restore_verified_in_chrome": True,
                       "surface_polyline_export_verified_in_chrome": True,
+                      "surface_polyline_restore_verified_in_chrome": True,
                       "surface_triangle_fan_area_export_verified_in_chrome": True,
                       "surface_chord_angle_export_verified_in_chrome": True,
                       "relative_3d_camera_bookmark_roundtrip_verified_in_chrome": True,
@@ -4765,6 +4834,8 @@ jobs:
               raise ValueError("Actual Chrome did not roundtrip a saved 3D distance annotation")
           if receipt.get("surface_polyline_export_verified_in_chrome") is not True:
               raise ValueError("Actual Chrome did not export a measured multi-point 3D path")
+          if receipt.get("surface_polyline_restore_verified_in_chrome") is not True:
+              raise ValueError("Actual Chrome did not restore a 3D path on the real mesh")
           if receipt.get("surface_triangle_fan_area_export_verified_in_chrome") is not True:
               raise ValueError("Actual Chrome did not export a relative 3D polygon triangle-fan area")
           if receipt.get("surface_chord_angle_export_verified_in_chrome") is not True:
