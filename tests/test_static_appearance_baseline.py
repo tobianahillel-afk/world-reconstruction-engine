@@ -1700,7 +1700,13 @@ def test_real_colmap_sparse_observations_export_viewable_rgb_glb(
     assert summary["source_colmap_points"] == summary["shown_points"] == 1
     assert summary["gpu_training_verified"] is False
     command = subprocess.run(
-        [sys.executable, "-m", "wre.reconstruction.static_appearance_baseline", "--inspect-glb", str(output)],
+        [
+            sys.executable,
+            "-m",
+            "wre.reconstruction.static_appearance_baseline",
+            "--inspect-glb",
+            str(output),
+        ],
         capture_output=True,
         text=True,
         timeout=25,
