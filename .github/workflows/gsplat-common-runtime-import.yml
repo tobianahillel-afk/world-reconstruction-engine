@@ -1072,7 +1072,7 @@ jobs:
               "four_dimensional_scene": False,
           }
           (output / "wre-sift-fourth-view-heldout.json").write_text(
-              json.dumps(fourth_report, indent=2, sort_keys=True) + "\\n",
+              json.dumps(fourth_report, indent=2, sort_keys=True) + "\n",
               encoding="utf-8",
           )
           print(
