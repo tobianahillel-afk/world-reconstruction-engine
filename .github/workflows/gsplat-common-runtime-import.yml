@@ -4913,6 +4913,9 @@ jobs:
                 const scene=document.getElementById('wre-scene');
                 const button=document.getElementById('wre-area-toggle');
                 button.click();
+                // Freeze the current 3D camera goal before selecting mesh pixels.
+                // Turning off auto-rotate alone does not stop in-flight motion.
+                scene.jumpCameraToGoal();
                 return button.getAttribute('aria-pressed') === 'true' &&
                   !scene.hasAttribute('auto-rotate');
               """), "Chrome could not activate the polygon area mode"
@@ -4953,20 +4956,14 @@ jobs:
                 const valid=c && maxArea>maxD*maxD*1e-6;
                 return {points:valid?[a,b,c]:null,count:hits.length,maxD,maxArea};
               """
-              area_probe = js(area_scan)
-              for _ in range(15):
-                  if area_probe.get("points"):
-                      break
-                  time.sleep(0.4)
-                  area_probe = js(area_scan)
-              assert area_probe.get("points"), area_probe
-              area_hits = area_probe["points"]
-              area_status = js(f"""
+              # One browser interaction samples and clicks the SAME current
+              # mesh view. A separate scan followed by another WebDriver call
+              # can become stale while the native camera is still settling.
+              area_interaction = f"""
                 const scene=document.getElementById('wre-scene');
                 const button=document.getElementById('wre-area-toggle');
-                // Sample the ACTUAL mesh again immediately before dispatch.
-                // The model-viewer camera may settle between WebDriver calls;
-                // stale screen pixels are not reliable points on the surface.
+                // Use the actual mesh raycasts from the current 3D camera.
+                // The selected points are dispatched before leaving this JS call.
                 const fresh=(() => {{ {area_scan} }})();
                 if (!fresh.points) return {{error:'area mesh sample vanished', count:fresh.count}};
                 window.__wreClickedRaycasts=[];
@@ -5009,6 +5006,14 @@ jobs:
                     }}
                   }}
                 }}
+                if (window.__wreClickedRaycasts.length !== 3) {{
+                  // Discard incomplete REAL clicks before another attempt.
+                  // Never fill missing geometry with synthetic coordinates.
+                  const count=window.__wreClickedRaycasts.length;
+                  button.click();
+                  button.click();
+                  return {{error:'mesh click did not complete',count}};
+                }}
                 return {{
                   status:document.getElementById('wre-measure-result').textContent,
                   pressed:button.getAttribute('aria-pressed'),
@@ -5017,7 +5022,13 @@ jobs:
                   clicked:window.__wreClickedRaycasts.slice(),
                   markerCount:scene.querySelectorAll('.wre-pick-marker').length
                 }};
-              """)
+              """
+              area_status = js(area_interaction)
+              for _ in range(15):
+                  if len(area_status.get("clicked", [])) == 3:
+                      break
+                  time.sleep(0.4)
+                  area_status = js(area_interaction)
               assert area_status.get("clicked") and len(area_status["clicked"]) == 3, area_status
               assert area_status["markerCount"] == 3
               assert area_status["pressed"] == "true"
