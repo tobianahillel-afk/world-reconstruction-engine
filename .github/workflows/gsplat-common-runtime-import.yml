@@ -6993,9 +6993,44 @@ jobs:
               '(D. Scharstein et al.); voir https://vision.middlebury.edu/stereo/data/.'
               '</figcaption></figure></details>'
           )
+          # Show the real same-run stereo evidence already in the offline ZIP.
+          # These are observed matching diagnostics, NOT an independent 3D GT.
+          diagnostics = (
+              '<details open id="wre-stereo-evidence">'
+              '<summary><strong>Qualité observée : photos vers 3D (CPU)</strong></summary>'
+              '<p id="wre-stereo-evidence-metrics">'
+              'Couverture disparité : '
+              + f'{100.0 * provenance["disparity_valid_fraction"]:.1f}%'
+              + ' des pixels ; cohérence gauche-droite parmi les pixels valides : '
+              + f'{100.0 * provenance["left_right_consistent_fraction_of_valid"]:.1f}%'
+              + ' ; erreur photométrique moyenne gauche-droite : '
+              + f'{provenance["stereo_photometric_mae_0_255"]:.2f}/255.'
+              + ' Ce sont des mesures internes sur observations, pas une précision '
+              'géométrique indépendante ni une échelle en mètres.</p>'
+              '<div style="display:flex;flex-wrap:wrap;gap:12px">'
+              '<figure style="flex:1 1 260px">'
+              '<a href="./wre-real-stereo-cpu-disparity.png" download>'
+              '<img id="wre-stereo-disparity" loading="eager" '
+              'style="width:100%;height:auto" alt="Disparité stéréo estimée sur vraies photos" '
+              'src="./wre-real-stereo-cpu-disparity.png"></a>'
+              '<figcaption>Disparité estimée, aperçu colorisé (pas une profondeur métrique).</figcaption>'
+              '</figure><figure style="flex:1 1 260px">'
+              '<a href="./wre-real-stereo-cpu-lr-consistency.png" download>'
+              '<img id="wre-stereo-consistency" loading="eager" '
+              'style="width:100%;height:auto" alt="Cohérence gauche-droite des correspondances" '
+              'src="./wre-real-stereo-cpu-lr-consistency.png"></a>'
+              '<figcaption>Vert : correspondance réciproque ; rouge : correspondance unilatérale.</figcaption>'
+              '</figure><figure style="flex:1 1 260px">'
+              '<a href="./wre-real-stereo-cpu-right-reprojection.png" download>'
+              '<img id="wre-stereo-reprojection" loading="eager" '
+              'style="width:100%;height:auto" alt="Comparaison réelle de reprojection entre images" '
+              'src="./wre-real-stereo-cpu-right-reprojection.png"></a>'
+              '<figcaption>Reprojection observée et différences, non vérité terrain 3D.</figcaption>'
+              '</figure></div></details>'
+          )
           comparison.write_text(
               page.replace(anchor,
-                  navigation + source_panel
+                  navigation + source_panel + diagnostics
                   + '<p><a href="./wre-real-stereo-cpu-disparity-u16.png" download>'
                   'Télécharger la disparité 16 bits sans perte</a> · '
                   'valeur PNG / 256 = disparité horizontale en pixels, '
@@ -7178,6 +7213,42 @@ jobs:
                       !!document.querySelector('a[href="./wre-original-aloeR.jpg"]');
               })()"""
               wait_for(lambda: js(raw_photo_loaded))
+              # Decode the genuine stereo diagnostic PNGs in the final extracted
+              # archive, not a synthetic browser fixture or earlier staging page.
+              evidence_loaded = """return (() => {
+                  const details = document.getElementById('wre-stereo-evidence');
+                  const names = [
+                      ['wre-stereo-disparity', 'wre-real-stereo-cpu-disparity.png'],
+                      ['wre-stereo-consistency', 'wre-real-stereo-cpu-lr-consistency.png'],
+                      ['wre-stereo-reprojection', 'wre-real-stereo-cpu-right-reprojection.png']
+                  ];
+                  return Boolean(details && details.open &&
+                      names.every(([id, name]) => {
+                          const img = document.getElementById(id);
+                          return img && img.complete && img.naturalWidth >= 320 &&
+                              img.naturalHeight >= 160 &&
+                              img.currentSrc.endsWith('/' + name) &&
+                              img.getBoundingClientRect().width >= 100 &&
+                              document.querySelector('a[href="./' + name + '"][download]');
+                      }) && document.getElementById('wre-stereo-evidence-metrics')
+                          ?.textContent.includes('pas une précision'));
+              })()"""
+              wait_for(lambda: js(evidence_loaded))
+              # Read actual decoded consistency pixels; the upstream stereo
+              # algorithm must have produced some mutually consistent matches.
+              assert js("""return (() => {
+                  const img=document.getElementById('wre-stereo-consistency');
+                  const canvas=document.createElement('canvas');
+                  canvas.width=img.naturalWidth; canvas.height=img.naturalHeight;
+                  const context=canvas.getContext('2d', {willReadFrequently:true});
+                  context.drawImage(img, 0, 0);
+                  const data=context.getImageData(0,0,canvas.width,canvas.height).data;
+                  for(let i=0;i<data.length;i+=4) {
+                      if(data[i]===0 && data[i+1]===255 && data[i+2]===0) return true;
+                  }
+                  return false;
+              })()""")
+              print("PASS: actual offline Chrome decoded stereo quality evidence and consistent pixels")
               # The final extracted archive must expose the ACTUAL numerical
               # stereo product through its user-facing download link.
               assert js("""return !!document.querySelector(
