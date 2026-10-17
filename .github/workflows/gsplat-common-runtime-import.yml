@@ -3600,7 +3600,16 @@ jobs:
               measure_status = js(f"""
                 const scene=document.getElementById('wre-scene');
                 const toggle=document.getElementById('wre-measure-toggle');
+                const clicked=[];
                 for (const p of {json.dumps(measure_hits)}) {{
+                  // Capture the REAL raycast immediately before each real
+                  // click event, rather than comparing against an earlier
+                  // sample taken while the camera was still settling.
+                  const hit=scene.positionAndNormalFromPoint(p.x,p.y);
+                  if (!hit || !hit.position) return {{error:'click missed surface'}};
+                  const pos=[hit.position.x,hit.position.y,hit.position.z];
+                  if (!pos.every(Number.isFinite)) return {{error:'nonfinite click hit'}};
+                  clicked.push(pos);
                   scene.dispatchEvent(new MouseEvent('click', {{
                     bubbles:true, clientX:p.x, clientY:p.y
                   }}));
@@ -3608,9 +3617,12 @@ jobs:
                 return {{
                   status:document.getElementById('wre-measure-result').textContent,
                   pressed:toggle.getAttribute('aria-pressed'),
-                  autoRotate:scene.hasAttribute('auto-rotate')
+                  autoRotate:scene.hasAttribute('auto-rotate'),
+                  clicked
                 }};
               """)
+              assert measure_status.get("clicked") and len(measure_status["clicked"]) == 2, measure_status
+              assert math.dist(*measure_status["clicked"]) > 0.001, measure_status
               assert measure_status["pressed"] == "true" and not measure_status["autoRotate"]
               assert "Relative 3D distance:" in measure_status["status"], measure_status
               assert "model units (NOT meters" in measure_status["status"]
@@ -3640,8 +3652,8 @@ jobs:
               assert exported_measurement["model_source"] == "surface"
               assert exported_measurement["metric_scale_known"] is False
               assert exported_measurement["units"] == "model_units"
-              assert exported_measurement["point_a_xyz"] == measure_hits[0]["pos"]
-              assert exported_measurement["point_b_xyz"] == measure_hits[1]["pos"]
+              assert exported_measurement["point_a_xyz"] == measure_status["clicked"][0]
+              assert exported_measurement["point_b_xyz"] == measure_status["clicked"][1]
               assert abs(exported_measurement["distance_model_units"] - displayed_distance) < 0.00001
               assert exported_measurement["distance_model_units"] > 0.0
               assert js("""
@@ -3658,7 +3670,13 @@ jobs:
                 const scene=document.getElementById('wre-scene');
                 const pathButton=document.getElementById('wre-path-toggle');
                 pathButton.click();
+                const clicked=[];
                 for (const p of {json.dumps([measure_hits[0],measure_hits[1],measure_hits[0]])}) {{
+                  const hit=scene.positionAndNormalFromPoint(p.x,p.y);
+                  if (!hit || !hit.position) return {{error:'path click missed surface'}};
+                  const pos=[hit.position.x,hit.position.y,hit.position.z];
+                  if (!pos.every(Number.isFinite)) return {{error:'nonfinite path hit'}};
+                  clicked.push(pos);
                   scene.dispatchEvent(new MouseEvent('click', {{
                     bubbles:true, clientX:p.x, clientY:p.y
                   }}));
@@ -3667,9 +3685,12 @@ jobs:
                   status:document.getElementById('wre-measure-result').textContent,
                   pressed:pathButton.getAttribute('aria-pressed'),
                   enabled:!document.getElementById('wre-measure-export').disabled,
-                  stoppedAutoRotate:!scene.hasAttribute('auto-rotate')
+                  stoppedAutoRotate:!scene.hasAttribute('auto-rotate'),
+                  clicked
                 }};
               """)
+              assert path_status.get("clicked") and len(path_status["clicked"]) == 3, path_status
+              assert math.dist(path_status["clicked"][0], path_status["clicked"][1]) > 0.001
               assert path_status["pressed"] == "true"
               assert path_status["enabled"] and path_status["stoppedAutoRotate"]
               assert "3D polyline length:" in path_status["status"]
@@ -3684,16 +3705,19 @@ jobs:
               assert path_json["metric_scale_known"] is False
               assert path_json["units"] == "model_units"
               assert path_json["surface_geodesic"] is False
-              assert path_json["points_xyz"] == [
-                  measure_hits[0]["pos"], measure_hits[1]["pos"], measure_hits[0]["pos"]
+              assert path_json["points_xyz"] == path_status["clicked"]
+              expected_segments = [
+                  math.dist(path_status["clicked"][0], path_status["clicked"][1]),
+                  math.dist(path_status["clicked"][1], path_status["clicked"][2])
               ]
-              expected_segment = math.dist(measure_hits[0]["pos"], measure_hits[1]["pos"])
               assert len(path_json["segment_lengths_model_units"]) == 2
               assert all(
-                  abs(d - expected_segment) < 0.000001
-                  for d in path_json["segment_lengths_model_units"]
+                  abs(actual - expected) < 0.000001
+                  for actual, expected in zip(
+                      path_json["segment_lengths_model_units"], expected_segments, strict=True
+                  )
               )
-              assert abs(path_json["total_length_model_units"] - 2 * expected_segment) < 0.000001
+              assert abs(path_json["total_length_model_units"] - sum(expected_segments)) < 0.000001
               assert js("""
                 document.getElementById('wre-path-toggle').click();
                 return document.getElementById('wre-measure-export').disabled &&
