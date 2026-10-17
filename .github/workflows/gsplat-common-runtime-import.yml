@@ -1843,6 +1843,22 @@ jobs:
           assert struct.unpack_from("<I", payload, 8)[0] == len(payload)
           digest = hashlib.sha256(payload).hexdigest()
           encoded = base64.b64encode(payload).decode("ascii")
+          # The second ACTUAL reconstruction is the measured SIFT 3D point
+          # cloud and the two estimated camera frustums, already in the bundle.
+          sift_scene_name = "wre-real-stereo-sift-estimated-cameras.glb"
+          sift_scene = (output / sift_scene_name).read_bytes()
+          assert 1024 < len(sift_scene) <= 15_000_000
+          assert struct.unpack_from("<4sII", sift_scene) == (
+              b"glTF", 2, len(sift_scene)
+          )
+          sift_json_size, sift_kind = struct.unpack_from("<I4s", sift_scene, 12)
+          assert sift_kind == b"JSON"
+          sift_doc = json.loads(sift_scene[20:20 + sift_json_size])
+          assert sift_doc["asset"]["extras"]["metric_scale_known"] is False
+          assert len(sift_doc["nodes"]) >= 4
+          assert len(sift_doc["cameras"]) >= 1
+          assert sift_doc["meshes"][0]["primitives"][0]["mode"] == 0
+          sift_digest = hashlib.sha256(sift_scene).hexdigest()
           # Keep the observed source and reconstruction errors visible beside
           # the GLB. Every diagnostic is a previously measured CPU output,
           # never an inferred or generated photograph.
@@ -1894,6 +1910,10 @@ jobs:
               h1 { font-size:18px; margin:0 0 5px; }
               p { margin:3px 0; line-height:1.35; }
               model-viewer { display:block; width:100%; flex:1; min-height:320px; }
+              .scene-options { display:flex; flex-wrap:wrap; align-items:center;
+                gap:12px; padding:10px 18px; background:#243349; }
+              .scene-options a { color:#9eddff; }
+              select { font:inherit; padding:4px; }
               .metrics { font-variant-numeric:tabular-nums; padding:8px 18px;
                 background:#202d3e; }
               .evidence { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
@@ -1914,9 +1934,38 @@ jobs:
               <p>Static approximate stereo mesh. Uncalibrated scene scale;
               incomplete/occluded surfaces. NOT 4D, Gaussian training or GPU rendering.</p>
             </header>
-            <model-viewer camera-controls auto-rotate interaction-prompt="auto"
+            <div class="scene-options">
+              <label for="wre-scene-choice">3D evidence:</label>
+              <select id="wre-scene-choice">
+                <option value="surface">CPU photo-textured stereo surface</option>
+                <option value="sift">Measured SIFT 3D points and camera frustums</option>
+              </select>
+              <a href="./wre-real-stereo-cpu-textured.glb" download>Download surface GLB</a>
+              <a href="./wre-real-stereo-sift-estimated-cameras.glb" download>Download SIFT/cameras GLB</a>
+              <a href="./wre-real-stereo-sift-colmap-dataset.zip" download>Download COLMAP dataset</a>
+            </div>
+            <model-viewer id="wre-scene" camera-controls auto-rotate interaction-prompt="auto"
               alt="Approximate CPU stereo 3D reconstruction from two real photos"
               src="data:model/gltf-binary;base64,WRE_GLB_BASE64"></model-viewer>
+            <p id="wre-scene-provenance" class="metrics" aria-live="polite">
+              Photo-textured stereo surface · SHA-256 WRE_GLB_SHA256</p>
+            <script>
+              const scene = document.getElementById("wre-scene");
+              const chooser = document.getElementById("wre-scene-choice");
+              const provenance = document.getElementById("wre-scene-provenance");
+              const surfaceSource = scene.getAttribute("src");
+              chooser.addEventListener("change", () => {
+                const sift = chooser.value === "sift";
+                scene.setAttribute("src", sift
+                  ? "./wre-real-stereo-sift-estimated-cameras.glb" : surfaceSource);
+                scene.setAttribute("alt", sift
+                  ? "Measured SIFT RGB 3D points and two estimated camera frustums"
+                  : "Approximate photo-textured stereo surface from two real photos");
+                provenance.textContent = sift
+                  ? "SIFT estimated points + cameras (unknown metric scale) · SHA-256 WRE_SIFT_GLB_SHA256"
+                  : "Photo-textured stereo surface · SHA-256 WRE_GLB_SHA256";
+              });
+            </script>
             <div class="metrics">Observed right-view photometric MAE: WRE_STEREO_MAE/255
               (in-sample). SIFT two-view reprojection RMSE: WRE_SIFT_RMSE px
               (in-sample, WRE_TRACKS measured 3D tracks). Neither is held-out accuracy.</div>
@@ -1933,8 +1982,10 @@ jobs:
                 <figcaption>Depth-based right view errors · SHA-256
                   WRE_STEREO_REPROJECTION_SHA</figcaption></figure>
             </section>
-            <footer>GLB SHA-256: WRE_GLB_SHA256. All scene data, diagnostics
-              and the hash-pinned Apache-2.0 model-viewer 4.1.0 script ship together.
+            <footer>Both GLBs and the estimated COLMAP dataset can be downloaded
+              unchanged for inspection in compatible 3D/COLMAP tools. All scene data,
+              diagnostics and the hash-pinned Apache-2.0 model-viewer 4.1.0 script
+              ship together.
               To view without internet, extract the archive, run
               <code>python3 -m http.server 8765 --bind 127.0.0.1</code>
               in the extracted folder and open
@@ -1944,7 +1995,11 @@ jobs:
           </body>
           </html>
           """
-          page = page.replace("WRE_GLB_BASE64", encoded).replace("WRE_GLB_SHA256", digest)
+          page = (
+              page.replace("WRE_GLB_BASE64", encoded)
+              .replace("WRE_SIFT_GLB_SHA256", sift_digest)
+              .replace("WRE_GLB_SHA256", digest)
+          )
           page = (
               page.replace("WRE_STEREO_MAE", f"{mae:.3f}")
               .replace("WRE_SIFT_RMSE", f"{rmse:.3f}")
@@ -1965,6 +2020,12 @@ jobs:
                   output / dict(images)[marker]
               ).read_bytes()
           assert 'src="./wre-model-viewer-4.1.0.min.js"' in page
+          assert 'id="wre-scene-choice"' in page
+          assert 'src="./wre-real-stereo-sift-estimated-cameras.glb"' not in page
+          assert "./wre-real-stereo-sift-estimated-cameras.glb" in page
+          assert "./wre-real-stereo-sift-colmap-dataset.zip" in page
+          assert sift_digest in page
+          assert "WRE_SIFT_GLB_SHA256" not in page
           assert "cdnjs.cloudflare.com" not in page
           viewer = output / "wre-real-stereo-cpu-viewer.html"
           viewer.write_text(page, encoding="utf-8")
