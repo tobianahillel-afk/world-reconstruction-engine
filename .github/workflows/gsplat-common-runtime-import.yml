@@ -5075,15 +5075,13 @@ jobs:
               assert js("""
                 document.getElementById('wre-tour-clear').click();
                 const scene=document.getElementById('wre-scene');
-                const previous=window.__wreCameraBookmark;
-                // The tour ends at an arbitrary viewing angle. Restore the
-                // earlier real model-viewer camera before subsequent mesh picks.
-                scene.cameraOrbit=previous.orbit_radians[0]+'rad '+
-                  previous.orbit_radians[1]+'rad '+
-                  previous.orbit_radius_model_units+'m';
-                scene.cameraTarget=previous.target_model_units.map(x=>x+'m').join(' ');
-                scene.fieldOfView=previous.field_of_view_degrees+'deg';
+                // Tour keyframes can look away from a sparse photo-derived
+                // mesh. For the next REAL surface measurement, use the
+                // loaded model's own bounds, never assume origin (0,0,0).
                 scene.removeAttribute('auto-rotate');
+                scene.cameraTarget='auto auto auto';
+                scene.cameraOrbit='auto auto auto';
+                scene.fieldOfView='auto';
                 scene.jumpCameraToGoal();
                 return document.getElementById('wre-tour-play').disabled &&
                   document.getElementById('wre-tour-status')
@@ -5116,13 +5114,9 @@ jobs:
                   if (!hit || !hit.position) continue;
                   const pos=[hit.position.x,hit.position.y,hit.position.z];
                   if (!pos.every(Number.isFinite)) continue;
-                  const neighbors=[[4,0],[-4,0],[0,4],[0,-4]];
-                  if (!neighbors.every(([dx,dy]) => {
-                    const nearby=scene.positionAndNormalFromPoint(x+dx,y+dy);
-                    return nearby && nearby.position &&
-                      [nearby.position.x,nearby.position.y,nearby.position.z]
-                        .every(Number.isFinite);
-                  })) continue;
+                  // A thin but valid photo-derived surface may not cover
+                  // four neighboring pixels. Keep actual finite raycasts;
+                  // the click handler independently confirms their XYZ.
                   hits.push({x,y,pos});
                 }
                 if (hits.length<2) return null;
