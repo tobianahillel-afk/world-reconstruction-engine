@@ -4414,6 +4414,60 @@ jobs:
                   view.getAttribute('src').startsWith('data:model/gltf-binary;base64,');
               """)
               assert first
+              # Both models are actual photo-derived 3D GLBs rendered in the
+              # same real Chrome/WebGL session, not static screenshots.
+              js("""
+                const pick=document.getElementById('wre-compare-choice');
+                pick.value='sift';
+                pick.dispatchEvent(new Event('change', {bubbles:true}));
+              """)
+              assert until("""
+                const left=document.getElementById('wre-scene');
+                const right=document.getElementById('wre-compare-scene');
+                return left.loaded && right.loaded && left.model && right.model &&
+                  right.getAttribute('src') ===
+                    './wre-real-stereo-sift-estimated-cameras.glb' &&
+                  !right.hidden && right.getBoundingClientRect().width > 200 &&
+                  left.getBoundingClientRect().width > 200 &&
+                  !document.getElementById('wre-compare-sync').disabled &&
+                  document.getElementById('wre-compare-status').textContent
+                    .includes('Both 3D models rendered');
+              """), "Both real GLBs were not loaded side-by-side"
+              js("""
+                document.getElementById('wre-scene').removeAttribute('auto-rotate');
+                document.getElementById('wre-compare-sync').click();
+              """)
+              assert until("""
+                const right=document.getElementById('wre-compare-scene');
+                return right.loaded &&
+                  right.cameraOrbit.includes('rad') &&
+                  right.cameraTarget.includes('m') &&
+                  document.getElementById('wre-compare-status').textContent
+                    .includes('not registered');
+              """), "Real 3D comparison camera-copy action did not complete"
+              comparison_png = base64.b64decode(
+                  call("GET", f"/session/{session}/screenshot"), validate=True
+              )
+              assert comparison_png.startswith(bytes.fromhex("89504e470d0a1a0a"))
+              assert len(comparison_png) > 10000
+              (proof / "real-stereo-3d-side-by-side.png").write_bytes(comparison_png)
+              side_by_side_sha256 = hashlib.sha256(comparison_png).hexdigest()
+              js("""
+                const pick=document.getElementById('wre-compare-choice');
+                pick.value='';
+                pick.dispatchEvent(new Event('change', {bubbles:true}));
+                document.getElementById('wre-scene').setAttribute('auto-rotate','');
+              """)
+              assert js("""
+                const right=document.getElementById('wre-compare-scene');
+                return right.hidden &&
+                  !document.getElementById('wre-views').classList.contains('dual') &&
+                  document.getElementById('wre-compare-sync').disabled &&
+                  document.getElementById('wre-scene').loaded &&
+                  document.getElementById('wre-scene').hasAttribute('auto-rotate') &&
+                  document.getElementById('wre-compare-status').textContent
+                    .includes('Comparison off');
+              """), "Closing comparison altered the primary 3D experience"
               # A REAL model-viewer screenshot of the loaded real-photo mesh.
               # Exercise the same user-facing button/API (not a ChromeDriver
               # viewport screenshot), check actual PNG bytes and dimensions.
@@ -5515,6 +5569,8 @@ jobs:
                       "stereo_cloud_mode_loaded": True,
                       "photometric_cloud_mode_loaded": True,
                       "sift_camera_mode_loaded": True,
+                      "two_real_3d_models_compared_side_by_side": True,
+                      "side_by_side_screenshot_sha256": side_by_side_sha256,
                       "local_glb_file_loaded_in_chrome": True,
                       "surface_distance_measured_in_chrome": True,
                       "surface_measurement_export_verified_in_chrome": True,
@@ -5640,6 +5696,8 @@ jobs:
               raise ValueError("The same-run browser did not load all four real 3D modes")
           if receipt.get("local_glb_file_loaded_in_chrome") is not True:
               raise ValueError("Actual Chrome did not open a user-selected GLB")
+          if receipt.get("two_real_3d_models_compared_side_by_side") is not True:
+              raise ValueError("Actual Chrome did not compare two real 3D GLBs side by side")
           if receipt.get("surface_distance_measured_in_chrome") is not True:
               raise ValueError("Actual Chrome did not measure two real mesh points")
           if receipt.get("surface_measurement_export_verified_in_chrome") is not True:
@@ -5687,6 +5745,12 @@ jobs:
               if name in receipt["input_glb_sha256"] and digest != receipt["input_glb_sha256"][name]:
                   raise ValueError(f"Chrome input and packaged GLB disagree: {name}")
               source_hashes[name] = digest
+          compare_proof = (proof / "real-stereo-3d-side-by-side.png").read_bytes()
+          if not compare_proof.startswith(bytes.fromhex("89504e470d0a1a0a")) or (
+              hashlib.sha256(compare_proof).hexdigest()
+              != receipt.get("side_by_side_screenshot_sha256")
+          ):
+              raise ValueError("Side-by-side Chrome proof is missing or altered")
           for required in (
               "wre-real-stereo-cpu-viewer.html",
               "wre-model-viewer-4.1.0.min.js",
