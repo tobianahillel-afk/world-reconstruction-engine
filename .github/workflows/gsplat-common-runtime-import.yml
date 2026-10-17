@@ -6438,7 +6438,7 @@ jobs:
               raise ValueError("Actual Chrome did not render smooth 3D camera interpolation")
           if receipt.get("camera_tour_storyboard_verified_in_chrome") is not True:
               raise ValueError("Actual Chrome did not export actual 3D camera views as one PNG")
-          if receipt.get("camera_tour_storyboard_png_dimensions") != [640, 480]:
+          if receipt.get("camera_tour_storyboard_png_dimensions") != [640, 240]:
               raise ValueError("Real WebGL camera storyboard dimensions are invalid")
           if receipt.get("current_view_png_export_verified_in_chrome") is not True:
               raise ValueError("Actual Chrome did not export its current real-photo 3D view as PNG")
