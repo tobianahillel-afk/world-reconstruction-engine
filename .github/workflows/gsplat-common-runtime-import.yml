@@ -4342,7 +4342,7 @@ jobs:
                 return button.getAttribute('aria-pressed') === 'true' &&
                   !scene.hasAttribute('auto-rotate');
               """)
-              measure_hits = js("""
+              measure_scan = """
                 const scene=document.getElementById('wre-scene');
                 const box=scene.getBoundingClientRect();
                 const hits=[];
@@ -4362,8 +4362,8 @@ jobs:
                   }
                 }
                 return null;
-              """)
-              assert measure_hits is not None, "Chrome could not hit two distinct real mesh points"
+              """
+              assert js(measure_scan) is not None, "Chrome could not hit two distinct real mesh points"
               measure_status = js(f"""
                 const scene=document.getElementById('wre-scene');
                 const toggle=document.getElementById('wre-measure-toggle');
@@ -4382,9 +4382,14 @@ jobs:
                   }}
                   return hit;
                 }};
-                for (const p of {json.dumps(measure_hits)}) {{
+                // Scan and click in the SAME WebDriver script. Camera
+                // interpolation after bookmark restore made separately
+                // sampled pixels stale, even after stopping auto-rotate.
+                const fresh=(() => {{ {measure_scan} }})();
+                if (!fresh) return {{error:'fresh measure scan found no two points'}};
+                for (const p of fresh) {{
                   const hit=originalRaycast(p.x,p.y);
-                  if (!hit || !hit.position) return {{error:'click missed surface'}};
+                  if (!hit || !hit.position) return {{error:'fresh click missed surface'}};
                   window.__wreCapturingClick=true;
                   scene.dispatchEvent(new MouseEvent('click', {{
                     bubbles:true, clientX:p.x, clientY:p.y
