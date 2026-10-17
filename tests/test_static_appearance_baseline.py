@@ -6,6 +6,7 @@ import json
 import os
 import shutil
 import struct
+import subprocess
 import sys
 import zlib
 from dataclasses import FrozenInstanceError, replace

@@ -2826,7 +2826,9 @@ def _gsplat_rgb_preview_cli(argv: list[str] | None = None) -> int:
         help="Maximum visible Gaussian centers in a .glb preview (default: 2000000)",
     )
     parser.add_argument(
-        "--inspect-glb", type=Path, help="Read an existing WRE RGB-center GLB and print its validated point summary"
+        "--inspect-glb",
+        type=Path,
+        help="Read an existing WRE RGB-center GLB and print its validated point summary",
     )
     args = parser.parse_args(argv)
     if args.inspect_glb is not None:
