@@ -107,14 +107,9 @@ jobs:
               "DJI_0042.JPG": "7b799d410074a779dddbe840ec0d249889d25d8e",
               "DJI_0043.JPG": "82398bb391df8625cc99d2cb08a7f917ca34f9a6",
               "DJI_0044.JPG": "3b8067e31ceee8d6610e9eb43a225dd46eb0caf6",
-              "DJI_0045.JPG": "c422351723436e3f15fb5fe739d85341eaddbee9",
-              "DJI_0046.JPG": "7bbda14acbeb4ea76cc74927bb8ae3d70e459c42",
-              "DJI_0047.JPG": "a4a0385521c135cab13148b18ddecb51ae546c95",
-              "DJI_0048.JPG": "d3d255c466ff6df0ee85f2c21f0bd652937e010a",
-              "DJI_0049.JPG": "acb27dc2c21646f0abc21ca3d09c3b182c8008a5",
           }
           RECEIPT = {
-              "source": "OpenMVG Palm Desert Micro eight real DJI Mini 2 drone photos",
+              "source": "OpenMVG Palm Desert Micro three consecutive real DJI Mini 2 drone photos",
               "source_license": "CC BY-NC 4.0: Attribution-NonCommercial; experimental use only",
               "source_credit": "Copyright 2021 Pierre MOULON; openMVG/Image_datasets",
               "source_license_url": "https://creativecommons.org/licenses/by-nc/4.0/",
