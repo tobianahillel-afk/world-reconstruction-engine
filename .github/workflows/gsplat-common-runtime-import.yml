@@ -7611,6 +7611,58 @@ jobs:
                   'a[href="./wre-real-stereo-cpu-disparity-f32.pfm"][download]'
               )""")
               print("PASS: actual Chrome inspected pixel float32 from the same real-photo PFM")
+              # User-facing batch export: two DISTINCT observed source pixels,
+              # then verify downloaded JSON against the same SHA256-checked PFM.
+              assert js("""const add=document.getElementById('wre-save-stereo-point');
+                  const download=document.getElementById('wre-export-stereo-points');
+                  if(add.disabled || !download.disabled) return false;
+                  add.click();
+                  return !download.disabled &&
+                    document.getElementById('wre-stereo-point-count').textContent.includes('1 points');
+              """)
+              next_x = px - 1 if selected_x >= px else px + 1
+              assert next_x != selected_x and 2.0 < actual_disparity(next_x, py) < 128.0
+              js(f"""const img=document.getElementById('wre-stereo-disparity');
+                  const box=img.getBoundingClientRect();
+                  img.dispatchEvent(new MouseEvent('click',{{
+                    bubbles:true,cancelable:true,
+                    clientX:box.left+({next_x}+.5)*box.width/img.naturalWidth,
+                    clientY:box.top+({py}+.5)*box.height/img.naturalHeight
+                  }}));return true;""")
+              wait_for(lambda: js("""const el=document.getElementById('wre-pixel-inspector');
+                  return el.dataset.x!==\'""" + str(selected_x) + """\' &&
+                    !document.getElementById('wre-save-stereo-point').disabled;"""), timeout=15)
+              js("""document.getElementById('wre-save-stereo-point').click();
+                  window.__wreObservedPoints=null;
+                  const native=URL.createObjectURL.bind(URL);
+                  URL.createObjectURL=blob=>{
+                    if(blob.type==='application/json') blob.text().then(
+                      content=>window.__wreObservedPoints=JSON.parse(content));
+                    return native(blob);
+                  };
+                  document.getElementById('wre-export-stereo-points').click();
+                  return true;""")
+              wait_for(lambda: js("return !!window.__wreObservedPoints"), timeout=15)
+              exported = js("return window.__wreObservedPoints")
+              assert exported["schema"] == "wre.observed_stereo_points.v1"
+              assert exported["source_pfm_sha256"] == numeric_metrics[
+                  "dense_disparity_float32_pfm_sha256"
+              ]
+              assert exported["metric_scale_known"] is False
+              assert exported["focal_assumption_pixels"] == width
+              assert exported["baseline_assumption_model_units"] == 1
+              assert len(exported["points"]) == 2
+              for point in exported["points"]:
+                  x, y = point["left_pixel"]
+                  d = actual_disparity(x, y)
+                  assert 2 < d < 128 and abs(point["disparity_pixels"] - d) < 1e-4
+                  assert abs(point["right_pixel"][0] - (x-d)) < 1e-4
+                  assert point["right_pixel"][1] == y
+                  xyz = [(x-(width-1)/2)/d, (y-(height-1)/2)/d, width/d]
+                  assert all(abs(a-b) < 1e-4 for a,b in
+                             zip(point["xyz_relative_model_units"], xyz))
+              assert len({tuple(p["left_pixel"]) for p in exported["points"]}) == 2
+              print("PASS: actual Chrome exported two real-photo stereo XYZ observations")
               browser("POST", f"/session/{session}/url", {
                   "url": "http://127.0.0.1:8877/wre-real-stereo-cpu-viewer.html",
               })
