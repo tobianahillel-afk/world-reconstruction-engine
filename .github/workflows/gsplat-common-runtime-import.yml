@@ -3372,6 +3372,7 @@ jobs:
                   ("sift", "./wre-real-stereo-sift-estimated-cameras.glb",
                    "unknown metric scale"),
               )
+              mode_screenshot_sha256 = {}
               for sequence, (name, filename, evidence) in enumerate(modes, start=1):
                   js(f"""
                     const chooser=document.getElementById('wre-scene-choice');
@@ -3386,6 +3387,14 @@ jobs:
                       document.getElementById('wre-scene-provenance').textContent
                         .includes({json.dumps(evidence)});
                   """), f"Model-viewer could not load actual {name} 3D reconstruction"
+                  screenshot_data = base64.b64decode(
+                      call("GET", f"/session/{session}/screenshot"),
+                      validate=True,
+                  )
+                  assert screenshot_data.startswith(b"\\x89PNG\\r\\n\\x1a\\n")
+                  assert len(screenshot_data) > 10000
+                  (proof / f"real-stereo-3d-{name}.png").write_bytes(screenshot_data)
+                  mode_screenshot_sha256[name] = hashlib.sha256(screenshot_data).hexdigest()
               js("""
                 const chooser=document.getElementById('wre-scene-choice');
                 chooser.value='surface';
@@ -3417,6 +3426,7 @@ jobs:
                       "surface_reload": True,
                       "webgl_context": True,
                       "input_glb_sha256": expected_hashes,
+                      "mode_screenshot_sha256": mode_screenshot_sha256,
                       "screenshot_sha256": hashlib.sha256(png).hexdigest(),
                       "metric_scale_known": False,
                       "real_gpu_training": False,
