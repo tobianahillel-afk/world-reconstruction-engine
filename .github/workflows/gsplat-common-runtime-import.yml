@@ -2122,11 +2122,41 @@ jobs:
             </div>
             <p id="wre-scene-provenance" class="metrics" aria-live="polite">
               Photo-textured stereo surface · SHA-256 WRE_GLB_SHA256</p>
+            <p id="wre-observed-stereo-marker-status" role="status" aria-live="polite">
+              No selected stereo observation linked to this static 3D preview.</p>
             <p id="wre-measure-result" class="metrics" aria-live="polite">
               Surface measurement off. Coordinates are arbitrary 3D model units, NOT meters.</p>
             <script>
               const scene = document.getElementById("wre-scene");
               const chooser = document.getElementById("wre-scene-choice");
+              // The gallery passes only measured finite model-unit XYZ via URL.
+              // The observed disparity frame has Y-down/Z-forward; glTF uses
+              // Y-up/Z-back. This is a marker, not surface alignment/metric GT.
+              const observedKeys = ["stereo_x", "stereo_y", "stereo_z"];
+              const inspectedParams = new URLSearchParams(location.search);
+              if (observedKeys.every(key => inspectedParams.has(key))) {
+                const observed = observedKeys.map(key => Number(inspectedParams.get(key)));
+                if (observed.every(v => Number.isFinite(v) && Math.abs(v) < 1000000)
+                    && observed[2] > 0) {
+                  const marker = document.createElement("button");
+                  marker.type = "button";
+                  marker.slot = "hotspot-wre-observed-stereo";
+                  marker.className = "wre-pick-marker";
+                  marker.dataset.position = [
+                    observed[0], -observed[1], -observed[2]
+                  ].map(value => value + "m").join(" ");
+                  marker.dataset.normal = "0m 1m 0m";
+                  marker.textContent = "◎";
+                  marker.setAttribute("aria-label", "Nonmetric photo stereo observation");
+                  scene.appendChild(marker);
+                  chooser.addEventListener("change", () => {
+                    marker.hidden = chooser.value !== "surface";
+                  });
+                  document.getElementById("wre-observed-stereo-marker-status").textContent =
+                    "Observed stereo point marked in approximate photo-derived 3D; " +
+                    "relative units only, no exact surface correspondence or metric scale.";
+                }
+              }
               const compareChoice = document.getElementById("wre-compare-choice");
               const compareScene = document.getElementById("wre-compare-scene");
               const compareSync = document.getElementById("wre-compare-sync");
@@ -7063,6 +7093,9 @@ jobs:
           <button type="button" id="wre-export-stereo-ply" disabled>
             Exporter les points 3D en PLY coloré (échelle relative)
           </button>
+          <a id="wre-inspected-point-live-3d" aria-disabled="true">
+            Localiser ce point observé dans le modèle 3D approximatif
+          </a>
           <span id="wre-stereo-point-count" role="status" aria-live="polite">0 point enregistré</span>
           <figure id="wre-stereo-match" style="margin:12px 0;max-width:960px">
             <div style="position:relative">
@@ -7087,6 +7120,7 @@ jobs:
             const savePoint = document.getElementById('wre-save-stereo-point');
             const exportPoints = document.getElementById('wre-export-stereo-points');
             const exportPly = document.getElementById('wre-export-stereo-ply');
+            const open3d = document.getElementById('wre-inspected-point-live-3d');
             const pointCount = document.getElementById('wre-stereo-point-count');
             const observations = [];
             let selected = null;
@@ -7203,6 +7237,8 @@ jobs:
               event.preventDefault();  // The image is also a download link.
               selected = null;
               savePoint.disabled = true;
+              open3d.removeAttribute('href');
+              open3d.setAttribute('aria-disabled', 'true');
               delete status.dataset.error;
               try {
                 const map = await getMap();
@@ -7244,6 +7280,12 @@ jobs:
                     xyz_relative_model_units: [pointX, pointY, relativeDepth]
                   };
                   savePoint.disabled = false;
+                  const query = new URLSearchParams({
+                    stereo_x:String(pointX), stereo_y:String(pointY),
+                    stereo_z:String(relativeDepth)
+                  });
+                  open3d.href = './wre-real-stereo-cpu-viewer.html?' + query.toString();
+                  open3d.setAttribute('aria-disabled', 'false');
                 }
                 status.dataset.modelX = String(pointX);
                 status.dataset.modelY = String(pointY);
