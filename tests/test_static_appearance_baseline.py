@@ -1690,9 +1690,8 @@ def test_real_colmap_rgb_glb_preserves_sparse_native_count_after_uncolorable_exc
         "property float x\nproperty float y\nproperty float z\n"
         "property uchar red\nproperty uchar green\nproperty uchar blue\nend_header\n"
     ).encode("ascii")
-    points = (
-        struct.pack("<3f3B", 1, 2, 3, 25, 50, 75)
-        + struct.pack("<3f3B", 4, 5, 6, 100, 150, 200)
+    points = struct.pack("<3f3B", 1, 2, 3, 25, 50, 75) + struct.pack(
+        "<3f3B", 4, 5, 6, 100, 150, 200
     )
     rgb.write_bytes(header + points)
     output = tmp_path / "observed.glb"
@@ -1707,8 +1706,10 @@ def test_real_colmap_rgb_glb_preserves_sparse_native_count_after_uncolorable_exc
     content = output.read_bytes()
     json_size = struct.unpack_from("<I", content, 12)[0]
     assert content[28 + json_size :] == (
-        struct.pack("<3f3B", 1, 2, 3, 25, 50, 75) + b"\x00"
-        + struct.pack("<3f3B", 4, 5, 6, 100, 150, 200) + b"\x00"
+        struct.pack("<3f3B", 1, 2, 3, 25, 50, 75)
+        + b"\x00"
+        + struct.pack("<3f3B", 4, 5, 6, 100, 150, 200)
+        + b"\x00"
     )
 
 
