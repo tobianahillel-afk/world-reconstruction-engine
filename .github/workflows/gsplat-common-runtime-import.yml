@@ -1926,6 +1926,9 @@ jobs:
               h1 { font-size:18px; margin:0 0 5px; }
               p { margin:3px 0; line-height:1.35; }
               model-viewer { display:block; width:100%; flex:1; min-height:320px; }
+              .wre-pick-marker { background:#ffdf68; color:#172232; border:2px solid #172232;
+                border-radius:50%; width:29px; height:29px; font:bold 14px sans-serif;
+                text-align:center; pointer-events:none; }
               .scene-options { display:flex; flex-wrap:wrap; align-items:center;
                 gap:12px; padding:10px 18px; background:#243349; }
               .scene-options a { color:#9eddff; }
@@ -1991,7 +1994,22 @@ jobs:
               let tracing = false;
               let measured = [];
               let completedMeasurement = null;
+              function clearPickMarkers() {
+                scene.querySelectorAll(".wre-pick-marker").forEach(marker => marker.remove());
+              }
+              function placePickMarker(point, index) {
+                const marker = document.createElement("button");
+                marker.type = "button";
+                marker.className = "wre-pick-marker";
+                marker.setAttribute("slot", "hotspot-wre-pick-" + index);
+                marker.dataset.position = point.join(" ");
+                marker.textContent = String(index);
+                marker.setAttribute("aria-label", "3D point " + index + " in model units");
+                marker.tabIndex = -1;
+                scene.appendChild(marker);
+              }
               function resetMeasurement() {
+                clearPickMarkers();
                 measured = [];
                 completedMeasurement = null;
                 exportButton.disabled = true;
@@ -2033,11 +2051,13 @@ jobs:
                 const point = [hit.position.x, hit.position.y, hit.position.z];
                 if (!point.every(Number.isFinite)) return;
                 if (!tracing && measured.length === 2) {
+                  clearPickMarkers();
                   measured = [];
                   completedMeasurement = null;
                   exportButton.disabled = true;
                 }
                 measured.push(point);
+                placePickMarker(point, measured.length);
                 if (measured.length === 1) {
                   measureResult.textContent = "First surface point selected; click another point.";
                   return;
@@ -2234,6 +2254,7 @@ jobs:
           assert 'id="wre-local-glb"' in page
           assert 'id="wre-measure-toggle"' in page
           assert 'id="wre-path-toggle"' in page
+          assert 'hotspot-wre-pick-' in page
           assert 'wre.relative_3d_surface_polyline.v1' in page
           assert 'id="wre-measure-export"' in page
           assert 'distance_model_units' in page
@@ -3695,10 +3716,25 @@ jobs:
                   pressed:pathButton.getAttribute('aria-pressed'),
                   enabled:!document.getElementById('wre-measure-export').disabled,
                   stoppedAutoRotate:!scene.hasAttribute('auto-rotate'),
-                  clicked:window.__wreClickedRaycasts.slice()
+                  clicked:window.__wreClickedRaycasts.slice(),
+                  markers:[...scene.querySelectorAll('.wre-pick-marker')].map(m => ({{
+                    slot:m.getAttribute('slot'),
+                    position:m.dataset.position,
+                    label:m.textContent
+                  }}))
                 }};
               """)
               assert path_status.get("clicked") and len(path_status["clicked"]) == 3, path_status
+              assert len(path_status["markers"]) == 3, path_status
+              for index, marker in enumerate(path_status["markers"], start=1):
+                  assert marker["slot"] == f"hotspot-wre-pick-{index}", marker
+                  assert marker["label"] == str(index), marker
+                  actual = [float(value) for value in marker["position"].split()]
+                  assert len(actual) == 3 and all(
+                      abs(a - b) < 1e-7 for a, b in zip(
+                          actual, path_status["clicked"][index - 1], strict=True
+                      )
+                  ), marker
               assert math.dist(path_status["clicked"][0], path_status["clicked"][1]) > 0.001
               assert path_status["pressed"] == "true"
               assert path_status["enabled"] and path_status["stoppedAutoRotate"]
@@ -3730,7 +3766,8 @@ jobs:
               assert js("""
                 document.getElementById('wre-path-toggle').click();
                 return document.getElementById('wre-measure-export').disabled &&
-                  document.getElementById('wre-scene').hasAttribute('auto-rotate');
+                  document.getElementById('wre-scene').hasAttribute('auto-rotate') &&
+                  document.querySelectorAll('.wre-pick-marker').length === 0;
               """)
 
               js("""
