@@ -1323,11 +1323,11 @@ def test_external_gsplat_runner_rejects_failure_or_missing_output(
         "run",
         lambda *_args, **_kwargs: SimpleNamespace(returncode=return_code),
     )
-    with pytest.raises(GsplatStaticAppearancePreflightError):
     monkeypatch.setattr(
         baseline_module, "verify_gsplat_static_appearance_native_geometry",
         lambda *_args, **_kwargs: None,
     )
+    with pytest.raises(GsplatStaticAppearancePreflightError):
         run_gsplat_reference_training(
             request=request,
             source=source,
