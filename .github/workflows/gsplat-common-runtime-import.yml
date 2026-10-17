@@ -3642,6 +3642,55 @@ jobs:
                   document.getElementById('wre-scene').hasAttribute('auto-rotate') &&
                   document.getElementById('wre-measure-export').disabled;
               """)
+              # Trace a THREE-point polyline on the same real Chrome mesh:
+              # A -> B -> A gives two independent raycast events and two
+              # straight 3D chord segments, not a mesh geodesic.
+              path_status = js(f"""
+                const scene=document.getElementById('wre-scene');
+                const pathButton=document.getElementById('wre-path-toggle');
+                pathButton.click();
+                for (const p of {json.dumps([measure_hits[0],measure_hits[1],measure_hits[0]])}) {{
+                  scene.dispatchEvent(new MouseEvent('click', {{
+                    bubbles:true, clientX:p.x, clientY:p.y
+                  }}));
+                }}
+                return {{
+                  status:document.getElementById('wre-measure-result').textContent,
+                  pressed:pathButton.getAttribute('aria-pressed'),
+                  enabled:!document.getElementById('wre-measure-export').disabled,
+                  stoppedAutoRotate:!scene.hasAttribute('auto-rotate')
+                }};
+              """)
+              assert path_status["pressed"] == "true"
+              assert path_status["enabled"] and path_status["stoppedAutoRotate"]
+              assert "3D polyline length:" in path_status["status"]
+              assert "2 straight segments; NOT geodesic or meters" in path_status["status"]
+              js("""
+                window.__wreExportedMeasurement = null;
+                document.getElementById('wre-measure-export').click();
+              """)
+              path_json = json.loads(until("return window.__wreExportedMeasurement;"))
+              assert path_json["schema"] == "wre.relative_3d_surface_polyline.v1"
+              assert path_json["model_source"] == "surface"
+              assert path_json["metric_scale_known"] is False
+              assert path_json["units"] == "model_units"
+              assert path_json["surface_geodesic"] is False
+              assert path_json["points_xyz"] == [
+                  measure_hits[0]["pos"], measure_hits[1]["pos"], measure_hits[0]["pos"]
+              ]
+              expected_segment = math.dist(measure_hits[0]["pos"], measure_hits[1]["pos"])
+              assert len(path_json["segment_lengths_model_units"]) == 2
+              assert all(
+                  abs(d - expected_segment) < 0.000001
+                  for d in path_json["segment_lengths_model_units"]
+              )
+              assert abs(path_json["total_length_model_units"] - 2 * expected_segment) < 0.000001
+              assert js("""
+                document.getElementById('wre-path-toggle').click();
+                return document.getElementById('wre-measure-export').disabled &&
+                  document.getElementById('wre-scene').hasAttribute('auto-rotate');
+              """)
+
               js("""
                 window.__wre3dLoads=0;
                 document.getElementById('wre-scene').addEventListener(
@@ -3727,6 +3776,7 @@ jobs:
                       "local_glb_file_loaded_in_chrome": True,
                       "surface_distance_measured_in_chrome": True,
                       "surface_measurement_export_verified_in_chrome": True,
+                      "surface_polyline_export_verified_in_chrome": True,
                       "surface_reload": True,
                       "webgl_context": True,
                       "input_glb_sha256": expected_hashes,
@@ -3841,6 +3891,8 @@ jobs:
               raise ValueError("Actual Chrome did not measure two real mesh points")
           if receipt.get("surface_measurement_export_verified_in_chrome") is not True:
               raise ValueError("Actual Chrome did not export a nonmetric 3D surface measurement")
+          if receipt.get("surface_polyline_export_verified_in_chrome") is not True:
+              raise ValueError("Actual Chrome did not export a measured multi-point 3D path")
           
           glbs = (
               "wre-real-stereo-cpu-textured.glb",
