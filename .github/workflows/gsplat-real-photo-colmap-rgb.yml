@@ -691,7 +691,7 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: wre-real-photo-undistorted-colmap-capture
-          path: \${{ runner.temp }}/wre-real-photo-colmap-rgb/gsplat-capture/
+          path: ${{ runner.temp }}/wre-real-photo-colmap-rgb/gsplat-capture/
           if-no-files-found: error
           retention-days: 7
 
