@@ -348,9 +348,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          uv python install 3.12.12
+          # WRE's package import also initializes ingestion/exif.py.
+          # A bare uv-installed interpreter misses runtime exifread; install
+          # only the exact WRE production dependencies from existing uv.lock.
+          uv sync --locked --no-dev --python 3.12.12
           export PYTHONPATH="$GITHUB_WORKSPACE/src"
-          "$(uv python find 3.12.12)" - <<'PY'
+          uv run --locked --no-dev --no-sync --python 3.12.12 python - <<'PY'
           import hashlib
           import os
           from pathlib import Path
