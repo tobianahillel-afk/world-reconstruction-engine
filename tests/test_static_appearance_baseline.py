@@ -1674,6 +1674,45 @@ def test_real_colmap_sparse_coordinates_and_original_png_colors_export_to_ply(
     assert request.source_geometry.point_maps[0].positions_xyz == ((1.0, 2.0, 3.0),)
 
 
+def test_real_colmap_rgb_glb_preserves_sparse_native_count_after_uncolorable_exclusion(
+    tmp_path: Path,
+) -> None:
+    """GLB keeps native source cardinality even when only two points have RGB."""
+    rgb = tmp_path / "observed.ply"
+    header = (
+        "ply\nformat binary_little_endian 1.0\n"
+        "comment wre_colmap_source_sha256 " + "a" * 64 + "\n"
+        "comment wre_metric_scale_known false\n"
+        "comment wre_color_source original_srgb8_feature_observation\n"
+        "comment wre_native_source_points 3\n"
+        "comment wre_excluded_uncolorable_points 1\n"
+        "element vertex 2\n"
+        "property float x\nproperty float y\nproperty float z\n"
+        "property uchar red\nproperty uchar green\nproperty uchar blue\nend_header\n"
+    ).encode("ascii")
+    points = struct.pack("<3f3B", 1, 2, 3, 25, 50, 75) + struct.pack(
+        "<3f3B", 4, 5, 6, 100, 150, 200
+    )
+    rgb.write_bytes(header + points)
+    output = tmp_path / "observed.glb"
+    digest = baseline_module._write_verified_xyz_rgb_points_glb(
+        rgb=rgb, preview_path=output, max_points=2, observed_colmap=True
+    )
+    inspection = baseline_module.inspect_verified_gsplat_rgb_centers_glb(path=output)
+    assert inspection["kind"] == "wre_colmap_observed_rgb_points"
+    assert inspection["source_colmap_points"] == 3
+    assert inspection["shown_points"] == 2
+    assert inspection["sha256"] == digest.value
+    content = output.read_bytes()
+    json_size = struct.unpack_from("<I", content, 12)[0]
+    assert content[28 + json_size :] == (
+        struct.pack("<3f3B", 1, 2, 3, 25, 50, 75)
+        + b"\x00"
+        + struct.pack("<3f3B", 4, 5, 6, 100, 150, 200)
+        + b"\x00"
+    )
+
+
 def test_real_colmap_sparse_observations_export_viewable_rgb_glb(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

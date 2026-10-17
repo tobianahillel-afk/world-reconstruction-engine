@@ -95,7 +95,9 @@ jobs:
           from wre.reconstruction.static_appearance_baseline import (
               GSPLAT_STATIC_APPEARANCE_REPRESENTATION,
               GsplatStaticAppearancePreflightSource,
+              export_verified_colmap_observed_rgb_glb,
               export_verified_colmap_observed_rgb_ply,
+              inspect_verified_gsplat_rgb_centers_glb,
           )
           from wre.reconstruction.static_appearance_candidate import StaticAppearanceCandidateRequest
           
@@ -353,6 +355,32 @@ jobs:
           assert b"comment wre_metric_scale_known false" in header
           assert len(canonical.camera_solutions) == len(inputs)
           assert any(sum(item[3:]) > 0 for item in struct.iter_unpack("<3f3B", body))
+          # Re-run the verified native-model converter to produce an actual glTF 2.0
+          # POINTS asset alongside the original full-resolution observed RGB PLY.
+          # This is not Gaussian-splat rendering or learned appearance.
+          viewable_glb = ROOT / "observed-real-colmap-rgb.glb"
+          glb_digest = export_verified_colmap_observed_rgb_glb(
+              appearance_request,
+              preflight_source,
+              features=features,
+              expected_environment=reconstruction.environment,
+              module=pycolmap,
+              preview_path=viewable_glb,
+          )
+          inspected = inspect_verified_gsplat_rgb_centers_glb(path=viewable_glb)
+          assert inspected["kind"] == "wre_colmap_observed_rgb_points"
+          assert inspected["source_colmap_points"] == model.num_points3d
+          assert inspected["shown_points"] == exported_points
+          assert inspected["metric_scale_known"] is False
+          assert inspected["gpu_training_verified"] is False
+          assert inspected["sha256"] == glb_digest.value
+          glb_bytes = viewable_glb.read_bytes()
+          json_length = struct.unpack_from("<I", glb_bytes, 12)[0]
+          glb_binary = glb_bytes[28 + json_length :]
+          assert len(glb_binary) == exported_points * 16
+          for i, ply_record in enumerate(struct.iter_unpack("<3f3B", body)):
+              assert struct.unpack_from("<3f3B", glb_binary, 16 * i) == ply_record
+              assert glb_binary[16 * i + 15] == 0
           RECEIPT["reconstruction"] = {
               "registered_images": model.num_registered_images,
               "sparse_points": model.num_points3d,
@@ -363,22 +391,26 @@ jobs:
               "scale_status": canonical.geometry_solution.scale_status.value,
               "ply_sha256": digest.value,
               "ply_bytes": len(payload),
+              "glb_sha256": glb_digest.value,
+              "glb_bytes": len(glb_bytes),
+              "glb_verified_readback": True,
               "source_photo_reconstruction_executed_on_cpu": True,
               "native_pycolmap_model_canonicalized": True,
           }
           (ROOT / "real-photo-colmap-rgb-receipt.json").write_text(
               json.dumps(RECEIPT, indent=2, sort_keys=True) + "\n", encoding="utf-8"
           )
-          print("REAL DRONE CPU PHOTO->COLMAP->OBSERVED RGB PLY PASS")
+          print("REAL DRONE CPU PHOTO->COLMAP->OBSERVED RGB PLY+GLB PASS")
           print(json.dumps(RECEIPT["reconstruction"], sort_keys=True))
           
           PY
-      - name: Publish exact-run real-photo sparse PLY and verified receipt
+      - name: Publish actual reconstructed RGB PLY, inspectable GLB and verified receipt
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: wre-real-photo-colmap-observed-rgb
           path: |
             ${{ runner.temp }}/wre-real-photo-colmap-rgb/observed-real-colmap-rgb.ply
+            ${{ runner.temp }}/wre-real-photo-colmap-rgb/observed-real-colmap-rgb.glb
             ${{ runner.temp }}/wre-real-photo-colmap-rgb/real-photo-colmap-rgb-receipt.json
           if-no-files-found: error
           retention-days: 7
