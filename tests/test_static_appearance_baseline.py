@@ -558,8 +558,10 @@ def test_preflight_has_no_trainer_execution_or_optional_framework_import() -> No
         "hashlib",
         "json",
         "math",
+        "os",
         "pathlib",
         "shutil",
+        "stat",
         "struct",
         "tempfile",
         "typing",
@@ -707,6 +709,68 @@ def test_gsplat_ply_materialization_hashes_real_output_and_retains_path(tmp_path
     )
 
 
+def test_gsplat_ply_rejects_replacement_between_path_check_and_open(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data = _gsplat_ply()
+    root, profile, ref = _gsplat_output(tmp_path, data)
+    target = root / profile.expected_ply_relative_path
+    replacement = tmp_path / "replacement.ply"
+    replacement.write_bytes(data)
+    original_open = Path.open
+
+    def swap_on_open(path: Path, mode: str = "r", *args: Any, **kwargs: Any) -> Any:
+        if path == target and mode == "rb":
+            replacement.replace(target)
+        return original_open(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", swap_on_open)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="between path verification"):
+        materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
+
+
+def test_gsplat_ply_rejects_replacement_during_streamed_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    data = _gsplat_ply(vertices=2)
+    root, profile, ref = _gsplat_output(tmp_path, data)
+    target = root / profile.expected_ply_relative_path
+    replacement = tmp_path / "replacement.ply"
+    replacement.write_bytes(data)
+    original_open = Path.open
+
+    class ReplaceDuringRead:
+        def __init__(self, stream: Any) -> None:
+            self.stream = stream
+            self.replaced = False
+
+        def __enter__(self) -> ReplaceDuringRead:
+            return self
+
+        def __exit__(self, *args: Any) -> Any:
+            return self.stream.__exit__(*args)
+
+        def __getattr__(self, name: str) -> Any:
+            return getattr(self.stream, name)
+
+        def read(self, *args: Any) -> bytes:
+            result = self.stream.read(*args)
+            if not self.replaced:
+                replacement.replace(target)
+                self.replaced = True
+            return result
+
+    def change_while_reading(path: Path, mode: str = "r", *args: Any, **kwargs: Any) -> Any:
+        stream = original_open(path, mode, *args, **kwargs)
+        if path == target and mode == "rb":
+            return ReplaceDuringRead(stream)
+        return stream
+
+    monkeypatch.setattr(Path, "open", change_while_reading)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="changed during"):
+        materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
+
+
 @pytest.mark.parametrize("rest_count", (0, 3, 42, 48))
 def test_gsplat_ply_rejects_wrong_degree_or_partial_harmonics(
     tmp_path: Path, rest_count: int
@@ -771,6 +835,74 @@ def test_gsplat_ply_materialization_rejects_nonfinite_payload(tmp_path: Path) ->
     root, profile, ref = _gsplat_output(tmp_path, bytes(data))
     with pytest.raises(GsplatStaticAppearancePreflightError, match="non-finite"):
         materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
+
+
+def test_gsplat_ply_rejects_pathological_decimal_vertex_count(tmp_path: Path) -> None:
+    # The PLY header is below the 16-KiB bound but Python 3.12 cannot
+    # convert this 5,000-digit decimal without exceeding its int guard.
+    # Reject it as an invalid PLY header rather than leaking ValueError.
+    data = _gsplat_ply().replace(b"element vertex 1\n", b"element vertex " + b"9" * 5000 + b"\n")
+    root, profile, ref = _gsplat_output(tmp_path, data)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="non-empty vertex"):
+        materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
+
+
+@pytest.mark.parametrize(
+    ("vertex_count", "reason"),
+    (
+        (b"100000000", "payload is truncated"),
+        (b"100000001", "outside the audited bounded profile"),
+    ),
+)
+def test_gsplat_ply_decimal_vertex_boundaries(
+    tmp_path: Path, vertex_count: bytes, reason: str
+) -> None:
+    # The accepted limit still needs a corresponding payload; the following
+    # count is rejected before any attempted payload allocation or read.
+    original = _gsplat_ply()
+    data = original.replace(b"element vertex 1\n", b"element vertex " + vertex_count + b"\n")
+    assert data != original
+    root, profile, ref = _gsplat_output(tmp_path, data)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match=reason):
+        materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
+
+
+def test_gsplat_ply_rejects_zero_norm_rotation_quaternion(tmp_path: Path) -> None:
+    # A finite all-zero quaternion cannot specify a rotation. The hash and
+    # vertex count are otherwise valid, so this must fail on payload semantics.
+    data = bytearray(_gsplat_ply(vertices=2))
+    stride = 59 * 4  # Exact source schema: 6 + 45 + 8 float32 properties.
+    first_vertex_rotation = len(data) - stride * 2 + stride - 4 * 4
+    data[first_vertex_rotation : first_vertex_rotation + 16] = bytes(16)
+    root, profile, ref = _gsplat_output(tmp_path, bytes(data))
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="zero-norm rotation"):
+        materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
+
+
+@pytest.mark.parametrize(
+    ("component", "should_reject"),
+    ((1.0e-30, True), (1.0e30, True), (1.0e-18, False), (1.0e18, False)),
+)
+def test_gsplat_ply_rotation_requires_stable_float32_squared_norm(
+    tmp_path: Path, component: float, should_reject: bool
+) -> None:
+    # Exercise the true 59-float layout with one modified quaternion only.
+    # The file remains finite, fully sized and hashable in every case.
+    data = bytearray(_gsplat_ply(vertices=2))
+    stride = 59 * 4
+    first_rotation = len(data) - 2 * stride + stride - 4 * 4
+    data[first_rotation : first_rotation + 16] = struct.pack("<4f", component, 0.0, 0.0, 0.0)
+    root, profile, ref = _gsplat_output(tmp_path, bytes(data))
+    if should_reject:
+        with pytest.raises(
+            GsplatStaticAppearancePreflightError, match="numerically unstable rotation"
+        ):
+            materialize_verified_gsplat_ply(artifact_ref=ref, output_root=root, profile=profile)
+    else:
+        result = materialize_verified_gsplat_ply(
+            artifact_ref=ref, output_root=root, profile=profile
+        )
+        assert result.entries[0].sha256 == _digest(bytes(data))
 
 
 def test_gsplat_ply_materialization_rejects_zero_gaussians_and_forged_header(

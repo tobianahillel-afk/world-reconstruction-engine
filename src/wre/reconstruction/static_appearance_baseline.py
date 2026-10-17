@@ -10,7 +10,9 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import shutil
+import stat
 import struct
 import tempfile
 import zlib
@@ -1752,8 +1754,28 @@ def materialize_verified_gsplat_ply(
     if file_path.resolve(strict=True).parent != ply_directory.resolve(strict=True):
         raise GsplatStaticAppearancePreflightError("gsplat PLY escaped its output directory")
 
+    # Tie the checked path to the actual descriptor: replacing a pathname
+    # between the symlink check and open must not change the bytes we certify.
+    before = file_path.lstat()
+    if not stat.S_ISREG(before.st_mode):
+        raise GsplatStaticAppearancePreflightError("gsplat PLY must be a regular file")
     digest = hashlib.sha256()
     with file_path.open("rb") as stream:
+        opened = os.fstat(stream.fileno())
+        identity = (opened.st_dev, opened.st_ino)
+        if identity != (before.st_dev, before.st_ino):
+            raise GsplatStaticAppearancePreflightError(
+                "gsplat PLY changed between path verification and opening"
+            )
+        # Size and timestamps on the *open handle* detect ordinary concurrent
+        # in-place rewrites even if the final byte length is unchanged.
+        original = (
+            opened.st_dev,
+            opened.st_ino,
+            opened.st_size,
+            opened.st_mtime_ns,
+            opened.st_ctime_ns,
+        )
 
         def read_header_line() -> str:
             raw = stream.readline(_MAX_GSPLAT_PLY_HEADER_BYTES + 1)
@@ -1788,6 +1810,7 @@ def materialize_verified_gsplat_ply(
             or not parts[2].isascii()
             or not parts[2].isdecimal()
             or parts[2].startswith("0")
+            or len(parts[2]) > len(str(_MAX_GSPLAT_PLY_VERTICES))
         ):
             raise GsplatStaticAppearancePreflightError(
                 "gsplat PLY must declare one non-empty vertex element"
@@ -1831,7 +1854,7 @@ def materialize_verified_gsplat_ply(
         header_length = stream.tell()
         stride = len(properties) * 4
         expected_size = header_length + count * stride
-        size = file_path.stat().st_size
+        size = opened.st_size
         if size != expected_size:
             raise GsplatStaticAppearancePreflightError(
                 "gsplat PLY payload is truncated or contains unexpected bytes"
@@ -1843,15 +1866,51 @@ def materialize_verified_gsplat_ply(
             chunk = stream.read(min(remaining, stride * max(1, 4096 // stride)))
             if not chunk or len(chunk) % stride:
                 raise GsplatStaticAppearancePreflightError("gsplat PLY vertex data is incomplete")
-            if any(not math.isfinite(value) for (value,) in struct.iter_unpack("<f", chunk)):
-                raise GsplatStaticAppearancePreflightError(
-                    "gsplat PLY contains non-finite Gaussian parameters"
-                )
+            # Inspect whole Gaussian records: finite floats alone do not make
+            # an all-zero quaternion a valid 3D rotation.
+            for record in struct.iter_unpack(f"<{len(properties)}f", chunk):
+                if any(not math.isfinite(value) for value in record):
+                    raise GsplatStaticAppearancePreflightError(
+                        "gsplat PLY contains non-finite Gaussian parameters"
+                    )
+                rotation = record[-4:]
+                if not any(value != 0.0 for value in rotation):
+                    raise GsplatStaticAppearancePreflightError(
+                        "gsplat PLY contains a zero-norm rotation quaternion"
+                    )
+                # gsplat's rasterizer uses float32 quaternion operations.
+                # A finite nonzero tuple may still produce a subnormal or
+                # overflowing squared norm after float32 multiplication.
+                norm_squared = sum(value * value for value in rotation)
+                float32_min_normal = 2.0**-126
+                float32_max = (2.0 - 2.0**-23) * 2.0**127
+                if not float32_min_normal <= norm_squared <= float32_max:
+                    raise GsplatStaticAppearancePreflightError(
+                        "gsplat PLY contains a numerically unstable rotation quaternion"
+                    )
             digest.update(chunk)
             remaining -= len(chunk)
         if stream.read(1):
             raise GsplatStaticAppearancePreflightError("gsplat PLY contains trailing bytes")
-    if file_path.stat().st_size != size:
+        final_handle = os.fstat(stream.fileno())
+        if (
+            final_handle.st_dev,
+            final_handle.st_ino,
+            final_handle.st_size,
+            final_handle.st_mtime_ns,
+            final_handle.st_ctime_ns,
+        ) != original:
+            raise GsplatStaticAppearancePreflightError(
+                "gsplat PLY changed during materialization verification"
+            )
+    final_path = file_path.lstat()
+    if (
+        final_path.st_dev,
+        final_path.st_ino,
+        final_path.st_size,
+        final_path.st_mtime_ns,
+        final_path.st_ctime_ns,
+    ) != original:
         raise GsplatStaticAppearancePreflightError(
             "gsplat PLY changed during materialization verification"
         )
