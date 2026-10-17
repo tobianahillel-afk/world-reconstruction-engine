@@ -1335,7 +1335,7 @@ def test_verified_gsplat_gaussian_splat_export_retains_shape_orientation_and_opa
     from wre import reconstruction
 
     assert reconstruction.export_verified_gsplat_splat is export_verified_gsplat_splat
-    with pytest.raises(GsplatStaticAppearancePreflightError, match="new .splat"):
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="renderer export requires"):
         export_verified_gsplat_splat(
             artifact_ref=ref, output_root=root, profile=profile, splat_path=target
         )
