@@ -228,6 +228,21 @@ jobs:
               ),
               module=pycolmap,
           )
+          # Use the exact canonical names registered in the WRE feature database.
+          feature_names = {item.observation_id: item.image_name for item in features.images}
+          canonical_images = ROOT / "canonical-images"
+          canonical_images.mkdir()
+          native_inputs = []
+          for item in inputs:
+              name = feature_names[item.observation.observation_id]
+              staged_path = canonical_images / name
+              staged_path.write_bytes(item.source_path.read_bytes())
+              native_inputs.append(ColmapReconstructionInput(
+                  observation=item.observation,
+                  source_path=staged_path,
+                  image_name=name,
+              ))
+          native_inputs = tuple(native_inputs)
           match_config = ColmapPairMatchingConfig()
           matches = match_colmap_pairs(
               ColmapPairMatchingRequest(
@@ -257,7 +272,7 @@ jobs:
               ColmapIncrementalReconstructionRequest(
                   run=run("mapping", mapping_config.sha256, 3),
                   verification=verified,
-                  inputs=inputs,
+                  inputs=native_inputs,
                   output_path=ROOT / "native-sparse",
                   config=mapping_config,
               ),
@@ -308,8 +323,8 @@ jobs:
               supporting_artifacts=(source_ref,),
           )
           preflight_source = GsplatStaticAppearancePreflightSource(
-              image_root=IMAGES,
-              images=inputs,
+              image_root=canonical_images,
+              images=native_inputs,
               native_model_root=reconstruction.output_path,
               native_model_artifact=model,
               native_model_ref=source_ref,
