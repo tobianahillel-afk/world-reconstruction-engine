@@ -870,6 +870,11 @@ jobs:
               archive_bytes = response.read(3_000_001)
           assert 0 < len(archive_bytes) <= 3_000_000
           archive_sha256 = hashlib.sha256(archive_bytes).hexdigest()
+          # First actual GitHub Actions benchmark run 38988336781 published
+          # the official ZIP digest in JSON artifact 12083948530.
+          assert archive_sha256 == (
+              "f333f7521b708bd1103ff905d9cbe7884c46739d797c7fd796818a4872e76ce5"
+          ), "official Middlebury archive changed"
           with zipfile.ZipFile(io.BytesIO(archive_bytes)) as archive:
               infos = [item for item in archive.infolist() if not item.is_dir()]
               assert 4 <= len(infos) <= 16
@@ -890,6 +895,18 @@ jobs:
               right_bytes = read_member("view5.png")
               gt_bytes = read_member("disp1.png")
               dmin_bytes = read_member("dmin.txt")
+          assert hashlib.sha256(left_bytes).hexdigest() == (
+              "9c055b7dd4084ae58d388159649045552d146d0cc507bc4e8d900f75e233cec3"
+          )
+          assert hashlib.sha256(right_bytes).hexdigest() == (
+              "203d6e855ed055043f8361838ba8211700ec29b5775145990c5101dbbe26"
+          )
+          assert hashlib.sha256(gt_bytes).hexdigest() == (
+              "fde8cfcf3d6d66a032f0096ffc112fda03f15b0d4bc43a5c4a8f1c5d29cd82c3"
+          )
+          assert hashlib.sha256(dmin_bytes).hexdigest() == (
+              "c730812f002668e7c68d8c0a2f2c4d96f430b9364ec4928329ddd2f25e0f1534"
+          )
 
           left = cv2.imdecode(np.frombuffer(left_bytes, np.uint8), cv2.IMREAD_COLOR)
           right = cv2.imdecode(np.frombuffer(right_bytes, np.uint8), cv2.IMREAD_COLOR)
@@ -978,7 +995,7 @@ jobs:
               "benchmark": "Middlebury 2006 HalfSize Aloe view1/view5 disp1",
               "official_source": archive_url,
               "source_zip_sha256_observed": archive_sha256,
-              "source_zip_pinned_sha256": False,
+              "source_zip_pinned_sha256": True,
               "image_pair_sha256": [
                   hashlib.sha256(left_bytes).hexdigest(),
                   hashlib.sha256(right_bytes).hexdigest(),
