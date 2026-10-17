@@ -7074,10 +7074,19 @@ jobs:
                   offset = end + 1;
                 }
                 const header = new TextDecoder().decode(raw.subarray(0, offset));
-                const match = /^Pf\\n([0-9]+) ([0-9]+)\\n-1[.]0\\n$/.exec(header);
-                if (!match) throw Error('Format PFM float32 little endian incorrect');
-                const width = Number(match[1]);
-                const height = Number(match[2]);
+                const lines = header.split(String.fromCharCode(10));
+                const dimensions = lines[1]?.split(' ');
+                if (lines.length !== 4 || lines[0] !== 'Pf' ||
+                    lines[2] !== '-1.0' || lines[3] !== '' ||
+                    dimensions?.length !== 2) {
+                  throw Error('Format PFM float32 little endian incorrect');
+                }
+                const width = Number(dimensions[0]);
+                const height = Number(dimensions[1]);
+                if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) ||
+                    width <= 0 || height <= 0) {
+                  throw Error('Dimensions du PFM invalides');
+                }
                 if (width !== picture.naturalWidth || height !== picture.naturalHeight ||
                     width * height * 4 + offset !== raw.byteLength) {
                   throw Error('PFM incompatible avec cette carte de disparité');
@@ -7114,6 +7123,7 @@ jobs:
                   relativeDepth.toFixed(3) +
                   ' unités de modèle (PAS des mètres, ni une précision certifiée).';
               } catch (error) {
+                status.dataset.error = String(error.message);
                 status.textContent = 'Inspection indisponible : ' + String(error.message);
               }
             });
@@ -7398,10 +7408,18 @@ jobs:
                       clientY:box.top + ({py} + 0.5) * box.height / image.naturalHeight
                   }})); return true;""")
               wait_for(lambda: js(
-                  "return document.getElementById('wre-pixel-inspector').dataset.x === '"
-                  + str(px) + "' && document.getElementById('wre-pixel-inspector').dataset.y === '"
-                  + str(py) + "'"
-              ))
+                  "return !!document.getElementById('wre-pixel-inspector').dataset.disparity "
+                  "|| !!document.getElementById('wre-pixel-inspector').dataset.error"
+              ), timeout=15)
+              inspector_state = js("""return (() => {
+                  const el=document.getElementById('wre-pixel-inspector');
+                  return {x:el.dataset.x, y:el.dataset.y, disparity:el.dataset.disparity,
+                          error:el.dataset.error, text:el.textContent};
+              })()""")
+              assert not inspector_state["error"], inspector_state
+              assert inspector_state["x"] == str(px) and inspector_state["y"] == str(py), (
+                  inspector_state, (px, py)
+              )
               observed = float(js(
                   "return document.getElementById('wre-pixel-inspector').dataset.disparity"
               ))
