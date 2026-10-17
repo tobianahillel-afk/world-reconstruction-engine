@@ -2003,6 +2003,7 @@ def test_exact_ply_output_assembles_complete_appearance_result_without_mutating_
         ("model", "exact checkpoint-free reference trainer"),
         ("revision", "exact checkpoint-free reference trainer"),
         ("producer_revision", "exact checkpoint-free reference trainer"),
+        ("producer_revision_missing", "exact checkpoint-free reference trainer"),
         ("implementation", "exact checkpoint-free reference trainer"),
     ],
 )
@@ -2028,6 +2029,15 @@ def test_exact_ply_assembly_rejects_false_producer_identity(
                 implementation="gsplat.examples.simple_trainer",
                 version="1.5.3",
                 revision="wrong",
+            ),
+        )
+    elif mutation == "producer_revision_missing":
+        producer = replace(
+            producer,
+            producer=ProducerRef(
+                implementation="gsplat.examples.simple_trainer",
+                version="1.5.3",
+                revision=None,
             ),
         )
     else:
