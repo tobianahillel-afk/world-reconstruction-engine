@@ -1719,9 +1719,7 @@ def test_verified_colmap_camera_rig_exports_real_relative_poses(
     request, source = _two_view_parts(tmp_path)
     canonical = _native_canonical(request, source)
     destination = tmp_path / "camera-rig.json"
-    digest = baseline_module.export_verified_colmap_camera_rig_json(
-        canonical, path=destination
-    )
+    digest = baseline_module.export_verified_colmap_camera_rig_json(canonical, path=destination)
     content = destination.read_bytes()
     assert digest == _digest(content)
     scene = json.loads(content)
@@ -1746,9 +1744,7 @@ def test_verified_colmap_camera_rig_rejects_foreign_frame_and_duplicate_view(
 ) -> None:
     request, source = _two_view_parts(tmp_path)
     canonical = _native_canonical(request, source)
-    foreign = replace(
-        canonical.camera_solutions[1], local_frame_id=LocalFrameId("frame:foreign")
-    )
+    foreign = replace(canonical.camera_solutions[1], local_frame_id=LocalFrameId("frame:foreign"))
     with pytest.raises(GsplatStaticAppearancePreflightError, match=r"same.*frame"):
         baseline_module.export_verified_colmap_camera_rig_json(
             replace(canonical, camera_solutions=(canonical.camera_solutions[0], foreign)),
