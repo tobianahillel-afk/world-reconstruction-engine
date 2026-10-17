@@ -3532,6 +3532,127 @@ jobs:
           print("Offline visual comparison verified: four same-run Chrome PNGs and hashes")
           PY
 
+      - name: Package one complete offline interactive 3D exploration archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import shutil
+          import struct
+          from pathlib import Path
+          
+          source = Path("wre-browser-preview")
+          proof = Path("wre-browser-proof")
+          bundle = Path("wre-unified-offline-3d")
+          receipt = json.loads((proof / "browser-verification.json").read_text(encoding="utf-8"))
+          if receipt.get("real_gpu_training") is not False or receipt.get("metric_scale_known") is not False:
+              raise ValueError("Missing explicit CPU/nonmetric proof")
+          if not all(receipt.get(k) is True for k in (
+              "surface_loaded", "stereo_cloud_mode_loaded", "photometric_cloud_mode_loaded",
+              "sift_camera_mode_loaded", "surface_reload", "webgl_context",
+          )):
+              raise ValueError("The same-run browser did not load all four real 3D modes")
+          
+          glbs = (
+              "wre-real-stereo-cpu-textured.glb",
+              "wre-real-stereo-cpu-lr-consistent.glb",
+              "wre-real-stereo-cpu-photometric-consistent.glb",
+              "wre-real-stereo-sift-estimated-cameras.glb",
+          )
+          source_hashes = {}
+          for name in glbs:
+              data = (source / name).read_bytes()
+              if len(data) < 20 or data[:4] != b"glTF" or struct.unpack_from("<II", data, 4) != (2, len(data)):
+                  raise ValueError(f"Invalid glTF 2.0 source: {name}")
+              digest = hashlib.sha256(data).hexdigest()
+              if name in receipt["input_glb_sha256"] and digest != receipt["input_glb_sha256"][name]:
+                  raise ValueError(f"Chrome input and packaged GLB disagree: {name}")
+              source_hashes[name] = digest
+          for required in (
+              "wre-real-stereo-cpu-viewer.html",
+              "wre-model-viewer-4.1.0.min.js",
+              "wre-model-viewer-4.1.0-LICENSE",
+          ):
+              if not (source / required).is_file():
+                  raise ValueError(f"Missing offline viewer dependency: {required}")
+          
+          png_hashes = {
+              "real-stereo-3d-browser.png": receipt["screenshot_sha256"],
+              **{
+                  f"real-stereo-3d-{mode}.png": digest
+                  for mode, digest in receipt["mode_screenshot_sha256"].items()
+              },
+          }
+          if set(png_hashes) != {
+              "real-stereo-3d-browser.png",
+              "real-stereo-3d-stereo.png",
+              "real-stereo-3d-quality.png",
+              "real-stereo-3d-sift.png",
+          }:
+              raise ValueError("Four Chrome screenshot identities required")
+          for name, digest in png_hashes.items():
+              data = (proof / name).read_bytes()
+              if not data.startswith(bytes.fromhex("89504e470d0a1a0a")):
+                  raise ValueError(f"Missing PNG signature: {name}")
+              if hashlib.sha256(data).hexdigest() != digest:
+                  raise ValueError(f"Corrupted same-run Chrome proof: {name}")
+          
+          shutil.copytree(source, bundle)
+          for name in (*png_hashes, "browser-verification.json", "wre-real-3d-comparison.html"):
+              shutil.copy2(proof / name, bundle / name)
+          
+          comparison = bundle / "wre-real-3d-comparison.html"
+          page = comparison.read_text(encoding="utf-8")
+          anchor = '<div class="gallery">'
+          if page.count(anchor) != 1:
+              raise ValueError("Unknown comparison HTML structure")
+          navigation = (
+              '<p><strong><a href="./wre-real-stereo-cpu-viewer.html">'
+              'Explorer les quatre représentations en 3D interactive</a></strong>. '
+              'Pour utiliser le visualiseur hors ligne, dans le dossier extrait lancez '
+              '<code>python3 -m http.server 8765 --bind 127.0.0.1</code> '
+              'et ouvrez <code>http://127.0.0.1:8765/wre-real-3d-comparison.html</code>.</p>'
+          )
+          comparison.write_text(page.replace(anchor, navigation + anchor), encoding="utf-8")
+          (bundle / "README-OPEN-OFFLINE-3D.txt").write_text(
+              "WRE — 3D depuis deux photographies réelles (CPU)\n"
+              "1. Décompressez entièrement cette archive dans un dossier local.\n"
+              "2. Dans ce dossier : python3 -m http.server 8765 --bind 127.0.0.1\n"
+              "3. Ouvrez http://127.0.0.1:8765/wre-real-3d-comparison.html\n"
+              "4. Utilisez le lien vers le visualiseur interactif 3D à quatre modes.\n"
+              "Tout est local après extraction, sans API payante ni accès Internet.\n"
+              "Limites : deux photos statiques ; échelle métrique inconnue ; aucun entraînement GPU/4D.\n",
+              encoding="utf-8",
+          )
+          manifest = {
+              "source": "same GitHub Actions run, actual Chrome + real-photo CPU previews",
+              "source_glb_sha256": source_hashes,
+              "chrome_png_sha256": png_hashes,
+              "real_gpu_training": False,
+              "metric_scale_known": False,
+              "four_d_reconstruction": False,
+              "viewer": "wre-real-stereo-cpu-viewer.html",
+              "comparison": comparison.name,
+          }
+          (bundle / "wre-offline-3d-manifest.json").write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          assert all(hashlib.sha256((bundle / name).read_bytes()).hexdigest() == digest
+                     for name, digest in {**source_hashes, **png_hashes}.items())
+          print(f"One offline 3D exploration bundle: {len(list(bundle.iterdir()))} entries, "
+                "four GLBs, four real Chrome PNGs, interactive viewer, report, receipts")
+          PY
+
+      - name: Publish unified interactive 3D exploration archive
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wre-real-3d-unified-offline-explorer
+          path: wre-unified-offline-3d/
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Publish real browser rendering evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
