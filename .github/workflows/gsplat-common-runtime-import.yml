@@ -3461,6 +3461,77 @@ jobs:
               call("DELETE", f"/session/{session}")
           PY
 
+      - name: Package offline comparison of four real Chrome 3D views
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import html
+          import json
+          from pathlib import Path
+
+          proof = Path("wre-browser-proof")
+          report = json.loads((proof / "browser-verification.json").read_text(encoding="utf-8"))
+          if report.get("real_gpu_training") is not False or report.get("metric_scale_known") is not False:
+              raise ValueError("Missing explicit CPU / nonmetric provenance in browser report")
+          modes = (
+              ("surface", "Surface texturée (stéréo CPU)", "real-stereo-3d-browser.png",
+               report["screenshot_sha256"]),
+              ("stereo", "Nuage RGB cohérent gauche/droite", "real-stereo-3d-stereo.png",
+               report["mode_screenshot_sha256"]["stereo"]),
+              ("quality", "Nuage filtré par cohérence photométrique", "real-stereo-3d-quality.png",
+               report["mode_screenshot_sha256"]["quality"]),
+              ("sift", "Points SIFT et caméras estimées", "real-stereo-3d-sift.png",
+               report["mode_screenshot_sha256"]["sift"]),
+          )
+          cards = []
+          for mode, label, name, expected in modes:
+              payload = (proof / name).read_bytes()
+              if not payload.startswith(bytes.fromhex("89504e470d0a1a0a")):
+                  raise ValueError(f"Not a Chrome PNG: {name}")
+              if hashlib.sha256(payload).hexdigest() != expected:
+                  raise ValueError(f"Chrome screenshot integrity mismatch: {name}")
+              cards.append(
+                  '<figure><a href="' + html.escape(name, quote=True) + '">'
+                  '<img loading="lazy" alt="' + html.escape(label, quote=True) +
+                  '" src="' + html.escape(name, quote=True) + '"></a>'
+                  '<figcaption><strong>' + html.escape(label) + '</strong>'
+                  '<small>Mode ' + html.escape(mode) + ' · SHA-256 ' +
+                  html.escape(expected) + '</small></figcaption></figure>'
+              )
+          page = """<!doctype html>
+          <html lang="fr"><head><meta charset="utf-8">
+          <meta name="viewport" content="width=device-width,initial-scale=1">
+          <title>WRE · Comparaison de quatre représentations 3D réelles</title>
+          <style>
+          body{font:16px/1.55 system-ui,sans-serif;max-width:1360px;margin:auto;padding:24px;
+               color:#e8edf4;background:#111925}
+          h1{font-size:1.8rem}p{max-width:95ch}
+          .gallery{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px}
+          figure{margin:0;padding:12px;border:1px solid #536479;border-radius:10px}
+          img{display:block;width:100%;height:auto;border-radius:6px}
+          figcaption{padding-top:8px}small{display:block;overflow-wrap:anywhere;color:#b5c4d9}
+          a{color:#bad9ff}pre{white-space:pre-wrap;overflow-wrap:anywhere}
+          @media(max-width:700px){.gallery{grid-template-columns:1fr}}
+          </style></head><body>
+          <h1>Quatre vues d'une reconstruction à partir de vraies photos</h1>
+          <p>Captures réalisées par Google Chrome (WebGL logiciel SwiftShader) sur les modèles
+          issus d'une même exécution GitHub Actions. Sélectionnez une vue pour afficher
+          son image PNG originale. Aucune connexion réseau requise pour ce rapport.</p>
+          <div class="gallery">""" + "\n".join(cards) + """</div>
+          <p><strong>Limites :</strong> deux photos statiques, échelle métrique inconnue ;
+          scores de qualité non validés sur vues retenues ; pas de reconstruction 4D,
+          ni entraînement gsplat sur GPU. Les images sont des captures Chrome, et
+          non une preuve de précision géométrique ou photométrique.</p>
+          <details><summary>Preuve de chargement et empreintes exactes</summary><pre>""" + (
+              html.escape(json.dumps(report, indent=2, sort_keys=True))
+          ) + """</pre></details></body></html>"""
+          (proof / "wre-real-3d-comparison.html").write_text(page, encoding="utf-8")
+          assert len(cards) == 4
+          print("Offline visual comparison verified: four same-run Chrome PNGs and hashes")
+          PY
+
       - name: Publish real browser rendering evidence
         if: ${{ always() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
