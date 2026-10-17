@@ -4906,21 +4906,28 @@ jobs:
               # Actually move the real WebGL camera with both saved frames
               # via the user-facing keyframe selector, without mocked camera APIs.
               for selected, bookmark in ((1, "__wreRecordedFirst"), (2, "__wreRecordedSecond")):
-                  scrubbed = js(f"""
-                    const scene=document.getElementById('wre-scene');
+                  # model-viewer commits jumpCameraToGoal on a later render frame.
+                  # Dispatch the actual UI input once, then independently poll
+                  # the REAL camera properties instead of reading them in the
+                  # same JavaScript task as the input event.
+                  assert js(f"""
                     const step=document.getElementById('wre-tour-step');
                     step.value='{selected}';
                     step.dispatchEvent(new Event('input', {{bubbles:true}}));
+                    return !step.disabled && step.max==='2' &&
+                      document.getElementById('wre-tour-status').textContent
+                        .includes('Previewing saved viewpoint {selected}/2');
+                  """), f"Chrome ignored real 3D keyframe selector {selected}"
+                  scrubbed = until(f"""
+                    const scene=document.getElementById('wre-scene');
                     const orbit=scene.getCameraOrbit(), target=scene.getCameraTarget();
                     const values=[orbit.theta,orbit.phi,orbit.radius,
                       target.x,target.y,target.z,scene.getFieldOfView()];
                     const expected=window.{bookmark};
-                    return !step.disabled && step.max==='2' &&
-                      document.getElementById('wre-tour-status').textContent
-                        .includes('Previewing saved viewpoint {selected}/2') &&
-                      values.every((v,i)=>Math.abs(v-expected[i])<0.1) ? values : null;
-                  """)
-                  assert scrubbed is not None, f"Chrome failed true 3D keyframe scrub {selected}"
+                    return expected && values.every((v,i)=>Math.abs(v-expected[i])<0.1)
+                      ? values : null;
+                  """, limit=10)
+                  assert len(scrubbed) == 7, f"Chrome did not reach keyframe {selected}"
               assert js("""
                 const scene=document.getElementById('wre-scene');
                 scene.cameraOrbit='1.5rad 0.6rad 9m';
