@@ -211,11 +211,13 @@ jobs:
           import numpy as np
           import torch
           from PIL import Image
+          from gsplat import export_splats
 
           # Same -I and single source path as the real external trainer child.
           root = Path(os.environ["COMMON_SOURCES"])
           sys.path.insert(0, str(root / "gsplat" / "examples"))
           from datasets.colmap import Dataset, Parser
+          from utils import rgb_to_sh
 
           # These are valid COLMAP binary records (not WRE's placeholder bytes).
           # The fixture has one pinhole camera, three registered views and one
@@ -270,6 +272,45 @@ jobs:
                   assert batch["camtoworld"].shape == (4, 4)
                   assert torch.isfinite(batch["K"]).all()
                   assert torch.isfinite(batch["camtoworld"]).all()
+              # Actual end-to-end COLMAP points and RGB -> pinned gsplat
+              # exporter -> portable viewer files. These are initialized
+              # (UNTRAINED) Gaussians, not photorealistic reconstructions.
+              assert parsed.points.shape == (1, 3)
+              assert parsed.points_rgb.shape == (1, 3)
+              export_root = Path(os.environ["RUNNER_TEMP"]) / "wre-colmap-derived-splats"
+              (export_root / "ply").mkdir(parents=True, exist_ok=False)
+              means = torch.from_numpy(parsed.points.copy()).float()
+              rgb = torch.from_numpy(parsed.points_rgb.copy()).float() / 255.0
+              sh0 = rgb_to_sh(rgb).unsqueeze(1)
+              gaussians = dict(
+                  means=means,
+                  scales=torch.zeros((1, 3)),
+                  quats=torch.tensor([[1.0, 0.0, 0.0, 0.0]]),
+                  opacities=torch.zeros(1),
+                  sh0=sh0,
+                  shN=torch.zeros((1, 15, 3)),
+              )
+              ply_file = export_root / "ply" / "point_cloud_0.ply"
+              splat_file = export_root / "point_cloud_0.splat"
+              ply_bytes = export_splats(**gaussians, format="ply", save_to=str(ply_file))
+              splat_bytes = export_splats(
+                  **gaussians, format="splat", save_to=str(splat_file)
+              )
+              assert ply_file.read_bytes() == ply_bytes
+              assert splat_file.read_bytes() == splat_bytes
+              assert b"element vertex 1\n" in ply_bytes
+              assert b"property float f_rest_44\n" in ply_bytes
+              assert len(splat_bytes) == 32
+              assert np.allclose(struct.unpack("<3f", splat_bytes[:12]), parsed.points[0])
+              assert np.allclose(struct.unpack("<3f", splat_bytes[12:24]), [1, 1, 1])
+              assert all(
+                  abs(actual - expected) <= 1
+                  for actual, expected in zip(splat_bytes[24:27], parsed.points_rgb[0])
+              )
+              assert splat_bytes[27] == 127  # opacity sigmoid(0) * 255 truncated
+              print("Actual COLMAP 3D point+RGB exported by pinned gsplat as PLY and .splat.")
+              print("Viewable initialization, not SfM execution or trained appearance.")
+
               print("Three REAL binary COLMAP views decoded with upstream Parser/Dataset.")
               print("CPU tensor generation verified; no CUDA kernel or training occurred.")
           PY
