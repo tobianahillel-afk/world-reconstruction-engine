@@ -2369,7 +2369,7 @@ def export_verified_gsplat_rgb_centers_glb(
         )
         with rgb.open("rb") as source:
             header = bytearray()
-            while not header.endswith(b"end_header\\n"):
+            while not header.endswith(b"end_header\n"):
                 line = source.readline(_MAX_GSPLAT_PLY_HEADER_BYTES + 1 - len(header))
                 if not line or len(header) + len(line) > _MAX_GSPLAT_PLY_HEADER_BYTES:
                     raise GsplatStaticAppearancePreflightError(
@@ -2473,7 +2473,7 @@ def export_verified_gsplat_rgb_centers_glb(
                     struct.pack("<4sII", b"glTF", 2, total_length),
                     struct.pack("<I4s", len(document), b"JSON"),
                     document,
-                    struct.pack("<I4s", vertex_bytes, b"BIN\\x00"),
+                    struct.pack("<I4s", vertex_bytes, b"BIN\x00"),
                 ):
                     output.write(chunk)
                     digest.update(chunk)
@@ -2484,7 +2484,7 @@ def export_verified_gsplat_rgb_centers_glb(
                             "gsplat RGB centers changed during GLB export"
                         )
                     if index % stride == 0:
-                        vertex = record + b"\\x00"
+                        vertex = record + b"\x00"
                         output.write(vertex)
                         digest.update(vertex)
                 if source.read(1):
