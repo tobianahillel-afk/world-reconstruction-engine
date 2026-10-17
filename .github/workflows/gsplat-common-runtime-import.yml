@@ -2090,6 +2090,8 @@ jobs:
               ).read_bytes()
           assert 'src="./wre-model-viewer-4.1.0.min.js"' in page
           assert 'id="wre-scene-choice"' in page
+          assert 'id="wre-local-glb"' in page
+          assert 'URL.createObjectURL(file)' in page
           assert 'src="./wre-real-stereo-sift-estimated-cameras.glb"' not in page
           assert "./wre-real-stereo-sift-estimated-cameras.glb" in page
           assert "./wre-real-stereo-sift-colmap-dataset.zip" in page
@@ -3448,6 +3450,23 @@ jobs:
                   assert len(screenshot_data) > 10000
                   (proof / f"real-stereo-3d-{name}.png").write_bytes(screenshot_data)
                   mode_screenshot_sha256[name] = hashlib.sha256(screenshot_data).hexdigest()
+              # ChromeDriver sends REAL filesystem GLB bytes into the browser
+              # input, exercising the actual user-facing offline model loader.
+              local_file = str((root / "wre-real-stereo-cpu-textured.glb").resolve())
+              element = call("POST", f"/session/{session}/element", {
+                  "using": "css selector", "value": "#wre-local-glb"
+              })
+              element_id = element["element-6066-11e4-a52e-4f735466cecf"]
+              call("POST", f"/session/{session}/element/{element_id}/value", {
+                  "text": local_file, "value": list(local_file)
+              })
+              assert until("""
+                const scene=document.getElementById('wre-scene');
+                return window.__wre3dLoads >= 4 && scene.loaded === true &&
+                  scene.model && scene.getAttribute('src').startsWith('blob:') &&
+                  document.getElementById('wre-scene-provenance').textContent
+                    .includes('not WRE-verified');
+              """), "Actual Chrome could not open the user-selected GLB"
               js("""
                 const chooser=document.getElementById('wre-scene-choice');
                 chooser.value='surface';
@@ -3455,9 +3474,10 @@ jobs:
               """)
               assert until("""
                 const scene=document.getElementById('wre-scene');
-                return window.__wre3dLoads >= 4 && scene.loaded === true &&
+                return window.__wre3dLoads >= 5 && scene.loaded === true &&
                   scene.model &&
-                  scene.getAttribute('src').startsWith('data:model/gltf-binary;base64,');
+                  scene.getAttribute('src').startsWith('data:model/gltf-binary;base64,') &&
+                  document.getElementById('wre-local-glb').value === '';
               """)
               webgl = js("""
                 const c=document.createElement('canvas');
@@ -3476,6 +3496,7 @@ jobs:
                       "stereo_cloud_mode_loaded": True,
                       "photometric_cloud_mode_loaded": True,
                       "sift_camera_mode_loaded": True,
+                      "local_glb_file_loaded_in_chrome": True,
                       "surface_reload": True,
                       "webgl_context": True,
                       "input_glb_sha256": expected_hashes,
@@ -3584,6 +3605,8 @@ jobs:
               "sift_camera_mode_loaded", "surface_reload", "webgl_context",
           )):
               raise ValueError("The same-run browser did not load all four real 3D modes")
+          if receipt.get("local_glb_file_loaded_in_chrome") is not True:
+              raise ValueError("Actual Chrome did not open a user-selected GLB")
           
           glbs = (
               "wre-real-stereo-cpu-textured.glb",
