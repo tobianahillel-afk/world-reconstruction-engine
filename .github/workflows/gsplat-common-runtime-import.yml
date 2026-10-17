@@ -1963,6 +1963,9 @@ jobs:
               <a href="./wre-real-stereo-cpu-photometric-consistent.glb" download>Download filtered points GLB</a>
               <a href="./wre-real-stereo-sift-estimated-cameras.glb" download>Download SIFT/cameras GLB</a>
               <a href="./wre-real-stereo-sift-colmap-dataset.zip" download>Download COLMAP dataset</a>
+              <label for="wre-local-glb">Open your own GLB:</label>
+              <input id="wre-local-glb" type="file" accept=".glb,model/gltf-binary"
+                aria-label="Open a local GLB model (max 250 MB)">
             </div>
             <model-viewer id="wre-scene" camera-controls auto-rotate interaction-prompt="auto"
               alt="Approximate CPU stereo 3D reconstruction from two real photos"
@@ -1973,6 +1976,28 @@ jobs:
               const scene = document.getElementById("wre-scene");
               const chooser = document.getElementById("wre-scene-choice");
               const provenance = document.getElementById("wre-scene-provenance");
+              const localInput = document.getElementById("wre-local-glb");
+              let localUrl = null;
+              function releaseLocalUrl() {
+                if (localUrl) URL.revokeObjectURL(localUrl);
+                localUrl = null;
+              }
+              localInput.addEventListener("change", () => {
+                const file = localInput.files && localInput.files[0];
+                if (!file) return;
+                if (!file.name.toLowerCase().endsWith(".glb") ||
+                    file.size < 20 || file.size > 250_000_000) {
+                  provenance.textContent = "Choose a .glb file of 20 bytes to 250 MB.";
+                  return;
+                }
+                releaseLocalUrl();
+                localUrl = URL.createObjectURL(file);
+                scene.setAttribute("src", localUrl);
+                scene.setAttribute("alt", "User-selected local GLB model");
+                chooser.selectedIndex = -1;
+                provenance.textContent = "Local GLB: " + file.name +
+                  " · user-supplied, not WRE-verified or reconstructed here";
+              });
               const modes = {
                 surface: {
                   src: scene.getAttribute("src"),
@@ -1998,6 +2023,8 @@ jobs:
               chooser.addEventListener("change", () => {
                 const mode = modes[chooser.value];
                 if (!mode) return;
+                releaseLocalUrl();
+                localInput.value = "";
                 scene.setAttribute("src", mode.src);
                 scene.setAttribute("alt", mode.alt);
                 provenance.textContent = mode.label;
@@ -2027,7 +2054,10 @@ jobs:
               <code>python3 -m http.server 8765 --bind 127.0.0.1</code>
               in the extracted folder and open
               <code>http://127.0.0.1:8765/wre-real-stereo-cpu-viewer.html</code>.
-              No GPU training or held-out quality metric is implied.</footer>
+              You can also select a local GLB file using the file input; it stays
+              in your browser, is not uploaded, and its provenance is unverified.
+              Use only models you trust. No GPU training or held-out quality metric
+              is implied.</footer>
           </main>
           </body>
           </html>
