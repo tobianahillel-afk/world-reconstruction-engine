@@ -622,13 +622,21 @@ jobs:
           # MPEG-4 Part 2 encoding remains lossy; decoded RGB is not original.
           photo_video_name = "wre-real-stereo-cpu-photo-flythrough.mp4"
           photo_video_path = output / photo_video_name
+          # FFmpeg's mp4v encoder can silently crop odd frame dimensions.
+          # Keep the GIF unchanged; encode an explicit even-sized crop.
+          video_size = (gif_size[0] - gif_size[0] % 2, gif_size[1] - gif_size[1] % 2)
+          assert min(video_size) >= 2, "video frame is too small for MP4"
           encoder = cv2.VideoWriter(
-              str(photo_video_path), cv2.VideoWriter_fourcc(*"mp4v"), 10.0, gif_size
+              str(photo_video_path), cv2.VideoWriter_fourcc(*"mp4v"), 10.0, video_size
           )
           assert encoder.isOpened(), "pinned OpenCV MP4V writer unavailable"
           try:
               for frame in photo_frames:
-                  encoder.write(cv2.cvtColor(np.asarray(frame), cv2.COLOR_RGB2BGR))
+                  rgb = np.asarray(frame)
+                  assert rgb.shape == (gif_size[1], gif_size[0], 3)
+                  encoder.write(cv2.cvtColor(
+                      rgb[:video_size[1], :video_size[0]], cv2.COLOR_RGB2BGR
+                  ))
           finally:
               encoder.release()
           assert 100 < photo_video_path.stat().st_size < 8_000_000
@@ -640,7 +648,9 @@ jobs:
                   ok, image = decoder.read()
                   if not ok:
                       break
-                  assert image.shape == (gif_size[1], gif_size[0], 3)
+                  assert image.shape == (video_size[1], video_size[0], 3), (
+                      f"decoded MP4 frame has {image.shape}, expected {video_size}"
+                  )
                   decoded_frames.append(image)
           finally:
               decoder.release()
@@ -737,6 +747,10 @@ jobs:
               "photographic_stereo_flythrough_file": photo_gif_name,
               "photographic_stereo_flythrough_mp4_file": photo_video_name,
               "photographic_stereo_flythrough_mp4_codec": "MPEG-4 Part 2 mp4v; lossy",
+              "photographic_stereo_flythrough_mp4_width_height": list(video_size),
+              "photographic_stereo_flythrough_mp4_even_crop_from_gif": (
+                  list(gif_size) != list(video_size)
+              ),
               "photographic_stereo_flythrough_mp4_decoded_frames": len(decoded_frames),
               "photographic_stereo_flythrough_frames": len(photo_frames),
               "photographic_stereo_flythrough_camera_shifts_arbitrary_units": [
