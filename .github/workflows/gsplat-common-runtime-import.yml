@@ -4573,6 +4573,8 @@ jobs:
               raise ValueError("Actual Chrome did not export a relative 3D polygon triangle-fan area")
           if receipt.get("surface_chord_angle_export_verified_in_chrome") is not True:
               raise ValueError("Actual Chrome did not export a real-raycast 3D chord angle")
+          if receipt.get("relative_3d_camera_bookmark_roundtrip_verified_in_chrome") is not True:
+              raise ValueError("Actual Chrome did not roundtrip a relative 3D camera bookmark")
           if receipt.get("current_view_png_export_verified_in_chrome") is not True:
               raise ValueError("Actual Chrome did not export its current real-photo 3D view as PNG")
           dimensions = receipt.get("current_view_png_dimensions")
