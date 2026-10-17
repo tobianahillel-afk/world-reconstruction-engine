@@ -7787,15 +7787,49 @@ jobs:
                              zip(row[:3], point["xyz_relative_model_units"]))
                   assert [int(value) for value in row[3:]] == rgb
               print("PASS: actual Chrome exported real-photo colored relative XYZ as PLY")
-              browser("POST", f"/session/{session}/url", {
-                  "url": "http://127.0.0.1:8877/wre-real-stereo-cpu-viewer.html",
-              })
+              # Functional 2D -> 3D navigation: the last point comes from the
+              # SHA-256 verified on-disk PFM, not an invented camera landmark.
+              link = js("""return (() => {
+                  const anchor=document.getElementById('wre-inspected-point-live-3d');
+                  if (!anchor || anchor.getAttribute('aria-disabled')!=='false' ||
+                      !anchor.href) return null;
+                  const url=new URL(anchor.href);
+                  const q=url.searchParams;
+                  return {url:anchor.href, path:url.pathname,
+                      xyz:['stereo_x','stereo_y','stereo_z'].map(key=>Number(q.get(key)))};
+              })()""")
+              assert link and link["path"].endswith("/wre-real-stereo-cpu-viewer.html")
+              expected_xyz = exported["points"][-1]["xyz_relative_model_units"]
+              assert len(link["xyz"]) == 3
+              assert all(abs(actual - expected) < 1e-4 for actual, expected in
+                         zip(link["xyz"], expected_xyz))
+              browser("POST", f"/session/{session}/url", {"url": link["url"]})
               loaded = """return (() => {
                   const scene = document.getElementById("wre-scene");
                   return Boolean(scene && scene.loaded && scene.model &&
                       document.getElementById("wre-camera-export").disabled === false);
               })()"""
               wait_for(lambda: js(loaded))
+              # Validate the ACTUAL model-viewer WebGL model and hotspot in the
+              # extracted ZIP against the original real-photo disparity result.
+              actual_marker = js("""return (() => {
+                  const scene=document.getElementById('wre-scene');
+                  const marker=scene?.querySelector('[slot="hotspot-wre-observed-stereo"]');
+                  const status=document.getElementById('wre-observed-stereo-marker-status');
+                  if (!scene.loaded || !scene.model || !marker || marker.hidden ||
+                      !status?.textContent.includes('relative units only')) return null;
+                  return {coordinates:marker.dataset.position.split(' ').map(Number.parseFloat),
+                      label:marker.getAttribute('aria-label'), slot:marker.slot,
+                      src:scene.getAttribute('src'), visible:!marker.hidden};
+              })()""")
+              assert actual_marker is not None and actual_marker["visible"]
+              assert actual_marker["slot"] == "hotspot-wre-observed-stereo"
+              assert actual_marker["label"] == "Nonmetric photo stereo observation"
+              assert actual_marker["src"].startswith("data:model/gltf-binary;base64,")
+              expected_gltf = (expected_xyz[0], -expected_xyz[1], -expected_xyz[2])
+              assert all(abs(actual - expected) < 1e-4 for actual, expected in
+                         zip(actual_marker["coordinates"], expected_gltf))
+              print("PASS: real PFM observation linked to live Chrome 3D GLB hotspot")
               # Reopen the EXTRACTED archive and repeat the actual source-vs-3D
               # interaction; browser evidence must not rely on a staging page.
               js("""document.getElementById('wre-photo-toggle').click();""")
@@ -7829,6 +7863,8 @@ jobs:
                   " && document.getElementById('wre-scene').getAttribute('src').includes('sift')"
               ))
               assert js("return !!document.createElement('canvas').getContext('webgl2')")
+              assert js("""return document.getElementById('wre-scene')
+                  .querySelector('[slot="hotspot-wre-observed-stereo"]').hidden""")
               print("PASS: archived real source photos and SIFT GLB rendered in Chrome WebGL")
           finally:
               browser("DELETE", f"/session/{session}")
