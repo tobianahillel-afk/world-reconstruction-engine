@@ -804,6 +804,106 @@ jobs:
           )
           PY
 
+      - name: Measure real 3D-to-2D COLMAP reprojection error on source photographs (CPU)
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv/bin/python - <<'PY'
+          import hashlib
+          import json
+          import math
+          import os
+          from pathlib import Path
+          import numpy as np
+          import pycolmap
+
+          root = Path(os.environ["RUNNER_TEMP"]) / "wre-real-photo-colmap-rgb"
+          dataset = root / "gsplat-capture"
+          manifest_path = dataset / "wre-capture-manifest.json"
+          manifest = json.loads(manifest_path.read_text())
+          for relative, digest in manifest["file_sha256"].items():
+              item = dataset / relative
+              assert item.is_file() and not item.is_symlink()
+              assert hashlib.sha256(item.read_bytes()).hexdigest() == digest
+          model = pycolmap.Reconstruction(str(dataset / "sparse" / "0"))
+          assert model.num_reg_images() == manifest["undistorted_registered_views"] == 3
+          assert model.num_points3D() == manifest["undistorted_points3d"] == 856
+
+          def summarize(errors):
+              arr = np.asarray(errors, dtype=np.float64)
+              assert len(arr) and np.isfinite(arr).all()
+              return {
+                  "observations": int(len(arr)),
+                  "rms_pixels": float(np.sqrt(np.mean(arr * arr))),
+                  "median_pixels": float(np.median(arr)),
+                  "p95_pixels": float(np.percentile(arr, 95)),
+                  "max_pixels": float(np.max(arr)),
+              }
+
+          all_errors, point_ids, cameras = [], set(), {}
+          for image_id in sorted(int(i) for i in model.reg_image_ids()):
+              image = model.image(image_id)
+              assert image.name in manifest["views"]
+              errors = []
+              for feature in image.points2D:
+                  if not feature.has_point3D():
+                      continue
+                  point_id = int(feature.point3D_id)
+                  xyz = np.asarray(model.point3D(point_id).xyz, dtype=np.float64)
+                  observed = np.asarray(feature.xy, dtype=np.float64)
+                  projected = image.project_point(xyz)
+                  assert projected is not None, (image.name, point_id)
+                  projected = np.asarray(projected, dtype=np.float64)
+                  assert observed.shape == projected.shape == (2,)
+                  assert np.isfinite(observed).all() and np.isfinite(projected).all()
+                  error = math.hypot(*(projected - observed))
+                  assert math.isfinite(error)
+                  errors.append(error)
+                  all_errors.append(error)
+                  point_ids.add(point_id)
+              assert len(errors) >= 50, (image.name, len(errors))
+              cameras[image.name] = summarize(errors)
+          assert len(cameras) == 3
+          assert len(all_errors) >= 300 and len(point_ids) >= 100
+          report = {
+              "schema": "wre.experimental.real_photo_reprojection_v1",
+              "metric_type": "in_sample_colmap_bundle_adjustment_residual",
+              "units": "undistorted_image_pixels",
+              "camera_count": len(cameras),
+              "unique_source_3d_points_observed": len(point_ids),
+              "source_native_sparse_points": manifest["native_points3d"],
+              "overall": summarize(all_errors),
+              "per_undistorted_camera": cameras,
+              "held_out_accuracy_measured": False,
+              "metric_scale_known": False,
+              "gpu_training_steps": 0,
+              "license": manifest["license"],
+              "credit": manifest["credit"],
+          }
+          report_file = dataset / "inspection" / "real-colmap-reprojection-quality.json"
+          report_file.parent.mkdir(exist_ok=True)
+          payload = (json.dumps(report, indent=2, sort_keys=True, allow_nan=False) + "\n").encode()
+          report_file.write_bytes(payload)
+          digest = hashlib.sha256(payload).hexdigest()
+          manifest["file_sha256"][report_file.relative_to(dataset).as_posix()] = digest
+          manifest["reprojection_quality"] = {
+              "report_path": report_file.relative_to(dataset).as_posix(),
+              "report_sha256": digest,
+              "in_sample_rms_pixels": report["overall"]["rms_pixels"],
+              "in_sample_p95_pixels": report["overall"]["p95_pixels"],
+              "tracked_observations": len(all_errors),
+          }
+          manifest_path.write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n")
+          assert json.loads(report_file.read_text())["overall"]["observations"] == len(all_errors)
+          print(
+              "REAL CPU COLMAP REPROJECTION QUALITY:",
+              len(all_errors), "observations,", len(point_ids), "unique 3D points,",
+              "RMS", round(report["overall"]["rms_pixels"], 4), "px,",
+              "P95", round(report["overall"]["p95_pixels"], 4), "px;",
+              "in-sample ONLY, held-out and GPU UNVERIFIED",
+          )
+          PY
+
       - name: Export native-photo RGB Gaussian seeds using exact upstream gsplat exporter on CPU
         shell: bash
         run: |
