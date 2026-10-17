@@ -4783,6 +4783,40 @@ jobs:
                   view.getAttribute('src').startsWith('data:model/gltf-binary;base64,');
               """)
               assert first
+              # Show actual 2D inputs NEXT TO the actively rendered real 3D
+              # GLB. This is not a reprojected camera match or static image mock.
+              js("""
+                document.getElementById('wre-photo-toggle').click();
+              """)
+              assert until("""
+                const pane=document.getElementById('wre-source-panel');
+                const img=document.getElementById('wre-live-source-photos');
+                const model=document.getElementById('wre-scene');
+                return !pane.hidden && img.complete && img.naturalWidth >= 640 &&
+                  img.naturalHeight >= 160 &&
+                  img.currentSrc.endsWith('/wre-real-stereo-cpu-photos.png') &&
+                  img.getBoundingClientRect().width >= 200 &&
+                  model.loaded && model.model &&
+                  model.getBoundingClientRect().width >= 260 &&
+                  document.getElementById('wre-photo-toggle')
+                    .getAttribute('aria-pressed') === 'true' &&
+                  !!document.createElement('canvas').getContext('webgl2');
+              """), "Actual observed 2D photos and rendered GLB not simultaneously visible"
+              live_2d_3d_png = base64.b64decode(
+                  call("GET", f"/session/{session}/screenshot"), validate=True
+              )
+              assert live_2d_3d_png.startswith(bytes.fromhex("89504e470d0a1a0a"))
+              assert len(live_2d_3d_png) > 10000
+              (proof / "real-stereo-2d-and-3d.png").write_bytes(live_2d_3d_png)
+              live_2d_3d_sha256 = hashlib.sha256(live_2d_3d_png).hexdigest()
+              js("document.getElementById('wre-photo-toggle').click();")
+              assert js("""
+                const pane=document.getElementById('wre-source-panel');
+                const model=document.getElementById('wre-scene');
+                return pane.hidden && model.loaded && model.model &&
+                  document.getElementById('wre-photo-toggle')
+                    .getAttribute('aria-pressed') === 'false';
+              """), "Returning from photo comparison lost the active 3D model"
               # Both models are actual photo-derived 3D GLBs rendered in the
               # same real Chrome/WebGL session, not static screenshots.
               js("""
@@ -6352,6 +6386,8 @@ jobs:
                       "sift_camera_mode_loaded": True,
                       "two_real_3d_models_compared_side_by_side": True,
                       "dual_3d_linked_orbit_verified_in_chrome": True,
+                      "source_photos_and_live_3d_verified_in_chrome": True,
+                      "source_photos_live_3d_screenshot_sha256": live_2d_3d_sha256,
                       "side_by_side_screenshot_sha256": side_by_side_sha256,
                       "local_glb_file_loaded_in_chrome": True,
                       "surface_distance_measured_in_chrome": True,
