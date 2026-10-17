@@ -1026,7 +1026,8 @@ def test_one_call_gsplat_reconstruction_stages_real_files_and_returns_candidate(
 
     monkeypatch.setattr(baseline_module.subprocess, "run", fake_trainer)
     monkeypatch.setattr(
-        baseline_module, "verify_gsplat_static_appearance_native_geometry",
+        baseline_module,
+        "verify_gsplat_static_appearance_native_geometry",
         lambda *_args, **_kwargs: None,
     )
     result = reconstruct_gsplat_static_appearance(
@@ -1108,7 +1109,8 @@ def test_external_gsplat_runner_builds_complete_canonical_candidate_with_process
 
     monkeypatch.setattr(baseline_module.subprocess, "run", fake_cuda_process)
     monkeypatch.setattr(
-        baseline_module, "verify_gsplat_static_appearance_native_geometry",
+        baseline_module,
+        "verify_gsplat_static_appearance_native_geometry",
         lambda *_args, **_kwargs: None,
     )
     result = run_gsplat_reference_training(
@@ -1242,7 +1244,8 @@ def test_external_gsplat_runner_spawns_real_process_and_assembles_appearance(
         baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
     )
     monkeypatch.setattr(
-        baseline_module, "verify_gsplat_static_appearance_native_geometry",
+        baseline_module,
+        "verify_gsplat_static_appearance_native_geometry",
         lambda *_args, **_kwargs: None,
     )
     result = run_gsplat_reference_training(
@@ -1287,7 +1290,8 @@ def test_real_trainer_refuses_foreign_native_geometry_before_cuda_launch(
         raise AssertionError("CUDA training must not start on mismatched geometry")
 
     monkeypatch.setattr(
-        baseline_module, "verify_gsplat_static_appearance_native_geometry",
+        baseline_module,
+        "verify_gsplat_static_appearance_native_geometry",
         reject_foreign_geometry,
     )
     monkeypatch.setattr(baseline_module.subprocess, "run", must_not_train)
@@ -1370,7 +1374,8 @@ def test_external_gsplat_runner_rejects_failure_or_missing_output(
         lambda *_args, **_kwargs: SimpleNamespace(returncode=return_code),
     )
     monkeypatch.setattr(
-        baseline_module, "verify_gsplat_static_appearance_native_geometry",
+        baseline_module,
+        "verify_gsplat_static_appearance_native_geometry",
         lambda *_args, **_kwargs: None,
     )
     with pytest.raises(GsplatStaticAppearancePreflightError):
