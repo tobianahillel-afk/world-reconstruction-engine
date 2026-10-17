@@ -1176,6 +1176,94 @@ jobs:
           assert np.array_equal(persisted_depth, depth_map_mm)
           assert np.isclose(depth_map_mm[yy[0], xx[0]], depth_mm[0], rtol=1e-6)
 
+          # CPU-only surface mesh: two triangles per observed, smooth 2x2
+          # patch. Use stereo predictions only; official GT is never a mask.
+          mesh_valid = depth_map_mm > 0.0
+          vertex_count = int(mesh_valid.sum())
+          mesh_indices = np.full((height, width), -1, dtype=np.int32)
+          mesh_indices[mesh_valid] = np.arange(vertex_count, dtype=np.int32)
+          top_left = depth_map_mm[:-1, :-1]
+          top_right = depth_map_mm[:-1, 1:]
+          bottom_left = depth_map_mm[1:, :-1]
+          bottom_right = depth_map_mm[1:, 1:]
+          depth_min = np.minimum.reduce(
+              (top_left, top_right, bottom_left, bottom_right)
+          )
+          depth_max = np.maximum.reduce(
+              (top_left, top_right, bottom_left, bottom_right)
+          )
+          smooth = (
+              mesh_valid[:-1, :-1] & mesh_valid[:-1, 1:]
+              & mesh_valid[1:, :-1] & mesh_valid[1:, 1:]
+              & (depth_max - depth_min <= 0.02 * np.maximum(depth_min, 1.0))
+          )
+          v00 = mesh_indices[:-1, :-1][smooth]
+          v01 = mesh_indices[:-1, 1:][smooth]
+          v10 = mesh_indices[1:, :-1][smooth]
+          v11 = mesh_indices[1:, 1:][smooth]
+          # Winding toward the camera (image y points down).
+          triangles = np.concatenate((
+              np.column_stack((v00, v10, v01)),
+              np.column_stack((v01, v10, v11)),
+          )).astype(np.int32)
+          assert vertex_count > 1000 and len(triangles) > 10000
+          assert triangles.min() >= 0 and triangles.max() < vertex_count
+          y_mesh, x_mesh = np.nonzero(mesh_valid)
+          z_mesh = depth_map_mm[mesh_valid].astype(np.float64)
+          rgb_mesh = cv2.cvtColor(left, cv2.COLOR_BGR2RGB)[mesh_valid]
+          vertices_dtype = np.dtype([
+              ("x", "<f4"), ("y", "<f4"), ("z", "<f4"),
+              ("red", "u1"), ("green", "u1"), ("blue", "u1"),
+          ])
+          mesh_vertices = np.empty(vertex_count, dtype=vertices_dtype)
+          mesh_vertices["x"] = (x_mesh - (width - 1) / 2.0) * z_mesh / focal_px
+          mesh_vertices["y"] = (y_mesh - (height - 1) / 2.0) * z_mesh / focal_px
+          mesh_vertices["z"] = z_mesh
+          for channel, index in (("red", 0), ("green", 1), ("blue", 2)):
+              mesh_vertices[channel] = rgb_mesh[:, index]
+          faces_dtype = np.dtype([("count", "u1"), ("indices", "<i4", (3,))])
+          mesh_faces = np.empty(len(triangles), dtype=faces_dtype)
+          mesh_faces["count"] = 3
+          mesh_faces["indices"] = triangles
+          assert vertices_dtype.itemsize == 15 and faces_dtype.itemsize == 13
+          mesh_header = (
+              "ply\nformat binary_little_endian 1.0\n"
+              f"element vertex {vertex_count}\n"
+              "property float x\nproperty float y\nproperty float z\n"
+              "property uchar red\nproperty uchar green\nproperty uchar blue\n"
+              f"element face {len(triangles)}\n"
+              "property list uchar int vertex_indices\nend_header\n"
+          ).encode("ascii")
+          mesh_path = (
+              Path(os.environ["RUNNER_TEMP"]) / "wre-middlebury-half-aloe-cpu-rgb-mesh.ply"
+          )
+          with mesh_path.open("wb") as mesh_stream:
+              mesh_stream.write(mesh_header)
+              mesh_stream.write(mesh_vertices.tobytes())
+              mesh_stream.write(mesh_faces.tobytes())
+          expected_bytes = (
+              len(mesh_header) + vertex_count * 15 + len(triangles) * 13
+          )
+          assert mesh_path.stat().st_size == expected_bytes
+          with mesh_path.open("rb") as check:
+              assert check.read(len(mesh_header)) == mesh_header
+              record = struct.unpack("<3f3B", check.read(15))
+              assert np.allclose(
+                  record[:3],
+                  tuple(float(mesh_vertices[name][0]) for name in ("x", "y", "z")),
+                  rtol=0, atol=0,
+              )
+              assert record[3:] == tuple(int(c) for c in rgb_mesh[0])
+              check.seek(len(mesh_header) + vertex_count * 15)
+              assert struct.unpack("<B3i", check.read(13)) == (
+                  3, *(int(v) for v in triangles[0]),
+              )
+              check.seek(0, os.SEEK_END)
+              assert check.tell() == expected_bytes
+          print(
+              f"Actual-photo stereo mesh: {vertex_count} RGB vertices, "
+              f"{len(triangles)} triangles, no GT-guided reconstruction."
+          )
           # Actual-photo diagnostic, calculated AFTER stereo inference.
           # Identical colors represent identical CROPPED disparity (0..160px).
           # Red/blue error panel uses official GT only to evaluate, NEVER
@@ -1289,6 +1377,13 @@ jobs:
                   float(np.sqrt(np.mean(agreement_error * agreement_error)))
                   if len(agreement_error) else None
               ),
+              "dense_rgb_mesh_ply_name": mesh_path.name,
+              "dense_rgb_mesh_vertices": vertex_count,
+              "dense_rgb_mesh_triangles": int(len(triangles)),
+              "dense_rgb_mesh_neighbor_max_relative_depth_jump": 0.02,
+              "dense_rgb_mesh_sha256": hashlib.sha256(mesh_path.read_bytes()).hexdigest(),
+              "dense_rgb_mesh_uses_groundtruth_visibility_mask": False,
+              "dense_rgb_mesh_calibrated_world_coordinates": False,
               "dense_depth_map_name": depth_output.name,
               "dense_depth_map_format": "NumPy float32 [height,width], 0=invalid",
               "dense_depth_map_nonzero_pixels": int(np.count_nonzero(depth_map_mm)),
@@ -1347,13 +1442,14 @@ jobs:
             wre-middlebury-half-aloe-cpu-left-right-3d.ply \
             wre-middlebury-half-aloe-cpu-hh4-3d.ply \
             wre-middlebury-half-aloe-cpu-depth-mm.npy \
+            wre-middlebury-half-aloe-cpu-rgb-mesh.ply \
             wre-middlebury-half-aloe-stereo-diagnostics.png
           do
             test -s "$RUNNER_TEMP/$name"
             cp "$RUNNER_TEMP/$name" "$bundle/$name"
             test -s "$bundle/$name"
           done
-          test "$(find "$bundle" -maxdepth 1 -type f | wc -l)" -eq 7
+          test "$(find "$bundle" -maxdepth 1 -type f | wc -l)" -eq 8
 
       - name: Publish independently measured Middlebury stereo quality and RGB 3D
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
