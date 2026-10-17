@@ -1208,6 +1208,94 @@ jobs:
               rtol=0,
               atol=1e-5,
           ), "COLMAP serialization altered the withheld fourth-view projection"
+          # Portable four-view RGB geometry, reused from the existing CPU
+          # stereo glTF POINTS exporter. No new solver or GPU renderer.
+          # COLMAP camera coordinates are Y-down/Z-forward; glTF uses Y-up/-Z.
+          rgb_positions = np.ascontiguousarray(reconstructed, dtype="<f4").copy()
+          rgb_positions[:, 1:] *= -1.0
+          rgb_colors = np.ascontiguousarray(colors, dtype="u1")
+          assert rgb_positions.shape == rgb_colors.shape
+          assert np.isfinite(rgb_positions).all()
+          glb_binary = bytearray()
+          glb_views = []
+          for payload in (rgb_positions.tobytes(), rgb_colors.tobytes()):
+              offset = len(glb_binary)
+              glb_binary.extend(payload)
+              glb_binary.extend(b"\\0" * (-len(glb_binary) % 4))
+              glb_views.append({
+                  "buffer": 0, "byteOffset": offset,
+                  "byteLength": len(payload), "target": 34962,
+              })
+          glb_document = {
+              "asset": {
+                  "version": "2.0",
+                  "generator": "WRE measured SIFT four-view COLMAP CPU",
+              },
+              "scene": 0,
+              "scenes": [{"nodes": [0]}],
+              "nodes": [{"mesh": 0, "name": "Four-view measured RGB 3D points"}],
+              "meshes": [{"primitives": [{
+                  "attributes": {"POSITION": 0, "COLOR_0": 1},
+                  "material": 0, "mode": 0,
+              }]}],
+              "materials": [{
+                  "name": "Observed source RGB",
+                  "doubleSided": True,
+                  "extensions": {"KHR_materials_unlit": {}},
+              }],
+              "extensionsUsed": ["KHR_materials_unlit"],
+              "buffers": [{"byteLength": len(glb_binary)}],
+              "bufferViews": glb_views,
+              "accessors": [
+                  {
+                      "bufferView": 0, "componentType": 5126,
+                      "count": len(rgb_positions), "type": "VEC3",
+                      "min": rgb_positions.min(axis=0).tolist(),
+                      "max": rgb_positions.max(axis=0).tolist(),
+                  },
+                  {
+                      "bufferView": 1, "componentType": 5121,
+                      "normalized": True, "count": len(rgb_colors),
+                      "type": "VEC3",
+                  },
+              ],
+          }
+          glb_json = json.dumps(
+              glb_document, separators=(",", ":"), allow_nan=False
+          ).encode("utf-8")
+          glb_json += b" " * (-len(glb_json) % 4)
+          glb_data = (
+              struct.pack(
+                  "<4sII", b"glTF", 2,
+                  12 + 8 + len(glb_json) + 8 + len(glb_binary),
+              )
+              + struct.pack("<I4s", len(glb_json), b"JSON") + glb_json
+              + struct.pack("<I4s", len(glb_binary), b"BIN\\0") + glb_binary
+          )
+          four_glb_path = output / "wre-sift-four-view-rgb.glb"
+          four_glb_path.write_bytes(glb_data)
+          reopened_glb = four_glb_path.read_bytes()
+          assert struct.unpack_from("<4sII", reopened_glb) == (
+              b"glTF", 2, len(reopened_glb)
+          )
+          json_length, chunk_type = struct.unpack_from("<I4s", reopened_glb, 12)
+          assert chunk_type == b"JSON"
+          decoded_glb = json.loads(reopened_glb[20:20 + json_length])
+          assert decoded_glb["accessors"][0]["count"] == len(reconstructed)
+          assert decoded_glb["accessors"][1]["normalized"] is True
+          bin_header = 20 + json_length
+          bin_length, bin_type = struct.unpack_from("<I4s", reopened_glb, bin_header)
+          assert bin_type == b"BIN\\0"
+          assert bin_header + 8 + bin_length == len(reopened_glb)
+          raw_glb = reopened_glb[bin_header + 8:]
+          for view, expected in zip(
+              decoded_glb["bufferViews"],
+              (rgb_positions.tobytes(), rgb_colors.tobytes()),
+              strict=True,
+          ):
+              begin = view["byteOffset"]
+              assert raw_glb[begin:begin + view["byteLength"]] == expected
+
           four_handoff = {
               "algorithm": "OpenCV SIFT + EssentialMat + PnP + SciPy sparse BA",
               "registered_cameras": 4,
@@ -1218,6 +1306,10 @@ jobs:
               "independently_measured_fourth_view_heldout_rmse_px": fourth_rmse,
               "heldout_scored_before_fourth_view_export": True,
               "colmap_reloaded_by": "pinned gsplat Parser/Dataset (CPU)",
+              "rgb_glb_filename": "wre-sift-four-view-rgb.glb",
+              "rgb_glb_point_count": int(len(reconstructed)),
+              "rgb_glb_sha256": hashlib.sha256(reopened_glb).hexdigest(),
+              "rgb_glb_representation": "glTF 2.0 POINTS from observed RGB and BA XYZ",
               "intrinsics_known": True,
               "metric_scale_known": False,
               "synthetic_image_fixture": True,
@@ -1440,13 +1532,14 @@ jobs:
             wre-sift-fourth-view-heldout-overlay.png \
             wre-sift-fourth-view-heldout.json \
             wre-sift-four-view-colmap-model.zip \
-            wre-sift-four-view-colmap-handoff.json
+            wre-sift-four-view-colmap-handoff.json \
+            wre-sift-four-view-rgb.glb
           do
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 23
-          echo "Staged all 23 real PLY/PNG/NPY/JSON/ZIP files for artifact upload"
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 24
+          echo "Staged all 24 real PLY/PNG/NPY/JSON/ZIP/GLB files for artifact upload"
 
       - name: Publish CPU COLMAP 3D preview and measured reprojection
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
