@@ -1926,6 +1926,9 @@ jobs:
               h1 { font-size:18px; margin:0 0 5px; }
               p { margin:3px 0; line-height:1.35; }
               model-viewer { display:block; width:100%; flex:1; min-height:320px; }
+              .wre-pick-marker { background:#ffdf68; color:#172232; border:2px solid #172232;
+                border-radius:50%; width:29px; height:29px; font:bold 14px sans-serif;
+                text-align:center; pointer-events:none; }
               .scene-options { display:flex; flex-wrap:wrap; align-items:center;
                 gap:12px; padding:10px 18px; background:#243349; }
               .scene-options a { color:#9eddff; }
@@ -1967,6 +1970,7 @@ jobs:
               <input id="wre-local-glb" type="file" accept=".glb,model/gltf-binary"
                 aria-label="Open a local GLB model (max 250 MB)">
               <button id="wre-measure-toggle" type="button" aria-pressed="false">Measure surface distance</button>
+              <button id="wre-path-toggle" type="button" aria-pressed="false">Trace 3D path</button>
               <button id="wre-measure-export" type="button" disabled
                 aria-label="Download relative surface measurement as JSON">Download measurement JSON</button>
             </div>
@@ -1983,24 +1987,57 @@ jobs:
               const provenance = document.getElementById("wre-scene-provenance");
               const localInput = document.getElementById("wre-local-glb");
               const measureButton = document.getElementById("wre-measure-toggle");
+              const pathButton = document.getElementById("wre-path-toggle");
               const exportButton = document.getElementById("wre-measure-export");
               const measureResult = document.getElementById("wre-measure-result");
               let measuring = false;
+              let tracing = false;
               let measured = [];
               let completedMeasurement = null;
+              function clearPickMarkers() {
+                scene.querySelectorAll(".wre-pick-marker").forEach(marker => marker.remove());
+              }
+              function placePickMarker(point, index) {
+                const marker = document.createElement("button");
+                marker.type = "button";
+                marker.className = "wre-pick-marker";
+                marker.setAttribute("slot", "hotspot-wre-pick-" + index);
+                marker.dataset.position = point.join(" ");
+                marker.textContent = String(index);
+                marker.setAttribute("aria-label", "3D point " + index + " in model units");
+                marker.tabIndex = -1;
+                scene.appendChild(marker);
+              }
               function resetMeasurement() {
+                clearPickMarkers();
                 measured = [];
                 completedMeasurement = null;
                 exportButton.disabled = true;
-                measureResult.textContent = measuring
-                  ? "Click two points on the visible mesh. Model units only (NOT meters)."
-                  : "Surface measurement off. Model units only (NOT meters).";
+                measureResult.textContent = tracing
+                  ? "Click two or more mesh points to trace a 3D polyline (NOT geodesic or meters)."
+                  : measuring
+                    ? "Click two points on the visible mesh. Model units only (NOT meters)."
+                    : "Surface measurement off. Model units only (NOT meters).";
               }
               measureButton.addEventListener("click", () => {
-                measuring = !measuring;
+                measuring = !measuring || tracing;
+                tracing = false;
+                pathButton.setAttribute("aria-pressed", "false");
+                pathButton.textContent = "Trace 3D path";
                 measureButton.setAttribute("aria-pressed", String(measuring));
                 measureButton.textContent = measuring ? "Stop measuring" : "Measure surface distance";
                 if (measuring) scene.removeAttribute("auto-rotate");
+                else scene.setAttribute("auto-rotate", "");
+                resetMeasurement();
+              });
+              pathButton.addEventListener("click", () => {
+                tracing = !tracing;
+                measuring = tracing;
+                measureButton.setAttribute("aria-pressed", "false");
+                measureButton.textContent = "Measure surface distance";
+                pathButton.setAttribute("aria-pressed", String(tracing));
+                pathButton.textContent = tracing ? "Stop tracing" : "Trace 3D path";
+                if (tracing) scene.removeAttribute("auto-rotate");
                 else scene.setAttribute("auto-rotate", "");
                 resetMeasurement();
               });
@@ -2013,14 +2050,46 @@ jobs:
                 }
                 const point = [hit.position.x, hit.position.y, hit.position.z];
                 if (!point.every(Number.isFinite)) return;
-                if (measured.length === 2) {
+                if (!tracing && measured.length === 2) {
+                  clearPickMarkers();
                   measured = [];
                   completedMeasurement = null;
                   exportButton.disabled = true;
                 }
                 measured.push(point);
+                placePickMarker(point, measured.length);
                 if (measured.length === 1) {
-                  measureResult.textContent = "First surface point selected; click a second point.";
+                  measureResult.textContent = "First surface point selected; click another point.";
+                  return;
+                }
+                if (tracing) {
+                  const segments = [];
+                  for (let i = 1; i < measured.length; i++) {
+                    const a = measured[i - 1], b = measured[i];
+                    segments.push(Math.hypot(
+                      a[0] - b[0], a[1] - b[1], a[2] - b[2]
+                    ));
+                  }
+                  const total = segments.reduce((a, b) => a + b, 0);
+                  if (!Number.isFinite(total) || !segments.every(Number.isFinite)) {
+                    resetMeasurement();
+                    return;
+                  }
+                  measureResult.textContent = "3D polyline length: " + total.toFixed(5) +
+                    " model units (" + segments.length +
+                    " straight segments; NOT geodesic or meters).";
+                  completedMeasurement = {
+                    schema: "wre.relative_3d_surface_polyline.v1",
+                    model_source: chooser.value || "user-supplied-local-glb",
+                    model_provenance: provenance.textContent.trim(),
+                    metric_scale_known: false,
+                    units: "model_units",
+                    points_xyz: measured.map(p => p.slice()),
+                    segment_lengths_model_units: segments,
+                    total_length_model_units: total,
+                    surface_geodesic: false
+                  };
+                  exportButton.disabled = false;
                   return;
                 }
                 const relativeDistance = Math.hypot(
@@ -2054,7 +2123,10 @@ jobs:
                 const url = URL.createObjectURL(blob);
                 const link = document.createElement("a");
                 link.href = url;
-                link.download = "wre-relative-surface-measurement.json";
+                link.download = completedMeasurement.schema ===
+                  "wre.relative_3d_surface_polyline.v1"
+                  ? "wre-relative-surface-polyline.json"
+                  : "wre-relative-surface-measurement.json";
                 document.body.appendChild(link);
                 link.click();
                 link.remove();
@@ -2141,8 +2213,10 @@ jobs:
               <code>http://127.0.0.1:8765/wre-real-stereo-cpu-viewer.html</code>.
               You can also select a local GLB file using the file input; it stays
               in your browser, is not uploaded, and its provenance is unverified.
-              Measure distance by clicking two points on a visible mesh. The reported
-              values are in arbitrary model units and must NOT be interpreted as meters.
+              Measure distance by clicking two points, or trace a multi-point 3D
+              polyline on the visible mesh. Path segments are straight 3D chords,
+              NOT shortest paths along the mesh, and values are arbitrary model
+              units that must NOT be interpreted as meters.
               Use only models you trust. No GPU training or held-out quality metric
               is implied.</footer>
           </main>
@@ -2179,6 +2253,9 @@ jobs:
           assert 'id="wre-scene-choice"' in page
           assert 'id="wre-local-glb"' in page
           assert 'id="wre-measure-toggle"' in page
+          assert 'id="wre-path-toggle"' in page
+          assert 'hotspot-wre-pick-' in page
+          assert 'wre.relative_3d_surface_polyline.v1' in page
           assert 'id="wre-measure-export"' in page
           assert 'distance_model_units' in page
           assert 'positionAndNormalFromPoint' in page
@@ -3429,6 +3506,7 @@ jobs:
           import base64
           import hashlib
           import json
+          import math
           import time
           from pathlib import Path
           from urllib.error import URLError
@@ -3509,6 +3587,15 @@ jobs:
               # Raycast the ACTUAL Chrome-loaded photo mesh, not a mocked
               # geometry API. Click two different hit points via the viewer
               # measurement control, then verify the relative distance.
+              # Stop model-viewer's auto-rotation BEFORE sampling the camera
+              # raycast coordinates; otherwise points drift before replay.
+              assert js("""
+                const scene=document.getElementById('wre-scene');
+                const button=document.getElementById('wre-measure-toggle');
+                button.click();
+                return button.getAttribute('aria-pressed') === 'true' &&
+                  !scene.hasAttribute('auto-rotate');
+              """)
               measure_hits = js("""
                 const scene=document.getElementById('wre-scene');
                 const box=scene.getBoundingClientRect();
@@ -3534,20 +3621,41 @@ jobs:
               measure_status = js(f"""
                 const scene=document.getElementById('wre-scene');
                 const toggle=document.getElementById('wre-measure-toggle');
-                toggle.click();
+                // Observe the genuine raycast inside the actual click handler.
+                // Pre-click samples can differ during camera interpolation and
+                // are not the geometry saved by the user-facing export.
+                const originalRaycast=scene.positionAndNormalFromPoint.bind(scene);
+                window.__wreClickedRaycasts=[];
+                window.__wreCapturingClick=false;
+                scene.positionAndNormalFromPoint=(x,y) => {{
+                  const hit=originalRaycast(x,y);
+                  if (window.__wreCapturingClick && hit && hit.position) {{
+                    window.__wreClickedRaycasts.push([
+                      hit.position.x,hit.position.y,hit.position.z
+                    ]);
+                  }}
+                  return hit;
+                }};
                 for (const p of {json.dumps(measure_hits)}) {{
+                  const hit=originalRaycast(p.x,p.y);
+                  if (!hit || !hit.position) return {{error:'click missed surface'}};
+                  window.__wreCapturingClick=true;
                   scene.dispatchEvent(new MouseEvent('click', {{
                     bubbles:true, clientX:p.x, clientY:p.y
                   }}));
+                  window.__wreCapturingClick=false;
                 }}
                 return {{
                   status:document.getElementById('wre-measure-result').textContent,
                   pressed:toggle.getAttribute('aria-pressed'),
-                  autoRotate:scene.hasAttribute('auto-rotate')
+                  autoRotate:scene.hasAttribute('auto-rotate'),
+                  clicked:window.__wreClickedRaycasts.slice()
                 }};
               """)
+              assert measure_status.get("clicked") and len(measure_status["clicked"]) == 2, measure_status
+              assert math.dist(*measure_status["clicked"]) > 0.001, measure_status
               assert measure_status["pressed"] == "true" and not measure_status["autoRotate"]
-              assert "Relative 3D distance:" in measure_status["status"]
+              assert "Relative 3D distance:" in measure_status["status"], measure_status
               assert "model units (NOT meters" in measure_status["status"]
               displayed_distance = float(
                 measure_status["status"].split("Relative 3D distance: ",1)[1]
@@ -3575,8 +3683,8 @@ jobs:
               assert exported_measurement["model_source"] == "surface"
               assert exported_measurement["metric_scale_known"] is False
               assert exported_measurement["units"] == "model_units"
-              assert exported_measurement["point_a_xyz"] == measure_hits[0]["pos"]
-              assert exported_measurement["point_b_xyz"] == measure_hits[1]["pos"]
+              assert exported_measurement["point_a_xyz"] == measure_status["clicked"][0]
+              assert exported_measurement["point_b_xyz"] == measure_status["clicked"][1]
               assert abs(exported_measurement["distance_model_units"] - displayed_distance) < 0.00001
               assert exported_measurement["distance_model_units"] > 0.0
               assert js("""
@@ -3586,6 +3694,82 @@ jobs:
                   document.getElementById('wre-scene').hasAttribute('auto-rotate') &&
                   document.getElementById('wre-measure-export').disabled;
               """)
+              # Trace a THREE-point polyline on the same real Chrome mesh:
+              # A -> B -> A gives two independent raycast events and two
+              # straight 3D chord segments, not a mesh geodesic.
+              path_status = js(f"""
+                const scene=document.getElementById('wre-scene');
+                const pathButton=document.getElementById('wre-path-toggle');
+                pathButton.click();
+                window.__wreClickedRaycasts=[];
+                for (const p of {json.dumps([measure_hits[0],measure_hits[1],measure_hits[0]])}) {{
+                  const hit=scene.positionAndNormalFromPoint(p.x,p.y);
+                  if (!hit || !hit.position) return {{error:'path click missed surface'}};
+                  window.__wreCapturingClick=true;
+                  scene.dispatchEvent(new MouseEvent('click', {{
+                    bubbles:true, clientX:p.x, clientY:p.y
+                  }}));
+                  window.__wreCapturingClick=false;
+                }}
+                return {{
+                  status:document.getElementById('wre-measure-result').textContent,
+                  pressed:pathButton.getAttribute('aria-pressed'),
+                  enabled:!document.getElementById('wre-measure-export').disabled,
+                  stoppedAutoRotate:!scene.hasAttribute('auto-rotate'),
+                  clicked:window.__wreClickedRaycasts.slice(),
+                  markers:[...scene.querySelectorAll('.wre-pick-marker')].map(m => ({{
+                    slot:m.getAttribute('slot'),
+                    position:m.dataset.position,
+                    label:m.textContent
+                  }}))
+                }};
+              """)
+              assert path_status.get("clicked") and len(path_status["clicked"]) == 3, path_status
+              assert len(path_status["markers"]) == 3, path_status
+              for index, marker in enumerate(path_status["markers"], start=1):
+                  assert marker["slot"] == f"hotspot-wre-pick-{index}", marker
+                  assert marker["label"] == str(index), marker
+                  actual = [float(value) for value in marker["position"].split()]
+                  assert len(actual) == 3 and all(
+                      abs(a - b) < 1e-7 for a, b in zip(
+                          actual, path_status["clicked"][index - 1], strict=True
+                      )
+                  ), marker
+              assert math.dist(path_status["clicked"][0], path_status["clicked"][1]) > 0.001
+              assert path_status["pressed"] == "true"
+              assert path_status["enabled"] and path_status["stoppedAutoRotate"]
+              assert "3D polyline length:" in path_status["status"]
+              assert "2 straight segments; NOT geodesic or meters" in path_status["status"]
+              js("""
+                window.__wreExportedMeasurement = null;
+                document.getElementById('wre-measure-export').click();
+              """)
+              path_json = json.loads(until("return window.__wreExportedMeasurement;"))
+              assert path_json["schema"] == "wre.relative_3d_surface_polyline.v1"
+              assert path_json["model_source"] == "surface"
+              assert path_json["metric_scale_known"] is False
+              assert path_json["units"] == "model_units"
+              assert path_json["surface_geodesic"] is False
+              assert path_json["points_xyz"] == path_status["clicked"]
+              expected_segments = [
+                  math.dist(path_status["clicked"][0], path_status["clicked"][1]),
+                  math.dist(path_status["clicked"][1], path_status["clicked"][2])
+              ]
+              assert len(path_json["segment_lengths_model_units"]) == 2
+              assert all(
+                  abs(actual - expected) < 0.000001
+                  for actual, expected in zip(
+                      path_json["segment_lengths_model_units"], expected_segments, strict=True
+                  )
+              )
+              assert abs(path_json["total_length_model_units"] - sum(expected_segments)) < 0.000001
+              assert js("""
+                document.getElementById('wre-path-toggle').click();
+                return document.getElementById('wre-measure-export').disabled &&
+                  document.getElementById('wre-scene').hasAttribute('auto-rotate') &&
+                  document.querySelectorAll('.wre-pick-marker').length === 0;
+              """)
+
               js("""
                 window.__wre3dLoads=0;
                 document.getElementById('wre-scene').addEventListener(
@@ -3671,6 +3855,7 @@ jobs:
                       "local_glb_file_loaded_in_chrome": True,
                       "surface_distance_measured_in_chrome": True,
                       "surface_measurement_export_verified_in_chrome": True,
+                      "surface_polyline_export_verified_in_chrome": True,
                       "surface_reload": True,
                       "webgl_context": True,
                       "input_glb_sha256": expected_hashes,
@@ -3785,6 +3970,8 @@ jobs:
               raise ValueError("Actual Chrome did not measure two real mesh points")
           if receipt.get("surface_measurement_export_verified_in_chrome") is not True:
               raise ValueError("Actual Chrome did not export a nonmetric 3D surface measurement")
+          if receipt.get("surface_polyline_export_verified_in_chrome") is not True:
+              raise ValueError("Actual Chrome did not export a measured multi-point 3D path")
           
           glbs = (
               "wre-real-stereo-cpu-textured.glb",
