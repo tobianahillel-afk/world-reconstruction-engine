@@ -7074,7 +7074,7 @@ jobs:
                   offset = end + 1;
                 }
                 const header = new TextDecoder().decode(raw.subarray(0, offset));
-                const match = /^Pf\n([0-9]+) ([0-9]+)\n-1[.]0\n$/.exec(header);
+                const match = /^Pf\\n([0-9]+) ([0-9]+)\\n-1[.]0\\n$/.exec(header);
                 if (!match) throw Error('Format PFM float32 little endian incorrect');
                 const width = Number(match[1]);
                 const height = Number(match[2]);
@@ -7123,7 +7123,9 @@ jobs:
           comparison.write_text(
               page.replace(anchor,
                   navigation + source_panel + diagnostics + pixel_inspector
-                  + '<p><a href="./wre-real-stereo-cpu-disparity-u16.png" download>'
+                  + '<p><a href="./wre-real-stereo-cpu-disparity-f32.pfm" download>'
+                  'Télécharger la disparité float32 (PFM)</a> · '
+                  '<a href="./wre-real-stereo-cpu-disparity-u16.png" download>'
                   'Télécharger la disparité 16 bits sans perte</a> · '
                   'valeur PNG / 256 = disparité horizontale en pixels, '
                   '0 = invalide ; PAS profondeur métrique.</p>'
@@ -7136,7 +7138,8 @@ jobs:
               "2. Linux/macOS : python3 open-wre-3d.py ; Windows : py -3 open-wre-3d.py\n"
               "3. Le navigateur ouvre automatiquement la galerie locale (127.0.0.1).\n"
               "4. Sélectionnez le visualiseur interactif 3D et ses quatre modes.\n"
-              "5. Téléchargez la disparité PNG 16 bits : valeur/256 = disparité en pixels ;\n"
+              "5. Cliquez sur l'aperçu de disparité pour lire le pixel float32 réel.\n"
+              "   Vous pouvez télécharger PFM ou PNG 16 bits : valeur PNG/256 = disparité ;\n"
               "   0 = pixel invalide. Ne PAS interpréter comme une profondeur en mètres.\n"
               "Tout est local après extraction, sans API payante ni accès Internet.\n"
               "Limites : deux photos statiques ; échelle métrique inconnue ; aucun entraînement GPU/4D.\n",
