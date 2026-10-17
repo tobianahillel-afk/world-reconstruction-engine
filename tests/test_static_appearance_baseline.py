@@ -848,6 +848,7 @@ def test_preflight_has_no_trainer_execution_or_optional_framework_import() -> No
             imported.add(node.module.split(".")[0])
     assert imported <= {
         "__future__",
+        "argparse",
         "ast",
         "dataclasses",
         "hashlib",
