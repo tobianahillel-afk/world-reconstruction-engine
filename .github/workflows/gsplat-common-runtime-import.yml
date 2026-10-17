@@ -839,6 +839,253 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      # This is a separate, actually calibrated benchmark: the prior OpenCV
+      # Aloe JPG sample pair was NOT independently proven to be official
+      # Middlebury view1/view5, so never compare its disparity as ground truth.
+      # Official 2006 documentation defines half-size disp1/2 + dmin.
+      - name: Measure stereo disparity on original Middlebury half-size Aloe GT (CPU)
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$COMMON_PYTHON" - <<'PY'
+          import hashlib
+          import io
+          import json
+          import math
+          import os
+          import struct
+          import time
+          import urllib.error
+          import urllib.request
+          import zipfile
+          from pathlib import Path
+
+          import cv2
+          import numpy as np
+
+          archive_url = (
+              "https://vision.middlebury.edu/stereo/data/scenes2006/"
+              "HalfSize/zip-2views/Aloe-2views.zip"
+          )
+          # 1.4 MiB official ZIP; bound both transport and uncompressed data.
+          for attempt in range(3):
+              try:
+                  with urllib.request.urlopen(archive_url, timeout=45) as response:
+                      archive_bytes = response.read(3_000_001)
+                  break
+              except (urllib.error.URLError, TimeoutError):
+                  if attempt == 2:
+                      raise
+                  time.sleep(2 * (attempt + 1))
+          assert 0 < len(archive_bytes) <= 3_000_000
+          archive_sha256 = hashlib.sha256(archive_bytes).hexdigest()
+          # First actual GitHub Actions benchmark run 38988336781 published
+          # the official ZIP digest in JSON artifact 12083948530.
+          assert archive_sha256 == (
+              "f333f7521b708bd1103ff905d9cbe7884c46739d797c7fd796818a4872e76ce5"
+          ), "official Middlebury archive changed"
+          with zipfile.ZipFile(io.BytesIO(archive_bytes)) as archive:
+              infos = [item for item in archive.infolist() if not item.is_dir()]
+              assert 4 <= len(infos) <= 16
+              assert sum(item.file_size for item in infos) <= 16_000_000
+
+              def read_member(name):
+                  matches = [
+                      item for item in infos
+                      if item.filename.replace("\\", "/").split("/")[-1] == name
+                  ]
+                  assert len(matches) == 1, (name, len(matches))
+                  with archive.open(matches[0]) as stream:
+                      data = stream.read(8_000_001)
+                  assert 0 < len(data) <= 8_000_000
+                  return data
+
+              left_bytes = read_member("view1.png")
+              right_bytes = read_member("view5.png")
+              gt_bytes = read_member("disp1.png")
+              dmin_bytes = read_member("dmin.txt")
+          assert hashlib.sha256(left_bytes).hexdigest() == (
+              "9c055b7dd4084ae58d388159649045552d146d0cc507bc4e8d900f75e233cec3"
+          )
+          assert hashlib.sha256(right_bytes).hexdigest() == (
+              "203d6e855ed055043f8361838ba8211700ec29b5775145990c5101dbbe26b2de"
+          )
+          assert hashlib.sha256(gt_bytes).hexdigest() == (
+              "fde8cfcf3d6d66a032f0096ffc112fda03f15b0d4bc43a5c4a8f1c5d29cd82c3"
+          )
+          assert hashlib.sha256(dmin_bytes).hexdigest() == (
+              "c730812f002668e7c68d8c0a2f2c4d96f430b9364ec4928329ddd2f25e0f1534"
+          )
+
+          left = cv2.imdecode(np.frombuffer(left_bytes, np.uint8), cv2.IMREAD_COLOR)
+          right = cv2.imdecode(np.frombuffer(right_bytes, np.uint8), cv2.IMREAD_COLOR)
+          groundtruth = cv2.imdecode(np.frombuffer(gt_bytes, np.uint8), cv2.IMREAD_UNCHANGED)
+          assert left is not None and right is not None and groundtruth is not None
+          assert left.shape == right.shape and left.shape[:2] == groundtruth.shape
+          assert groundtruth.ndim == 2 and groundtruth.dtype == np.uint8
+          height, width = groundtruth.shape
+          assert 500 <= height <= 600 and 600 <= width <= 750
+          dmin = float(dmin_bytes.decode("ascii").strip())
+          assert math.isfinite(dmin) and 0 <= dmin < width / 2
+
+          # Per official 2006 Middlebury spec, half-size encoded disparity
+          # intensity / 2, plus the crop offset dmin; zero is UNKNOWN, not 0 px.
+          reference = groundtruth.astype(np.float32) / 2.0 + dmin
+          known = groundtruth > 0
+          min_disparity = max(0, math.floor(dmin) - 16)
+          matcher = cv2.StereoSGBM_create(
+              minDisparity=min_disparity,
+              numDisparities=160,
+              blockSize=5,
+              P1=8 * 3 * 25,
+              P2=32 * 3 * 25,
+              uniquenessRatio=10,
+              speckleWindowSize=50,
+              speckleRange=2,
+          )
+          left_gray = cv2.cvtColor(left, cv2.COLOR_BGR2GRAY)
+          right_gray = cv2.cvtColor(right, cv2.COLOR_BGR2GRAY)
+          predicted = matcher.compute(left_gray, right_gray).astype(np.float32) / 16.0
+          evaluated = known & np.isfinite(predicted) & (predicted >= min_disparity)
+          count = int(np.count_nonzero(evaluated))
+          assert count > 1000, count
+          delta = np.abs(predicted[evaluated] - reference[evaluated])
+          # Compare an EXISTING second OpenCV solver, not a new matcher or a
+          # reference-fitted correction. Both share the published dmin prior.
+          bm = cv2.StereoBM_create(numDisparities=160, blockSize=15)
+          bm.setMinDisparity(min_disparity)
+          bm_predicted = bm.compute(left_gray, right_gray).astype(np.float32) / 16.0
+          bm_evaluated = known & np.isfinite(bm_predicted) & (bm_predicted >= min_disparity)
+          bm_count = int(np.count_nonzero(bm_evaluated))
+          bm_delta = np.abs(bm_predicted[bm_evaluated] - reference[bm_evaluated])
+          # Do not choose either solver by fitting to the test reference.
+          # Report both independently; the default geometry stays SGBM.
+          # Reconstruct a bounded, VIEWABLE RGB PLY from estimated pixels,
+          # NOT from the reference disparity values. Middlebury publishes
+          # 3740px focal at FullSize and 160mm view1-to-view5 baseline;
+          # HalfSize focal is 1870px. Assume centered principal point
+          # (not provided), so exact XY calibration is not established.
+          focal_px = 3740.0 / 2.0
+          baseline_mm = 160.0
+          # Never use the ground-truth visibility mask to select 3D points:
+          # that would leak evaluation labels into the reconstructed model.
+          reconstructed = np.isfinite(predicted) & (predicted >= min_disparity)
+          reconstructed &= predicted > 0.0
+          reconstructed_count = int(np.count_nonzero(reconstructed))
+          assert reconstructed_count > 1000
+          chosen = np.flatnonzero(reconstructed)[
+              ::max(1, math.ceil(reconstructed_count / 60_000))
+          ]
+          yy, xx = np.unravel_index(chosen, predicted.shape)
+          d = predicted[yy, xx].astype(np.float64)
+          depth_mm = focal_px * baseline_mm / d
+          points = np.column_stack((
+              (xx - (width - 1) / 2.0) * depth_mm / focal_px,
+              (yy - (height - 1) / 2.0) * depth_mm / focal_px,
+              depth_mm,
+          )).astype(np.float32)
+          rgb = cv2.cvtColor(left, cv2.COLOR_BGR2RGB)[yy, xx]
+          assert 1000 < len(points) <= 60_000
+          assert np.isfinite(points).all() and np.all(points[:, 2] > 0)
+          ply_header = (
+              "ply\nformat binary_little_endian 1.0\n"
+              f"element vertex {len(points)}\n"
+              "property float x\nproperty float y\nproperty float z\n"
+              "property uchar red\nproperty uchar green\nproperty uchar blue\n"
+              "end_header\n"
+          ).encode("ascii")
+          ply_path = Path(os.environ["RUNNER_TEMP"]) / "wre-middlebury-half-aloe-cpu-3d.ply"
+          with ply_path.open("wb") as out:
+              out.write(ply_header)
+              for xyz, color in zip(points, rgb, strict=True):
+                  out.write(struct.pack(
+                      "<3f3B", float(xyz[0]), float(xyz[1]), float(xyz[2]),
+                      int(color[0]), int(color[1]), int(color[2]),
+                  ))
+          assert ply_path.stat().st_size == len(ply_header) + 15 * len(points)
+          with ply_path.open("rb") as inspect:
+              assert inspect.read(len(ply_header)) == ply_header
+              first = struct.unpack("<3f3B", inspect.read(15))
+              assert np.allclose(first[:3], points[0], atol=0, rtol=0)
+              assert tuple(first[3:]) == tuple(int(v) for v in rgb[0])
+
+          report = {
+              "benchmark": "Middlebury 2006 HalfSize Aloe view1/view5 disp1",
+              "official_source": archive_url,
+              "source_zip_sha256_observed": archive_sha256,
+              "source_zip_pinned_sha256": True,
+              "image_pair_sha256": [
+                  hashlib.sha256(left_bytes).hexdigest(),
+                  hashlib.sha256(right_bytes).hexdigest(),
+              ],
+              "reference_disp1_sha256": hashlib.sha256(gt_bytes).hexdigest(),
+              "dmin_txt_sha256": hashlib.sha256(dmin_bytes).hexdigest(),
+              "image_height_width": [height, width],
+              "dmin_crop_disparity_px": dmin,
+              "reference_zero_means_unknown": True,
+              "halfsize_reference_encoding": "disp1_png_value/2 + dmin",
+              "algorithm": "OpenCV StereoSGBM CPU independent pair",
+              "matcher_min_disparity": min_disparity,
+              "matcher_num_disparities": 160,
+              "rgb_3d_ply_name": ply_path.name,
+              "rgb_3d_point_count": int(len(points)),
+              "rgb_3d_valid_predicted_pixels": reconstructed_count,
+              "rgb_3d_uses_groundtruth_visibility_mask": False,
+              "rgb_3d_coordinate_units": "estimated millimeters under official f/b and centered-cx-cy",
+              "focal_px_halfsize": focal_px,
+              "stereo_baseline_mm_official": baseline_mm,
+              "principal_point_is_assumed_center": True,
+              "groundtruth_known_pixels": int(np.count_nonzero(known)),
+              "overlapping_valid_pixels": count,
+              "coverage_of_groundtruth": count / int(np.count_nonzero(known)),
+              "disparity_mae_px": float(np.mean(delta)),
+              "stereo_bm_model": "OpenCV StereoBM independent CPU comparison",
+              "stereo_bm_valid_overlap_pixels": bm_count,
+              "stereo_bm_valid_reference_coverage": (
+                  bm_count / int(np.count_nonzero(known))
+              ),
+              "stereo_bm_mae_px": float(np.mean(bm_delta)) if bm_count else None,
+              "stereo_bm_rmse_px": (
+                  float(np.sqrt(np.mean(bm_delta * bm_delta))) if bm_count else None
+              ),
+              "stereo_bm_bad_gt_2px_fraction": (
+                  float(np.mean(bm_delta > 2.0)) if bm_count else None
+              ),
+              "groundtruth_used_for_solver_selection": False,
+              "disparity_rmse_px": float(np.sqrt(np.mean(delta * delta))),
+              "bad_gt_1px_fraction": float(np.mean(delta > 1.0)),
+              "bad_gt_2px_fraction": float(np.mean(delta > 2.0)),
+              "photographs_are_real": True,
+              "actual_gpu_execution": False,
+              "trained_gaussian_appearance": False,
+              "metric_3d_reconstruction_validated": False,
+          }
+          destination = Path(os.environ["RUNNER_TEMP"]) / "wre-middlebury-half-aloe-gt.json"
+          destination.write_text(json.dumps(report, sort_keys=True, indent=2) + "\n")
+          print(json.dumps(report, sort_keys=True))
+          PY
+
+      - name: Stage the measured stereo report and actual RGB 3D PLY
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle="$RUNNER_TEMP/wre-middlebury-aloe-quality-bundle"
+          mkdir -p "$bundle"
+          for name in wre-middlebury-half-aloe-gt.json wre-middlebury-half-aloe-cpu-3d.ply; do
+            test -s "$RUNNER_TEMP/$name"
+            cp "$RUNNER_TEMP/$name" "$bundle/$name"
+            test -s "$bundle/$name"
+          done
+          test "$(find "$bundle" -maxdepth 1 -type f | wc -l)" -eq 2
+
+      - name: Publish independently measured Middlebury stereo quality and RGB 3D
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wre-middlebury-aloe-official-gt-cpu-quality
+          path: ${{ runner.temp }}/wre-middlebury-aloe-quality-bundle/
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Build BOTH upstream CUDA extensions into the SAME Python interpreter
         shell: bash
         run: |
