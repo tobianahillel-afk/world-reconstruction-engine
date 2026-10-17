@@ -1422,6 +1422,38 @@ jobs:
               json.dumps(record, sort_keys=True, indent=2) + "\n"
           )
           assert ply.stat().st_size > 250
+          # Preserve observed 2D/3D tracks: PLY alone loses pixel associations.
+          track_path = root / "wre-real-stereo-sift-observed-tracks.json"
+          tracks = {
+              "source_montage_sha256": hashlib.sha256(
+                  (root / "wre-real-stereo-cpu-photos.png").read_bytes()
+              ).hexdigest(),
+              "estimated_pose_sha256": hashlib.sha256(
+                  (root / "wre-real-stereo-sift-estimated-pose.json").read_bytes()
+              ).hexdigest(),
+              "source_ply_sha256": hashlib.sha256(ply.read_bytes()).hexdigest(),
+              "coordinate_system": "left_camera_opencv_xyz_arbitrary_scale",
+              "image_coordinates": "left_and_right_crop_pixel_xy",
+              "track_count": len(xyz),
+              "left_observed_xy": p0.tolist(),
+              "right_observed_xy": p1.tolist(),
+              "triangulated_xyz": xyz.tolist(),
+              "left_observed_rgb": rgb.tolist(),
+              "left_reprojected_xy": uv0.tolist(),
+              "right_reprojected_xy": uv1.tolist(),
+          }
+          track_path.write_text(
+              json.dumps(tracks, sort_keys=True, allow_nan=False) + "\n", encoding="utf-8"
+          )
+          reloaded = json.loads(track_path.read_text(encoding="utf-8"))
+          assert reloaded["track_count"] == len(xyz) >= 20
+          for name, expected in (
+              ("left_observed_xy", p0), ("right_observed_xy", p1),
+              ("triangulated_xyz", xyz), ("left_observed_rgb", rgb),
+              ("left_reprojected_xy", uv0), ("right_reprojected_xy", uv1),
+          ):
+              assert np.array_equal(np.asarray(reloaded[name]), expected)
+          assert reloaded["source_ply_sha256"] == hashlib.sha256(ply.read_bytes()).hexdigest()
           # Reuse the project glTF 2.0 exporter layout (binary views + JSON chunk).
           # These are REAL SIFT-triangulated photo RGB points, not a synthetic mesh.
           axis = np.diag([1.0, -1.0, -1.0])
@@ -1478,6 +1510,7 @@ jobs:
               "asset": {"version": "2.0", "generator": "WRE actual-photo SIFT CPU",
                         "extras": {"source_ply_sha256": hashlib.sha256(ply.read_bytes()).hexdigest(),
                                    "pose_json_sha256": hashlib.sha256(pose_bytes).hexdigest(),
+                                    "track_json_sha256": hashlib.sha256(track_path.read_bytes()).hexdigest(),
                                    "metric_scale_known": False, "pose_in_sample": True}},
               "scene": 0, "scenes": [{"nodes": [0,1,2,3]}],
               "nodes": [
@@ -1663,12 +1696,13 @@ jobs:
             wre-real-stereo-colmap-handoff.json \
             wre-real-stereo-sift-estimated-3d.ply \
             wre-real-stereo-sift-estimated-pose.json \
-            wre-real-stereo-sift-estimated-cameras.glb
+            wre-real-stereo-sift-estimated-cameras.glb \
+            wre-real-stereo-sift-observed-tracks.json
           do
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 30
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 31
 
       - name: Publish real-photo CPU 3D plus COLMAP before native CUDA builds
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -2685,13 +2719,14 @@ jobs:
             wre-real-stereo-cpu-metrics.json \
             wre-real-stereo-sift-estimated-3d.ply \
             wre-real-stereo-sift-estimated-pose.json \
-            wre-real-stereo-sift-estimated-cameras.glb
+            wre-real-stereo-sift-estimated-cameras.glb \
+            wre-real-stereo-sift-observed-tracks.json
           do
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 46
-          echo "Staged all 46 real PLY/OBJ/GLB/GIF/MTL/PNG/PFM/NPY/JSON/ZIP files for artifact upload"
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 47
+          echo "Staged all 47 real PLY/OBJ/GLB/GIF/MTL/PNG/PFM/NPY/JSON/ZIP files for artifact upload"
 
       - name: Publish CPU COLMAP 3D preview and measured reprojection
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
