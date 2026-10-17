@@ -401,6 +401,31 @@ jobs:
           depth_pfm = write_and_verify_pfm(
               "wre-real-stereo-cpu-depth-model-f32.pfm", depth_field
           )
+          # Portable lossless 16-bit grayscale depth-input interchange.
+          # Value 0 = no observed correspondence; positive values encode
+          # SGBM horizontal disparity in pixels multiplied by 256.
+          # This is NOT depth in metres, and must not be used as a metric map.
+          disparity_u16_name = "wre-real-stereo-cpu-disparity-u16.png"
+          disparity_u16 = np.where(
+              valid, np.rint(disparity_field * 256.0), 0
+          ).astype(np.uint16)
+          assert np.array_equal(disparity_u16 > 0, valid)
+          portable_disparity = Path(os.environ["RUNNER_TEMP"]) / disparity_u16_name
+          assert cv2.imwrite(str(portable_disparity), disparity_u16)
+          restored_disparity = cv2.imread(
+              str(portable_disparity), cv2.IMREAD_UNCHANGED
+          )
+          assert restored_disparity is not None
+          assert restored_disparity.dtype == np.uint16
+          assert restored_disparity.shape == (height, width)
+          assert np.array_equal(restored_disparity, disparity_u16)
+          assert np.all(
+              np.abs(restored_disparity[valid].astype(np.float32) / 256.0
+                     - disparity_field[valid]) <= 1.0 / 512.0 + 1e-6
+          )
+          disparity_u16_sha256 = hashlib.sha256(
+              portable_disparity.read_bytes()
+          ).hexdigest()
           principal_x, principal_y = (width - 1) / 2.0, (height - 1) / 2.0
           yy_selected, xx_selected = np.where(valid[::3, ::3])
           yy_selected *= 3
@@ -1197,6 +1222,11 @@ jobs:
               "baseline_model_units_arbitrary": baseline_gauge,
               "approximate_focal_pixels": focal_guess,
               "dense_disparity_float32_pfm": disparity_pfm,
+              "dense_disparity_uint16_png": disparity_u16_name,
+              "dense_disparity_uint16_png_sha256": disparity_u16_sha256,
+              "dense_disparity_uint16_units_per_pixel": 256,
+              "dense_disparity_uint16_invalid_value": 0,
+              "dense_disparity_uint16_metric_scale_known": False,
               "dense_depth_float32_pfm": depth_pfm,
               "dense_pfm_invalid_pixel_value": 0.0,
               "dense_depth_pfm_units": "arbitrary baseline=1, not metres",
@@ -2000,6 +2030,9 @@ jobs:
               <a href="./wre-real-stereo-cpu-photometric-consistent.glb" download>Download filtered points GLB</a>
               <a href="./wre-real-stereo-sift-estimated-cameras.glb" download>Download SIFT/cameras GLB</a>
               <a href="./wre-real-stereo-sift-colmap-dataset.zip" download>Download COLMAP dataset</a>
+              <a href="./wre-real-stereo-cpu-disparity-u16.png" download>Download lossless 16-bit disparity PNG</a>
+              <span>Disparity PNG: uint16 pixel value / 256 = horizontal disparity in pixels;
+                zero means invalid. NOT metric depth.</span>
               <label for="wre-local-glb">Open your own GLB:</label>
               <input id="wre-local-glb" type="file" accept=".glb,model/gltf-binary"
                 aria-label="Open a local GLB model (max 250 MB)">
@@ -3607,6 +3640,7 @@ jobs:
             wre-real-stereo-cpu-disparity.png \
             wre-real-stereo-cpu-disparity-f32.pfm \
             wre-real-stereo-cpu-depth-model-f32.pfm \
+            wre-real-stereo-cpu-disparity-u16.png \
             wre-real-stereo-cpu-lr-consistency.png \
             wre-real-stereo-cpu-photos.png \
             wre-real-stereo-cpu-novel-views.png \
@@ -3626,7 +3660,7 @@ jobs:
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 39
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 40
 
       - name: Publish real-photo CPU 3D plus COLMAP before native CUDA builds
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -4710,6 +4744,7 @@ jobs:
             wre-real-stereo-cpu-disparity.png \
             wre-real-stereo-cpu-disparity-f32.pfm \
             wre-real-stereo-cpu-depth-model-f32.pfm \
+            wre-real-stereo-cpu-disparity-u16.png \
             wre-real-stereo-cpu-lr-consistency.png \
             wre-real-stereo-cpu-photos.png \
             wre-real-stereo-cpu-novel-views.png \
@@ -4727,8 +4762,8 @@ jobs:
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 53
-          echo "Staged all 53 real assets including local model-viewer JS and Apache license"
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 54
+          echo "Staged all 54 real assets including portable disparity and local model-viewer JS"
 
       - name: Publish CPU COLMAP 3D preview and measured reprojection
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -6884,6 +6919,26 @@ jobs:
           }:
               raise ValueError("Original stereo photographs have different provenance")
           input_sha256 = hashlib.sha256(input_png).hexdigest()
+          # Verify the exact same-run, lossless data product BEFORE archiving.
+          portable_name = provenance["dense_disparity_uint16_png"]
+          if portable_name != "wre-real-stereo-cpu-disparity-u16.png":
+              raise ValueError("Unrecognized 16-bit disparity product")
+          portable = (bundle / portable_name).read_bytes()
+          if (len(portable) < 33 or portable[:16] != bytes.fromhex(
+              "89504e470d0a1a0a0000000d49484452"
+          )):
+              raise ValueError("Missing PNG-16 disparity payload")
+          png_width, png_height = struct.unpack_from(">II", portable, 16)
+          if (png_width, png_height) != (width, height) or portable[24:26] != bytes((16, 0)):
+              raise ValueError("Disparity PNG is not 16-bit grayscale at source resolution")
+          if (
+              provenance["dense_disparity_uint16_units_per_pixel"] != 256
+              or provenance["dense_disparity_uint16_invalid_value"] != 0
+              or provenance["dense_disparity_uint16_metric_scale_known"] is not False
+              or hashlib.sha256(portable).hexdigest() !=
+              provenance["dense_disparity_uint16_png_sha256"]
+          ):
+              raise ValueError("Portable disparity scaling/provenance mismatch")
           raw_names = {
               "aloeL.jpg": "wre-original-aloeL.jpg",
               "aloeR.jpg": "wre-original-aloeR.jpg",
@@ -6939,7 +6994,14 @@ jobs:
               '</figcaption></figure></details>'
           )
           comparison.write_text(
-              page.replace(anchor, navigation + source_panel + anchor), encoding="utf-8"
+              page.replace(anchor,
+                  navigation + source_panel
+                  + '<p><a href="./wre-real-stereo-cpu-disparity-u16.png" download>'
+                  'Télécharger la disparité 16 bits sans perte</a> · '
+                  'valeur PNG / 256 = disparité horizontale en pixels, '
+                  '0 = invalide ; PAS profondeur métrique.</p>'
+                  + anchor),
+              encoding="utf-8",
           )
           (bundle / "README-OPEN-OFFLINE-3D.txt").write_text(
               "WRE — 3D depuis deux photographies réelles (CPU)\n"
@@ -7005,6 +7067,10 @@ jobs:
               "source_stereo_photo_png": input_name,
               "source_stereo_photo_png_sha256": input_sha256,
               "source_stereo_photo_dimensions": [input_width, input_height],
+              "portable_disparity_png": portable_name,
+              "portable_disparity_sha256": provenance["dense_disparity_uint16_png_sha256"],
+              "portable_disparity_units_per_pixel": 256,
+              "portable_disparity_metric_scale_known": False,
               "source_stereo_jpeg_git_blobs": source_blobs,
               "chrome_png_sha256": png_hashes,
               "camera_tour_storyboard_png": "real-stereo-3d-camera-storyboard.png",
