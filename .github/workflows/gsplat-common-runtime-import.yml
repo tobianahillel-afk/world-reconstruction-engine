@@ -7051,6 +7051,9 @@ jobs:
           Cliquez sur l'aperçu de disparité pour afficher une valeur observée
           (pixels), et une profondeur relative (unités de modèle, PAS mètres).
           </p>
+          <button type="button" id="wre-pixel-native-zoom" aria-pressed="false">
+            Inspection précise : afficher la disparité à 100% (un pixel source par pixel écran)
+          </button>
           <figure id="wre-stereo-match" style="margin:12px 0;max-width:960px">
             <div style="position:relative">
               <img id="wre-stereo-match-photos" loading="eager"
@@ -7070,6 +7073,15 @@ jobs:
             const status = document.getElementById('wre-pixel-inspector');
             const photos = document.getElementById('wre-stereo-match-photos');
             const overlay = document.getElementById('wre-stereo-match-overlay');
+            const zoom = document.getElementById('wre-pixel-native-zoom');
+            zoom.addEventListener('click', () => {
+              const enabled = zoom.getAttribute('aria-pressed') !== 'true';
+              if (enabled && !picture.naturalWidth) return;
+              zoom.setAttribute('aria-pressed', String(enabled));
+              picture.style.width = enabled ? picture.naturalWidth + 'px' : '100%';
+              picture.style.maxWidth = enabled ? 'none' : '100%';
+              picture.closest('figure').style.overflowX = enabled ? 'auto' : '';
+            });
             picture.style.cursor = 'crosshair';
             picture.title = 'Cliquez pour inspecter la disparité réelle à ce pixel';
             let loading = null;
