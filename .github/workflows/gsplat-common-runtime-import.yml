@@ -1260,6 +1260,105 @@ jobs:
               )
               check.seek(0, os.SEEK_END)
               assert check.tell() == expected_bytes
+          # Reuse the already exercised in-workflow glTF/GLB representation:
+          # real stereo vertices, observed left-photo texels, no GT in geometry.
+          glb_name = "wre-middlebury-half-aloe-cpu-textured-mesh.glb"
+          gltf_xyz = np.column_stack((
+              mesh_vertices["x"], mesh_vertices["y"], mesh_vertices["z"]
+          )).astype("<f4")
+          gltf_xyz[:, 1:] *= -1.0  # camera Y-down/Z-forward -> glTF Y-up/-Z-forward
+          gltf_uv = np.ascontiguousarray(
+              np.column_stack((
+                  (x_mesh + 0.5) / float(width),
+                  (y_mesh + 0.5) / float(height),
+              )), dtype="<f4",
+          )
+          gltf_indices = np.ascontiguousarray(triangles, dtype="<u4").reshape(-1)
+          assert len(gltf_xyz) == len(gltf_uv) == vertex_count
+          assert len(gltf_indices) == 3 * len(triangles)
+          assert np.all(gltf_indices < vertex_count)
+          assert np.all((gltf_uv > 0.0) & (gltf_uv < 1.0))
+          encoded_ok, encoded = cv2.imencode(".png", left)
+          assert encoded_ok
+          photo_png = encoded.tobytes()
+          assert photo_png.startswith(b"\x89PNG\r\n\x1a\n")
+          glb_bin, glb_views = bytearray(), []
+          for data, target in (
+              (gltf_xyz.tobytes(), 34962), (gltf_uv.tobytes(), 34962),
+              (gltf_indices.tobytes(), 34963), (photo_png, None),
+          ):
+              offset = len(glb_bin)
+              glb_bin.extend(data)
+              glb_bin.extend(b"\0" * (-len(glb_bin) % 4))
+              view = {"buffer": 0, "byteOffset": offset, "byteLength": len(data)}
+              if target is not None:
+                  view["target"] = target
+              glb_views.append(view)
+          document = {
+              "asset": {"version": "2.0", "generator": "WRE Middlebury stereo CPU"},
+              "scene": 0, "scenes": [{"nodes": [0]}],
+              "nodes": [{"mesh": 0, "name": "Observed Middlebury stereo mesh"}],
+              "meshes": [{"primitives": [{
+                  "attributes": {"POSITION": 0, "TEXCOORD_0": 1},
+                  "indices": 2, "material": 0, "mode": 4,
+              }]}],
+              "materials": [{
+                  "name": "Observed left photo", "doubleSided": True,
+                  "pbrMetallicRoughness": {
+                      "baseColorTexture": {"index": 0},
+                      "metallicFactor": 0, "roughnessFactor": 1,
+                  },
+                  "extensions": {"KHR_materials_unlit": {}},
+              }],
+              "extensionsUsed": ["KHR_materials_unlit"],
+              "textures": [{"sampler": 0, "source": 0}],
+              "samplers": [{"magFilter": 9729, "minFilter": 9729}],
+              "images": [{"bufferView": 3, "mimeType": "image/png"}],
+              "buffers": [{"byteLength": len(glb_bin)}],
+              "bufferViews": glb_views,
+              "accessors": [
+                  {"bufferView": 0, "componentType": 5126, "count": vertex_count,
+                   "type": "VEC3", "min": gltf_xyz.min(axis=0).tolist(),
+                   "max": gltf_xyz.max(axis=0).tolist()},
+                  {"bufferView": 1, "componentType": 5126, "count": vertex_count,
+                   "type": "VEC2"},
+                  {"bufferView": 2, "componentType": 5125,
+                   "count": len(gltf_indices), "type": "SCALAR"},
+              ],
+          }
+          json_chunk = json.dumps(document, separators=(",", ":")).encode("utf-8")
+          json_chunk += b" " * (-len(json_chunk) % 4)
+          glb_bytes = (
+              struct.pack("<4sII", b"glTF", 2, 12 + 8 + len(json_chunk) + 8 + len(glb_bin))
+              + struct.pack("<I4s", len(json_chunk), b"JSON") + json_chunk
+              + struct.pack("<I4s", len(glb_bin), b"BIN\0") + glb_bin
+          )
+          glb_path = Path(os.environ["RUNNER_TEMP"]) / glb_name
+          glb_path.write_bytes(glb_bytes)
+          # Check serialized vertices, triangles and photo image, not just header.
+          saved_glb = glb_path.read_bytes()
+          assert struct.unpack_from("<4sII", saved_glb) == (b"glTF", 2, len(saved_glb))
+          json_size, json_kind = struct.unpack_from("<I4s", saved_glb, 12)
+          assert json_kind == b"JSON"
+          readback = json.loads(saved_glb[20:20 + json_size])
+          binary_start = 20 + json_size
+          binary_size, binary_kind = struct.unpack_from("<I4s", saved_glb, binary_start)
+          assert binary_kind == b"BIN\0"
+          assert binary_start + 8 + binary_size == len(saved_glb)
+          assert readback["accessors"][0]["count"] == vertex_count
+          assert readback["accessors"][2]["count"] == len(triangles) * 3
+          binary = saved_glb[binary_start + 8:]
+          for view, expected in zip(
+              readback["bufferViews"],
+              (gltf_xyz.tobytes(), gltf_uv.tobytes(),
+               gltf_indices.tobytes(), photo_png),
+          ):
+              offset = view["byteOffset"]
+              assert binary[offset:offset + view["byteLength"]] == expected
+          assert np.array_equal(
+              cv2.imdecode(np.frombuffer(photo_png, dtype=np.uint8), cv2.IMREAD_COLOR),
+              left,
+          )
           print(
               f"Actual-photo stereo mesh: {vertex_count} RGB vertices, "
               f"{len(triangles)} triangles, no GT-guided reconstruction."
@@ -1382,6 +1481,13 @@ jobs:
               "dense_rgb_mesh_triangles": int(len(triangles)),
               "dense_rgb_mesh_neighbor_max_relative_depth_jump": 0.02,
               "dense_rgb_mesh_sha256": hashlib.sha256(mesh_path.read_bytes()).hexdigest(),
+              "dense_textured_glb_name": glb_path.name,
+              "dense_textured_glb_sha256": hashlib.sha256(saved_glb).hexdigest(),
+              "dense_textured_glb_vertices": vertex_count,
+              "dense_textured_glb_triangles": int(len(triangles)),
+              "dense_textured_glb_uses_observed_left_image": True,
+              "dense_textured_glb_uses_groundtruth_for_model": False,
+              "dense_textured_glb_calibrated_world_coordinates": False,
               "dense_rgb_mesh_uses_groundtruth_visibility_mask": False,
               "dense_rgb_mesh_calibrated_world_coordinates": False,
               "dense_depth_map_name": depth_output.name,
@@ -1443,13 +1549,14 @@ jobs:
             wre-middlebury-half-aloe-cpu-hh4-3d.ply \
             wre-middlebury-half-aloe-cpu-depth-mm.npy \
             wre-middlebury-half-aloe-cpu-rgb-mesh.ply \
+            wre-middlebury-half-aloe-cpu-textured-mesh.glb \
             wre-middlebury-half-aloe-stereo-diagnostics.png
           do
             test -s "$RUNNER_TEMP/$name"
             cp "$RUNNER_TEMP/$name" "$bundle/$name"
             test -s "$bundle/$name"
           done
-          test "$(find "$bundle" -maxdepth 1 -type f | wc -l)" -eq 8
+          test "$(find "$bundle" -maxdepth 1 -type f | wc -l)" -eq 9
 
       - name: Publish independently measured Middlebury stereo quality and RGB 3D
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
