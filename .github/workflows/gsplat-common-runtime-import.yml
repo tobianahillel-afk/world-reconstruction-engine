@@ -532,6 +532,7 @@ jobs:
         run: |
           set -euo pipefail
           "$COMMON_PYTHON" - <<'PY'
+          import hashlib
           import json
           import os
           import struct
@@ -1221,7 +1222,7 @@ jobs:
           for payload in (rgb_positions.tobytes(), rgb_colors.tobytes()):
               offset = len(glb_binary)
               glb_binary.extend(payload)
-              glb_binary.extend(b"\\0" * (-len(glb_binary) % 4))
+              glb_binary.extend(b"\0" * (-len(glb_binary) % 4))
               glb_views.append({
                   "buffer": 0, "byteOffset": offset,
                   "byteLength": len(payload), "target": 34962,
@@ -1270,7 +1271,7 @@ jobs:
                   12 + 8 + len(glb_json) + 8 + len(glb_binary),
               )
               + struct.pack("<I4s", len(glb_json), b"JSON") + glb_json
-              + struct.pack("<I4s", len(glb_binary), b"BIN\\0") + glb_binary
+              + struct.pack("<I4s", len(glb_binary), b"BIN\0") + glb_binary
           )
           four_glb_path = output / "wre-sift-four-view-rgb.glb"
           four_glb_path.write_bytes(glb_data)
@@ -1285,7 +1286,7 @@ jobs:
           assert decoded_glb["accessors"][1]["normalized"] is True
           bin_header = 20 + json_length
           bin_length, bin_type = struct.unpack_from("<I4s", reopened_glb, bin_header)
-          assert bin_type == b"BIN\\0"
+          assert bin_type == b"BIN\0"
           assert bin_header + 8 + bin_length == len(reopened_glb)
           raw_glb = reopened_glb[bin_header + 8:]
           for view, expected in zip(
