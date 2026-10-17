@@ -357,7 +357,7 @@ jobs:
               "registered_images": model.num_registered_images,
               "sparse_points": model.num_points3d,
           "exported_rgb_points": exported_points,
-          "excluded_unobserved_points": model.num_points3d - exported_points,
+          "excluded_uncolorable_points": model.num_points3d - exported_points,
               "source_sparse_identity_sha256": canonical.source_model_identity_sha256.value,
               "source_geometry_id": canonical.geometry_solution.geometry_solution_id.value,
               "scale_status": canonical.geometry_solution.scale_status.value,

@@ -2445,9 +2445,7 @@ def export_verified_colmap_observed_rgb_ply(
         point = native.point3D(point_id)
         xyz = tuple(float(v) for v in point.xyz)
         if len(xyz) != 3 or any(not math.isfinite(v) for v in xyz):
-            raise GsplatStaticAppearancePreflightError(
-                "COLMAP sparse point has invalid XYZ"
-            )
+            raise GsplatStaticAppearancePreflightError("COLMAP sparse point has invalid XYZ")
         if xyz != canonical.point_map.positions_xyz[position]:
             raise GsplatStaticAppearancePreflightError(
                 "COLMAP sparse point differs from canonical WRE geometry"
@@ -2482,18 +2480,12 @@ def export_verified_colmap_observed_rgb_ply(
                     "COLMAP point observation is outside the original PNG"
                 )
             offset = (y * width + x) * 3
-            sampled.append(
-                (image.name, pixels[offset], pixels[offset + 1], pixels[offset + 2])
-            )
+            sampled.append((image.name, pixels[offset], pixels[offset + 1], pixels[offset + 2]))
         # Point3D geometry is already bound to exact native SfM.
         # Its observed color requires one reciprocal pixel, not a second solve.
-        if len({item[0] for item in sampled}) != len(sampled):
-            raise GsplatStaticAppearancePreflightError(
-                "COLMAP point track repeats a source observation"
-            )
-        if not sampled:
-            # Keep geometry in its original native model; do not invent RGB.
-            # One uncolorable native point must not suppress all valid output.
+        if not sampled or len({item[0] for item in sampled}) != len(sampled):
+            # Only export points with unambiguous reciprocal native RGB samples.
+            # Leave uncolorable geometry in the audited COLMAP model, not in RGB.
             continue
         _, red, green, blue = min(sampled)
         try:
@@ -2514,7 +2506,7 @@ def export_verified_colmap_observed_rgb_ply(
         "comment wre_metric_scale_known false\n"
         "comment wre_color_source original_srgb8_feature_observation\n"
         f"comment wre_native_source_points {point_count}\n"
-        f"comment wre_excluded_unobserved_points {point_count - colored_count}\n"
+        f"comment wre_excluded_uncolorable_points {point_count - colored_count}\n"
         f"element vertex {colored_count}\n"
         "property float x\nproperty float y\nproperty float z\n"
         "property uchar red\nproperty uchar green\nproperty uchar blue\nend_header\n"

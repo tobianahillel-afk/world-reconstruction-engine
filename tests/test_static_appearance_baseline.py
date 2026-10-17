@@ -1792,8 +1792,12 @@ def test_colmap_observed_ply_refuses_model_with_no_colorable_native_point(
     target = tmp_path / "must-not-exist.ply"
     with pytest.raises(GsplatStaticAppearancePreflightError, match="no points"):
         baseline_module.export_verified_colmap_observed_rgb_ply(
-            request, source, features=features,
-            expected_environment=environment, module=module, preview_path=target,
+            request,
+            source,
+            features=features,
+            expected_environment=environment,
+            module=module,
+            preview_path=target,
         )
     assert not target.exists()
 
