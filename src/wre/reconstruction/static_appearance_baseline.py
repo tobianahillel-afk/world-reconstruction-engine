@@ -7,6 +7,7 @@ exposure consistency, the exact external environment and real GPU execution.
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
 import math
@@ -1706,6 +1707,63 @@ class GsplatStaticAppearanceTrainingProfile:
         """Exact upstream export location at the last 0-based training step."""
 
         return f"ply/point_cloud_{self.max_steps - 1}.ply"
+
+
+def verify_gsplat_reference_trainer_config_fields(
+    source_root: Path,
+    profile: GsplatStaticAppearanceTrainingProfile,
+) -> tuple[str, ...]:
+    """Check actual pinned trainer Config fields without importing or running it.
+
+    This is a source-schema gate, not an ABI, CUDA or training execution check.
+    It prevents a future external runner from silently dropping a misspelled
+    WRE override when constructing the exact reference trainer's Config.
+    """
+
+    if not isinstance(source_root, Path):
+        raise TypeError("gsplat trainer source_root must be pathlib.Path")
+    if not isinstance(profile, GsplatStaticAppearanceTrainingProfile):
+        raise TypeError("gsplat training profile must be GsplatStaticAppearanceTrainingProfile")
+    verify_gsplat_static_appearance_reference_sources(source_root)
+    source_file = (
+        _safe_root(source_root, "gsplat trainer source_root") / "examples/simple_trainer.py"
+    )
+    payload = source_file.read_bytes()
+    pinned = next(
+        (size, blob)
+        for path, size, blob in _GSPLAT_REFERENCE_SOURCE_FILES
+        if path == "examples/simple_trainer.py"
+    )
+    if len(payload) != pinned[0] or _git_blob_sha1(payload) != pinned[1]:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat trainer source changed before Config schema verification"
+        )
+    try:
+        parsed = ast.parse(payload, filename="examples/simple_trainer.py")
+    except (SyntaxError, ValueError) as exc:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat trainer has an invalid Config source"
+        ) from exc
+    configs = [
+        node for node in parsed.body if isinstance(node, ast.ClassDef) and node.name == "Config"
+    ]
+    if len(configs) != 1 or not any(
+        isinstance(dec, ast.Name) and dec.id == "dataclass" for dec in configs[0].decorator_list
+    ):
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat trainer does not declare the expected dataclass Config"
+        )
+    fields = {
+        node.target.id
+        for node in configs[0].body
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name)
+    }
+    overrides = set(profile.reference_overrides())
+    if not overrides <= fields:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat trainer Config lacks reviewed WRE override fields"
+        )
+    return tuple(sorted(overrides))
 
 
 _MAX_GSPLAT_PLY_HEADER_BYTES = 16 * 1024

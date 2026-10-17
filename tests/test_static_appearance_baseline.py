@@ -113,6 +113,7 @@ from wre.reconstruction.static_appearance_baseline import (
     preflight_gsplat_static_appearance_inputs,
     stage_verified_gsplat_static_appearance_dataset,
     verify_gsplat_reference_pycolmap_sources,
+    verify_gsplat_reference_trainer_config_fields,
     verify_gsplat_static_appearance_matching_capture_metadata,
     verify_gsplat_static_appearance_native_geometry,
     verify_gsplat_static_appearance_reference_sources,
@@ -188,6 +189,49 @@ def test_gsplat_reference_source_gate_verifies_exact_bytes_without_import(
         assert entry.byte_length == len(payload)
         assert entry.sha256 == _digest(payload)
     assert result == verify_gsplat_static_appearance_reference_sources(root)
+
+
+@pytest.mark.parametrize("mutation", ("none", "missing_field", "missing_dataclass"))
+def test_pinned_gsplat_trainer_config_fields_without_runtime_import(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mutation: str
+) -> None:
+    # A synthetic *repinned fixture*, not a claim of actual upstream execution.
+    root, data = _reviewed_source_fixture(tmp_path, monkeypatch)
+    profile = GsplatStaticAppearanceTrainingProfile(max_steps=20)
+    overrides = sorted(profile.reference_overrides())
+    fields = [name for name in overrides if mutation != "missing_field" or name != "save_ply"]
+    decorator = "" if mutation == "missing_dataclass" else "@dataclass\n"
+    source = decorator + "class Config:\n"
+    source += "".join(f"    {name}: object = None\n" for name in fields)
+    payload = source.encode("ascii")
+    data["examples/simple_trainer.py"] = payload
+    (root / "examples/simple_trainer.py").write_bytes(payload)
+    monkeypatch.setattr(
+        baseline_module,
+        "_GSPLAT_REFERENCE_SOURCE_FILES",
+        tuple(
+            (path, len(content), baseline_module._git_blob_sha1(content))
+            for path, content in sorted(data.items())
+        ),
+    )
+
+    if mutation == "none":
+        assert verify_gsplat_reference_trainer_config_fields(root, profile) == tuple(overrides)
+    else:
+        with pytest.raises(GsplatStaticAppearancePreflightError, match="Config"):
+            verify_gsplat_reference_trainer_config_fields(root, profile)
+
+
+def test_pinned_gsplat_config_gate_rejects_modified_source_after_pin(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, _data = _reviewed_source_fixture(tmp_path, monkeypatch)
+    source = root / "examples/simple_trainer.py"
+    # Replacing bytes without updating the source pins must fail *before*
+    # reading schema claims from an altered trainer.
+    source.write_bytes(b"print('other!!')\n")
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="Git blob differs"):
+        verify_gsplat_reference_trainer_config_fields(root, GsplatStaticAppearanceTrainingProfile())
 
 
 def test_gsplat_reference_source_gate_rejects_same_size_tampering(
@@ -554,6 +598,7 @@ def test_preflight_has_no_trainer_execution_or_optional_framework_import() -> No
             imported.add(node.module.split(".")[0])
     assert imported <= {
         "__future__",
+        "ast",
         "dataclasses",
         "hashlib",
         "json",
