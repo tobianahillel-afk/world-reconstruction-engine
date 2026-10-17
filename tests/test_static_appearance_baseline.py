@@ -1741,6 +1741,41 @@ def test_real_colmap_sparse_observations_export_viewable_rgb_glb(
         )
 
 
+def test_colmap_rgb_glb_refuses_source_ply_changed_between_two_passes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "observed-colmap.ply"
+    header = (
+        b"ply\nformat binary_little_endian 1.0\n"
+        + b"comment wre_colmap_source_sha256 "
+        + b"a" * 64
+        + b"\nelement vertex 1\nproperty float x\nproperty float y\nproperty float z\n"
+        + b"property uchar red\nproperty uchar green\nproperty uchar blue\nend_header\n"
+    )
+    first = header + struct.pack("<3f3B", 1.0, 2.0, 3.0, 64, 128, 192)
+    source.write_bytes(first)
+    output = tmp_path / "observed-colmap.glb"
+    actual_open = Path.open
+    reads = 0
+
+    def swap_between_passes(path: Path, mode: str = "r", *args: Any, **kwargs: Any) -> Any:
+        nonlocal reads
+        if path == source and mode == "rb":
+            reads += 1
+            if reads == 2:
+                # Same valid shape, point geometry and byte count, different RGB.
+                source.write_bytes(first[:-1] + b"\x03")
+        return actual_open(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", swap_between_passes)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="PLY bytes changed"):
+        baseline_module._write_verified_xyz_rgb_points_glb(
+            rgb=source, preview_path=output, max_points=1, observed_colmap=True
+        )
+    assert reads == 2
+    assert not output.exists()
+
+
 def test_colmap_sparse_observed_preview_rejects_tampered_photo_and_wrong_geometry(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
