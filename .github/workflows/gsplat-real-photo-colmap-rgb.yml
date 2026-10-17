@@ -404,6 +404,185 @@ jobs:
           print(json.dumps(RECEIPT["reconstruction"], sort_keys=True))
           
           PY
+      - name: Materialize self-contained offline viewer from real SfM GLB
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv/bin/python - <<'PY'
+          import base64
+          import hashlib
+          import json
+          import os
+          import urllib.request
+          from pathlib import Path
+
+          root = Path(os.environ["RUNNER_TEMP"]) / "wre-real-photo-colmap-rgb"
+          receipt = json.loads((root / "real-photo-colmap-rgb-receipt.json").read_text())
+          model = root / "observed-real-colmap-rgb.glb"
+          content = model.read_bytes()
+          assert hashlib.sha256(content).hexdigest() == receipt["reconstruction"]["glb_sha256"]
+          assert receipt["reconstruction"]["exported_rgb_points"] > 0
+          version = "4.1.0"
+          component_name = "wre-model-viewer-4.1.0.min.js"
+          url = f"https://cdnjs.cloudflare.com/ajax/libs/model-viewer/{version}/model-viewer.min.js"
+          expected_sri = "PMy/x5h09gVKwc21Cdcgu/VWJwgmeJ7uivJkbTar3vh5t8uzYo3NQgTkZE0fsfUd+9vihkAcLNAh6mv9mEXkZQ=="
+          with urllib.request.urlopen(url, timeout=40) as response:
+              component = response.read(5_000_001)
+          assert 100_000 < len(component) <= 5_000_000
+          assert base64.b64encode(hashlib.sha512(component).digest()).decode() == expected_sri
+          (root / component_name).write_bytes(component)
+          with urllib.request.urlopen(
+              "https://raw.githubusercontent.com/google/model-viewer/v4.1.0/LICENSE",
+              timeout=40,
+          ) as response:
+              license_bytes = response.read(20_001)
+          assert 11_000 < len(license_bytes) <= 20_000
+          assert b"Apache License" in license_bytes[:110]
+          (root / "wre-model-viewer-4.1.0-LICENSE.txt").write_bytes(license_bytes)
+
+          count = receipt["reconstruction"]["exported_rgb_points"]
+          native = receipt["reconstruction"]["sparse_points"]
+          digest = receipt["reconstruction"]["glb_sha256"]
+          html = """<!doctype html>
+          <html lang="en">
+          <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+          <title>WRE · Real-photograph reconstructed 3D</title>
+          <script type="module" src="./wre-model-viewer-4.1.0.min.js"
+            integrity="sha512-PMy/x5h09gVKwc21Cdcgu/VWJwgmeJ7uivJkbTar3vh5t8uzYo3NQgTkZE0fsfUd+9vihkAcLNAh6mv9mEXkZQ=="></script>
+          <style>
+          html,body{margin:0;background:#101720;color:#e6edf6;font:15px system-ui,sans-serif;height:100%}
+          main{height:100%;display:flex;flex-direction:column}
+          header{padding:16px 22px;background:#192638;border-bottom:1px solid #46556b}
+          h1{margin:0 0 5px;font-size:19px}
+          p{margin:5px 0;line-height:1.45}
+          model-viewer{flex:1;width:100%;min-height:350px;background:#182232}
+          footer{padding:12px 22px;font-size:12px;background:#192638}
+          a{color:#a8d7ff}
+          </style></head><body><main>
+          <header><h1>WRE · Native real-photo 3D point cloud</h1>
+          <p>Real DJI images → PyCOLMAP CPU → original observed RGB → portable GLB</p>
+          <p>COUNT_NATIVE original COLMAP XYZ points · COUNT_COLORED uniquely colorable points
+          · scale not metric · no gsplat training · no 4D</p></header>
+          <model-viewer id="wre-scene" camera-controls auto-rotate
+            interaction-prompt="auto" loading="eager" reveal="auto"
+            alt="3D colored sparse scene reconstructed by real native PyCOLMAP"
+            src="./observed-real-colmap-rgb.glb"></model-viewer>
+          <footer>GLB SHA-256: HASH_GLB · Copyright 2021 Pierre Moulon,
+          sample CC BY-NC 4.0 (noncommercial). Offline library: model-viewer 4.1.0,
+          Apache-2.0. Drag to orbit; scroll to zoom.
+          <a href="./observed-real-colmap-rgb.glb" download>Original verified GLB</a>
+          · <a href="./real-photo-colmap-rgb-receipt.json">Provenance</a></footer>
+          </main></body></html>"""
+          html = (
+              html.replace("COUNT_NATIVE", str(native))
+                  .replace("COUNT_COLORED", str(count))
+                  .replace("HASH_GLB", digest)
+          )
+          (root / "wre-real-photo-3d-viewer.html").write_text(html, encoding="utf-8")
+          (root / "HOW_TO_VIEW.txt").write_text(
+              "WRE real-photo experimental 3D: noncommercial CC BY-NC 4.0 dataset.\n"
+              "Unzip the artifact. In the extracted directory run:\n"
+              "  python3 -m http.server 8765 --bind 127.0.0.1\n"
+              "Then open http://127.0.0.1:8765/wre-real-photo-3d-viewer.html\n"
+              "All model/JS bytes are local; no network needed to VIEW.\n"
+              "GLB POINTS only; no Gaussian photorealism, metric scale, or 4D.\n",
+              encoding="utf-8",
+          )
+          print(f"OFFLINE VIEWER BUNDLED: {native} native, {count} RGB points")
+          PY
+
+      - name: Exercise actual offline Chrome WebGL viewer with real reconstructed GLB
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/wre-real-photo-colmap-rgb"
+          google-chrome --version
+          driver="$CHROMEWEBDRIVER/chromedriver"
+          test -x "$driver"
+          python3 -m http.server 8765 --bind 127.0.0.1 --directory "$root" >/tmp/wre-real-http.log 2>&1 &
+          http_pid="$!"
+          "$driver" --port=9515 --allowed-ips=127.0.0.1 >/tmp/wre-real-driver.log 2>&1 &
+          driver_pid="$!"
+          trap 'kill "$http_pid" "$driver_pid" 2>/dev/null || true' EXIT
+          .venv/bin/python - <<'PY'
+          import base64
+          import io
+          import json
+          import os
+          import time
+          from pathlib import Path
+          from urllib.request import Request, urlopen
+
+          base = "http://127.0.0.1:9515"
+          def browser(method, route, value=None):
+              payload = None if value is None else json.dumps(value).encode()
+              request = Request(
+                  base + route, data=payload, method=method,
+                  headers={"Content-Type": "application/json"},
+              )
+              with urlopen(request, timeout=40) as response:
+                  data = json.load(response)
+              value = data.get("value")
+              if isinstance(value, dict) and value.get("error"):
+                  raise RuntimeError(str(value))
+              return value
+
+          for _ in range(50):
+              try:
+                  if browser("GET", "/status")["ready"]:
+                      break
+              except (OSError, KeyError):
+                  pass
+              time.sleep(0.2)
+          else:
+              raise RuntimeError("ChromeDriver did not start")
+          caps = {"browserName":"chrome","goog:chromeOptions":{"args":[
+              "--headless=new","--no-sandbox","--disable-dev-shm-usage",
+              "--enable-unsafe-swiftshader","--use-gl=angle","--use-angle=swiftshader",
+              "--window-size=1280,900","--disable-background-networking",
+              "--host-resolver-rules=MAP * 0.0.0.0, EXCLUDE localhost",
+          ]}}
+          session = browser("POST", "/session", {"capabilities":{"alwaysMatch":caps}})["sessionId"]
+          def js(source):
+              return browser(
+                  "POST",f"/session/{session}/execute/sync",
+                  {"script":source,"args":[]},
+              )
+          try:
+              browser("POST",f"/session/{session}/url",{
+                  "url":"http://127.0.0.1:8765/wre-real-photo-3d-viewer.html",
+              })
+              for _ in range(100):
+                  result = js("""
+                    const view=document.getElementById('wre-scene');
+                    return Boolean(
+                      customElements.get('model-viewer') && view &&
+                      view.loaded && view.model &&
+                      view.getBoundingClientRect().width > 640 &&
+                      view.getBoundingClientRect().height > 300 &&
+                      !!document.createElement('canvas').getContext('webgl2')
+                    );
+                  """)
+                  if result:
+                      break
+                  time.sleep(0.4)
+              else:
+                  raise RuntimeError("Real reconstructed POINTS GLB never loaded in Chrome WebGL")
+              screenshot = base64.b64decode(
+                  browser("GET",f"/session/{session}/screenshot")
+              )
+              from PIL import Image
+              png = Image.open(io.BytesIO(screenshot))
+              png.load()
+              assert png.size[0] >= 1100 and png.size[1] >= 700
+              assert len(screenshot) > 10_000
+              output = Path(os.environ["RUNNER_TEMP"]) / "wre-real-photo-colmap-rgb"
+              (output / "wre-real-photo-3d-chrome.png").write_bytes(screenshot)
+              print("REAL CHROME WEBGL: loaded actual observed GLB, screenshot saved")
+          finally:
+              browser("DELETE",f"/session/{session}")
+          PY
+
       - name: Publish actual reconstructed RGB PLY, inspectable GLB and verified receipt
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -412,5 +591,10 @@ jobs:
             ${{ runner.temp }}/wre-real-photo-colmap-rgb/observed-real-colmap-rgb.ply
             ${{ runner.temp }}/wre-real-photo-colmap-rgb/observed-real-colmap-rgb.glb
             ${{ runner.temp }}/wre-real-photo-colmap-rgb/real-photo-colmap-rgb-receipt.json
+            ${{ runner.temp }}/wre-real-photo-colmap-rgb/wre-real-photo-3d-viewer.html
+            ${{ runner.temp }}/wre-real-photo-colmap-rgb/wre-model-viewer-4.1.0.min.js
+            ${{ runner.temp }}/wre-real-photo-colmap-rgb/wre-model-viewer-4.1.0-LICENSE.txt
+            ${{ runner.temp }}/wre-real-photo-colmap-rgb/wre-real-photo-3d-chrome.png
+            ${{ runner.temp }}/wre-real-photo-colmap-rgb/HOW_TO_VIEW.txt
           if-no-files-found: error
           retention-days: 7
