@@ -2642,6 +2642,25 @@ def _write_verified_xyz_rgb_points_glb(
                 "gsplat RGB centers preview lacks a vertex count"
             ) from exc
         sampled = min(count, max_points)
+        source_colmap_sha256: str | None = None
+        if observed_colmap:
+            source_hash_lines = [
+                line.split(b" ", 2)[2]
+                for line in header.splitlines()
+                if line.startswith(b"comment wre_colmap_source_sha256 ")
+            ]
+            if len(source_hash_lines) != 1:
+                raise GsplatStaticAppearancePreflightError(
+                    "COLMAP RGB preview lacks one native sparse model source identity"
+                )
+            source_colmap_sha256 = source_hash_lines[0].decode("ascii", errors="replace")
+            if len(source_colmap_sha256) != 64 or any(
+                char not in "0123456789abcdef" for char in source_colmap_sha256
+            ):
+                raise GsplatStaticAppearancePreflightError(
+                    "COLMAP RGB preview has an invalid native sparse model source identity"
+                )
+        source_digest = hashlib.sha256(header)
 
         # Fill the requested point budget rather than dropping almost
         # half the cloud when count exceeds the limit by only one point.
@@ -2661,6 +2680,7 @@ def _write_verified_xyz_rgb_points_glb(
                 raise GsplatStaticAppearancePreflightError(
                     "gsplat RGB centers preview was truncated"
                 )
+            source_digest.update(record)
             if index == next_index:
                 coords = struct.unpack_from("<3f", record)
                 for axis in range(3):
@@ -2734,6 +2754,7 @@ def _write_verified_xyz_rgb_points_glb(
             "shown_centers": sampled,
             "sampling": "even-endpoints",
             "requested_max_points": max_points,
+            "source_rgb_ply_sha256": source_digest.hexdigest(),
         },
     }
     if observed_colmap:
@@ -2742,6 +2763,8 @@ def _write_verified_xyz_rgb_points_glb(
             "wre_visualization": "COLMAP observed sparse RGB points, not Gaussian training",
             "metric_scale_known": False,
             "source_colmap_points": count,
+            "source_colmap_model_sha256": source_colmap_sha256,
+            "source_rgb_ply_sha256": source_digest.hexdigest(),
             "shown_points": sampled,
             "sampling": "even-endpoints",
             "requested_max_points": max_points,
@@ -2913,6 +2936,20 @@ def inspect_verified_gsplat_rgb_centers_glb(*, path: Path) -> dict[str, object]:
             and isinstance(extras[source_key], int)
             and not isinstance(extras[source_key], bool)
             and extras[source_key] >= count
+            and isinstance(extras["source_rgb_ply_sha256"], str)
+            and len(extras["source_rgb_ply_sha256"]) == 64
+            and all(c in "0123456789abcdef" for c in extras["source_rgb_ply_sha256"])
+            and (
+                not observed_colmap
+                or (
+                    isinstance(extras["source_colmap_model_sha256"], str)
+                    and len(extras["source_colmap_model_sha256"]) == 64
+                    and all(
+                        c in "0123456789abcdef"
+                        for c in extras["source_colmap_model_sha256"]
+                    )
+                )
+            )
             and primitive["mode"] == 0
             and primitive["attributes"] == {"POSITION": 0, "COLOR_0": 1}
             and scene["accessors"][0]["type"] == "VEC3"
@@ -2958,8 +2995,10 @@ def inspect_verified_gsplat_rgb_centers_glb(*, path: Path) -> dict[str, object]:
         "bounds_max": high,
         "metric_scale_known": False,
         "gpu_training_verified": False,
+        "source_rgb_ply_sha256": extras["source_rgb_ply_sha256"],
     }
     if observed_colmap:
+        result["source_colmap_model_sha256"] = extras["source_colmap_model_sha256"]
         result["source_colmap_points"] = extras["source_colmap_points"]
         result["shown_points"] = count
     else:
