@@ -2566,7 +2566,7 @@ def _gsplat_rgb_preview_cli(argv: list[str] | None = None) -> int:
     import argparse
 
     parser = argparse.ArgumentParser(
-        description="Export verified gsplat Gaussian centers as a standard RGB point-cloud PLY"
+        description="Export verified gsplat Gaussian centers as a RGB point cloud (.ply or .glb)"
     )
     parser.add_argument(
         "--output-root", required=True, type=Path, help="Existing gsplat trainer results directory"
@@ -2575,13 +2575,18 @@ def _gsplat_rgb_preview_cli(argv: list[str] | None = None) -> int:
         "--max-steps", type=int, required=True, help="Original trainer max_steps / PLY step number"
     )
     parser.add_argument(
-        "--preview", type=Path, required=True, help="New output RGB .ply file; parent must exist"
+        "--preview", type=Path, required=True, help="New output RGB .ply or .glb file"
     )
     args = parser.parse_args(argv)
     try:
         profile = GsplatStaticAppearanceTrainingProfile(max_steps=args.max_steps)
         preview = args.preview.absolute()
-        digest = export_verified_gsplat_rgb_centers_ply(
+        exporter = (
+            export_verified_gsplat_rgb_centers_glb
+            if preview.suffix.lower() == ".glb"
+            else export_verified_gsplat_rgb_centers_ply
+        )
+        digest = exporter(
             artifact_ref=ArtifactRef(
                 ArtifactId("appearance:gsplat:preview-source"),
                 APPEARANCE_MODEL_ARTIFACT_KIND,
@@ -2611,6 +2616,7 @@ __all__ = [
     "GsplatStaticAppearanceTrainingProfile",
     "GsplatStaticAppearanceVerifiedImage",
     "assemble_verified_gsplat_static_appearance_result",
+    "export_verified_gsplat_rgb_centers_glb",
     "export_verified_gsplat_rgb_centers_ply",
     "inspect_gsplat_static_appearance_shared_track_pixels",
     "materialize_verified_gsplat_ply",
