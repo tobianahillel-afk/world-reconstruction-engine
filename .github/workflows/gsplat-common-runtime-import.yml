@@ -1932,7 +1932,11 @@ jobs:
               .wre-views [hidden] { display:none !important; }
               .wre-photo-pane { flex:0 0 38%; min-width:0; overflow:auto;
                 padding:8px; background:#182537; box-sizing:border-box; }
-              .wre-photo-pane img { width:100%; height:auto; display:block; }
+              .wre-photo-crop { width:100%; overflow:hidden; }
+              .wre-photo-crop img { width:100%; height:auto; display:block; max-width:none; }
+              .wre-photo-crop[data-frame="left"] img,
+              .wre-photo-crop[data-frame="right"] img { width:200%; }
+              .wre-photo-crop[data-frame="right"] img { transform:translateX(-50%); }
               .wre-photo-pane p { font-size:12px; line-height:1.35; }
               @media(max-width:700px) {
                 .wre-views.dual,.wre-views.with-source { flex-direction:column; }
@@ -2047,8 +2051,18 @@ jobs:
             <div id="wre-views" class="wre-views">
               <aside id="wre-source-panel" class="wre-photo-pane" hidden
                 aria-label="Observed 2D photographs used as 3D reconstruction inputs">
-                <img id="wre-live-source-photos" src="./wre-real-stereo-cpu-photos.png"
-                  alt="Two real stereo Aloe photographs, left and right, processed for this reconstruction">
+                <label for="wre-source-frame">Inspect observed photograph:</label>
+                <select id="wre-source-frame" aria-label="Choose original left, right or paired photos">
+                  <option value="pair">Both originals</option>
+                  <option value="left">Left photograph</option>
+                  <option value="right">Right photograph</option>
+                </select>
+                <div id="wre-photo-crop" class="wre-photo-crop" data-frame="pair">
+                  <img id="wre-live-source-photos" src="./wre-real-stereo-cpu-photos.png"
+                    alt="Two real stereo Aloe photographs, left and right, processed for this reconstruction">
+                </div>
+                <p id="wre-source-frame-status" role="status">
+                  Both rectified source photographs; no 2D-to-3D camera registration.</p>
                 <p>Original 2D observations (rectified/resized) alongside the live,
                   approximate 3D model. Camera views are not registered to photo pixels.
                   Unknown metric scale; NOT reconstructed 4D motion.</p>
@@ -2074,6 +2088,9 @@ jobs:
               const viewPair = document.getElementById("wre-views");
               const photoToggle = document.getElementById("wre-photo-toggle");
               const photoPanel = document.getElementById("wre-source-panel");
+              const photoFrame = document.getElementById("wre-source-frame");
+              const photoCrop = document.getElementById("wre-photo-crop");
+              const photoFrameStatus = document.getElementById("wre-source-frame-status");
               const provenance = document.getElementById("wre-scene-provenance");
               const localInput = document.getElementById("wre-local-glb");
               const measureButton = document.getElementById("wre-measure-toggle");
@@ -3306,6 +3323,15 @@ jobs:
               });
               // The two observed photographs remain 2D evidence, not a
               // registered camera rendering of the reconstructed GLB.
+              photoFrame.addEventListener("change", () => {
+                const frame = photoFrame.value;
+                if (!["pair", "left", "right"].includes(frame)) return;
+                photoCrop.dataset.frame = frame;
+                photoFrameStatus.textContent = frame === "pair"
+                  ? "Both rectified source photographs; NOT registered to the 3D camera."
+                  : (frame === "left" ? "Left" : "Right") +
+                    " original photo crop; NOT a registered 3D projection.";
+              });
               photoToggle.addEventListener("click", () => {
                 if (compareChoice.value) return;
                 const show = photoPanel.hidden;
