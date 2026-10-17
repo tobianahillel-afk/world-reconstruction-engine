@@ -7832,6 +7832,21 @@ jobs:
                              zip(row[:3], point["xyz_relative_model_units"]))
                   assert [int(value) for value in row[3:]] == rgb
               print("PASS: actual Chrome exported real-photo colored relative XYZ as PLY")
+              # The new public multi-observation link must carry EXACTLY the
+              # same two PFM-derived XYZ already checked against real file bytes.
+              saved_link = js("""return (() => {
+                  const anchor=document.getElementById('wre-saved-points-live-3d');
+                  if (!anchor || anchor.getAttribute('aria-disabled')!=='false' ||
+                      !anchor.href) return null;
+                  const url=new URL(anchor.href);
+                  const encoded=url.searchParams.get('stereo_points');
+                  return {url:anchor.href, path:url.pathname,
+                    points:encoded===null?null:JSON.parse(encoded)};
+              })()""")
+              assert saved_link and saved_link["path"].endswith(
+                  "/wre-real-stereo-cpu-viewer.html")
+              assert saved_link["points"] == [
+                  point["xyz_relative_model_units"] for point in exported["points"]]
               # Functional 2D -> 3D navigation: the last point comes from the
               # SHA-256 verified on-disk PFM, not an invented camera landmark.
               link = js("""return (() => {
@@ -7931,6 +7946,56 @@ jobs:
                   return marker && marker.dataset.position.split(' ').length === 3;
               })()""")
               print("PASS: real stereo hotspot survives SIFT-to-surface model switching")
+              # Now open the NEW multi-point link in that same extracted ZIP.
+              # Verify both existing PFM observations independently, not
+              # merely the count of DOM buttons.
+              browser("POST", f"/session/{session}/url", {"url": saved_link["url"]})
+              wait_for(lambda: js(loaded))
+              markers = js("""return (() => {
+                  const scene=document.getElementById('wre-scene');
+                  const status=document.getElementById('wre-observed-stereo-marker-status');
+                  if (!scene.loaded || !scene.model ||
+                      !status?.textContent.includes('2 real-photo stereo observations') ||
+                      !status?.textContent.includes('no metric scale')) return null;
+                  return Array.from(scene.querySelectorAll(
+                    '[slot^="hotspot-wre-saved-stereo-"]')).map(node=>({
+                      slot:node.slot, label:node.getAttribute('aria-label'),
+                      position:node.dataset.position.split(' ').map(Number.parseFloat),
+                      hidden:node.hidden, text:node.textContent
+                    }));
+              })()""")
+              assert markers is not None and len(markers) == 2
+              for index, (point, marker) in enumerate(zip(exported["points"], markers)):
+                  xyz = point["xyz_relative_model_units"]
+                  expected = (xyz[0], -xyz[1], -xyz[2])
+                  assert marker["slot"] == f"hotspot-wre-saved-stereo-{index}"
+                  assert marker["label"] == f"Nonmetric saved stereo observation {index+1}"
+                  assert marker["text"] == str(index+1) and not marker["hidden"]
+                  assert all(abs(actual-target) < 1e-4 for actual, target in
+                             zip(marker["position"], expected))
+              js("""const choice=document.getElementById('wre-scene-choice');
+                  choice.value='sift';
+                  choice.dispatchEvent(new Event('change', {bubbles:true}));""")
+              wait_for(lambda: js(loaded) and js("""return (() => {
+                  const scene=document.getElementById('wre-scene');
+                  return document.getElementById('wre-scene-choice').value==='sift' &&
+                    Array.from(scene.querySelectorAll(
+                      '[slot^="hotspot-wre-saved-stereo-"]')).length===2 &&
+                    Array.from(scene.querySelectorAll(
+                      '[slot^="hotspot-wre-saved-stereo-"]')).every(node=>node.hidden);
+              })()"""))
+              js("""const choice=document.getElementById('wre-scene-choice');
+                  choice.value='surface';
+                  choice.dispatchEvent(new Event('change', {bubbles:true}));""")
+              wait_for(lambda: js(loaded) and js("""return (() => {
+                  const scene=document.getElementById('wre-scene');
+                  return document.getElementById('wre-scene-choice').value==='surface' &&
+                    Array.from(scene.querySelectorAll(
+                      '[slot^="hotspot-wre-saved-stereo-"]')).length===2 &&
+                    Array.from(scene.querySelectorAll(
+                      '[slot^="hotspot-wre-saved-stereo-"]')).every(node=>!node.hidden);
+              })()"""))
+              print("PASS: real PFM-derived multiple 3D hotspots survive SIFT-to-surface switching")
               print("PASS: archived real source photos and SIFT GLB rendered in Chrome WebGL")
           finally:
               browser("DELETE", f"/session/{session}")
