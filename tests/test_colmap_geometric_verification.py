@@ -477,8 +477,12 @@ def test_missing_geometry_result_is_rejected_and_partial_output_removed(tmp_path
 
 
 @pytest.mark.parametrize("omitted_raw_count", (0, 7))
+@pytest.mark.parametrize("omit_native_raw", (True, False))
 def test_native_geometry_can_omit_only_zero_match_pairs(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, omitted_raw_count: int
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    omitted_raw_count: int,
+    omit_native_raw: bool,
 ) -> None:
     matching = _matching_result(tmp_path)
     connection = sqlite3.connect(matching.database_path)
@@ -540,10 +544,18 @@ def test_native_geometry_can_omit_only_zero_match_pairs(
         monkeypatch.setattr(database, "read_num_matches", omit_unverified_pair)
         return database
 
-    fake.Database = SimpleNamespace(open=native_database_open)
+    if omit_native_raw:
+        fake.Database = SimpleNamespace(open=native_database_open)
+    else:
+        # Real PyCOLMAP 4.2 may retain a zero-raw-match row in matches, yet
+        # omit its result from read_two_view_geometries().
+        fake.drop_last_geometry = True
     request = _request(tmp_path, matching)
     if omitted_raw_count != 0:
-        with pytest.raises(ColmapGeometricVerificationError, match="geometry evidence membership"):
+        with pytest.raises(
+            ColmapGeometricVerificationError,
+            match="geometry evidence membership|lacks a nonempty pair",
+        ):
             verify_colmap_geometry(request, module=fake)
         assert not request.database_path.exists()
     else:
