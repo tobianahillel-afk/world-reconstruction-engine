@@ -2414,10 +2414,9 @@ def export_verified_colmap_observed_rgb_ply(
         raise GsplatStaticAppearancePreflightError("COLMAP observed sparse model is invalid")
     registered = tuple(sorted(int(i) for i in native.reg_image_ids()))
     native_images = {i: native.image(i) for i in registered}
-    if (
-        len(registered) != len(pixels_by_name)
-        or {image.name for image in native_images.values()} != set(pixels_by_name)
-    ):
+    if len(registered) != len(pixels_by_name) or {
+        image.name for image in native_images.values()
+    } != set(pixels_by_name):
         raise GsplatStaticAppearancePreflightError(
             "COLMAP observed registered images do not match original PNGs"
         )

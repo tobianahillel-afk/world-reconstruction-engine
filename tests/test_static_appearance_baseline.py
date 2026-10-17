@@ -1000,9 +1000,7 @@ def test_reference_runner_rejects_missing_photometry_before_any_cuda(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A verified COLMAP source without V2L17 evidence must not reach CUDA."""
-    request, source, staged, output, profile, ref, producer = _retained_gsplat_fixture(
-        tmp_path
-    )
+    request, source, staged, output, profile, ref, producer = _retained_gsplat_fixture(tmp_path)
     python_executable = tmp_path / "external-python"
     python_executable.write_bytes(b"stub")
     previous = (output / profile.expected_ply_relative_path).read_bytes()
@@ -1087,6 +1085,7 @@ def test_reference_runner_accepts_real_two_view_capture_evidence_before_native_g
             timeout_seconds=30,
         )
     assert not output.exists()
+
 
 def test_external_gsplat_training_is_exposed_by_public_reconstruction_package() -> None:
     from wre import reconstruction
@@ -1651,10 +1650,7 @@ def test_real_colmap_sparse_coordinates_and_original_png_colors_export_to_ply(
     data = preview.read_bytes()
     assert digest == _digest(data)
     assert b"comment wre_metric_scale_known false\n" in data
-    assert (
-        colmap_sparse_model_content_identity(source.native_model_artifact).value.encode()
-        in data
-    )
+    assert colmap_sparse_model_content_identity(source.native_model_artifact).value.encode() in data
     body = data.split(b"end_header\n", 1)[1]
     assert body == struct.pack("<3f3B", 1.0, 2.0, 3.0, 64, 128, 192)
     assert request.source_geometry.point_maps[0].positions_xyz == ((1.0, 2.0, 3.0),)
