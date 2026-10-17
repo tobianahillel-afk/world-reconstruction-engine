@@ -2674,6 +2674,10 @@ def inspect_verified_gsplat_rgb_centers_glb(*, path: Path) -> dict[str, object]:
         raise GsplatStaticAppearancePreflightError(
             "WRE RGB-center GLB contains invalid JSON"
         ) from exc
+    extras: dict[str, Any] = {}
+    count = 0
+    bounds_low: list[float] = []
+    bounds_high: list[float] = []
     try:
         extras = scene["extras"]
         count = scene["accessors"][0]["count"]
