@@ -5106,21 +5106,37 @@ jobs:
                 const box=scene.getBoundingClientRect();
                 const hits=[];
                 if (typeof scene.positionAndNormalFromPoint !== 'function') return null;
+                // Choose points inside the real mesh, not the first hit at a
+                // silhouette. After camera-tour playback the first marginal
+                // hit can vanish between the precheck and the click handler.
                 for (let yi=0;yi<=10;yi++) for (let xi=0;xi<=10;xi++) {
                   const x=box.left+box.width*(0.15+0.7*xi/10);
                   const y=box.top+box.height*(0.15+0.7*yi/10);
                   const hit=scene.positionAndNormalFromPoint(x,y);
-                  if (hit && hit.position &&
-                      [hit.position.x,hit.position.y,hit.position.z].every(Number.isFinite)) {
-                    const pos=[hit.position.x,hit.position.y,hit.position.z];
-                    if (hits.length && Math.hypot(
-                      pos[0]-hits[0].pos[0],pos[1]-hits[0].pos[1],
-                      pos[2]-hits[0].pos[2])>0.001)
-                      return [hits[0],{x,y,pos}];
-                    if (!hits.length) hits.push({x,y,pos});
-                  }
+                  if (!hit || !hit.position) continue;
+                  const pos=[hit.position.x,hit.position.y,hit.position.z];
+                  if (!pos.every(Number.isFinite)) continue;
+                  const neighbors=[[4,0],[-4,0],[0,4],[0,-4]];
+                  if (!neighbors.every(([dx,dy]) => {
+                    const nearby=scene.positionAndNormalFromPoint(x+dx,y+dy);
+                    return nearby && nearby.position &&
+                      [nearby.position.x,nearby.position.y,nearby.position.z]
+                        .every(Number.isFinite);
+                  })) continue;
+                  hits.push({x,y,pos});
                 }
-                return null;
+                if (hits.length<2) return null;
+                const middle=hits[Math.floor(hits.length/2)];
+                // Once one marker exists, the second point must differ from
+                // the actual recorded XYZ, not a stale pre-click sample.
+                const anchor=window.__wreClickedRaycasts?.[0] || middle.pos;
+                const options=hits.map(p => ({
+                  p,
+                  separation:Math.hypot(...p.pos.map((v,i)=>v-anchor[i]))
+                })).filter(item=>item.separation>0.001)
+                  .sort((a,b)=>a.separation-b.separation);
+                if (!options.length) return null;
+                return [middle,options[Math.floor(options.length/2)].p];
               """
               assert js(measure_scan) is not None, "Chrome could not hit two distinct real mesh points"
               measure_status = js(f"""
