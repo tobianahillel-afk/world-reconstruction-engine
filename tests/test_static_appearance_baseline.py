@@ -1142,9 +1142,7 @@ def test_external_gsplat_runner_builds_complete_canonical_candidate_with_process
     assert kwargs["env"]["CUDA_VISIBLE_DEVICES"] == "2"
     assert kwargs["env"]["PIP_NO_INDEX"] == "1"
     assert kwargs["env"]["TORCH_HOME"] == str(output / "torch-cache")
-    copied_weights = (
-        output / "torch-cache" / "hub" / "checkpoints" / "alexnet-owt-7be5be79.pth"
-    )
+    copied_weights = output / "torch-cache" / "hub" / "checkpoints" / "alexnet-owt-7be5be79.pth"
     assert copied_weights.read_bytes() == weights.read_bytes()
     assert hashlib.sha256(copied_weights.read_bytes()).hexdigest() == weight_digest
     assert "WRE_PRIVATE_CI_TOKEN" not in kwargs["env"]
@@ -1170,8 +1168,8 @@ def test_external_gsplat_runner_builds_complete_canonical_candidate_with_process
 def test_external_gsplat_runner_rejects_untrusted_lpips_cache_before_process(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, invalid: str
 ) -> None:
-    request, source, staged, output, profile, artifact_ref, producer = (
-        _retained_gsplat_fixture(tmp_path)
+    request, source, staged, output, profile, artifact_ref, producer = _retained_gsplat_fixture(
+        tmp_path
     )
     (output / profile.expected_ply_relative_path).unlink()
     (output / "ply").rmdir()
@@ -1193,7 +1191,8 @@ def test_external_gsplat_runner_rejects_untrusted_lpips_cache_before_process(
         baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
     )
     monkeypatch.setattr(
-        baseline_module, "verify_gsplat_static_appearance_native_geometry",
+        baseline_module,
+        "verify_gsplat_static_appearance_native_geometry",
         lambda *_args, **_kwargs: None,
     )
     monkeypatch.setattr(
