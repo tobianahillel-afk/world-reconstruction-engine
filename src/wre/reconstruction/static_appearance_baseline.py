@@ -26,7 +26,7 @@ from wre.domain.artifact_materialization import (
     ArtifactMaterializationEntry,
     ArtifactMaterializationMetadata,
 )
-from wre.domain.artifacts import ArtifactRef
+from wre.domain.artifacts import ArtifactId, ArtifactRef
 from wre.domain.color_conventions import (
     ColorConversionStatus,
     DecodedPixelColorEncoding,
@@ -2780,6 +2780,7 @@ __all__ = [
     "verify_gsplat_static_appearance_source_photometry",
     "verify_gsplat_static_appearance_staged_dataset",
 ]
+
 
 if __name__ == "__main__":
     raise SystemExit(_gsplat_rgb_preview_cli())
