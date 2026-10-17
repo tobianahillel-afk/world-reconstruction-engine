@@ -112,9 +112,9 @@ from wre.reconstruction.static_appearance_baseline import (
     GsplatStaticAppearancePreflightSource,
     GsplatStaticAppearanceTrainingProfile,
     assemble_verified_gsplat_static_appearance_result,
+    build_gsplat_reference_trainer_path_overrides,
     export_verified_gsplat_rgb_centers_glb,
     export_verified_gsplat_rgb_centers_ply,
-    build_gsplat_reference_trainer_path_overrides,
     inspect_gsplat_static_appearance_shared_track_pixels,
     materialize_verified_gsplat_ply,
     preflight_gsplat_static_appearance_inputs,
@@ -1065,7 +1065,9 @@ def test_one_call_gsplat_reconstruction_stages_real_files_and_returns_candidate(
     json_length = struct.unpack_from("<I", preview_bytes, 12)[0]
     viewer_scene = json.loads(preview_bytes[20 : 20 + json_length])
     assert viewer_scene["accessors"][0]["count"] == 2
-    assert viewer_scene["extras"]["wre_visualization"] == "Gaussian centers only, not Gaussian splatting"
+    assert viewer_scene["extras"]["wre_visualization"] == (
+        "Gaussian centers only, not Gaussian splatting"
+    )
     assert result.materialization.entries[0].sha256 == _digest(_gsplat_ply(vertices=2))
 
 
