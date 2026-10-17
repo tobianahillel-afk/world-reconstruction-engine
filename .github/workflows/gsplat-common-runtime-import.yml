@@ -4741,10 +4741,15 @@ jobs:
               area_status = js(f"""
                 const scene=document.getElementById('wre-scene');
                 const button=document.getElementById('wre-area-toggle');
+                // Sample the ACTUAL mesh again immediately before dispatch.
+                // The model-viewer camera may settle between WebDriver calls;
+                // stale screen pixels are not reliable points on the surface.
+                const fresh=(() => {{ {area_scan} }})();
+                if (!fresh.points) return {{error:'area mesh sample vanished', count:fresh.count}};
                 window.__wreClickedRaycasts=[];
-                for (const p of {json.dumps(area_hits)}) {{
+                for (const p of fresh.points) {{
                   const hit=scene.positionAndNormalFromPoint(p.x,p.y);
-                  if (!hit || !hit.position) return {{error:'area click missed surface'}};
+                  if (!hit || !hit.position) return {{error:'fresh area click missed surface'}};
                   window.__wreCapturingClick=true;
                   scene.dispatchEvent(new MouseEvent('click', {{
                     bubbles:true, clientX:p.x, clientY:p.y
