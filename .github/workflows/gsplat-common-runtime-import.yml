@@ -2155,17 +2155,37 @@ jobs:
                 tourRecord.disabled = true;
                 scene.removeAttribute("auto-rotate");
                 try {
-                  for (const [index, frame] of frames.entries()) {
-                    if (epoch !== tourEpoch || !scene.loaded ||
-                        cameraTourSource !== scene.getAttribute("src")) return;
+                  // Smooth the viewing camera, never the reconstructed scene.
+                  const applyCamera = frame => {
                     scene.cameraOrbit = frame[0] + "rad " + frame[1] + "rad " + frame[2] + "m";
                     scene.cameraTarget = frame.slice(3, 6).map(value => value + "m").join(" ");
                     scene.fieldOfView = frame[6] + "deg";
                     scene.jumpCameraToGoal();
+                  };
+                  for (const [index, frame] of frames.entries()) {
+                    if (epoch !== tourEpoch || !scene.loaded ||
+                        cameraTourSource !== scene.getAttribute("src")) return;
+                    if (index === 0) {
+                      applyCamera(frame);
+                      await new Promise(resolve => setTimeout(resolve, 180));
+                    } else {
+                      const previous = frames[index - 1];
+                      for (let step = 1; step <= 16; step++) {
+                        if (epoch !== tourEpoch || !scene.loaded ||
+                            cameraTourSource !== scene.getAttribute("src")) return;
+                        const t = step / 16;
+                        const eased = t * t * (3 - 2 * t);
+                        const between = frame.map((value, coordinate) =>
+                          previous[coordinate] + (value - previous[coordinate]) * eased);
+                        applyCamera(between);
+                        tourStatus.textContent = "Interpolating camera viewpoint " +
+                          index + "/" + frames.length + " (static 3D, NOT 4D).";
+                        await new Promise(resolve => setTimeout(resolve, 40));
+                      }
+                    }
                     tourStep.value = String(index + 1);
                     tourStatus.textContent = "Playing camera viewpoint " + (index + 1) +
                       "/" + frames.length + ".";
-                    await new Promise(resolve => setTimeout(resolve, 650));
                   }
                   if (epoch === tourEpoch) {
                     tourStatus.textContent = "Tour complete: " + frames.length +
