@@ -5163,12 +5163,15 @@ jobs:
               area_interaction = f"""
                 const scene=document.getElementById('wre-scene');
                 const button=document.getElementById('wre-area-toggle');
-                // Use the actual mesh raycasts from the current 3D camera.
-                // The selected points are dispatched before leaving this JS call.
+                scene.jumpCameraToGoal();
+                // Take the first two REAL scene points, then choose the
+                // third against the POSITIONS ACTUALLY RECORDED by clicks.
+                // Prior source used a stale 3rd screen hit: Chrome run
+                // 39026261749 then produced three collinear points (zero area).
                 const fresh=(() => {{ {area_scan} }})();
                 if (!fresh.points) return {{error:'area mesh sample vanished', count:fresh.count}};
                 window.__wreClickedRaycasts=[];
-                for (const p of fresh.points) {{
+                for (const p of fresh.points.slice(0,2)) {{
                   const hit=scene.positionAndNormalFromPoint(p.x,p.y);
                   if (!hit || !hit.position) continue;
                   window.__wreCapturingClick=true;
@@ -5177,50 +5180,62 @@ jobs:
                   }}));
                   window.__wreCapturingClick=false;
                 }}
-                // Real hit-testing sometimes drops the third click when the
-                // model-viewer camera updates its hit surface after placing
-                // hotspots. Retry OTHER genuinely raycast mesh pixels; never
-                // inject synthetic XYZ or fake a successful user interaction.
                 if (window.__wreClickedRaycasts.length === 2 &&
                     scene.querySelectorAll('.wre-pick-marker').length === 2) {{
                   const [a,b]=window.__wreClickedRaycasts;
                   const u=b.map((v,i)=>v-a[i]);
                   const edge=Math.hypot(...u);
-                  const box=scene.getBoundingClientRect();
-                  for (let yi=0;yi<=10 && window.__wreClickedRaycasts.length<3;yi++) {{
-                    for (let xi=0;xi<=10 && window.__wreClickedRaycasts.length<3;xi++) {{
-                      const x=box.left+box.width*(0.15+0.7*xi/10);
-                      const y=box.top+box.height*(0.15+0.7*yi/10);
-                      const hit=scene.positionAndNormalFromPoint(x,y);
-                      if (!hit || !hit.position) continue;
-                      const v=[hit.position.x-a[0],hit.position.y-a[1],
-                               hit.position.z-a[2]];
-                      const cross=Math.hypot(
-                        u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],
-                        u[0]*v[1]-u[1]*v[0]);
-                      if (!(cross>edge*edge*1e-6)) continue;
-                      window.__wreCapturingClick=true;
-                      scene.dispatchEvent(new MouseEvent('click', {{
-                        bubbles:true, clientX:x, clientY:y
-                      }}));
-                      window.__wreCapturingClick=false;
-                    }}
+                  const box=scene.getBoundingClientRect(), candidates=[];
+                  for (let yi=0;yi<=10;yi++) for (let xi=0;xi<=10;xi++) {{
+                    const x=box.left+box.width*(0.15+0.7*xi/10);
+                    const y=box.top+box.height*(0.15+0.7*yi/10);
+                    const hit=scene.positionAndNormalFromPoint(x,y);
+                    if (!hit || !hit.position) continue;
+                    const v=[hit.position.x-a[0],hit.position.y-a[1],
+                             hit.position.z-a[2]];
+                    const area2=Math.hypot(
+                      u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],
+                      u[0]*v[1]-u[1]*v[0]);
+                    if (area2>edge*edge*1e-6) candidates.push({{x,y,area2}});
+                  }}
+                  candidates.sort((p,q)=>q.area2-p.area2);
+                  for (const p of candidates) {{
+                    if (window.__wreClickedRaycasts.length !== 2) break;
+                    window.__wreCapturingClick=true;
+                    scene.dispatchEvent(new MouseEvent('click', {{
+                      bubbles:true, clientX:p.x, clientY:p.y
+                    }}));
+                    window.__wreCapturingClick=false;
                   }}
                 }}
-                if (window.__wreClickedRaycasts.length !== 3) {{
-                  // Discard incomplete REAL clicks before another attempt.
-                  // Never fill missing geometry with synthetic coordinates.
-                  const count=window.__wreClickedRaycasts.length;
+                const clicked=window.__wreClickedRaycasts;
+                let area2=0, edge2=0;
+                if (clicked.length === 3) {{
+                  const [a,b,c]=clicked;
+                  const u=b.map((v,i)=>v-a[i]);
+                  const v=c.map((n,i)=>n-a[i]);
+                  edge2=Math.hypot(...u)**2;
+                  area2=Math.hypot(
+                    u[1]*v[2]-u[2]*v[1],
+                    u[2]*v[0]-u[0]*v[2],
+                    u[0]*v[1]-u[1]*v[0]);
+                }}
+                if (!(clicked.length===3 && area2>edge2*1e-6)) {{
+                  // Reject zero-area or incomplete REAL raycast selections;
+                  // reset and retry instead of accepting a false area proof.
+                  const count=clicked.length;
                   button.click();
                   button.click();
-                  return {{error:'mesh click did not complete',count}};
+                  return {{error:'noncollinear area click not completed',
+                           count,area2,edge2}};
                 }}
                 return {{
                   status:document.getElementById('wre-measure-result').textContent,
                   pressed:button.getAttribute('aria-pressed'),
                   enabled:!document.getElementById('wre-measure-export').disabled,
                   stoppedAutoRotate:!scene.hasAttribute('auto-rotate'),
-                  clicked:window.__wreClickedRaycasts.slice(),
+                  clicked:clicked.slice(),
+                  triangleArea:area2/2,
                   markerCount:scene.querySelectorAll('.wre-pick-marker').length
                 }};
               """
