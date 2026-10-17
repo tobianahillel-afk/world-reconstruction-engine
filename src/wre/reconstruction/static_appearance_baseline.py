@@ -2495,7 +2495,6 @@ def export_verified_gsplat_rgb_centers_glb(
         raise
 
 
-
 def export_verified_gsplat_splat(
     *,
     artifact_ref: ArtifactRef,
@@ -2574,8 +2573,7 @@ def export_verified_gsplat_splat(
                     try:
                         scales = tuple(math.exp(value) for value in logits)
                         if any(
-                            value <= 0 or value > (2.0 - 2.0**-23) * 2.0**127
-                            for value in scales
+                            value <= 0 or value > (2.0 - 2.0**-23) * 2.0**127 for value in scales
                         ):
                             raise ValueError("Gaussian scale exceeds float32 range")
                         packed_scale = struct.pack("<3f", *scales)
@@ -2616,7 +2614,6 @@ def export_verified_gsplat_splat(
             destination.unlink(missing_ok=True)
         raise
     return Sha256Digest(export_digest.hexdigest())
-
 
 
 def assemble_verified_gsplat_static_appearance_result(
