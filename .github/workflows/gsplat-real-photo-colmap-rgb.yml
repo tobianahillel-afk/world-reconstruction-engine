@@ -522,9 +522,10 @@ jobs:
               )
               with urlopen(request, timeout=40) as response:
                   data = json.load(response)
-              if data.get("value", {}).get("error"):
-                  raise RuntimeError(str(data["value"]))
-              return data["value"]
+              value = data.get("value")
+              if isinstance(value, dict) and value.get("error"):
+                  raise RuntimeError(str(value))
+              return value
 
           for _ in range(50):
               try:
