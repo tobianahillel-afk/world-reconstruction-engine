@@ -5624,6 +5624,8 @@ jobs:
                report["mode_screenshot_sha256"]["quality"]),
               ("sift", "Points SIFT et caméras estimées", "real-stereo-3d-sift.png",
                report["mode_screenshot_sha256"]["sift"]),
+              ("dual", "Comparaison simultanée de deux vrais modèles 3D",
+               "real-stereo-3d-side-by-side.png", report["side_by_side_screenshot_sha256"]),
           )
           cards = []
           for mode, label, name, expected in modes:
@@ -5655,7 +5657,7 @@ jobs:
           a{color:#bad9ff}pre{white-space:pre-wrap;overflow-wrap:anywhere}
           @media(max-width:700px){.gallery{grid-template-columns:1fr}}
           </style></head><body>
-          <h1>Quatre vues d'une reconstruction à partir de vraies photos</h1>
+          <h1>Quatre modèles 3D réels et leur comparaison côte à côte</h1>
           <p>Captures réalisées par Google Chrome (WebGL logiciel SwiftShader) sur les modèles
           issus d'une même exécution GitHub Actions. Sélectionnez une vue pour afficher
           son image PNG originale. Aucune connexion réseau requise pour ce rapport.</p>
@@ -5668,8 +5670,8 @@ jobs:
               html.escape(json.dumps(report, indent=2, sort_keys=True))
           ) + """</pre></details></body></html>"""
           (proof / "wre-real-3d-comparison.html").write_text(page, encoding="utf-8")
-          assert len(cards) == 4
-          print("Offline visual comparison verified: four same-run Chrome PNGs and hashes")
+          assert len(cards) == 5
+          print("Offline visual comparison verified: five same-run Chrome PNGs and hashes")
           PY
 
       - name: Package one complete offline interactive 3D exploration archive
@@ -5745,12 +5747,6 @@ jobs:
               if name in receipt["input_glb_sha256"] and digest != receipt["input_glb_sha256"][name]:
                   raise ValueError(f"Chrome input and packaged GLB disagree: {name}")
               source_hashes[name] = digest
-          compare_proof = (proof / "real-stereo-3d-side-by-side.png").read_bytes()
-          if not compare_proof.startswith(bytes.fromhex("89504e470d0a1a0a")) or (
-              hashlib.sha256(compare_proof).hexdigest()
-              != receipt.get("side_by_side_screenshot_sha256")
-          ):
-              raise ValueError("Side-by-side Chrome proof is missing or altered")
           for required in (
               "wre-real-stereo-cpu-viewer.html",
               "wre-model-viewer-4.1.0.min.js",
@@ -5761,6 +5757,7 @@ jobs:
           
           png_hashes = {
               "real-stereo-3d-browser.png": receipt["screenshot_sha256"],
+              "real-stereo-3d-side-by-side.png": receipt["side_by_side_screenshot_sha256"],
               **{
                   f"real-stereo-3d-{mode}.png": digest
                   for mode, digest in receipt["mode_screenshot_sha256"].items()
@@ -5768,11 +5765,12 @@ jobs:
           }
           if set(png_hashes) != {
               "real-stereo-3d-browser.png",
+              "real-stereo-3d-side-by-side.png",
               "real-stereo-3d-stereo.png",
               "real-stereo-3d-quality.png",
               "real-stereo-3d-sift.png",
           }:
-              raise ValueError("Four Chrome screenshot identities required")
+              raise ValueError("Five Chrome screenshot identities required")
           for name, digest in png_hashes.items():
               data = (proof / name).read_bytes()
               if not data.startswith(bytes.fromhex("89504e470d0a1a0a")):
