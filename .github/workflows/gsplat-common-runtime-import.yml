@@ -3195,3 +3195,186 @@ jobs:
           path: wre-cpu-3d-artifacts/
           if-no-files-found: error
           retention-days: 7
+
+
+  browser-real-3d-smoke:
+    name: Real Chrome 3D viewer modes (CPU SwiftShader)
+    # The CPU preview is uploaded BEFORE native compilation. Always try to
+    # inspect it, even if the later CUDA compilation in the parent job fails.
+    if: ${{ always() }}
+    needs: combined-native-import
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - name: Download exact-run real-photo CPU 3D artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: wre-real-stereo-cpu-early-preview
+          path: wre-browser-preview
+
+      - name: Render BOTH real-photo 3D modes using actual Chrome WebGL
+        shell: bash
+        run: |
+          set -euo pipefail
+          google-chrome --version
+          driver="$CHROMEWEBDRIVER/chromedriver"
+          test -x "$driver"
+          test -s wre-browser-preview/wre-real-stereo-cpu-viewer.html
+          test -s wre-browser-preview/wre-real-stereo-cpu-textured.glb
+          test -s wre-browser-preview/wre-real-stereo-sift-estimated-cameras.glb
+          test -s wre-browser-preview/wre-model-viewer-4.1.0.min.js
+          mkdir -p wre-browser-proof
+          python3 -m http.server 8765 --bind 127.0.0.1 --directory wre-browser-preview > wre-browser-proof/http.log 2>&1 &
+          http_pid="$!"
+          "$driver" --port=9515 --allowed-ips=127.0.0.1 > wre-browser-proof/chromedriver.log 2>&1 &
+          driver_pid="$!"
+          trap 'kill "$http_pid" "$driver_pid" 2>/dev/null || true' EXIT
+          python3 - <<'PY'
+          import base64
+          import hashlib
+          import json
+          import time
+          from pathlib import Path
+          from urllib.error import URLError
+          from urllib.request import Request, urlopen
+
+          root = Path("wre-browser-preview")
+          proof = Path("wre-browser-proof")
+          expected_files = (
+              "wre-real-stereo-cpu-textured.glb",
+              "wre-real-stereo-sift-estimated-cameras.glb",
+          )
+          expected_hashes = {
+              name: hashlib.sha256((root / name).read_bytes()).hexdigest()
+              for name in expected_files
+          }
+          base = "http://127.0.0.1:9515"
+          def call(method, route, body=None):
+              data = None if body is None else json.dumps(body).encode("utf-8")
+              req = Request(
+                  base + route, data=data, method=method,
+                  headers={"Content-Type": "application/json"}
+              )
+              with urlopen(req, timeout=40) as response:
+                  raw = response.read()
+              return json.loads(raw)["value"] if raw else None
+
+          for attempt in range(50):
+              try:
+                  if call("GET", "/status")["ready"]:
+                      break
+              except (OSError, URLError, KeyError):
+                  pass
+              time.sleep(0.2)
+          else:
+              raise RuntimeError("ChromeDriver did not start on localhost")
+
+          options = {
+              "browserName": "chrome",
+              "goog:chromeOptions": {
+                  "args": [
+                      "--headless=new", "--no-sandbox", "--disable-dev-shm-usage",
+                      "--enable-unsafe-swiftshader", "--use-gl=angle",
+                      "--use-angle=swiftshader", "--window-size=1280,900",
+                      "--disable-background-networking",
+                      "--host-resolver-rules=MAP * 0.0.0.0, EXCLUDE localhost",
+                  ]
+              }
+          }
+          session_data = call("POST", "/session", {"capabilities": {"alwaysMatch": options}})
+          session = session_data["sessionId"]
+          def js(script):
+              return call(
+                  "POST", f"/session/{session}/execute/sync",
+                  {"script": script, "args": []}
+              )
+          try:
+              call(
+                  "POST", f"/session/{session}/url",
+                  {"url": "http://127.0.0.1:8765/wre-real-stereo-cpu-viewer.html"}
+              )
+              def until(script, limit=70):
+                  deadline = time.monotonic() + limit
+                  while time.monotonic() < deadline:
+                      result = js(script)
+                      if result:
+                          return result
+                      time.sleep(0.4)
+                  raise RuntimeError("Actual Chrome 3D render did not reach expected state")
+
+              # model-viewer really initializes WebGL and decodes the first GLB.
+              first = until("""
+                const view=document.getElementById('wre-scene');
+                return customElements.get('model-viewer') &&
+                  view && view.loaded === true && view.model &&
+                  view.getAttribute('src').startsWith('data:model/gltf-binary;base64,');
+              """)
+              assert first
+              js("""
+                window.__wre3dLoads=0;
+                document.getElementById('wre-scene').addEventListener(
+                  'load', () => window.__wre3dLoads++);
+                const chooser=document.getElementById('wre-scene-choice');
+                chooser.value='sift';
+                chooser.dispatchEvent(new Event('change', {bubbles:true}));
+              """)
+              second = until("""
+                const scene=document.getElementById('wre-scene');
+                return window.__wre3dLoads >= 1 && scene.loaded === true &&
+                  scene.model &&
+                  scene.getAttribute('src') ===
+                    './wre-real-stereo-sift-estimated-cameras.glb' &&
+                  document.getElementById('wre-scene-provenance').textContent
+                    .includes('unknown metric scale');
+              """)
+              assert second
+              js("""
+                const chooser=document.getElementById('wre-scene-choice');
+                chooser.value='surface';
+                chooser.dispatchEvent(new Event('change', {bubbles:true}));
+              """)
+              assert until("""
+                const scene=document.getElementById('wre-scene');
+                return window.__wre3dLoads >= 2 && scene.loaded === true &&
+                  scene.model &&
+                  scene.getAttribute('src').startsWith('data:model/gltf-binary;base64,');
+              """)
+              webgl = js("""
+                const c=document.createElement('canvas');
+                return Boolean(c.getContext('webgl2') || c.getContext('webgl'));
+              """)
+              assert webgl, "Chrome did not expose a WebGL rendering context"
+              screenshot = call("GET", f"/session/{session}/screenshot")
+              png = base64.b64decode(screenshot, validate=True)
+              assert png.startswith(b"\x89PNG\r\n\x1a\n") and len(png) > 10000
+              (proof / "real-stereo-3d-browser.png").write_bytes(png)
+              (proof / "browser-verification.json").write_text(
+                  json.dumps({
+                      "real_browser": "Google Chrome (headless)",
+                      "render_backend": "CPU SwiftShader; no CUDA training",
+                      "surface_loaded": True,
+                      "sift_camera_mode_loaded": True,
+                      "surface_reload": True,
+                      "webgl_context": True,
+                      "input_glb_sha256": expected_hashes,
+                      "screenshot_sha256": hashlib.sha256(png).hexdigest(),
+                      "metric_scale_known": False,
+                      "real_gpu_training": False,
+                  }, indent=2, sort_keys=True) + "\n",
+                  encoding="utf-8"
+              )
+              print("Actual Chrome WebGL: surface -> SIFT/cameras -> surface PASS")
+          finally:
+              call("DELETE", f"/session/{session}")
+          PY
+
+      - name: Publish real browser rendering evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wre-real-photo-browser-proof
+          path: wre-browser-proof/
+          if-no-files-found: warn
+          retention-days: 7
