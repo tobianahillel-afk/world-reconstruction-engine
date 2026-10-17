@@ -2949,7 +2949,9 @@ def _gsplat_rgb_preview_cli(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--max-steps", type=int, help="Original trainer max_steps / PLY step number"
     )
-    parser.add_argument("--preview", type=Path, help="New output RGB .ply, .glb centers, or anisotropic .splat")
+    parser.add_argument(
+        "--preview", type=Path, help="New RGB .ply, .glb centers or anisotropic .splat"
+    )
     parser.add_argument(
         "--max-points",
         type=int,
