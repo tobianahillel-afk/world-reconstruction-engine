@@ -1802,7 +1802,86 @@ jobs:
       # Run the actual-photo CPU reconstruction BEFORE expensive native CUDA
       # compilation. Keep the original photo pipeline in one place and make
       # its real 3D/preview outputs inspectable even while CUDA builds run.
-      - name: Stage thirty-four real-photo CPU 3D and SIFT COLMAP outputs early
+      - name: Package interactive browser preview of real-photo textured GLB (CPU)
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$COMMON_PYTHON" - <<'PY'
+          import base64
+          import hashlib
+          import os
+          import struct
+          from pathlib import Path
+
+          output = Path(os.environ["RUNNER_TEMP"])
+          source = output / "wre-real-stereo-cpu-textured.glb"
+          payload = source.read_bytes()
+          # glTF 2.0 binary header: magic, version, complete byte length.
+          assert 1024 < len(payload) <= 40_000_000
+          assert payload[:4] == b"glTF"
+          assert struct.unpack_from("<I", payload, 4)[0] == 2
+          assert struct.unpack_from("<I", payload, 8)[0] == len(payload)
+          digest = hashlib.sha256(payload).hexdigest()
+          encoded = base64.b64encode(payload).decode("ascii")
+          # Embed the actual previously generated GLB directly. Opening the
+          # HTML file needs no local web server or separately hosted model;
+          # only the pinned free open-source browser component needs network.
+          page = """<!doctype html>
+          <html lang="en">
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width,initial-scale=1">
+            <title>WRE · Real-photograph CPU 3D preview</title>
+            <script type="module"
+              src="https://cdnjs.cloudflare.com/ajax/libs/model-viewer/4.1.0/model-viewer.min.js"
+              integrity="sha512-PMy/x5h09gVKwc21Cdcgu/VWJwgmeJ7uivJkbTar3vh5t8uzYo3NQgTkZE0fsfUd+9vihkAcLNAh6mv9mEXkZQ=="
+              crossorigin="anonymous"></script>
+            <style>
+              html,body { margin:0; height:100%; background:#101722; color:#e6edf7;
+                font:15px system-ui,sans-serif; }
+              main { height:100%; display:flex; flex-direction:column; }
+              header { padding:12px 18px; background:#192332; }
+              h1 { font-size:18px; margin:0 0 5px; }
+              p { margin:3px 0; line-height:1.35; }
+              model-viewer { display:block; width:100%; flex:1; min-height:320px; }
+              footer { padding:8px 18px; background:#192332;
+                overflow-wrap:anywhere; font-size:12px; }
+            </style>
+          </head>
+          <body>
+          <main>
+            <header>
+              <h1>WRE · Interactive real-photo stereo 3D</h1>
+              <p>Drag to orbit, scroll to zoom. Geometry and texture come from two
+              pinned real photographs reconstructed on CPU.</p>
+              <p>Static approximate stereo mesh. Uncalibrated scene scale;
+              incomplete/occluded surfaces. NOT 4D, Gaussian training or GPU rendering.</p>
+            </header>
+            <model-viewer camera-controls auto-rotate interaction-prompt="auto"
+              alt="Approximate CPU stereo 3D reconstruction from two real photos"
+              src="data:model/gltf-binary;base64,WRE_GLB_BASE64"></model-viewer>
+            <footer>GLB SHA-256: WRE_GLB_SHA256. The mesh is embedded in this file;
+              the free model-viewer 4.1.0 renderer requires an internet connection.
+              Downloaded model bytes are not sent to an AI or paid API.</footer>
+          </main>
+          </body>
+          </html>
+          """
+          page = page.replace("WRE_GLB_BASE64", encoded).replace("WRE_GLB_SHA256", digest)
+          # Verify the browser artifact carries EXACTLY the validated source GLB.
+          inline = page.split("data:model/gltf-binary;base64,", 1)[1].split('"', 1)[0]
+          assert base64.b64decode(inline, validate=True) == payload
+          assert page.count("data:model/gltf-binary;base64,") == 1
+          viewer = output / "wre-real-stereo-cpu-viewer.html"
+          viewer.write_text(page, encoding="utf-8")
+          assert viewer.stat().st_size > len(payload)
+          print(
+              f"Real-photo stereo 3D viewer: {viewer.name}; GLB SHA256 {digest}; "
+              f"HTML bytes {viewer.stat().st_size}. Browser render not CI-tested."
+          )
+          PY
+
+      - name: Stage thirty-five real-photo CPU 3D and SIFT COLMAP outputs early
         shell: bash
         run: |
           set -euo pipefail
@@ -1820,6 +1899,7 @@ jobs:
             wre-real-stereo-cpu-surface.ply \
             wre-real-stereo-cpu-textured.obj \
             wre-real-stereo-cpu-textured.glb \
+            wre-real-stereo-cpu-viewer.html \
             wre-real-stereo-cpu-3d-flythrough.gif \
             wre-real-stereo-cpu-photo-flythrough.gif \
             wre-real-stereo-cpu-dual-photo-flythrough.gif \
@@ -1847,7 +1927,7 @@ jobs:
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 34
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 35
 
       - name: Publish real-photo CPU 3D plus COLMAP before native CUDA builds
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -2920,6 +3000,7 @@ jobs:
             wre-real-stereo-cpu-surface.ply \
             wre-real-stereo-cpu-textured.obj \
             wre-real-stereo-cpu-textured.glb \
+            wre-real-stereo-cpu-viewer.html \
             wre-real-stereo-cpu-3d-flythrough.gif \
             wre-real-stereo-cpu-photo-flythrough.gif \
             wre-real-stereo-cpu-dual-photo-flythrough.gif \
@@ -2945,8 +3026,8 @@ jobs:
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 50
-          echo "Staged all 50 real PLY/OBJ/GLB/GIF/MTL/PNG/PFM/NPY/JSON/ZIP files for artifact upload"
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 51
+          echo "Staged all 51 real PLY/OBJ/GLB/HTML/GIF/MTL/PNG/PFM/NPY/JSON/ZIP files for artifact upload"
 
       - name: Publish CPU COLMAP 3D preview and measured reprojection
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
