@@ -854,6 +854,8 @@ jobs:
           import math
           import os
           import struct
+          import time
+          import urllib.error
           import urllib.request
           import zipfile
           from pathlib import Path
@@ -866,8 +868,15 @@ jobs:
               "HalfSize/zip-2views/Aloe-2views.zip"
           )
           # 1.4 MiB official ZIP; bound both transport and uncompressed data.
-          with urllib.request.urlopen(archive_url, timeout=90) as response:
-              archive_bytes = response.read(3_000_001)
+          for attempt in range(3):
+              try:
+                  with urllib.request.urlopen(archive_url, timeout=45) as response:
+                      archive_bytes = response.read(3_000_001)
+                  break
+              except (urllib.error.URLError, TimeoutError):
+                  if attempt == 2:
+                      raise
+                  time.sleep(2 * (attempt + 1))
           assert 0 < len(archive_bytes) <= 3_000_000
           archive_sha256 = hashlib.sha256(archive_bytes).hexdigest()
           # First actual GitHub Actions benchmark run 38988336781 published
