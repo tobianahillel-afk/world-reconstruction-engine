@@ -361,6 +361,8 @@ from wre.reconstruction.open3d_surface import (
 )
 from wre.reconstruction.static_appearance_baseline import (
     assemble_verified_gsplat_static_appearance_result,
+    export_verified_gsplat_rgb_centers_glb,
+    export_verified_gsplat_rgb_centers_ply,
     reconstruct_gsplat_static_appearance,
     run_gsplat_reference_training,
     verify_gsplat_fused_ssim_reference_sources,
@@ -715,6 +717,8 @@ __all__ = [
     "publish_colmap_pair_matches",
     "reconstruct_colmap_globally",
     "reconstruct_colmap_incrementally",
+    "export_verified_gsplat_rgb_centers_glb",
+    "export_verified_gsplat_rgb_centers_ply",
     "reconstruct_gsplat_static_appearance",
     "run_gsplat_reference_training",
     "verify_colmap_geometry",
