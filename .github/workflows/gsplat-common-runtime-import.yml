@@ -7967,6 +7967,74 @@ jobs:
                              zip(row[:3], point["xyz_relative_model_units"]))
                   assert [int(value) for value in row[3:]] == rgb
               print("PASS: actual Chrome exported real-photo colored relative XYZ as PLY")
+              # Reopen the real OFFLINE archive in Chrome, then import the
+              # JSON emitted by its own browser from verified Middlebury PFM
+              # bytes. File API/async handler and link updates are real DOM.
+              comparison_url = js("return location.href")
+              browser("POST", f"/session/{session}/url", {"url": comparison_url})
+              wait_for(lambda: js("""return (() => {
+                  const image=document.getElementById('wre-stereo-disparity');
+                  return !!image && image.complete && image.naturalWidth > 0 &&
+                    !!document.getElementById('wre-import-stereo-points');
+              })()"""))
+              assert js("""return (() => {
+                  const link=document.getElementById('wre-saved-points-live-3d');
+                  return link.getAttribute('aria-disabled')==='true' &&
+                    !link.hasAttribute('href') &&
+                    document.getElementById('wre-export-stereo-points').disabled;
+              })()""")
+
+              def load_stereo_json_in_chrome(payload):
+                  # JS File/DataTransfer is the browser's actual local input API;
+                  # no mock of the importer, PFM loader or 3D geometry.
+                  encoded = json.dumps(json.dumps(payload, separators=(",", ":")))
+                  assert js(f"""const form=document.getElementById('wre-import-stereo-points');
+                      const file=new File([{encoded}], 'observed.json',
+                        {{type:'application/json'}});
+                      const transfer=new DataTransfer();
+                      transfer.items.add(file);
+                      form.files=transfer.files;
+                      form.dispatchEvent(new Event('change', {{bubbles:true}}));
+                      return true;""")
+
+              bad_source = dict(exported)
+              bad_source["source_pfm_sha256"] = "0" * 64
+              load_stereo_json_in_chrome(bad_source)
+              wait_for(lambda: js("""return document.getElementById(
+                  'wre-stereo-import-status').dataset.result==='error'"""))
+              assert js("""return !document.getElementById(
+                  'wre-saved-points-live-3d').hasAttribute('href')""")
+
+              bad_xyz = json.loads(json.dumps(exported))
+              bad_xyz["points"][0]["xyz_relative_model_units"][0] += 1.0
+              load_stereo_json_in_chrome(bad_xyz)
+              wait_for(lambda: js("""return document.getElementById(
+                  'wre-stereo-import-status').dataset.result==='error'"""))
+              assert js("""return document.getElementById(
+                  'wre-export-stereo-ply').disabled""")
+
+              load_stereo_json_in_chrome(exported)
+              wait_for(lambda: js("""return document.getElementById(
+                  'wre-stereo-import-status').dataset.result==='ok'"""))
+              restored = js("""return (() => {
+                  const link=document.getElementById('wre-saved-points-live-3d');
+                  if (!link.href || link.getAttribute('aria-disabled')!=='false')
+                    return null;
+                  return {
+                    count:document.getElementById('wre-stereo-point-count').textContent,
+                    data:new URL(link.href).searchParams.get('stereo_points'),
+                    exportEnabled:!document.getElementById('wre-export-stereo-points').disabled,
+                    plyEnabled:!document.getElementById('wre-export-stereo-ply').disabled
+                  };
+              })()""")
+              assert restored and restored["count"].startswith("2 points")
+              assert restored["exportEnabled"] and restored["plyEnabled"]
+              restored_xyz = json.loads(restored["data"])
+              assert len(restored_xyz) == len(exported["points"]) == 2
+              for xyz, saved in zip(restored_xyz, exported["points"]):
+                  assert all(abs(value - expected) < 1e-4 for value, expected in
+                             zip(xyz, saved["xyz_relative_model_units"]))
+              print("PASS: actual Chrome restored saved stereo JSON against real PFM")
               # The new public multi-observation link must carry EXACTLY the
               # same two PFM-derived XYZ already checked against real file bytes.
               saved_link = js("""return (() => {
