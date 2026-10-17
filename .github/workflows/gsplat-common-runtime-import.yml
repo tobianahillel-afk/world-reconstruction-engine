@@ -1112,6 +1112,49 @@ jobs:
           with lr_ply.open("rb") as check:
               assert check.read(len(lr_header)) == lr_header
               assert len(check.read()) == 15 * len(lr_xyz)
+          # Second established SGBM 4-direction variant; no GT-derived selection.
+          hh4 = cv2.StereoSGBM_create(
+              minDisparity=min_disparity, numDisparities=160, blockSize=5,
+              P1=8 * 3 * 25, P2=32 * 3 * 25, uniquenessRatio=10,
+              speckleWindowSize=50, speckleRange=2, mode=cv2.STEREO_SGBM_MODE_HH4,
+          )
+          hh4_disp = hh4.compute(left_gray, right_gray).astype(np.float32) / 16.0
+          hh4_valid = np.isfinite(hh4_disp) & (hh4_disp >= min_disparity) & (hh4_disp > 0)
+          hh4_count = int(np.count_nonzero(hh4_valid))
+          hh4_ids = np.flatnonzero(hh4_valid)[
+              ::max(1, math.ceil(max(1, hh4_count) / 60_000))
+          ]
+          hh4_y, hh4_x = np.unravel_index(hh4_ids, hh4_disp.shape)
+          hh4_d = hh4_disp[hh4_y, hh4_x].astype(np.float64)
+          hh4_z = focal_px * baseline_mm / hh4_d
+          hh4_xyz = np.column_stack((
+              (hh4_x - (width - 1) / 2.0) * hh4_z / focal_px,
+              (hh4_y - (height - 1) / 2.0) * hh4_z / focal_px,
+              hh4_z,
+          )).astype(np.float32)
+          hh4_rgb = cv2.cvtColor(left, cv2.COLOR_BGR2RGB)[hh4_y, hh4_x]
+          assert len(hh4_xyz) <= 60_000
+          assert np.isfinite(hh4_xyz).all() and np.all(hh4_xyz[:, 2] > 0)
+          hh4_header = ply_header.replace(
+              f"element vertex {len(points)}\n".encode(),
+              f"element vertex {len(hh4_xyz)}\n".encode(),
+          )
+          hh4_ply = Path(os.environ["RUNNER_TEMP"]) / "wre-middlebury-half-aloe-cpu-hh4-3d.ply"
+          with hh4_ply.open("wb") as out:
+              out.write(hh4_header)
+              for xyz, color in zip(hh4_xyz, hh4_rgb, strict=True):
+                  out.write(struct.pack(
+                      "<3f3B", float(xyz[0]), float(xyz[1]), float(xyz[2]),
+                      int(color[0]), int(color[1]), int(color[2]),
+                  ))
+          assert hh4_ply.stat().st_size == len(hh4_header) + 15 * len(hh4_xyz)
+          with hh4_ply.open("rb") as check:
+              assert check.read(len(hh4_header)) == hh4_header
+              assert len(check.read()) == 15 * len(hh4_xyz)
+          # Evaluate versus official GT only AFTER generating the predictions.
+          hh4_evaluated = hh4_valid & known
+          hh4_error = np.abs(hh4_disp[hh4_evaluated] - reference[hh4_evaluated])
+
           lr_known = lr_mask & known
           lr_error = np.abs(predicted[lr_known] - reference[lr_known])
 
@@ -1142,6 +1185,19 @@ jobs:
               "consensus_matchers": ["OpenCV StereoSGBM", "OpenCV StereoBM"],
               "consensus_abs_disparity_threshold_px": 2.0,
               "consensus_uses_groundtruth_visibility_mask": False,
+              "sgbm_hh4_mode": "OpenCV StereoSGBM MODE_HH4 CPU",
+              "sgbm_hh4_uses_groundtruth_for_solver_selection": False,
+              "sgbm_hh4_rgb_3d_ply_name": hh4_ply.name,
+              "sgbm_hh4_rgb_3d_points": int(len(hh4_xyz)),
+              "sgbm_hh4_valid_predicted_pixels": hh4_count,
+              "sgbm_hh4_reference_overlap_for_evaluation_only": int(len(hh4_error)),
+              "sgbm_hh4_reference_rmse_px_for_evaluation_only": (
+                  float(np.sqrt(np.mean(hh4_error * hh4_error))) if len(hh4_error) else None
+              ),
+              "sgbm_hh4_reference_bad_gt_2px_fraction_for_evaluation_only": (
+                  float(np.mean(hh4_error > 2.0)) if len(hh4_error) else None
+              ),
+
               "left_right_rgb_3d_ply_name": lr_ply.name,
               "left_right_rgb_3d_points": int(len(lr_xyz)),
               "left_right_consistent_pixels": lr_count,
@@ -1204,13 +1260,14 @@ jobs:
             wre-middlebury-half-aloe-gt.json \
             wre-middlebury-half-aloe-cpu-3d.ply \
             wre-middlebury-half-aloe-cpu-consensus-3d.ply \
-            wre-middlebury-half-aloe-cpu-left-right-3d.ply
+            wre-middlebury-half-aloe-cpu-left-right-3d.ply \
+            wre-middlebury-half-aloe-cpu-hh4-3d.ply
           do
             test -s "$RUNNER_TEMP/$name"
             cp "$RUNNER_TEMP/$name" "$bundle/$name"
             test -s "$bundle/$name"
           done
-          test "$(find "$bundle" -maxdepth 1 -type f | wc -l)" -eq 4
+          test "$(find "$bundle" -maxdepth 1 -type f | wc -l)" -eq 5
 
       - name: Publish independently measured Middlebury stereo quality and RGB 3D
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
