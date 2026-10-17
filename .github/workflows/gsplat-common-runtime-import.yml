@@ -1872,8 +1872,8 @@ jobs:
               chunk_bytes, chunk_type = struct.unpack_from("<I4s", content, 12)
               assert chunk_type == b"JSON"
               doc = json.loads(content[20:20 + chunk_bytes])
+              assert doc["asset"]["version"] == "2.0"
               assert doc["meshes"][0]["primitives"][0]["mode"] == 0
-              assert doc["asset"]["extras"]["metric_scale_known"] is False
               cloud_digests[label] = hashlib.sha256(content).hexdigest()
           # Keep the observed source and reconstruction errors visible beside
           # the GLB. Every diagnostic is a previously measured CPU output,
