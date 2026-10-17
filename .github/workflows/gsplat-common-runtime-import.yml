@@ -2127,6 +2127,9 @@ jobs:
               No selected stereo observation linked to this static 3D preview.</p>
             <div id="wre-saved-stereo-navigation" role="group"
               aria-label="Navigate saved stereo points in approximate 3D"></div>
+            <p id="wre-saved-stereo-distance" role="status" aria-live="polite">
+              Select two different saved photo observations to measure their relative 3D distance.
+              No metric calibration is available.</p>
             <p id="wre-measure-result" class="metrics" aria-live="polite">
               Surface measurement off. Coordinates are arbitrary 3D model units, NOT meters.</p>
             <script>
@@ -2175,6 +2178,8 @@ jobs:
                   const navigation = document.getElementById("wre-saved-stereo-navigation");
                   const observedStatus =
                     document.getElementById("wre-observed-stereo-marker-status");
+                  const stereoDistance = document.getElementById("wre-saved-stereo-distance");
+                  let previousObservedIndex = null;
                   savedPoints.forEach((point, index) => {
                     const marker = document.createElement("button");
                     marker.type = "button";
@@ -2201,6 +2206,21 @@ jobs:
                       scene.removeAttribute("auto-rotate");
                       scene.cameraTarget = marker.dataset.position;
                       scene.jumpCameraToGoal();
+                      if (previousObservedIndex !== null && previousObservedIndex !== index) {
+                        const previous = savedPoints[previousObservedIndex];
+                        const distance = Math.hypot(
+                          point[0] - previous[0], point[1] - previous[1],
+                          point[2] - previous[2]);
+                        stereoDistance.dataset.distance = String(distance);
+                        stereoDistance.dataset.firstIndex = String(previousObservedIndex);
+                        stereoDistance.dataset.secondIndex = String(index);
+                        stereoDistance.textContent =
+                          "3D separation of saved observations " +
+                          (previousObservedIndex + 1) + " and " + (index + 1) +
+                          ": " + distance.toFixed(4) +
+                          " relative model units; NOT calibrated meters.";
+                      }
+                      previousObservedIndex = index;
                       for (const button of navigation.querySelectorAll("button")) {
                         button.setAttribute("aria-pressed", String(button === focus));
                       }
@@ -8040,6 +8060,23 @@ jobs:
                           all(abs(actual - target) < 1e-3 for actual, target in
                               zip(result["xyz"], expected_target)))
                   wait_for(focused)
+              # Independently calculate the distance between the two actual
+              # SHA-verified real-photo PFM observations, not just DOM counters.
+              distance = js("""return (() => {
+                  const status=document.getElementById('wre-saved-stereo-distance');
+                  return status ? {value:Number(status.dataset.distance),
+                      from:status.dataset.firstIndex, to:status.dataset.secondIndex,
+                      text:status.textContent} : null;
+              })()""")
+              from math import dist as euclidean_distance
+              relative_xyz = [point["xyz_relative_model_units"] for point in exported["points"]]
+              expected_distance = euclidean_distance(relative_xyz[0], relative_xyz[1])
+              assert distance and distance["from"] == "0" and distance["to"] == "1"
+              assert abs(distance["value"] - expected_distance) < 1e-5
+              assert expected_distance > 0
+              assert "relative model units" in distance["text"]
+              assert "NOT calibrated meters" in distance["text"]
+              print("PASS: real PFM-derived 3D observation distance rendered in live Chrome")
               js("""const choice=document.getElementById('wre-scene-choice');
                   choice.value='sift';
                   choice.dispatchEvent(new Event('change', {bubbles:true}));""")
