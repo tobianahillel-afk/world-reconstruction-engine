@@ -1395,7 +1395,7 @@ jobs:
                       "temporal_scene_change_measured": False,
                       "scale_metric_known": False,
                       "source_photos_license": "CC BY-NC 4.0; noncommercial",
-                  }, sort_keys=True, indent=2) + "\\n"
+                  }, sort_keys=True, indent=2)
               )
               print(
                   "REAL PHOTO GAUSSIAN CAMERA TOUR:",
