@@ -1926,6 +1926,11 @@ jobs:
               h1 { font-size:18px; margin:0 0 5px; }
               p { margin:3px 0; line-height:1.35; }
               model-viewer { display:block; width:100%; flex:1; min-height:320px; }
+              .wre-views { display:flex; flex:1; min-height:320px; gap:6px; }
+              .wre-views model-viewer { flex:1; min-width:0; }
+              .wre-views.dual model-viewer { width:50%; }
+              .wre-views [hidden] { display:none !important; }
+              @media(max-width:700px) { .wre-views.dual { flex-direction:column; } }
               .wre-pick-marker { background:#ffdf68; color:#172232; border:2px solid #172232;
                 border-radius:50%; width:29px; height:29px; font:bold 14px sans-serif;
                 text-align:center; pointer-events:none; }
@@ -1961,6 +1966,16 @@ jobs:
                 <option value="quality">Photometric-consistent observed RGB points</option>
                 <option value="sift">Measured SIFT 3D points and camera frustums</option>
               </select>
+              <label for="wre-compare-choice">Second 3D view:</label>
+              <select id="wre-compare-choice" aria-label="Select a second 3D model to compare">
+                <option value="">Comparison off</option>
+                <option value="surface">Photo-textured surface</option>
+                <option value="stereo">Stereo RGB points</option>
+                <option value="quality">Photometric RGB points</option>
+                <option value="sift">SIFT 3D points and cameras</option>
+              </select>
+              <button id="wre-compare-sync" type="button" disabled>Copy left viewpoint to right</button>
+              <span id="wre-compare-status" role="status">Comparison off.</span>
               <a href="./wre-real-stereo-cpu-textured.glb" download>Download surface GLB</a>
               <a href="./wre-real-stereo-cpu-lr-consistent.glb" download>Download stereo points GLB</a>
               <a href="./wre-real-stereo-cpu-photometric-consistent.glb" download>Download filtered points GLB</a>
@@ -2006,9 +2021,13 @@ jobs:
                 aria-label="Restore a previously exported 3D camera viewpoint" disabled>
               <span id="wre-camera-status" role="status">Camera bookmark available after load.</span>
             </div>
-            <model-viewer id="wre-scene" camera-controls auto-rotate interaction-prompt="auto"
-              alt="Approximate CPU stereo 3D reconstruction from two real photos"
-              src="data:model/gltf-binary;base64,WRE_GLB_BASE64"></model-viewer>
+            <div id="wre-views" class="wre-views">
+              <model-viewer id="wre-scene" camera-controls auto-rotate interaction-prompt="auto"
+                alt="Approximate CPU stereo 3D reconstruction from two real photos"
+                src="data:model/gltf-binary;base64,WRE_GLB_BASE64"></model-viewer>
+              <model-viewer id="wre-compare-scene" camera-controls hidden
+                alt="Second independently rendered real-photo 3D comparison"></model-viewer>
+            </div>
             <p id="wre-scene-provenance" class="metrics" aria-live="polite">
               Photo-textured stereo surface · SHA-256 WRE_GLB_SHA256</p>
             <p id="wre-measure-result" class="metrics" aria-live="polite">
@@ -2016,6 +2035,11 @@ jobs:
             <script>
               const scene = document.getElementById("wre-scene");
               const chooser = document.getElementById("wre-scene-choice");
+              const compareChoice = document.getElementById("wre-compare-choice");
+              const compareScene = document.getElementById("wre-compare-scene");
+              const compareSync = document.getElementById("wre-compare-sync");
+              const compareStatus = document.getElementById("wre-compare-status");
+              const viewPair = document.getElementById("wre-views");
               const provenance = document.getElementById("wre-scene-provenance");
               const localInput = document.getElementById("wre-local-glb");
               const measureButton = document.getElementById("wre-measure-toggle");
@@ -2928,6 +2952,48 @@ jobs:
                   label: "SIFT estimated points + cameras (unknown metric scale) · SHA-256 WRE_SIFT_GLB_SHA256"
                 }
               };
+              // Compare two independently rendered real GLB assets. Copying a
+              // camera does NOT register different geometries or prove scale.
+              compareChoice.addEventListener("change", () => {
+                const other = modes[compareChoice.value];
+                compareSync.disabled = true;
+                if (!other) {
+                  compareScene.removeAttribute("src");
+                  compareScene.hidden = true;
+                  viewPair.classList.remove("dual");
+                  compareStatus.textContent = "Comparison off.";
+                  return;
+                }
+                compareScene.hidden = false;
+                viewPair.classList.add("dual");
+                compareStatus.textContent = "Loading independent right-hand GLB...";
+                compareScene.setAttribute("alt", other.alt);
+                compareScene.setAttribute("src", other.src);
+              });
+              compareScene.addEventListener("load", () => {
+                if (compareScene.hidden) return;
+                compareSync.disabled = !scene.loaded;
+                compareStatus.textContent = "Both 3D models rendered; geometry uses uncalibrated units.";
+              });
+              compareScene.addEventListener("error", () => {
+                compareSync.disabled = true;
+                compareStatus.textContent = "Right-hand model could not be loaded.";
+              });
+              compareSync.addEventListener("click", () => {
+                if (!scene.loaded || !compareScene.loaded || compareScene.hidden) return;
+                const orbit = scene.getCameraOrbit();
+                const target = scene.getCameraTarget();
+                const fov = scene.getFieldOfView();
+                if (![orbit.theta, orbit.phi, orbit.radius, target.x, target.y,
+                      target.z, fov].every(Number.isFinite)) return;
+                compareScene.cameraOrbit = orbit.theta + "rad " + orbit.phi +
+                  "rad " + orbit.radius + "m";
+                compareScene.cameraTarget = [target.x, target.y, target.z]
+                  .map(value => value + "m").join(" ");
+                compareScene.fieldOfView = fov + "deg";
+                compareScene.jumpCameraToGoal();
+                compareStatus.textContent = "Copied camera coordinates only; 3D models are not registered.";
+              });
               chooser.addEventListener("change", () => {
                 const mode = modes[chooser.value];
                 if (!mode) return;
@@ -4348,6 +4414,60 @@ jobs:
                   view.getAttribute('src').startsWith('data:model/gltf-binary;base64,');
               """)
               assert first
+              # Both models are actual photo-derived 3D GLBs rendered in the
+              # same real Chrome/WebGL session, not static screenshots.
+              js("""
+                const pick=document.getElementById('wre-compare-choice');
+                pick.value='sift';
+                pick.dispatchEvent(new Event('change', {bubbles:true}));
+              """)
+              assert until("""
+                const left=document.getElementById('wre-scene');
+                const right=document.getElementById('wre-compare-scene');
+                return left.loaded && right.loaded && left.model && right.model &&
+                  right.getAttribute('src') ===
+                    './wre-real-stereo-sift-estimated-cameras.glb' &&
+                  !right.hidden && right.getBoundingClientRect().width > 200 &&
+                  left.getBoundingClientRect().width > 200 &&
+                  !document.getElementById('wre-compare-sync').disabled &&
+                  document.getElementById('wre-compare-status').textContent
+                    .includes('Both 3D models rendered');
+              """), "Both real GLBs were not loaded side-by-side"
+              js("""
+                document.getElementById('wre-scene').removeAttribute('auto-rotate');
+                document.getElementById('wre-compare-sync').click();
+              """)
+              assert until("""
+                const right=document.getElementById('wre-compare-scene');
+                return right.loaded &&
+                  right.cameraOrbit.includes('rad') &&
+                  right.cameraTarget.includes('m') &&
+                  document.getElementById('wre-compare-status').textContent
+                    .includes('not registered');
+              """), "Real 3D comparison camera-copy action did not complete"
+              comparison_png = base64.b64decode(
+                  call("GET", f"/session/{session}/screenshot"), validate=True
+              )
+              assert comparison_png.startswith(bytes.fromhex("89504e470d0a1a0a"))
+              assert len(comparison_png) > 10000
+              (proof / "real-stereo-3d-side-by-side.png").write_bytes(comparison_png)
+              side_by_side_sha256 = hashlib.sha256(comparison_png).hexdigest()
+              js("""
+                const pick=document.getElementById('wre-compare-choice');
+                pick.value='';
+                pick.dispatchEvent(new Event('change', {bubbles:true}));
+                document.getElementById('wre-scene').setAttribute('auto-rotate','');
+              """)
+              assert js("""
+                const right=document.getElementById('wre-compare-scene');
+                return right.hidden &&
+                  !document.getElementById('wre-views').classList.contains('dual') &&
+                  document.getElementById('wre-compare-sync').disabled &&
+                  document.getElementById('wre-scene').loaded &&
+                  document.getElementById('wre-scene').hasAttribute('auto-rotate') &&
+                  document.getElementById('wre-compare-status').textContent
+                    .includes('Comparison off');
+              """), "Closing comparison altered the primary 3D experience"
               # A REAL model-viewer screenshot of the loaded real-photo mesh.
               # Exercise the same user-facing button/API (not a ChromeDriver
               # viewport screenshot), check actual PNG bytes and dimensions.
@@ -5449,6 +5569,8 @@ jobs:
                       "stereo_cloud_mode_loaded": True,
                       "photometric_cloud_mode_loaded": True,
                       "sift_camera_mode_loaded": True,
+                      "two_real_3d_models_compared_side_by_side": True,
+                      "side_by_side_screenshot_sha256": side_by_side_sha256,
                       "local_glb_file_loaded_in_chrome": True,
                       "surface_distance_measured_in_chrome": True,
                       "surface_measurement_export_verified_in_chrome": True,
@@ -5502,6 +5624,8 @@ jobs:
                report["mode_screenshot_sha256"]["quality"]),
               ("sift", "Points SIFT et caméras estimées", "real-stereo-3d-sift.png",
                report["mode_screenshot_sha256"]["sift"]),
+              ("dual", "Comparaison simultanée de deux vrais modèles 3D",
+               "real-stereo-3d-side-by-side.png", report["side_by_side_screenshot_sha256"]),
           )
           cards = []
           for mode, label, name, expected in modes:
@@ -5533,7 +5657,7 @@ jobs:
           a{color:#bad9ff}pre{white-space:pre-wrap;overflow-wrap:anywhere}
           @media(max-width:700px){.gallery{grid-template-columns:1fr}}
           </style></head><body>
-          <h1>Quatre vues d'une reconstruction à partir de vraies photos</h1>
+          <h1>Quatre modèles 3D réels et leur comparaison côte à côte</h1>
           <p>Captures réalisées par Google Chrome (WebGL logiciel SwiftShader) sur les modèles
           issus d'une même exécution GitHub Actions. Sélectionnez une vue pour afficher
           son image PNG originale. Aucune connexion réseau requise pour ce rapport.</p>
@@ -5546,8 +5670,8 @@ jobs:
               html.escape(json.dumps(report, indent=2, sort_keys=True))
           ) + """</pre></details></body></html>"""
           (proof / "wre-real-3d-comparison.html").write_text(page, encoding="utf-8")
-          assert len(cards) == 4
-          print("Offline visual comparison verified: four same-run Chrome PNGs and hashes")
+          assert len(cards) == 5
+          print("Offline visual comparison verified: five same-run Chrome PNGs and hashes")
           PY
 
       - name: Package one complete offline interactive 3D exploration archive
@@ -5574,6 +5698,8 @@ jobs:
               raise ValueError("The same-run browser did not load all four real 3D modes")
           if receipt.get("local_glb_file_loaded_in_chrome") is not True:
               raise ValueError("Actual Chrome did not open a user-selected GLB")
+          if receipt.get("two_real_3d_models_compared_side_by_side") is not True:
+              raise ValueError("Actual Chrome did not compare two real 3D GLBs side by side")
           if receipt.get("surface_distance_measured_in_chrome") is not True:
               raise ValueError("Actual Chrome did not measure two real mesh points")
           if receipt.get("surface_measurement_export_verified_in_chrome") is not True:
@@ -5631,6 +5757,7 @@ jobs:
           
           png_hashes = {
               "real-stereo-3d-browser.png": receipt["screenshot_sha256"],
+              "real-stereo-3d-side-by-side.png": receipt["side_by_side_screenshot_sha256"],
               **{
                   f"real-stereo-3d-{mode}.png": digest
                   for mode, digest in receipt["mode_screenshot_sha256"].items()
@@ -5638,11 +5765,12 @@ jobs:
           }
           if set(png_hashes) != {
               "real-stereo-3d-browser.png",
+              "real-stereo-3d-side-by-side.png",
               "real-stereo-3d-stereo.png",
               "real-stereo-3d-quality.png",
               "real-stereo-3d-sift.png",
           }:
-              raise ValueError("Four Chrome screenshot identities required")
+              raise ValueError("Five Chrome screenshot identities required")
           for name, digest in png_hashes.items():
               data = (proof / name).read_bytes()
               if not data.startswith(bytes.fromhex("89504e470d0a1a0a")):
