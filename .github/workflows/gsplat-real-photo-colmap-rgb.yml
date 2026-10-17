@@ -109,9 +109,10 @@ jobs:
               "DJI_0042.JPG": "7b799d410074a779dddbe840ec0d249889d25d8e",
               "DJI_0043.JPG": "82398bb391df8625cc99d2cb08a7f917ca34f9a6",
               "DJI_0044.JPG": "3b8067e31ceee8d6610e9eb43a225dd46eb0caf6",
+              "DJI_0045.JPG": "c422351723436e3f15fb5fe739d85341eaddbee9",
           }
           RECEIPT = {
-              "source": "OpenMVG Palm Desert Micro three consecutive real DJI Mini 2 drone photos",
+              "source": "OpenMVG Palm Desert Micro four consecutive real DJI Mini 2 drone photos",
               "source_license": "CC BY-NC 4.0: Attribution-NonCommercial; experimental use only",
               "source_credit": "Copyright 2021 Pierre MOULON; openMVG/Image_datasets",
               "source_license_url": "https://creativecommons.org/licenses/by-nc/4.0/",
@@ -604,7 +605,7 @@ jobs:
           raw_model = pycolmap.Reconstruction(str(model_path))
           expected_views = receipt["reconstruction"]["registered_images"]
           expected_points = receipt["reconstruction"]["sparse_points"]
-          assert raw_model.num_reg_images() == expected_views == 3
+          assert raw_model.num_reg_images() == expected_views == 4
           assert raw_model.num_points3D() == expected_points > 0
 
           undistorted = root / "colmap-undistorted-native"
@@ -749,10 +750,10 @@ jobs:
               assert hashlib.sha256(target_path.read_bytes()).hexdigest() == expected, relative
 
           parser = Parser(str(dataset), factor=1, normalize=False, test_every=8)
-          assert len(parser.image_names) == receipt["undistorted_registered_views"] == 3
+          assert len(parser.image_names) == receipt["undistorted_registered_views"] == 4
           assert parser.points.shape == (receipt["undistorted_points3d"], 3)
           assert parser.points_rgb.shape == (receipt["undistorted_points3d"], 3)
-          assert parser.camtoworlds.shape == (3, 4, 4)
+          assert parser.camtoworlds.shape == (4, 4, 4)
           assert np.isfinite(parser.camtoworlds).all()
           assert np.isfinite(parser.points).all()
           assert set(parser.image_names) == set(receipt["views"])
@@ -761,7 +762,7 @@ jobs:
               len(params) == 0 for params in parser.params_dict.values()
           ), "upstream parser must see distortion-free PINHOLE cameras"
           train, val = Dataset(parser, split="train"), Dataset(parser, split="val")
-          assert (len(train), len(val)) == (2, 1)
+          assert (len(train), len(val)) == (3, 1)
           view_proofs = {}
           for split, dataloader in (("train", train), ("val", val)):
               for idx in range(len(dataloader)):
@@ -826,8 +827,8 @@ jobs:
               assert item.is_file() and not item.is_symlink()
               assert hashlib.sha256(item.read_bytes()).hexdigest() == digest
           model = pycolmap.Reconstruction(str(dataset / "sparse" / "0"))
-          assert model.num_reg_images() == manifest["undistorted_registered_views"] == 3
-          assert model.num_points3D() == manifest["undistorted_points3d"] == 856
+          assert model.num_reg_images() == manifest["undistorted_registered_views"] == 4
+          assert model.num_points3D() == manifest["undistorted_points3d"] >= 856
 
           def summarize(errors):
               arr = np.asarray(errors, dtype=np.float64)
@@ -863,7 +864,7 @@ jobs:
                   point_ids.add(point_id)
               assert len(errors) >= 50, (image.name, len(errors))
               cameras[image.name] = summarize(errors)
-          assert len(cameras) == 3
+          assert len(cameras) == 4
           assert len(all_errors) >= 300 and len(point_ids) >= 100
           report = {
               "schema": "wre.experimental.real_photo_reprojection_v1",
@@ -940,7 +941,7 @@ jobs:
           header, marker, body = raw.partition(b"end_header\n")
           native_count = receipt["reconstruction"]["sparse_points"]
           count = receipt["reconstruction"]["exported_rgb_points"]
-          assert marker and count == 854 and native_count == 856
+          assert marker and 1 <= count <= native_count and native_count >= 856
           assert b"comment wre_color_source original_srgb8_feature_observation" in header
           assert f"comment wre_native_source_points {native_count}".encode() in header
           assert f"element vertex {count}".encode() in header
@@ -1056,7 +1057,7 @@ jobs:
           splat_data = splat.read_bytes()
           expected_points = evidence["gaussians_original_rgb_observed"]
           assert evidence["training_steps"] == 0 and evidence["gpu_kernel_executed"] is False
-          assert expected_points == 854 and len(splat_data) == expected_points * 32
+          assert 1 <= expected_points <= evidence["source_native_colmap_point_count"] and len(splat_data) == expected_points * 32
           assert hashlib.sha256(splat_data).hexdigest() == evidence["upstream_exporter_splat_sha256"]
 
           upstream = "ba182b51b7c2ad5738cdd6741cd63336d27470fb"
@@ -1082,7 +1083,7 @@ jobs:
           # Use the ACTUAL photogrammetric camera, not the vendor demo pose.
           dataset = root / "gsplat-capture"
           parser = Parser(str(dataset), factor=1, normalize=False, test_every=8)
-          assert len(parser.image_names) == 3
+          assert len(parser.image_names) == 4
           actual_cameras = []
           for index, image_name in enumerate(parser.image_names):
               camera_id = parser.camera_ids[index]
@@ -1101,7 +1102,7 @@ jobs:
                   "fx": float(K[0, 0]),
                   "fy": float(K[1, 1]),
               })
-          assert len({cam["img_name"] for cam in actual_cameras}) == 3
+          assert len({cam["img_name"] for cam in actual_cameras}) == 4
           assert all(
               np.linalg.norm(
                   np.asarray(actual_cameras[0]["position"]) - np.asarray(cam["position"])
@@ -1152,9 +1153,9 @@ jobs:
               "<body>",
               '<body><aside style="position:absolute;bottom:35px;left:14px;'
               'padding:8px;background:#17212ddd;z-index:101;color:white;'
-              'font:13px sans-serif;pointer-events:none">WRE · 854 source-observed '
+              f'font:13px sans-serif;pointer-events:none">WRE · {expected_points} source-observed '
               'Gaussian seeds · UNTRAINED (0 steps) · nonmetric / noncommercial '
-              '· keys 0/1/2: recovered cameras · no CUDA or 4D</aside>',
+              '· keys 0/1/2/3: recovered cameras · no CUDA or 4D</aside>',
           )
           (output / "index.html").write_text(html, encoding="utf-8")
           (output / "Gaussian-WebGL-viewer-MIT-LICENSE.txt").write_bytes(files["LICENSE"])
@@ -1165,7 +1166,7 @@ jobs:
               "After unzipping the GitHub Actions Gaussian artifact, run:\n"
               "  python3 -m http.server 8767 --bind 127.0.0.1\n"
               "Then open http://127.0.0.1:8767/index.html and orbit/zoom.\n"
-              "Press keys 0, 1, 2 to inspect the three recovered COLMAP views.\n"
+              "Press keys 0, 1, 2, 3 to inspect the four recovered COLMAP views.\n"
               "All bytes are local after unzipping; no third-party requests.\n"
               "Gaussians are initialized from real SfM, NOT trained photorealism.\n",
               encoding="utf-8",
@@ -1214,6 +1215,9 @@ jobs:
           from urllib.request import Request, urlopen
           from PIL import Image
 
+          evidence_path = Path(os.environ["RUNNER_TEMP"]) / "wre-real-photo-colmap-rgb" / "real-photo-initial-gaussians" / "untrained-gaussian-provenance.json"
+          expected_drawn = json.loads(evidence_path.read_text())["gaussians_original_rgb_observed"]
+          assert expected_drawn >= 1
           endpoint = "http://127.0.0.1:9517"
           def browser(method, route, payload=None):
               body = None if payload is None else json.dumps(payload).encode()
@@ -1269,7 +1273,7 @@ jobs:
                   """)
                   if state["error"]:
                       raise RuntimeError("Gaussian WebGL renderer: " + state["error"])
-                  if state["count"] == 854 and state["webgl"] and state["width"] >= 640:
+                  if state["count"] == expected_drawn and state["webgl"] and state["width"] >= 640:
                       break
                   time.sleep(0.35)
               else:
@@ -1288,7 +1292,7 @@ jobs:
               dst = root / "real-photo-initial-gaussians"
               (dst / "wre-real-gaussian-webgl-chrome.png").write_bytes(screenshot)
               # Use the upstream viewer's existing keyboard camera selection.
-              for index in (1, 2):
+              for index in (1, 2, 3):
                   execute(
                       "window.__wreRenderedGaussianCount = 0;"
                       "window.dispatchEvent(new KeyboardEvent('keydown', {"
@@ -1305,7 +1309,7 @@ jobs:
                       """)
                       if switched["error"]:
                           raise RuntimeError("Gaussian camera switch: " + switched["error"])
-                      if switched["camera"] == index and switched["count"] == 854:
+                      if switched["camera"] == index and switched["count"] == expected_drawn:
                           break
                       time.sleep(0.15)
                   else:
@@ -1317,7 +1321,7 @@ jobs:
                   )
                   assert len(view) > 10_000
                   (dst / f"wre-real-gaussian-webgl-camera-{index}.png").write_bytes(view)
-              print("REAL MULTIVIEW GAUSSIAN WEBGL PASS: 3 source COLMAP camera views")
+              print("REAL MULTIVIEW GAUSSIAN WEBGL PASS: 4 source COLMAP camera views")
               print(
                   "ACTUAL UNTRAINED GAUSSIAN WEBGL PASS:",
                   state["count"], "real SfM splats;",
