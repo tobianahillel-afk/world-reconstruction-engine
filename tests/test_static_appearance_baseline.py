@@ -1966,6 +1966,36 @@ def test_gsplat_glb_cli_respects_requested_preview_density(tmp_path: Path) -> No
     assert run.stdout.strip() == f"{_digest(glb).value}  {preview}"
 
 
+def test_gsplat_splat_cli_exports_real_anisotropic_records_on_cpu(tmp_path: Path) -> None:
+    """Actual external WRE CLI reads the source PLY and writes a .splat file."""
+    root, profile, ref = _gsplat_output(tmp_path, _gsplat_ply(vertices=2))
+    viewer = tmp_path / "viewer"
+    viewer.mkdir()
+    output = viewer / "gaussians.splat"
+    command = [
+        sys.executable,
+        "-m",
+        "wre.reconstruction.static_appearance_baseline",
+        "--output-root",
+        str(root),
+        "--max-steps",
+        str(profile.max_steps),
+        "--preview",
+        str(output),
+    ]
+    completed = subprocess.run(command, capture_output=True, text=True, check=False, timeout=30)
+    assert completed.returncode == 0, completed.stderr
+    data = output.read_bytes()
+    assert len(data) == 64
+    assert len(list(struct.iter_unpack("<6f8B", data))) == 2
+    assert completed.stdout.strip() == f"{_digest(data).value}  {output}"
+    assert (root / profile.expected_ply_relative_path).read_bytes() == _gsplat_ply(vertices=2)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="requires a new"):
+        export_verified_gsplat_splat(
+            artifact_ref=ref, output_root=root, profile=profile, splat_path=output
+        )
+
+
 def test_gsplat_rgb_glb_cli_executes_real_cpu_export(tmp_path: Path) -> None:
     """Run the production -m CLI, not a simulated subprocess or a CUDA training job."""
     import subprocess
