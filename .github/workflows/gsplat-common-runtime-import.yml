@@ -7390,16 +7390,24 @@ jobs:
               assert sha256(actual_pfm).hexdigest() == numeric_metrics[
                   "dense_disparity_float32_pfm_sha256"
               ]
-              # PFM scanlines are bottom-up. Select a truly observed pixel
-              # rather than guessing that the image centre is valid.
+              # A CSS-sized image may display several source pixels per screen
+              # pixel. Choose an observed valid 3x3 neighbourhood, so browser
+              # integer MouseEvent coordinates cannot land on an invalid edge.
               from struct import iter_unpack
+              def actual_disparity(x, y):
+                  index = (height - 1 - y) * width + x
+                  return unpack_from("<f", actual_pfm, len(header) + 4 * index)[0]
+
               measured = None
               for index, (value,) in enumerate(iter_unpack("<f", actual_pfm[len(header):])):
-                  if 2.0 < value < 128.0:
-                      measured = (index % width, height - 1 - index // width, value)
+                  px, py = index % width, height - 1 - index // width
+                  if (1 <= px < width - 1 and 1 <= py < height - 1 and
+                      all(2.0 < actual_disparity(px + dx, py + dy) < 128.0
+                          for dx in (-1, 0, 1) for dy in (-1, 0, 1))):
+                      measured = (px, py)
                       break
-              assert measured is not None, "No observed numeric stereo pixel"
-              px, py, expected_disparity = measured
+              assert measured is not None, "No observed contiguous valid stereo pixels"
+              px, py = measured
               js(f"""const image = document.getElementById('wre-stereo-disparity');
                   const box = image.getBoundingClientRect();
                   image.dispatchEvent(new MouseEvent('click', {{
@@ -7417,12 +7425,17 @@ jobs:
                           error:el.dataset.error, text:el.textContent};
               })()""")
               assert not inspector_state["error"], inspector_state
-              assert inspector_state["x"] == str(px) and inspector_state["y"] == str(py), (
+              # DOM MouseEvent client coordinates are CSS pixels, not exact
+              # intrinsic image pixels. Audit the actual selected source pixel
+              # against the independently decoded SHA256-checked PFM instead
+              # of assuming CSS -> intrinsic coordinates are lossless.
+              selected_x, selected_y = int(inspector_state["x"]), int(inspector_state["y"])
+              assert abs(selected_x - px) <= 1 and abs(selected_y - py) <= 1, (
                   inspector_state, (px, py)
               )
-              observed = float(js(
-                  "return document.getElementById('wre-pixel-inspector').dataset.disparity"
-              ))
+              expected_disparity = actual_disparity(selected_x, selected_y)
+              assert 2.0 < expected_disparity < 128.0, inspector_state
+              observed = float(inspector_state["disparity"])
               assert abs(observed - expected_disparity) < 0.0001
               assert "PAS des mètres" in js(
                   "return document.getElementById('wre-pixel-inspector').textContent"
