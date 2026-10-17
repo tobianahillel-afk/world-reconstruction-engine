@@ -1392,6 +1392,59 @@ jobs:
           xy[:, 0] = np.clip(xy[:, 0], 0, w - 1)
           xy[:, 1] = np.clip(xy[:, 1], 0, h - 1)
           rgb = left[xy[:, 1], xy[:, 0], ::-1]
+          # Visual proof using ACTUAL image observations and SIFT-derived 3D.
+          # Circles=observed pixels; white crosses=reprojected XYZ; lines=residuals.
+          # Metrics are in-sample, NEVER held-out reconstruction accuracy.
+          residuals = np.sqrt(
+              (np.square(uv0 - p0).sum(axis=1)
+               + np.square(uv1 - p1).sum(axis=1)) / 2.0
+          )
+          assert len(residuals) == len(xyz) and np.all(np.isfinite(residuals))
+          assert np.isclose(np.sqrt(np.mean(residuals**2)), rmse, atol=1e-8)
+          banner = 38
+          diagnostic = np.zeros((h + banner, 2 * w, 3), dtype=np.uint8)
+          diagnostic[banner:, :w] = left
+          diagnostic[banner:, w:] = right
+          for i, (observed, projected) in enumerate(((p0, uv0), (p1, uv1))):
+              horizontal_offset = i * w
+              for obs, pred, error in zip(observed, projected, residuals, strict=True):
+                  observed_at = (
+                      int(round(obs[0])) + horizontal_offset, int(round(obs[1])) + banner
+                  )
+                  predicted_at = (
+                      int(round(pred[0])) + horizontal_offset, int(round(pred[1])) + banner
+                  )
+                  if not (horizontal_offset <= observed_at[0] < horizontal_offset + w
+                          and banner <= observed_at[1] < banner + h):
+                      continue
+                  color = (20, 200, 40) if error <= 2.0 else (20, 100, 255)
+                  if (horizontal_offset <= predicted_at[0] < horizontal_offset + w
+                          and banner <= predicted_at[1] < banner + h):
+                      cv2.line(diagnostic, observed_at, predicted_at, color, 1)
+                      cv2.drawMarker(
+                          diagnostic, predicted_at, (255, 255, 255),
+                          cv2.MARKER_CROSS, markerSize=5, thickness=1,
+                      )
+                  cv2.circle(diagnostic, observed_at, 2, color, thickness=-1)
+          p95 = float(np.percentile(residuals, 95))
+          median = float(np.median(residuals))
+          cv2.putText(
+              diagnostic,
+              f"REAL SIFT observed vs 3D projection | in-sample RMSE {rmse:.2f}px",
+              (8, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.41, (255, 255, 255), 1,
+          )
+          cv2.putText(
+              diagnostic,
+              f"Left / right | {len(xyz)} tracks | p95 {p95:.2f}px | green <=2px",
+              (8, 31), cv2.FONT_HERSHEY_SIMPLEX, 0.41, (255, 255, 255), 1,
+          )
+          diagnostic_path = root / "wre-real-stereo-sift-observed-reprojection.png"
+          assert cv2.imwrite(str(diagnostic_path), diagnostic)
+          decoded_diagnostic = cv2.imread(str(diagnostic_path), cv2.IMREAD_COLOR)
+          assert decoded_diagnostic is not None
+          assert decoded_diagnostic.shape == (h + banner, 2 * w, 3)
+          diagnostic_sha256 = hashlib.sha256(diagnostic_path.read_bytes()).hexdigest()
+          assert diagnostic_path.stat().st_size > 1000
           ply = root / "wre-real-stereo-sift-estimated-3d.ply"
           with ply.open("w", encoding="ascii") as file:
               file.write("ply\nformat ascii 1.0\n" +
@@ -1410,6 +1463,10 @@ jobs:
               "pose_ransac_inliers": int(inlier_count),
               "triangulated_positive_depth_rgb_points": int(len(xyz)),
               "two_view_in_sample_reprojection_rmse_pixels": rmse,
+              "two_view_in_sample_reprojection_median_pixels": median,
+              "two_view_in_sample_reprojection_p95_pixels": p95,
+              "reprojection_diagnostic_png": diagnostic_path.name,
+              "reprojection_diagnostic_sha256": diagnostic_sha256,
               "estimated_rotation_world_to_right_camera": R.tolist(),
               "estimated_translation_direction_world_to_right_camera": t.ravel().tolist(),
               "intrinsics_approximate": K.tolist(),
@@ -1745,7 +1802,7 @@ jobs:
       # Run the actual-photo CPU reconstruction BEFORE expensive native CUDA
       # compilation. Keep the original photo pipeline in one place and make
       # its real 3D/preview outputs inspectable even while CUDA builds run.
-      - name: Stage thirty-three real-photo CPU 3D and SIFT COLMAP outputs early
+      - name: Stage thirty-four real-photo CPU 3D and SIFT COLMAP outputs early
         shell: bash
         run: |
           set -euo pipefail
@@ -1783,13 +1840,14 @@ jobs:
             wre-real-stereo-sift-estimated-pose.json \
             wre-real-stereo-sift-estimated-cameras.glb \
             wre-real-stereo-sift-observed-tracks.json \
+            wre-real-stereo-sift-observed-reprojection.png \
             wre-real-stereo-sift-colmap-dataset.zip \
             wre-real-stereo-sift-colmap-handoff.json
           do
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 33
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 34
 
       - name: Publish real-photo CPU 3D plus COLMAP before native CUDA builds
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -2880,14 +2938,15 @@ jobs:
             wre-real-stereo-sift-estimated-pose.json \
             wre-real-stereo-sift-estimated-cameras.glb \
             wre-real-stereo-sift-observed-tracks.json \
+            wre-real-stereo-sift-observed-reprojection.png \
             wre-real-stereo-sift-colmap-dataset.zip \
             wre-real-stereo-sift-colmap-handoff.json
           do
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 49
-          echo "Staged all 49 real PLY/OBJ/GLB/GIF/MTL/PNG/PFM/NPY/JSON/ZIP files for artifact upload"
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 50
+          echo "Staged all 50 real PLY/OBJ/GLB/GIF/MTL/PNG/PFM/NPY/JSON/ZIP files for artifact upload"
 
       - name: Publish CPU COLMAP 3D preview and measured reprojection
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
