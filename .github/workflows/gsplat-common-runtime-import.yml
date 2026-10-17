@@ -1345,8 +1345,8 @@ jobs:
             wre-middlebury-half-aloe-cpu-3d.ply \
             wre-middlebury-half-aloe-cpu-consensus-3d.ply \
             wre-middlebury-half-aloe-cpu-left-right-3d.ply \
-            wre-middlebury-half-aloe-cpu-hh4-3d.ply
-            wre-middlebury-half-aloe-cpu-depth-mm.npy
+            wre-middlebury-half-aloe-cpu-hh4-3d.ply \
+            wre-middlebury-half-aloe-cpu-depth-mm.npy \
             wre-middlebury-half-aloe-stereo-diagnostics.png
           do
             test -s "$RUNNER_TEMP/$name"
