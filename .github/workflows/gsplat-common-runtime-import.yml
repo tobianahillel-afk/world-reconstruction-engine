@@ -7051,10 +7051,114 @@ jobs:
           Cliquez sur l'aperçu de disparité pour afficher une valeur observée
           (pixels), et une profondeur relative (unités de modèle, PAS mètres).
           </p>
+          <button type="button" id="wre-pixel-native-zoom" aria-pressed="false">
+            Inspection précise : afficher la disparité à 100% (un pixel source par pixel écran)
+          </button>
+          <button type="button" id="wre-save-stereo-point" disabled>
+            Conserver le point 3D relatif inspecté
+          </button>
+          <button type="button" id="wre-export-stereo-points" disabled>
+            Exporter les points observés (JSON)
+          </button>
+          <button type="button" id="wre-export-stereo-ply" disabled>
+            Exporter les points 3D en PLY coloré (échelle relative)
+          </button>
+          <span id="wre-stereo-point-count" role="status" aria-live="polite">0 point enregistré</span>
+          <figure id="wre-stereo-match" style="margin:12px 0;max-width:960px">
+            <div style="position:relative">
+              <img id="wre-stereo-match-photos" loading="eager"
+                src="./wre-real-stereo-cpu-photos.png"
+                style="display:block;width:100%;height:auto"
+                alt="Photographies observées à gauche et à droite, juxtaposées">
+              <canvas id="wre-stereo-match-overlay" aria-hidden="true"
+                style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none"></canvas>
+            </div>
+            <figcaption>Rouge : observation gauche ; vert : correspondance
+              stéréo calculée à droite. Coordonnées 3D relatives uniquement,
+              PAS une précision métrique ni une correspondance garantie.</figcaption>
+          </figure>
           <script>
           (() => {
             const picture = document.getElementById('wre-stereo-disparity');
             const status = document.getElementById('wre-pixel-inspector');
+            const photos = document.getElementById('wre-stereo-match-photos');
+            const overlay = document.getElementById('wre-stereo-match-overlay');
+            const zoom = document.getElementById('wre-pixel-native-zoom');
+            const savePoint = document.getElementById('wre-save-stereo-point');
+            const exportPoints = document.getElementById('wre-export-stereo-points');
+            const exportPly = document.getElementById('wre-export-stereo-ply');
+            const pointCount = document.getElementById('wre-stereo-point-count');
+            const observations = [];
+            let selected = null;
+            savePoint.addEventListener('click', () => {
+              if (!selected || observations.length >= 64) return;
+              observations.push({...selected});
+              pointCount.textContent = observations.length + ' points relatifs conservés (max 64)';
+              exportPoints.disabled = false;
+              exportPly.disabled = false;
+            });
+            function downloadObserved(blob, filename) {
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = filename;
+              document.body.appendChild(link);
+              link.click();
+              link.remove();
+              setTimeout(() => URL.revokeObjectURL(url), 1000);
+            }
+            exportPly.addEventListener('click', () => {
+              if (!observations.length || !photos.complete ||
+                  photos.naturalWidth !== picture.naturalWidth * 2 ||
+                  photos.naturalHeight !== picture.naturalHeight) return;
+              // Sample actual observed left-image RGB, not disparity false color.
+              const canvas = document.createElement('canvas');
+              canvas.width = photos.naturalWidth;
+              canvas.height = photos.naturalHeight;
+              const context = canvas.getContext('2d', {willReadFrequently:true});
+              context.drawImage(photos, 0, 0);
+              const header = [
+                'ply', 'format ascii 1.0',
+                'comment WRE observed real-photo stereo points; relative scale only',
+                'comment metric_scale_known false',
+                'comment source_pfm_sha256 __WRE_VERIFIED_PFM_SHA256__',
+                'element vertex ' + observations.length,
+                'property float x', 'property float y', 'property float z',
+                'property uchar red', 'property uchar green', 'property uchar blue',
+                'end_header'
+              ];
+              const rows = observations.map(point => {
+                const [u, v] = point.left_pixel;
+                const [x, y, z] = point.xyz_relative_model_units;
+                const color = context.getImageData(u, v, 1, 1).data;
+                return [x, y, z, color[0], color[1], color[2]].join(' ');
+              });
+              downloadObserved(new Blob([[...header, ...rows, ''].join(String.fromCharCode(10))],
+                {type:'text/plain'}), 'wre-observed-relative-rgb-points.ply');
+            });
+            exportPoints.addEventListener('click', () => {
+              if (!observations.length) return;
+              const payload = {
+                schema: 'wre.observed_stereo_points.v1',
+                source_pfm: 'wre-real-stereo-cpu-disparity-f32.pfm',
+                source_pfm_sha256: '__WRE_VERIFIED_PFM_SHA256__',
+                metric_scale_known: false,
+                focal_assumption_pixels: picture.naturalWidth,
+                baseline_assumption_model_units: 1,
+                points: observations
+              };
+              const blob = new Blob([JSON.stringify(payload, null, 2) + String.fromCharCode(10)],
+                {type:'application/json'});
+              downloadObserved(blob, 'wre-observed-stereo-points.json');
+            });
+            zoom.addEventListener('click', () => {
+              const enabled = zoom.getAttribute('aria-pressed') !== 'true';
+              if (enabled && !picture.naturalWidth) return;
+              zoom.setAttribute('aria-pressed', String(enabled));
+              picture.style.width = enabled ? picture.naturalWidth + 'px' : '100%';
+              picture.style.maxWidth = enabled ? 'none' : '100%';
+              picture.closest('figure').style.overflowX = enabled ? 'auto' : '';
+            });
             picture.style.cursor = 'crosshair';
             picture.title = 'Cliquez pour inspecter la disparité réelle à ce pixel';
             let loading = null;
@@ -7097,6 +7201,9 @@ jobs:
             }
             picture.addEventListener('click', async (event) => {
               event.preventDefault();  // The image is also a download link.
+              selected = null;
+              savePoint.disabled = true;
+              delete status.dataset.error;
               try {
                 const map = await getMap();
                 const rect = picture.getBoundingClientRect();
@@ -7111,17 +7218,60 @@ jobs:
                 status.dataset.x = String(u);
                 status.dataset.y = String(v);
                 status.dataset.disparity = String(disparity);
+                delete status.dataset.rightX;
+                delete status.dataset.rightY;
+                delete status.dataset.modelX;
+                delete status.dataset.modelY;
+                delete status.dataset.modelZ;
+                overlay.getContext('2d').clearRect(0, 0, overlay.width, overlay.height);
                 if (!Number.isFinite(disparity) || disparity <= 0) {
                   status.textContent = 'Pixel (' + u + ',' + v +
                     ') : aucune disparité stéréo valide observée.';
                   return;
                 }
-                // WRE's existing uncalibrated preview uses f=width, baseline=1.
+                // The existing CPU preview uses focal=width and baseline=1
+                // in ARBITRARY model units, never a physical camera calibration.
                 const relativeDepth = map.width / disparity;
+                const pointX = (u - (map.width - 1) / 2) / disparity;
+                const pointY = (v - (map.height - 1) / 2) / disparity;
+                const rightX = u - disparity;
+                const inFrame = rightX >= 0 && rightX < map.width;
+                if (inFrame) {
+                  selected = {
+                    left_pixel: [u, v],
+                    right_pixel: [rightX, v],
+                    disparity_pixels: disparity,
+                    xyz_relative_model_units: [pointX, pointY, relativeDepth]
+                  };
+                  savePoint.disabled = false;
+                }
+                status.dataset.modelX = String(pointX);
+                status.dataset.modelY = String(pointY);
+                status.dataset.modelZ = String(relativeDepth);
+                if (inFrame && photos.complete &&
+                    photos.naturalWidth === map.width * 2 &&
+                    photos.naturalHeight === map.height) {
+                  overlay.width = photos.naturalWidth;
+                  overlay.height = photos.naturalHeight;
+                  const ctx = overlay.getContext('2d');
+                  for (const [x, color] of [[u, '#ff2020'], [map.width + rightX, '#20ef20']]) {
+                    ctx.beginPath();
+                    ctx.arc(x + 0.5, v + 0.5, 6, 0, Math.PI * 2);
+                    ctx.lineWidth = 3;
+                    ctx.strokeStyle = color;
+                    ctx.stroke();
+                  }
+                  status.dataset.rightX = String(rightX);
+                  status.dataset.rightY = String(v);
+                }
                 status.textContent = 'Pixel (' + u + ',' + v + ') : disparité ' +
                   disparity.toFixed(3) + ' px ; profondeur relative ' +
-                  relativeDepth.toFixed(3) +
-                  ' unités de modèle (PAS des mètres, ni une précision certifiée).';
+                  relativeDepth.toFixed(3) + ' unités de modèle ; 3D ≈ (' +
+                  pointX.toFixed(3) + ', ' + pointY.toFixed(3) + ', ' +
+                  relativeDepth.toFixed(3) + ') ; ' +
+                  (inFrame ? 'correspondance droite x=' + rightX.toFixed(3) +
+                    ', y=' + v + ' px' : 'correspondance droite hors image') +
+                  ' (PAS des mètres, ni une précision certifiée).';
               } catch (error) {
                 status.dataset.error = String(error.message);
                 status.textContent = 'Inspection indisponible : ' + String(error.message);
@@ -7139,7 +7289,10 @@ jobs:
                   'Télécharger la disparité 16 bits sans perte</a> · '
                   'valeur PNG / 256 = disparité horizontale en pixels, '
                   '0 = invalide ; PAS profondeur métrique.</p>'
-                  + anchor),
+                  + anchor).replace(
+                      "__WRE_VERIFIED_PFM_SHA256__",
+                      provenance["dense_disparity_float32_pfm_sha256"],
+                  ),
               encoding="utf-8",
           )
           (bundle / "README-OPEN-OFFLINE-3D.txt").write_text(
@@ -7148,7 +7301,8 @@ jobs:
               "2. Linux/macOS : python3 open-wre-3d.py ; Windows : py -3 open-wre-3d.py\n"
               "3. Le navigateur ouvre automatiquement la galerie locale (127.0.0.1).\n"
               "4. Sélectionnez le visualiseur interactif 3D et ses quatre modes.\n"
-              "5. Cliquez sur l'aperçu de disparité pour lire le pixel float32 réel.\n"
+              "5. Cliquez sur la disparité pour voir les deux observations des photos\n"
+              "   et les coordonnées 3D relatives (PAS une mesure en mètres).\n"
               "   Vous pouvez télécharger PFM ou PNG 16 bits : valeur PNG/256 = disparité ;\n"
               "   0 = pixel invalide. Ne PAS interpréter comme une profondeur en mètres.\n"
               "Tout est local après extraction, sans API payante ni accès Internet.\n"
@@ -7403,11 +7557,24 @@ jobs:
                   px, py = index % width, height - 1 - index // width
                   if (1 <= px < width - 1 and 1 <= py < height - 1 and
                       all(2.0 < actual_disparity(px + dx, py + dy) < 128.0
-                          for dx in (-1, 0, 1) for dy in (-1, 0, 1))):
+                          for dx in (-1, 0, 1) for dy in (-1, 0, 1)) and
+                      9 < px - value < width - 9 and 9 < py < height - 9):
                       measured = (px, py)
                       break
               assert measured is not None, "No observed contiguous valid stereo pixels"
               px, py = measured
+              # A real Chrome run previously failed: an intended valid (158,545)
+              # became invalid (156,545) on a downscaled CSS image because
+              # MouseEvent.clientX was quantized in screen pixels. Exercise the
+              # PUBLIC 1:1 toggle and verify actual rendered native dimensions.
+              assert js("""const zoom=document.getElementById('wre-pixel-native-zoom');
+                  const image=document.getElementById('wre-stereo-disparity');
+                  zoom.click();
+                  const box=image.getBoundingClientRect();
+                  return zoom.getAttribute('aria-pressed')==='true' &&
+                    Math.abs(box.width-image.naturalWidth)<0.01 &&
+                    Math.abs(box.height-image.naturalHeight)<0.01 &&
+                    image.closest('figure').scrollWidth >= image.naturalWidth;""")
               js(f"""const image = document.getElementById('wre-stereo-disparity');
                   const box = image.getBoundingClientRect();
                   image.dispatchEvent(new MouseEvent('click', {{
@@ -7440,10 +7607,144 @@ jobs:
               assert "PAS des mètres" in js(
                   "return document.getElementById('wre-pixel-inspector').textContent"
               )
+              # Inspect the ACTUAL rectified source photographs from the same
+              # extracted ZIP, not a synthetic photo or a copied DOM label.
+              correspondences = js("""return (() => {
+                  const status=document.getElementById('wre-pixel-inspector');
+                  const photos=document.getElementById('wre-stereo-match-photos');
+                  const overlay=document.getElementById('wre-stereo-match-overlay');
+                  const context=overlay.getContext('2d');
+                  const x=Number(status.dataset.x), y=Number(status.dataset.y);
+                  const xr=Number(status.dataset.rightX);
+                  function ring(x) {
+                    return Array.from(context.getImageData(Math.round(x)+6,y,1,1).data);
+                  }
+                  return {
+                    loaded:photos.complete && photos.naturalWidth===overlay.width &&
+                      photos.naturalHeight===overlay.height,
+                    width:photos.naturalWidth,height:photos.naturalHeight,
+                    rightX:xr,rightY:Number(status.dataset.rightY),
+                    modelX:Number(status.dataset.modelX),modelY:Number(status.dataset.modelY),
+                    modelZ:Number(status.dataset.modelZ),
+                    left:ring(x),right:ring(overlay.width/2+xr)
+                  };
+              })()""")
+              assert correspondences["loaded"], correspondences
+              assert correspondences["width"] == 2*width
+              assert correspondences["height"] == height
+              assert abs(correspondences["rightX"]-(selected_x-expected_disparity)) < 1e-4
+              assert correspondences["rightY"] == selected_y
+              assert abs(correspondences["modelX"] -
+                         (selected_x-(width-1)/2)/expected_disparity) < 1e-4
+              assert abs(correspondences["modelY"] -
+                         (selected_y-(height-1)/2)/expected_disparity) < 1e-4
+              assert abs(correspondences["modelZ"] - width/expected_disparity) < 1e-4
+              assert correspondences["left"][0] > 150 and correspondences["left"][1] < 90
+              assert correspondences["left"][3] > 0
+              assert correspondences["right"][1] > 140 and correspondences["right"][0] < 100
+              assert correspondences["right"][3] > 0
+              print("PASS: actual Chrome marked two observed stereo pixels and relative 3D XYZ")
               assert js("""return !!document.querySelector(
                   'a[href="./wre-real-stereo-cpu-disparity-f32.pfm"][download]'
               )""")
               print("PASS: actual Chrome inspected pixel float32 from the same real-photo PFM")
+              # User-facing batch export: two DISTINCT observed source pixels,
+              # then verify downloaded JSON against the same SHA256-checked PFM.
+              assert js("""const add=document.getElementById('wre-save-stereo-point');
+                  const download=document.getElementById('wre-export-stereo-points');
+                  if(add.disabled || !download.disabled) return false;
+                  add.click();
+                  return !download.disabled &&
+                    document.getElementById('wre-stereo-point-count').textContent.includes('1 points');
+              """)
+              next_x = px - 1 if selected_x >= px else px + 1
+              assert next_x != selected_x and 2.0 < actual_disparity(next_x, py) < 128.0
+              js(f"""const img=document.getElementById('wre-stereo-disparity');
+                  const box=img.getBoundingClientRect();
+                  img.dispatchEvent(new MouseEvent('click',{{
+                    bubbles:true,cancelable:true,
+                    clientX:box.left+({next_x}+.5)*box.width/img.naturalWidth,
+                    clientY:box.top+({py}+.5)*box.height/img.naturalHeight
+                  }}));return true;""")
+              wait_for(lambda: js("""const el=document.getElementById('wre-pixel-inspector');
+                  return el.dataset.x!==\'""" + str(selected_x) + """\' &&
+                    !document.getElementById('wre-save-stereo-point').disabled;"""), timeout=15)
+              js("""document.getElementById('wre-save-stereo-point').click();
+                  window.__wreObservedPoints=null;
+                  const native=URL.createObjectURL.bind(URL);
+                  URL.createObjectURL=blob=>{
+                    if(blob.type==='application/json') blob.text().then(
+                      content=>window.__wreObservedPoints=JSON.parse(content));
+                    return native(blob);
+                  };
+                  document.getElementById('wre-export-stereo-points').click();
+                  return true;""")
+              wait_for(lambda: js("return !!window.__wreObservedPoints"), timeout=15)
+              exported = js("return window.__wreObservedPoints")
+              assert exported["schema"] == "wre.observed_stereo_points.v1"
+              assert exported["source_pfm_sha256"] == numeric_metrics[
+                  "dense_disparity_float32_pfm_sha256"
+              ]
+              assert exported["metric_scale_known"] is False
+              assert exported["focal_assumption_pixels"] == width
+              assert exported["baseline_assumption_model_units"] == 1
+              assert len(exported["points"]) == 2
+              for point in exported["points"]:
+                  x, y = point["left_pixel"]
+                  d = actual_disparity(x, y)
+                  assert 2 < d < 128 and abs(point["disparity_pixels"] - d) < 1e-4
+                  assert abs(point["right_pixel"][0] - (x-d)) < 1e-4
+                  assert point["right_pixel"][1] == y
+                  xyz = [(x-(width-1)/2)/d, (y-(height-1)/2)/d, width/d]
+                  assert all(abs(a-b) < 1e-4 for a,b in
+                             zip(point["xyz_relative_model_units"], xyz))
+              assert len({tuple(p["left_pixel"]) for p in exported["points"]}) == 2
+              print("PASS: actual Chrome exported two real-photo stereo XYZ observations")
+              # Open the REAL browser's portable RGB point-cloud download, not
+              # a fabricated Python fixture. Compare all XYZ to the original
+              # float32 PFM and RGB to actual processed left-photo pixels.
+              assert js("""const button=document.getElementById('wre-export-stereo-ply');
+                  if(button.disabled) return false;
+                  window.__wreObservedPly=null;
+                  const original=URL.createObjectURL.bind(URL);
+                  URL.createObjectURL=blob=>{
+                    if(blob.type==='text/plain') blob.text().then(
+                      text=>window.__wreObservedPly=text);
+                    return original(blob);
+                  };
+                  button.click();
+                  return true;""")
+              wait_for(lambda: js("return !!window.__wreObservedPly"), timeout=15)
+              ascii_ply = js("return window.__wreObservedPly")
+              header, vertices = ascii_ply.split("end_header" + chr(10), 1)
+              assert header.startswith("ply" + chr(10) + "format ascii 1.0")
+              assert "element vertex 2" in header
+              assert "comment metric_scale_known false" in header
+              assert ("comment source_pfm_sha256 " +
+                      numeric_metrics["dense_disparity_float32_pfm_sha256"]) in header
+              assert all(("property " + field) in header for field in (
+                  "float x", "float y", "float z",
+                  "uchar red", "uchar green", "uchar blue",
+              ))
+              rows = [line.split() for line in vertices.splitlines() if line]
+              assert len(rows) == len(exported["points"]) == 2
+              observed_rgb = js("""return (() => {
+                const img=document.getElementById('wre-stereo-match-photos');
+                const canvas=document.createElement('canvas');
+                canvas.width=img.naturalWidth;canvas.height=img.naturalHeight;
+                const ctx=canvas.getContext('2d',{willReadFrequently:true});
+                ctx.drawImage(img,0,0);
+                return window.__wreObservedPoints.points.map(point=>{
+                  const [u,v]=point.left_pixel;
+                  return Array.from(ctx.getImageData(u,v,1,1).data).slice(0,3);
+                });
+              })()""")
+              for row, point, rgb in zip(rows, exported["points"], observed_rgb):
+                  assert len(row) == 6
+                  assert all(abs(float(value)-expected) < 1e-4 for value, expected in
+                             zip(row[:3], point["xyz_relative_model_units"]))
+                  assert [int(value) for value in row[3:]] == rgb
+              print("PASS: actual Chrome exported real-photo colored relative XYZ as PLY")
               browser("POST", f"/session/{session}/url", {
                   "url": "http://127.0.0.1:8877/wre-real-stereo-cpu-viewer.html",
               })
