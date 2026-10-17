@@ -7700,6 +7700,51 @@ jobs:
                              zip(point["xyz_relative_model_units"], xyz))
               assert len({tuple(p["left_pixel"]) for p in exported["points"]}) == 2
               print("PASS: actual Chrome exported two real-photo stereo XYZ observations")
+              # Open the REAL browser's portable RGB point-cloud download, not
+              # a fabricated Python fixture. Compare all XYZ to the original
+              # float32 PFM and RGB to actual processed left-photo pixels.
+              assert js("""const button=document.getElementById('wre-export-stereo-ply');
+                  if(button.disabled) return false;
+                  window.__wreObservedPly=null;
+                  const original=URL.createObjectURL.bind(URL);
+                  URL.createObjectURL=blob=>{
+                    if(blob.type==='text/plain') blob.text().then(
+                      text=>window.__wreObservedPly=text);
+                    return original(blob);
+                  };
+                  button.click();
+                  return true;""")
+              wait_for(lambda: js("return !!window.__wreObservedPly"), timeout=15)
+              ascii_ply = js("return window.__wreObservedPly")
+              header, vertices = ascii_ply.split("end_header" + chr(10), 1)
+              assert header.startswith("ply" + chr(10) + "format ascii 1.0")
+              assert "element vertex 2" in header
+              assert "comment metric_scale_known false" in header
+              assert ("comment source_pfm_sha256 " +
+                      numeric_metrics["dense_disparity_float32_pfm_sha256"]) in header
+              assert all(("property " + field) in header for field in (
+                  "float x", "float y", "float z",
+                  "uchar red", "uchar green", "uchar blue",
+              ))
+              rows = [line.split() for line in vertices.splitlines() if line]
+              assert len(rows) == len(exported["points"]) == 2
+              observed_rgb = js("""return (() => {
+                const img=document.getElementById('wre-stereo-match-photos');
+                const canvas=document.createElement('canvas');
+                canvas.width=img.naturalWidth;canvas.height=img.naturalHeight;
+                const ctx=canvas.getContext('2d',{willReadFrequently:true});
+                ctx.drawImage(img,0,0);
+                return window.__wreObservedPoints.points.map(point=>{
+                  const [u,v]=point.left_pixel;
+                  return Array.from(ctx.getImageData(u,v,1,1).data).slice(0,3);
+                });
+              })()""")
+              for row, point, rgb in zip(rows, exported["points"], observed_rgb):
+                  assert len(row) == 6
+                  assert all(abs(float(value)-expected) < 1e-4 for value, expected in
+                             zip(row[:3], point["xyz_relative_model_units"]))
+                  assert [int(value) for value in row[3:]] == rgb
+              print("PASS: actual Chrome exported real-photo colored relative XYZ as PLY")
               browser("POST", f"/session/{session}/url", {
                   "url": "http://127.0.0.1:8877/wre-real-stereo-cpu-viewer.html",
               })
