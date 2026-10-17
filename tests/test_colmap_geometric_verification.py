@@ -469,7 +469,7 @@ def test_missing_geometry_result_is_rejected_and_partial_output_removed(tmp_path
     matching = _matching_result(tmp_path)
     request = _request(tmp_path, matching)
 
-    with pytest.raises(ColmapGeometricVerificationError, match="exactly one geometry result"):
+    with pytest.raises(ColmapGeometricVerificationError, match="lacks a nonempty pair"):
         verify_colmap_geometry(request, module=_FakePycolmap(drop_last_geometry=True))
 
     assert matching.database_path.exists()
@@ -554,7 +554,7 @@ def test_native_geometry_can_omit_only_zero_match_pairs(
     if omitted_raw_count != 0:
         with pytest.raises(
             ColmapGeometricVerificationError,
-            match="geometry evidence membership|lacks a nonempty pair",
+            match=r"geometry evidence membership|lacks a nonempty pair",
         ):
             verify_colmap_geometry(request, module=fake)
         assert not request.database_path.exists()
