@@ -4883,6 +4883,86 @@ jobs:
                   !document.getElementById('wre-tour-play').disabled ? actual : null;
               """)
               assert len(played_tour) == 7
+              # Roundtrip the user's REAL Chrome/WebGL camera tour via local JSON.
+              assert js("""
+                window.__wreSavedTour = null;
+                const priorCreateTourURL = URL.createObjectURL.bind(URL);
+                URL.createObjectURL = blob => {
+                  if (blob.type === 'application/json') {
+                    blob.text().then(text => {
+                      try {
+                        const saved = JSON.parse(text);
+                        if (saved.schema === 'wre.relative_3d_camera_tour.v1')
+                          window.__wreSavedTour = saved;
+                      } catch(e) {window.__wreSavedTour = {error:String(e)};}
+                    });
+                  }
+                  return priorCreateTourURL(blob);
+                };
+                document.getElementById('wre-tour-export').click();
+                return document.getElementById('wre-tour-status').textContent
+                  .includes('tour exported locally');
+              """)
+              portable_tour = until("return window.__wreSavedTour;")
+              assert portable_tour["schema"] == "wre.relative_3d_camera_tour.v1"
+              assert portable_tour["metric_scale_known"] is False
+              assert portable_tour["model_identity"].startswith("Photo-textured stereo surface")
+              assert len(portable_tour["keyframes"]) == 2
+              assert all(len(frame) == 7 for frame in portable_tour["keyframes"])
+              assert js("""
+                document.getElementById('wre-tour-clear').click();
+                return document.getElementById('wre-tour-play').disabled &&
+                  document.getElementById('wre-tour-export').disabled;
+              """)
+              foreign_tour = dict(portable_tour, model_identity="wrong photo-derived GLB")
+              js(f"""
+                const input=document.getElementById('wre-tour-import');
+                const foreign=new File(
+                  [JSON.stringify({json.dumps(foreign_tour)})],
+                  'foreign-tour.json', {{type:'application/json'}});
+                const transfer=new DataTransfer(); transfer.items.add(foreign);
+                input.files=transfer.files;
+                input.dispatchEvent(new Event('change', {{bubbles:true}}));
+              """)
+              assert until("""
+                return document.getElementById('wre-tour-status')
+                  .textContent.includes('restore refused') &&
+                  document.getElementById('wre-tour-play').disabled;
+              """)
+              js(f"""
+                const input=document.getElementById('wre-tour-import');
+                const saved=new File(
+                  [JSON.stringify({json.dumps(portable_tour)})],
+                  'saved-tour.json', {{type:'application/json'}});
+                const transfer=new DataTransfer(); transfer.items.add(saved);
+                input.files=transfer.files;
+                input.dispatchEvent(new Event('change', {{bubbles:true}}));
+              """)
+              assert until("""
+                return document.getElementById('wre-tour-status')
+                  .textContent.includes('2 tour viewpoints restored') &&
+                  !document.getElementById('wre-tour-play').disabled &&
+                  !document.getElementById('wre-tour-export').disabled;
+              """)
+              assert js("""
+                const scene=document.getElementById('wre-scene');
+                scene.cameraOrbit='2rad 0.5rad 8m';
+                scene.jumpCameraToGoal();
+                document.getElementById('wre-tour-play').click();
+                return document.getElementById('wre-tour-play').disabled;
+              """)
+              restored_tour = until("""
+                const scene=document.getElementById('wre-scene');
+                const status=document.getElementById('wre-tour-status').textContent;
+                if (!status.includes('Tour complete: 2 viewpoints') ||
+                    !status.includes('NOT 4D reconstruction')) return null;
+                const orbit=scene.getCameraOrbit(), target=scene.getCameraTarget();
+                const values=[orbit.theta,orbit.phi,orbit.radius,
+                  target.x,target.y,target.z,scene.getFieldOfView()];
+                return values.every((v,i)=>
+                  Math.abs(v-window.__wreSavedTour.keyframes[1][i])<0.1) ? values : null;
+              """)
+              assert len(restored_tour) == 7
               assert js("""
                 document.getElementById('wre-tour-clear').click();
                 return document.getElementById('wre-tour-play').disabled &&
@@ -5905,6 +5985,7 @@ jobs:
                       "surface_chord_angle_restore_verified_in_chrome": True,
                       "relative_3d_camera_bookmark_roundtrip_verified_in_chrome": True,
                       "user_camera_tour_verified_in_chrome": True,
+                      "portable_camera_tour_json_roundtrip_verified_in_chrome": True,
               "current_view_png_export_verified_in_chrome": True,
                       "current_view_png_dimensions": [view_png["width"], view_png["height"]],
                       "surface_reload": True,
@@ -6049,6 +6130,8 @@ jobs:
               raise ValueError("Actual Chrome did not roundtrip a relative 3D camera bookmark")
           if receipt.get("user_camera_tour_verified_in_chrome") is not True:
               raise ValueError("Actual Chrome did not replay a user camera tour")
+          if receipt.get("portable_camera_tour_json_roundtrip_verified_in_chrome") is not True:
+              raise ValueError("Actual Chrome did not export and restore a real camera tour")
           if receipt.get("current_view_png_export_verified_in_chrome") is not True:
               raise ValueError("Actual Chrome did not export its current real-photo 3D view as PNG")
           dimensions = receipt.get("current_view_png_dimensions")
