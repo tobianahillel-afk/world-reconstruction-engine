@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import hashlib
 import json
+import math
 import os
 import shutil
 import struct
@@ -116,6 +117,7 @@ from wre.reconstruction.static_appearance_baseline import (
     build_gsplat_reference_trainer_path_overrides,
     export_verified_gsplat_rgb_centers_glb,
     export_verified_gsplat_rgb_centers_ply,
+    export_verified_gsplat_splat,
     inspect_gsplat_static_appearance_shared_track_pixels,
     materialize_verified_gsplat_ply,
     preflight_gsplat_static_appearance_inputs,
@@ -995,14 +997,11 @@ def _gsplat_output(
     return output, profile, ref
 
 
-
 def test_reference_runner_rejects_missing_photometry_before_any_cuda(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A verified COLMAP source without V2L17 evidence must not reach CUDA."""
-    request, source, staged, output, profile, ref, producer = _retained_gsplat_fixture(
-        tmp_path
-    )
+    request, source, staged, output, profile, ref, producer = _retained_gsplat_fixture(tmp_path)
     python_executable = tmp_path / "external-python"
     python_executable.write_bytes(b"stub")
     previous = (output / profile.expected_ply_relative_path).read_bytes()
@@ -1088,6 +1087,7 @@ def test_reference_runner_accepts_real_two_view_capture_evidence_before_native_g
         )
     assert not output.exists()
 
+
 def test_external_gsplat_training_is_exposed_by_public_reconstruction_package() -> None:
     from wre import reconstruction
 
@@ -1096,8 +1096,9 @@ def test_external_gsplat_training_is_exposed_by_public_reconstruction_package() 
     assert "run_gsplat_reference_training" in baseline_module.__all__
 
 
+@pytest.mark.parametrize("preview_format", ("glb", "splat"))
 def test_one_call_gsplat_reconstruction_stages_real_files_and_returns_candidate(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, preview_format: str
 ) -> None:
     """Real CPU staging + file hashing + output assembly, substituted GPU trainer."""
     # This test isolates trainer orchestration; V2L17 evidence has separate real tests.
@@ -1136,7 +1137,7 @@ def test_one_call_gsplat_reconstruction_stages_real_files_and_returns_candidate(
     )
     preview_parent = tmp_path / "interactive-preview"
     preview_parent.mkdir()
-    preview_file = preview_parent / "gaussian-centers.glb"
+    preview_file = preview_parent / f"gaussian-centers.{preview_format}"
     result = reconstruct_gsplat_static_appearance(
         request=request,
         source=source,
@@ -1163,13 +1164,19 @@ def test_one_call_gsplat_reconstruction_stages_real_files_and_returns_candidate(
     assert (staged.dataset_root / "sparse" / "0" / "cameras.bin").is_file()
     assert (output / "wre-reference-training.log").is_file()
     preview_bytes = preview_file.read_bytes()
-    assert struct.unpack_from("<4sII", preview_bytes) == (b"glTF", 2, len(preview_bytes))
-    json_length = struct.unpack_from("<I", preview_bytes, 12)[0]
-    viewer_scene = json.loads(preview_bytes[20 : 20 + json_length])
-    assert viewer_scene["accessors"][0]["count"] == 2
-    assert viewer_scene["extras"]["wre_visualization"] == (
-        "Gaussian centers only, not Gaussian splatting"
-    )
+    if preview_format == "glb":
+        assert struct.unpack_from("<4sII", preview_bytes) == (b"glTF", 2, len(preview_bytes))
+        json_length = struct.unpack_from("<I", preview_bytes, 12)[0]
+        viewer_scene = json.loads(preview_bytes[20 : 20 + json_length])
+        assert viewer_scene["accessors"][0]["count"] == 2
+        assert viewer_scene["extras"]["wre_visualization"] == (
+            "Gaussian centers only, not Gaussian splatting"
+        )
+    else:
+        assert len(preview_bytes) == 2 * 32
+        anisotropic = list(struct.iter_unpack("<6f8B", preview_bytes))
+        assert len(anisotropic) == 2
+        assert all(scale > 0.0 for record in anisotropic for scale in record[3:6])
     assert result.materialization.entries[0].sha256 == _digest(_gsplat_ply(vertices=2))
 
 
@@ -1672,6 +1679,80 @@ def test_gsplat_glb_inspector_rejects_corrupted_real_vertex_bytes(tmp_path: Path
         baseline_module.inspect_verified_gsplat_rgb_centers_glb(path=target)
 
 
+def test_verified_gsplat_gaussian_splat_export_retains_shape_orientation_and_opacity(
+    tmp_path: Path,
+) -> None:
+    """Actual 32-byte records decoded independently, not just an export stub."""
+    first = [0.0] * 59
+    first[:6] = [1.0, 2.0, 3.0, 0.0, 0.0, 0.0]
+    first[-8:] = [0.0, 0.0, math.log(2), math.log(0.5), 1.0, 0.0, 0.0, 0.0]
+    second = [0.0] * 59
+    second[:6] = [-1.0, 0.0, 2.0, 2.0, -2.0, 0.0]
+    second[-8:] = [5.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0]
+    template = _gsplat_ply(vertices=2)
+    split = template.index(b"end_header\n") + len(b"end_header\n")
+    gaussian_ply = template[:split] + struct.pack("<59f", *first) + struct.pack("<59f", *second)
+    root, profile, ref = _gsplat_output(tmp_path, gaussian_ply)
+    viewer = tmp_path / "viewer"
+    viewer.mkdir()
+    target = viewer / "gaussians.splat"
+    digest = export_verified_gsplat_splat(
+        artifact_ref=ref, output_root=root, profile=profile, splat_path=target
+    )
+    data = target.read_bytes()
+    assert len(data) == 2 * 32
+    assert digest == _digest(data)
+    assert (root / profile.expected_ply_relative_path).read_bytes() == gaussian_ply
+    records = list(struct.iter_unpack("<6f8B", data))
+    assert len(records) == 2
+    assert records[0][:3] == (1.0, 2.0, 3.0)
+    assert records[0][3:6] == pytest.approx((1.0, 2.0, 0.5), rel=1e-6)
+    assert records[0][6:] == (127, 127, 127, 127, 255, 128, 128, 128)
+    assert records[1][:3] == (-1.0, 0.0, 2.0)
+    assert records[1][3:6] == (1.0, 1.0, 1.0)
+    assert records[1][6:] == (255, 0, 127, 253, 128, 255, 128, 128)
+    from wre import reconstruction
+
+    assert reconstruction.export_verified_gsplat_splat is export_verified_gsplat_splat
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="renderer export requires"):
+        export_verified_gsplat_splat(
+            artifact_ref=ref, output_root=root, profile=profile, splat_path=target
+        )
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected_message"),
+    (
+        ("invalid_ply", "unexpected bytes"),
+        ("zero_rotation", "quaternion"),
+        ("huge_log_scale", "scale"),
+    ),
+)
+def test_verified_gaussian_splat_export_refuses_bad_inputs_without_partial_file(
+    tmp_path: Path, mutation: str, expected_message: str
+) -> None:
+    record = [0.0] * 59
+    record[-4] = 1.0
+    if mutation == "zero_rotation":
+        record[-4:] = [0.0, 0.0, 0.0, 0.0]
+    if mutation == "huge_log_scale":
+        record[-7] = 1000.0
+    template = _gsplat_ply(vertices=1)
+    split = template.index(b"end_header\n") + len(b"end_header\n")
+    payload = template[:split] + struct.pack("<59f", *record)
+    if mutation == "invalid_ply":
+        payload += b"unexpected"
+    root, profile, ref = _gsplat_output(tmp_path, payload)
+    viewer = tmp_path / "viewer"
+    viewer.mkdir()
+    target = viewer / "gaussians.splat"
+    with pytest.raises(GsplatStaticAppearancePreflightError, match=expected_message):
+        export_verified_gsplat_splat(
+            artifact_ref=ref, output_root=root, profile=profile, splat_path=target
+        )
+    assert not target.exists()
+
+
 def test_verified_gsplat_gaussian_centers_export_real_viewable_rgb_ply(
     tmp_path: Path,
 ) -> None:
@@ -1888,6 +1969,36 @@ def test_gsplat_glb_cli_respects_requested_preview_density(tmp_path: Path) -> No
     assert scene["extras"]["sampling"] == "even-endpoints"
     assert scene["extras"]["requested_max_points"] == 1
     assert run.stdout.strip() == f"{_digest(glb).value}  {preview}"
+
+
+def test_gsplat_splat_cli_exports_real_anisotropic_records_on_cpu(tmp_path: Path) -> None:
+    """Actual external WRE CLI reads the source PLY and writes a .splat file."""
+    root, profile, ref = _gsplat_output(tmp_path, _gsplat_ply(vertices=2))
+    viewer = tmp_path / "viewer"
+    viewer.mkdir()
+    output = viewer / "gaussians.splat"
+    command = [
+        sys.executable,
+        "-m",
+        "wre.reconstruction.static_appearance_baseline",
+        "--output-root",
+        str(root),
+        "--max-steps",
+        str(profile.max_steps),
+        "--preview",
+        str(output),
+    ]
+    completed = subprocess.run(command, capture_output=True, text=True, check=False, timeout=30)
+    assert completed.returncode == 0, completed.stderr
+    data = output.read_bytes()
+    assert len(data) == 64
+    assert len(list(struct.iter_unpack("<6f8B", data))) == 2
+    assert completed.stdout.strip() == f"{_digest(data).value}  {output}"
+    assert (root / profile.expected_ply_relative_path).read_bytes() == _gsplat_ply(vertices=2)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="requires a new"):
+        export_verified_gsplat_splat(
+            artifact_ref=ref, output_root=root, profile=profile, splat_path=output
+        )
 
 
 def test_gsplat_rgb_glb_cli_executes_real_cpu_export(tmp_path: Path) -> None:
