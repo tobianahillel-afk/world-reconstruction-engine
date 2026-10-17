@@ -5249,6 +5249,7 @@ jobs:
               assert area_status["markerCount"] == 3
               assert area_status["pressed"] == "true"
               assert area_status["enabled"] and area_status["stoppedAutoRotate"]
+              assert area_status["triangleArea"] > 0, area_status
               assert "3D triangle-fan area:" in area_status["status"]
               assert "NOT physical surface area or m²" in area_status["status"]
               js("""
@@ -5273,6 +5274,7 @@ jobs:
               )
               expected_area=0.5*math.sqrt(sum(x*x for x in cross))
               assert expected_area > 0.0
+              assert abs(expected_area-area_status["triangleArea"]) < 1e-6
               assert len(area_json["triangle_areas_model_units_squared"]) == 1
               assert abs(area_json["triangle_areas_model_units_squared"][0]-expected_area) < 1e-6
               assert abs(area_json["total_area_model_units_squared"]-expected_area) < 1e-6
