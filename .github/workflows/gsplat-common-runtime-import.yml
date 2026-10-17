@@ -288,6 +288,7 @@ jobs:
           set -euo pipefail
           "$COMMON_PYTHON" -I - <<'PY'
           import os
+          import struct
           from pathlib import Path
 
           import torch
@@ -328,9 +329,14 @@ jobs:
           assert isinstance(splat_data, bytes)
           assert splat_path.read_bytes() == splat_data
           assert len(splat_data) == 2 * 32  # Native splat: 32 bytes/vertex.
-          import struct
-          assert struct.unpack_from("<3f", splat_data, 0) == (0.0, 0.0, 2.0)
-          assert splat_data[12:24] == struct.pack("<3f", 1.0, 1.0, 1.0)
+          # Upstream sorts centers by Morton order; never assume original
+          # input tensor order is retained in the portable .splat bytes.
+          assert {splat_data[i:i + 12] for i in (0, 32)} == {
+              struct.pack("<3f", 0.0, 0.0, 2.0),
+              struct.pack("<3f", 0.4, 0.2, 2.4),
+          }
+          for i in (0, 32):
+              assert splat_data[i + 12:i + 24] == struct.pack("<3f", 1.0, 1.0, 1.0)
           print(f"Actual pinned gsplat.export_splats CPU emitted {len(produced)} PLY bytes")
           print(f"Actual pinned gsplat.export_splats CPU emitted {len(splat_data)} .splat bytes")
           print("Two synthetic CPU Gaussians; no GPU run or scene reconstruction.")
