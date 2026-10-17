@@ -2638,7 +2638,6 @@ def export_verified_gsplat_rgb_centers_glb(
     return Sha256Digest(digest.hexdigest())
 
 
-
 def inspect_verified_gsplat_rgb_centers_glb(*, path: Path) -> dict[str, object]:
     """Load and inspect WRE's own portable RGB-center GLB, without a GPU.
 
@@ -2667,7 +2666,7 @@ def inspect_verified_gsplat_rgb_centers_glb(*, path: Path) -> dict[str, object]:
     if bin_start + 8 > len(payload):
         raise GsplatStaticAppearancePreflightError("WRE RGB-center GLB is truncated")
     bin_size, bin_type = struct.unpack_from("<I4s", payload, bin_start)
-    if bin_type != b"BIN\\x00" or bin_size != len(payload) - bin_start - 8:
+    if bin_type != b"BIN\x00" or bin_size != len(payload) - bin_start - 8:
         raise GsplatStaticAppearancePreflightError("WRE RGB-center binary chunk is invalid")
     try:
         scene = json.loads(payload[20:bin_start].decode("utf-8"))
@@ -2738,6 +2737,7 @@ def inspect_verified_gsplat_rgb_centers_glb(*, path: Path) -> dict[str, object]:
         "metric_scale_known": False,
         "gpu_training_verified": False,
     }
+
 
 def assemble_verified_gsplat_static_appearance_result(
     *,

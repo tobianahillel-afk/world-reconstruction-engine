@@ -1617,7 +1617,6 @@ def test_external_gsplat_runner_rejects_failure_or_missing_output(
     assert (output / "wre-reference-training.log").exists()
 
 
-
 def test_exported_gsplat_glb_can_be_reopened_and_inspected_offline(tmp_path: Path) -> None:
     """A real GLB created by the CPU exporter is independently readable by WRE."""
     original = _gsplat_ply(vertices=4)
