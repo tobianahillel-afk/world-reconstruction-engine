@@ -3363,20 +3363,29 @@ jobs:
                 window.__wre3dLoads=0;
                 document.getElementById('wre-scene').addEventListener(
                   'load', () => window.__wre3dLoads++);
-                const chooser=document.getElementById('wre-scene-choice');
-                chooser.value='sift';
-                chooser.dispatchEvent(new Event('change', {bubbles:true}));
               """)
-              second = until("""
-                const scene=document.getElementById('wre-scene');
-                return window.__wre3dLoads >= 1 && scene.loaded === true &&
-                  scene.model &&
-                  scene.getAttribute('src') ===
-                    './wre-real-stereo-sift-estimated-cameras.glb' &&
-                  document.getElementById('wre-scene-provenance').textContent
-                    .includes('unknown metric scale');
-              """)
-              assert second
+              modes = (
+                  ("stereo", "./wre-real-stereo-cpu-lr-consistent.glb",
+                   "Stereo-consistent RGB points"),
+                  ("quality", "./wre-real-stereo-cpu-photometric-consistent.glb",
+                   "Photometric-consistent RGB points"),
+                  ("sift", "./wre-real-stereo-sift-estimated-cameras.glb",
+                   "unknown metric scale"),
+              )
+              for sequence, (name, filename, evidence) in enumerate(modes, start=1):
+                  js(f"""
+                    const chooser=document.getElementById('wre-scene-choice');
+                    chooser.value={json.dumps(name)};
+                    chooser.dispatchEvent(new Event('change', {{bubbles:true}}));
+                  """)
+                  assert until(f"""
+                    const scene=document.getElementById('wre-scene');
+                    return window.__wre3dLoads >= {sequence} &&
+                      scene.loaded === true && scene.model &&
+                      scene.getAttribute('src') === {json.dumps(filename)} &&
+                      document.getElementById('wre-scene-provenance').textContent
+                        .includes({json.dumps(evidence)});
+                  """), f"Model-viewer could not load actual {name} 3D reconstruction"
               js("""
                 const chooser=document.getElementById('wre-scene-choice');
                 chooser.value='surface';
@@ -3384,7 +3393,7 @@ jobs:
               """)
               assert until("""
                 const scene=document.getElementById('wre-scene');
-                return window.__wre3dLoads >= 2 && scene.loaded === true &&
+                return window.__wre3dLoads >= 4 && scene.loaded === true &&
                   scene.model &&
                   scene.getAttribute('src').startsWith('data:model/gltf-binary;base64,');
               """)
@@ -3402,6 +3411,8 @@ jobs:
                       "real_browser": "Google Chrome (headless)",
                       "render_backend": "CPU SwiftShader; no CUDA training",
                       "surface_loaded": True,
+                      "stereo_cloud_mode_loaded": True,
+                      "photometric_cloud_mode_loaded": True,
                       "sift_camera_mode_loaded": True,
                       "surface_reload": True,
                       "webgl_context": True,
