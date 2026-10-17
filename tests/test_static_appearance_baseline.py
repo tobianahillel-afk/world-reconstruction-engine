@@ -1749,7 +1749,7 @@ def test_verified_colmap_camera_rig_rejects_foreign_frame_and_duplicate_view(
     foreign = replace(
         canonical.camera_solutions[1], local_frame_id=LocalFrameId("frame:foreign")
     )
-    with pytest.raises(GsplatStaticAppearancePreflightError, match="same.*frame"):
+    with pytest.raises(GsplatStaticAppearancePreflightError, match=r"same.*frame"):
         baseline_module.export_verified_colmap_camera_rig_json(
             replace(canonical, camera_solutions=(canonical.camera_solutions[0], foreign)),
             path=tmp_path / "foreign.json",
