@@ -1155,6 +1155,73 @@ jobs:
           with hh4_ply.open("rb") as check:
               assert check.read(len(hh4_header)) == hh4_header
               assert len(check.read()) == 15 * len(hh4_xyz)
+          # Deliver a real, full-resolution CPU depth map aligned to left
+          # pixels (not just the 60k-point PLY subsample). Value 0 means
+          # invalid; nonzero values use the documented approximate camera
+          # geometry and the cropped disparity + dmin physical denominator.
+          depth_map_mm = np.zeros(predicted.shape, dtype=np.float32)
+          depth_map_mm[reconstructed] = (
+              focal_px * baseline_mm
+              / (predicted[reconstructed].astype(np.float64) + dmin)
+          ).astype(np.float32)
+          assert depth_map_mm.shape == (height, width)
+          assert np.all(np.isfinite(depth_map_mm))
+          assert np.array_equal(depth_map_mm > 0, reconstructed)
+          depth_output = (
+              Path(os.environ["RUNNER_TEMP"]) / "wre-middlebury-half-aloe-cpu-depth-mm.npy"
+          )
+          np.save(depth_output, depth_map_mm, allow_pickle=False)
+          persisted_depth = np.load(depth_output, allow_pickle=False)
+          assert persisted_depth.dtype == np.float32
+          assert np.array_equal(persisted_depth, depth_map_mm)
+          assert np.isclose(depth_map_mm[yy[0], xx[0]], depth_mm[0], rtol=1e-6)
+
+          # Actual-photo diagnostic, calculated AFTER stereo inference.
+          # Identical colors represent identical CROPPED disparity (0..160px).
+          # Red/blue error panel uses official GT only to evaluate, NEVER
+          # to select reconstructed pixels or influence any solver.
+          scale_to_byte = 255.0 / 160.0
+          prediction_color = cv2.applyColorMap(
+              np.uint8(np.clip(predicted, 0, 160) * scale_to_byte),
+              cv2.COLORMAP_TURBO,
+          )
+          prediction_color[~reconstructed] = 0
+          reference_color = cv2.applyColorMap(
+              np.uint8(np.clip(reference, 0, 160) * scale_to_byte),
+              cv2.COLORMAP_TURBO,
+          )
+          reference_color[~known] = 0
+          overlap_error = np.zeros(predicted.shape, dtype=np.uint8)
+          overlap_error[evaluated] = np.uint8(
+              np.clip(np.abs(predicted[evaluated] - reference[evaluated]), 0, 10)
+              * (255.0 / 10.0)
+          )
+          error_color = cv2.applyColorMap(overlap_error, cv2.COLORMAP_JET)
+          error_color[~evaluated] = 0
+          diagnostics = np.zeros((height * 2, width * 2, 3), dtype=np.uint8)
+          diagnostics[:height, :width] = left
+          diagnostics[:height, width:] = prediction_color
+          diagnostics[height:, :width] = reference_color
+          diagnostics[height:, width:] = error_color
+          for caption, origin in (
+              ("LEFT PHOTO", (10, 26)),
+              ("SGBM CROPPED DISP 0-160px", (width + 10, 26)),
+              ("OFFICIAL GT CROPPED DISP 0-160px", (10, height + 26)),
+              ("ABS ERROR 0-10px ON OVERLAP", (width + 10, height + 26)),
+          ):
+              cv2.putText(
+                  diagnostics, caption, origin, cv2.FONT_HERSHEY_SIMPLEX,
+                  0.55, (255, 255, 255), 1, cv2.LINE_AA,
+              )
+          diagnostic_output = (
+              Path(os.environ["RUNNER_TEMP"]) / "wre-middlebury-half-aloe-stereo-diagnostics.png"
+          )
+          assert cv2.imwrite(str(diagnostic_output), diagnostics)
+          decoded_diagnostic = cv2.imread(str(diagnostic_output), cv2.IMREAD_COLOR)
+          assert decoded_diagnostic is not None
+          assert decoded_diagnostic.shape == (2 * height, 2 * width, 3)
+          assert int(np.count_nonzero(decoded_diagnostic)) > 100_000
+
           # Evaluate versus official GT only AFTER generating the predictions.
           hh4_evaluated = hh4_valid & known
           hh4_error = np.abs(hh4_disp[hh4_evaluated] - reference[hh4_evaluated])
@@ -1222,6 +1289,16 @@ jobs:
                   float(np.sqrt(np.mean(agreement_error * agreement_error)))
                   if len(agreement_error) else None
               ),
+              "dense_depth_map_name": depth_output.name,
+              "dense_depth_map_format": "NumPy float32 [height,width], 0=invalid",
+              "dense_depth_map_nonzero_pixels": int(np.count_nonzero(depth_map_mm)),
+              "dense_depth_map_units": "estimated mm; centered principal point assumed",
+              "dense_depth_map_sha256": hashlib.sha256(depth_output.read_bytes()).hexdigest(),
+              "stereo_diagnostic_png_name": diagnostic_output.name,
+              "stereo_diagnostic_png_sha256": (
+                  hashlib.sha256(diagnostic_output.read_bytes()).hexdigest()
+              ),
+              "stereo_diagnostic_uses_gt_for_evaluation_only": True,
               "rgb_3d_uses_groundtruth_visibility_mask": False,
               "rgb_3d_coordinate_units": "estimated millimeters under official f/b and centered-cx-cy",
               "focal_px_halfsize": focal_px,
@@ -1269,12 +1346,14 @@ jobs:
             wre-middlebury-half-aloe-cpu-consensus-3d.ply \
             wre-middlebury-half-aloe-cpu-left-right-3d.ply \
             wre-middlebury-half-aloe-cpu-hh4-3d.ply
+            wre-middlebury-half-aloe-cpu-depth-mm.npy
+            wre-middlebury-half-aloe-stereo-diagnostics.png
           do
             test -s "$RUNNER_TEMP/$name"
             cp "$RUNNER_TEMP/$name" "$bundle/$name"
             test -s "$bundle/$name"
           done
-          test "$(find "$bundle" -maxdepth 1 -type f | wc -l)" -eq 5
+          test "$(find "$bundle" -maxdepth 1 -type f | wc -l)" -eq 7
 
       - name: Publish independently measured Middlebury stereo quality and RGB 3D
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
