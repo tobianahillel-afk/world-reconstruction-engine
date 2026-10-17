@@ -470,6 +470,52 @@ jobs:
                       f"{int(color[0])} {int(color[1])} {int(color[2])}\n"
                   )
           assert (output / quality_name).stat().st_size > 100
+          # Functional real-photo 3D export: ALL selected pixels, rather than
+          # the old 20k decimated point preview. No new stereo solver.
+          dense_mask = checked & (residual <= photometric_limit)
+          dense_y, dense_x = np.nonzero(dense_mask)
+          dense_count = int(len(dense_x))
+          assert dense_count >= len(quality_xyz) >= 100
+          dense_depth = depth_field[dense_y, dense_x]
+          dense_color = left[dense_y, dense_x, ::-1]
+          dense_dtype = np.dtype([
+              ("x", "<f4"), ("y", "<f4"), ("z", "<f4"),
+              ("red", "u1"), ("green", "u1"), ("blue", "u1"),
+          ])
+          dense_vertices = np.empty(dense_count, dtype=dense_dtype)
+          dense_vertices["x"] = (
+              (dense_x - principal_x) * dense_depth / focal_guess
+          )
+          dense_vertices["y"] = (
+              (dense_y - principal_y) * dense_depth / focal_guess
+          )
+          dense_vertices["z"] = dense_depth
+          for name, index in zip(("red", "green", "blue"), range(3)):
+              dense_vertices[name] = dense_color[:, index]
+          assert np.isfinite(
+              np.column_stack((
+                  dense_vertices["x"], dense_vertices["y"], dense_vertices["z"]
+              ))
+          ).all()
+          dense_name = "wre-real-stereo-cpu-dense-consistent-rgb.ply"
+          dense_header = (
+              "ply\nformat binary_little_endian 1.0\n"
+              f"element vertex {dense_count}\n"
+              "property float x\nproperty float y\nproperty float z\n"
+              "property uchar red\nproperty uchar green\nproperty uchar blue\n"
+              "end_header\n"
+          ).encode("ascii")
+          dense_path = output / dense_name
+          with dense_path.open("wb") as stream:
+              stream.write(dense_header)
+              stream.write(dense_vertices.tobytes())
+          with dense_path.open("rb") as stream:
+              assert stream.read(len(dense_header)) == dense_header
+              dense_payload = stream.read()
+          assert len(dense_payload) == dense_count * dense_dtype.itemsize
+          dense_restored = np.frombuffer(dense_payload, dtype=dense_dtype)
+          assert np.array_equal(dense_restored, dense_vertices)
+          assert dense_path.stat().st_size == len(dense_header) + len(dense_payload)
           # Green = two-way geometry consistent, red = one-way-only pixel.
           diagnostic = np.zeros_like(left)
           diagnostic[valid & ~checked] = (0, 0, 255)
@@ -1157,6 +1203,14 @@ jobs:
               "left_right_consistent_fraction_of_valid": checked_count / int(valid.sum()),
               "left_right_consistent_exported_points": int(len(checked_xyz)),
               "photo_consistent_3d_points": int(len(quality_xyz)),
+              "dense_photo_consistent_binary_ply": dense_name,
+              "dense_photo_consistent_points": dense_count,
+              "dense_photo_consistent_selection": (
+                  "all observed pixels with disparity L/R <=2px and RGB MAE <=8/255"
+              ),
+              "dense_photo_consistent_dtype": "binary_little_endian f32 xyz u8 RGB",
+              "dense_photo_consistent_scale_metric": False,
+              "dense_photo_consistent_gpu_training": False,
               "photo_consistent_glb": quality_glb_name,
               "photo_consistent_glb_is_dynamic_4d_scene": False,
               "photo_consistent_mae_threshold_rgb_0_255": photometric_limit,
@@ -1357,7 +1411,7 @@ jobs:
       # Run the actual-photo CPU reconstruction BEFORE expensive native CUDA
       # compilation. Keep the original photo pipeline in one place and make
       # its real 3D/preview outputs inspectable even while CUDA builds run.
-      - name: Stage twenty-four real-photo CPU 3D, animated mesh, GLB and COLMAP outputs early
+      - name: Stage twenty-seven real-photo CPU 3D, animated mesh, GLB and COLMAP outputs early
         shell: bash
         run: |
           set -euo pipefail
@@ -1366,6 +1420,7 @@ jobs:
           for file in \
             wre-real-stereo-cpu-reconstruction.ply \
             wre-real-stereo-cpu-photometric-consistent.ply \
+            wre-real-stereo-cpu-dense-consistent-rgb.ply \
             wre-real-stereo-cpu-photometric-consistent.glb \
             wre-real-stereo-cpu-middlebury-reference-check.png \
             wre-real-stereo-cpu-middlebury-reference-check.json \
@@ -1394,7 +1449,7 @@ jobs:
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 26
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 27
 
       - name: Publish real-photo CPU 3D plus COLMAP before native CUDA builds
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -2386,6 +2441,7 @@ jobs:
             wre-sift-cpu-view-2.png \
             wre-real-stereo-cpu-reconstruction.ply \
             wre-real-stereo-cpu-photometric-consistent.ply \
+            wre-real-stereo-cpu-dense-consistent-rgb.ply \
             wre-real-stereo-cpu-photometric-consistent.glb \
             wre-real-stereo-cpu-middlebury-reference-check.png \
             wre-real-stereo-cpu-middlebury-reference-check.json \
@@ -2412,8 +2468,8 @@ jobs:
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 42
-          echo "Staged all 42 real PLY/OBJ/GLB/GIF/MTL/PNG/PFM/NPY/JSON/ZIP files for artifact upload"
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 43
+          echo "Staged all 43 real PLY/OBJ/GLB/GIF/MTL/PNG/PFM/NPY/JSON/ZIP files for artifact upload"
 
       - name: Publish CPU COLMAP 3D preview and measured reprojection
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
