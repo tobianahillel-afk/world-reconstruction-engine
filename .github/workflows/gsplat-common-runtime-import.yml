@@ -4589,6 +4589,70 @@ jobs:
               """)
               assert "User-scaled straight-line distance: 2.50000 m" in calibrated_distance
               assert "NOT certified accuracy" in calibrated_distance
+              # Real Chrome/WebGL: save a separate, UNVERIFIED manual scale
+              # and restore it against the identical photo-derived SHA model.
+              js("""
+                window.__wreExportedMeasurement=null;
+                document.getElementById('wre-reference-export').click();
+              """)
+              saved_reference = json.loads(until("return window.__wreExportedMeasurement;"))
+              assert saved_reference["schema"] == "wre.user_reference_3d_calibration.v1"
+              assert saved_reference["reference_source"] == "manual_user_entry"
+              assert saved_reference["metric_scale_known"] is False
+              assert saved_reference["independently_verified"] is False
+              assert saved_reference["model_provenance"] == exported_measurement["model_provenance"]
+              assert saved_reference["reference_points_xyz"] == [
+                  exported_measurement["point_a_xyz"], exported_measurement["point_b_xyz"]
+              ]
+              assert saved_reference["reference_length_metres"] == 2.5
+              assert abs(
+                  saved_reference["metres_per_model_unit"] -
+                  2.5 / exported_measurement["distance_model_units"]
+              ) < 1e-9
+              assert js("""
+                document.getElementById('wre-reference-clear').click();
+                return document.getElementById('wre-reference-export').disabled;
+              """), "Manual scale was not cleared"
+              js(f"""
+                const input=document.getElementById('wre-reference-import');
+                const file=new File([JSON.stringify({json.dumps(saved_reference)})],
+                  'real-photo-manual-reference.json', {{type:'application/json'}});
+                const data=new DataTransfer();
+                data.items.add(file);input.files=data.files;
+                input.dispatchEvent(new Event('change', {{bubbles:true}}));
+              """)
+              restored_reference = until("""
+                const status=document.getElementById('wre-reference-status').textContent;
+                return status.includes('User-scaled straight-line distance: 2.50000 m') &&
+                  !document.getElementById('wre-reference-export').disabled &&
+                  document.getElementById('wre-reference-metres').value === '2.5'
+                  ? status : null;
+              """)
+              assert "NOT certified accuracy" in restored_reference
+              for invalid in (
+                  dict(saved_reference, model_provenance="different GLB"),
+                  dict(saved_reference, reference_distance_model_units=
+                       saved_reference["reference_distance_model_units"] + 2),
+                  dict(saved_reference, metres_per_model_unit=
+                       saved_reference["metres_per_model_unit"] * 2),
+              ):
+                  js(f"""
+                    const input=document.getElementById('wre-reference-import');
+                    const file=new File([JSON.stringify({json.dumps(invalid)})],
+                      'invalid-reference.json', {{type:'application/json'}});
+                    const data=new DataTransfer();
+                    data.items.add(file);input.files=data.files;
+                    input.dispatchEvent(new Event('change', {{bubbles:true}}));
+                  """)
+                  assert until("""
+                    return document.getElementById('wre-reference-status')
+                      .textContent.includes('Calibration restore refused');
+                  """)
+                  assert js("""
+                    document.getElementById('wre-reference-estimate').click();
+                    return document.getElementById('wre-reference-status')
+                      .textContent.includes('User-scaled straight-line distance: 2.50000 m');
+                  """), "Invalid reference altered the still-valid manual scale"
               assert js("""
                 window.__wreExportedMeasurement=null;
                 document.getElementById('wre-measure-export').click();
