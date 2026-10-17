@@ -2954,10 +2954,7 @@ def inspect_verified_gsplat_rgb_centers_glb(*, path: Path) -> dict[str, object]:
                 or (
                     isinstance(extras["source_colmap_model_sha256"], str)
                     and len(extras["source_colmap_model_sha256"]) == 64
-                    and all(
-                        c in "0123456789abcdef"
-                        for c in extras["source_colmap_model_sha256"]
-                    )
+                    and all(c in "0123456789abcdef" for c in extras["source_colmap_model_sha256"])
                 )
             )
             and primitive["mode"] == 0
