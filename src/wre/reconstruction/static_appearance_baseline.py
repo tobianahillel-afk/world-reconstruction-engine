@@ -2330,6 +2330,172 @@ def export_verified_gsplat_rgb_centers_ply(
     return Sha256Digest(output_hash.hexdigest())
 
 
+
+def export_verified_gsplat_rgb_centers_glb(
+    *,
+    artifact_ref: ArtifactRef,
+    output_root: Path,
+    profile: GsplatStaticAppearanceTrainingProfile,
+    preview_path: Path,
+) -> Sha256Digest:
+    """Create a portable glTF POINTS view of audited Gaussian RGB centers.
+
+    Reuse the pinned Gaussian-to-RGB PLY converter; GLB uses interleaved
+    POSITION float32 and normalized COLOR_0 uint8 with an unlit material.
+    Deterministically sample very large clouds for interactive inspection.
+    This is NOT Gaussian radiance rendering, physical geometry, or metric 3D.
+    """
+
+    if not isinstance(preview_path, Path) or not preview_path.is_absolute():
+        raise TypeError("gsplat GLB preview requires an absolute pathlib.Path")
+    parent = _safe_root(preview_path.parent, "gsplat GLB preview parent")
+    destination = parent / preview_path.name
+    if destination.suffix.lower() != ".glb" or destination.exists():
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat GLB preview must use a new distinct .glb file"
+        )
+
+    max_points = 2_000_000  # at most 32 MB of interleaved vertex attributes
+    with tempfile.TemporaryDirectory(prefix="wre-gsplat-rgb-", dir=parent) as staging:
+        rgb = Path(staging) / "centers-rgb.ply"
+        export_verified_gsplat_rgb_centers_ply(
+            artifact_ref=artifact_ref,
+            output_root=output_root,
+            profile=profile,
+            preview_path=rgb,
+        )
+        with rgb.open("rb") as source:
+            header = bytearray()
+            while not header.endswith(b"end_header\\n"):
+                line = source.readline(_MAX_GSPLAT_PLY_HEADER_BYTES + 1 - len(header))
+                if not line or len(header) + len(line) > _MAX_GSPLAT_PLY_HEADER_BYTES:
+                    raise GsplatStaticAppearancePreflightError(
+                        "gsplat RGB centers preview has an invalid PLY header"
+                    )
+                header.extend(line)
+            try:
+                count = int(header.splitlines()[2].split()[2])
+            except (IndexError, ValueError) as exc:
+                raise GsplatStaticAppearancePreflightError(
+                    "gsplat RGB centers preview lacks a vertex count"
+                ) from exc
+            stride = max(1, (count + max_points - 1) // max_points)
+            sampled = (count + stride - 1) // stride
+            low = [math.inf, math.inf, math.inf]
+            high = [-math.inf, -math.inf, -math.inf]
+            for index in range(count):
+                record = source.read(15)
+                if len(record) != 15:
+                    raise GsplatStaticAppearancePreflightError(
+                        "gsplat RGB centers preview was truncated"
+                    )
+                if index % stride == 0:
+                    coords = struct.unpack_from("<3f", record)
+                    for axis in range(3):
+                        low[axis] = min(low[axis], coords[axis])
+                        high[axis] = max(high[axis], coords[axis])
+            if source.read(1):
+                raise GsplatStaticAppearancePreflightError(
+                    "gsplat RGB centers preview has trailing data"
+                )
+            if not sampled:
+                raise GsplatStaticAppearancePreflightError(
+                    "gsplat RGB centers preview must contain points"
+                )
+
+        vertex_bytes = sampled * 16
+        gltf = {
+            "asset": {
+                "version": "2.0",
+                "generator": "WRE gsplat RGB Gaussian centers — not radiance",
+            },
+            "extensionsUsed": ["KHR_materials_unlit"],
+            "scene": 0,
+            "scenes": [{"nodes": [0]}],
+            "nodes": [{"mesh": 0}],
+            "meshes": [{
+                "primitives": [{
+                    "attributes": {"POSITION": 0, "COLOR_0": 1},
+                    "material": 0,
+                    "mode": 0,
+                }]
+            }],
+            "materials": [{"extensions": {"KHR_materials_unlit": {}}}],
+            "buffers": [{"byteLength": vertex_bytes}],
+            "bufferViews": [{
+                "buffer": 0,
+                "byteOffset": 0,
+                "byteLength": vertex_bytes,
+                "byteStride": 16,
+                "target": 34962,
+            }],
+            "accessors": [
+                {
+                    "bufferView": 0,
+                    "componentType": 5126,
+                    "count": sampled,
+                    "type": "VEC3",
+                    "min": low,
+                    "max": high,
+                },
+                {
+                    "bufferView": 0,
+                    "byteOffset": 12,
+                    "componentType": 5121,
+                    "normalized": True,
+                    "count": sampled,
+                    "type": "VEC3",
+                },
+            ],
+            "extras": {
+                "wre_visualization": "Gaussian centers only, not Gaussian splatting",
+                "metric_scale_known": False,
+                "source_gaussians": count,
+                "shown_centers": sampled,
+                "sample_stride": stride,
+            },
+        }
+        document = json.dumps(
+            gltf, sort_keys=True, separators=(",", ":"), allow_nan=False
+        ).encode("utf-8")
+        document += b" " * (-len(document) % 4)
+        total_length = 12 + 8 + len(document) + 8 + vertex_bytes
+        digest = hashlib.sha256()
+        created = False
+        try:
+            with rgb.open("rb") as source, destination.open("xb") as output:
+                created = True
+                source.seek(len(header))
+                for chunk in (
+                    struct.pack("<4sII", b"glTF", 2, total_length),
+                    struct.pack("<I4s", len(document), b"JSON"),
+                    document,
+                    struct.pack("<I4s", vertex_bytes, b"BIN\\x00"),
+                ):
+                    output.write(chunk)
+                    digest.update(chunk)
+                for index in range(count):
+                    record = source.read(15)
+                    if len(record) != 15:
+                        raise GsplatStaticAppearancePreflightError(
+                            "gsplat RGB centers changed during GLB export"
+                        )
+                    if index % stride == 0:
+                        vertex = record + b"\\x00"
+                        output.write(vertex)
+                        digest.update(vertex)
+                if source.read(1):
+                    raise GsplatStaticAppearancePreflightError(
+                        "gsplat RGB centers gained data during GLB export"
+                    )
+        except Exception:
+            if created:
+                destination.unlink(missing_ok=True)
+            raise
+    return Sha256Digest(digest.hexdigest())
+
+
+
 def assemble_verified_gsplat_static_appearance_result(
     *,
     request: StaticAppearanceCandidateRequest,
