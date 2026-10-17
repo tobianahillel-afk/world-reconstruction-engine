@@ -784,7 +784,8 @@ jobs:
               len(params) == 0 for params in parser.params_dict.values()
           ), "upstream parser must see distortion-free PINHOLE cameras"
           train, val = Dataset(parser, split="train"), Dataset(parser, split="val")
-          assert (len(train), len(val)) == (7, 1)
+          # Pinned gsplat Dataset holds out indices 0 and 8 when test_every=8.
+          assert (len(train), len(val)) == (10, 2)
           view_proofs = {}
           for split, dataloader in (("train", train), ("val", val)):
               for idx in range(len(dataloader)):
