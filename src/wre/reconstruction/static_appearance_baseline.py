@@ -2590,26 +2590,29 @@ def _gsplat_rgb_preview_cli(argv: list[str] | None = None) -> int:
     try:
         profile = GsplatStaticAppearanceTrainingProfile(max_steps=args.max_steps)
         preview = args.preview.absolute()
-        exporter = (
-            export_verified_gsplat_rgb_centers_glb
-            if preview.suffix.lower() == ".glb"
-            else export_verified_gsplat_rgb_centers_ply
+        source_ref = ArtifactRef(
+            ArtifactId("appearance:gsplat:preview-source"),
+            APPEARANCE_MODEL_ARTIFACT_KIND,
         )
-        if args.max_points is not None and preview.suffix.lower() != ".glb":
-            raise GsplatStaticAppearancePreflightError(
-                "gsplat --max-points applies only to .glb preview exports"
+        if preview.suffix.lower() == ".glb":
+            digest = export_verified_gsplat_rgb_centers_glb(
+                artifact_ref=source_ref,
+                output_root=args.output_root.absolute(),
+                profile=profile,
+                preview_path=preview,
+                max_points=args.max_points if args.max_points is not None else 2_000_000,
             )
-        options = {"max_points": args.max_points} if args.max_points is not None else {}
-        digest = exporter(
-            artifact_ref=ArtifactRef(
-                ArtifactId("appearance:gsplat:preview-source"),
-                APPEARANCE_MODEL_ARTIFACT_KIND,
-            ),
-            output_root=args.output_root.absolute(),
-            profile=profile,
-            preview_path=preview,
-            **options,
-        )
+        else:
+            if args.max_points is not None:
+                raise GsplatStaticAppearancePreflightError(
+                    "gsplat --max-points applies only to .glb preview exports"
+                )
+            digest = export_verified_gsplat_rgb_centers_ply(
+                artifact_ref=source_ref,
+                output_root=args.output_root.absolute(),
+                profile=profile,
+                preview_path=preview,
+            )
     except (GsplatStaticAppearancePreflightError, ValueError, TypeError, OSError) as exc:
         parser.error(str(exc))
     print(f"{digest.value}  {preview}")
