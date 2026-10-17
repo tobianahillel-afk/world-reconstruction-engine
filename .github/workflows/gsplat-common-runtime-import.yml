@@ -4828,6 +4828,46 @@ jobs:
                     .getAttribute('aria-pressed') === 'true' &&
                   !!document.createElement('canvas').getContext('webgl2');
               """), "Actual observed 2D photos and rendered GLB not simultaneously visible"
+              # Exercise each source-photo half with real pixels and a LIVE GLB.
+              # This crop is evidence inspection, not calibrated 2D/3D registration.
+              frames = js("""
+                const choice=document.getElementById('wre-source-frame');
+                const crop=document.getElementById('wre-photo-crop');
+                const img=document.getElementById('wre-live-source-photos');
+                const model=document.getElementById('wre-scene');
+                function inspect(frame) {
+                  choice.value=frame;
+                  choice.dispatchEvent(new Event('change', {bubbles:true}));
+                  const a=img.getBoundingClientRect(), b=crop.getBoundingClientRect();
+                  return {frame:crop.dataset.frame, ratio:a.width/b.width,
+                    leftOffset:a.left-b.left, rightOffset:a.right-b.right,
+                    loaded:model.loaded && Boolean(model.model)};
+                }
+                const left=inspect('left'), right=inspect('right'), pair=inspect('pair');
+                const canvas=document.createElement('canvas');
+                canvas.width=12; canvas.height=12;
+                const context=canvas.getContext('2d', {willReadFrequently:true});
+                const half=img.naturalWidth/2, height=img.naturalHeight;
+                function sample(x) {
+                  context.clearRect(0,0,12,12);
+                  context.drawImage(img,x,0,half,height,0,0,12,12);
+                  return Array.from(context.getImageData(0,0,12,12).data);
+                }
+                return {left,right,pair,
+                  distinct:JSON.stringify(sample(0)) !== JSON.stringify(sample(half)),
+                  imageWidth:img.naturalWidth};
+              """)
+              assert frames["imageWidth"] >= 640
+              assert frames["distinct"], "Original left and right photo pixels must differ"
+              assert all(frames[v]["loaded"] for v in ("left", "right", "pair"))
+              assert frames["left"]["frame"] == "left"
+              assert frames["right"]["frame"] == "right"
+              assert frames["pair"]["frame"] == "pair"
+              assert 1.95 < frames["left"]["ratio"] < 2.05
+              assert 1.95 < frames["right"]["ratio"] < 2.05
+              assert 0.95 < frames["pair"]["ratio"] < 1.05
+              assert abs(frames["left"]["leftOffset"]) < 3
+              assert abs(frames["right"]["rightOffset"]) < 3
               live_2d_3d_png = base64.b64decode(
                   call("GET", f"/session/{session}/screenshot"), validate=True
               )
@@ -6413,6 +6453,7 @@ jobs:
                       "two_real_3d_models_compared_side_by_side": True,
                       "dual_3d_linked_orbit_verified_in_chrome": True,
                       "source_photos_and_live_3d_verified_in_chrome": True,
+                      "individual_left_right_photos_verified_in_chrome": True,
                       "source_photos_live_3d_screenshot_sha256": live_2d_3d_sha256,
                       "side_by_side_screenshot_sha256": side_by_side_sha256,
                       "local_glb_file_loaded_in_chrome": True,
@@ -6557,6 +6598,8 @@ jobs:
               raise ValueError("Actual Chrome did not compare two real 3D GLBs side by side")
           if receipt.get("source_photos_and_live_3d_verified_in_chrome") is not True:
               raise ValueError("Actual Chrome did not show source photos beside a live GLB")
+          if receipt.get("individual_left_right_photos_verified_in_chrome") is not True:
+              raise ValueError("Actual Chrome did not verify both individual source-photo views")
           if receipt.get("dual_3d_linked_orbit_verified_in_chrome") is not True:
               raise ValueError("Actual Chrome did not verify independent linked 3D orbit angles")
           if receipt.get("surface_distance_measured_in_chrome") is not True:
@@ -6889,6 +6932,16 @@ jobs:
                       scene.loaded && scene.model &&
                       scene.getBoundingClientRect().width >= 260;
               })()"""))
+              # Verify the extracted ZIP preserves the interactive photo crops.
+              assert js("""const choice=document.getElementById('wre-source-frame');
+                  const crop=document.getElementById('wre-photo-crop');
+                  const img=document.getElementById('wre-live-source-photos');
+                  choice.value='right';
+                  choice.dispatchEvent(new Event('change', {bubbles:true}));
+                  const a=img.getBoundingClientRect(), b=crop.getBoundingClientRect();
+                  return crop.dataset.frame === 'right' && a.width/b.width > 1.95 &&
+                      Math.abs(a.right-b.right)<3 &&
+                      document.getElementById('wre-scene').loaded;""")
               js("""document.getElementById('wre-photo-toggle').click();""")
               wait_for(lambda: js(loaded))
               js("""const choice = document.getElementById("wre-scene-choice");
