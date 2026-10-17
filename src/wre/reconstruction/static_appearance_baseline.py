@@ -2816,9 +2816,7 @@ def _gsplat_rgb_preview_cli(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--max-steps", type=int, help="Original trainer max_steps / PLY step number"
     )
-    parser.add_argument(
-        "--preview", type=Path, help="New output RGB .ply or .glb file"
-    )
+    parser.add_argument("--preview", type=Path, help="New output RGB .ply or .glb file")
     parser.add_argument(
         "--max-points",
         type=int,
@@ -2832,9 +2830,10 @@ def _gsplat_rgb_preview_cli(argv: list[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
     if args.inspect_glb is not None:
-        if any(value is not None for value in (
-            args.output_root, args.max_steps, args.preview, args.max_points
-        )):
+        if any(
+            value is not None
+            for value in (args.output_root, args.max_steps, args.preview, args.max_points)
+        ):
             parser.error("--inspect-glb cannot be combined with export arguments")
         try:
             summary = inspect_verified_gsplat_rgb_centers_glb(path=args.inspect_glb.absolute())

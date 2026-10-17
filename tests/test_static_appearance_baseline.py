@@ -1640,8 +1640,13 @@ def test_exported_gsplat_glb_can_be_reopened_and_inspected_offline(tmp_path: Pat
     assert summary["gpu_training_verified"] is False
     assert summary["metric_scale_known"] is False
     command = subprocess.run(
-        [sys.executable, "-m", "wre.reconstruction.static_appearance_baseline",
-         "--inspect-glb", str(target)],
+        [
+            sys.executable,
+            "-m",
+            "wre.reconstruction.static_appearance_baseline",
+            "--inspect-glb",
+            str(target),
+        ],
         capture_output=True,
         text=True,
         timeout=25,
