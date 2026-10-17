@@ -2737,7 +2737,9 @@ def _write_verified_xyz_rgb_points_glb(
         },
     }
     if observed_colmap:
-        gltf["asset"]["generator"] = "WRE observed COLMAP sparse RGB points — not Gaussian training"
+        gltf["asset"]["generator"] = (
+            "WRE observed COLMAP sparse RGB points — not Gaussian training"
+        )
         gltf["extras"] = {
             "wre_visualization": "COLMAP observed sparse RGB points, not trained Gaussian splatting",
             "metric_scale_known": False,
