@@ -550,10 +550,10 @@ jobs:
           # performed on REAL image pixels using pinned OpenCV SIFT/knnMatch.
           # No ground-truth 2D track IDs or 3D points enter triangulatePoints.
           rng = np.random.default_rng(20261016)
-          texture = rng.integers(0, 256, size=(240, 360, 3), dtype=np.uint8)
+          texture = rng.integers(0, 256, size=(240, 400, 3), dtype=np.uint8)
           views = []
           output = Path(os.environ["RUNNER_TEMP"])
-          for view_index in range(3):
+          for view_index in range(4):
               rgb = np.empty((240, 320, 3), dtype=np.uint8)
               rgb[:120] = texture[:120, 14 * view_index : 320 + 14 * view_index]
               rgb[120:] = texture[120:, 7 * view_index : 320 + 7 * view_index]
@@ -995,6 +995,92 @@ jobs:
               "parsed by actual upstream gsplat dataset on CPU."
           )
 
+
+          # FOURTH INDEPENDENT VIEW: no image 3 pixels enter the three-view
+          # EssentialMat, PnP, triangulation or SciPy bundle adjustment.
+          # Use existing SIFT and OpenCV PnP to localize a new camera, then
+          # score withheld fourth-view correspondences never used for fitting.
+          fourth_matches = {}
+          for candidate, alternate in matcher.knnMatch(
+              features[0][1], features[3][1], k=2
+          ):
+              if candidate.distance >= 0.7 * alternate.distance:
+                  continue
+              p0 = features[0][0][candidate.queryIdx].pt
+              p4 = features[3][0][candidate.trainIdx].pt
+              if (
+                  abs(p0[1] - p4[1]) < 1.0
+                  and abs(p0[1] - 120.0) > 14.0
+                  and 2.0 < p0[0] - p4[0] < 90.0
+              ):
+                  fourth_matches[candidate.queryIdx] = candidate
+          original_features = np.asarray(shared, dtype=np.int64)[inlier][selected]
+          fourth_indices = np.asarray(
+              [idx for idx, feature_id in enumerate(original_features)
+               if int(feature_id) in fourth_matches], dtype=np.int64,
+          )
+          assert len(fourth_indices) >= 55, len(fourth_indices)
+          fourth_pixels = np.asarray(
+              [
+                  features[3][0][fourth_matches[int(original_features[idx])].trainIdx].pt
+                  for idx in fourth_indices
+              ], dtype=np.float64,
+          )
+          fourth_train = np.arange(len(fourth_indices)) % 5 != 0
+          assert int(fourth_train.sum()) >= 40
+          assert int((~fourth_train).sum()) >= 10
+          cv2.setRNGSeed(20261017)
+          ok4, rotation4, translation4, inliers4 = cv2.solvePnPRansac(
+              np.ascontiguousarray(reconstructed[fourth_indices[fourth_train]]),
+              np.ascontiguousarray(fourth_pixels[fourth_train]),
+              intrinsic, None, iterationsCount=500, reprojectionError=1.0,
+              confidence=0.999, flags=cv2.SOLVEPNP_EPNP,
+          )
+          assert ok4 and inliers4 is not None and len(inliers4) >= 35
+          withheld_points = reconstructed[fourth_indices[~fourth_train]]
+          withheld_pixels = fourth_pixels[~fourth_train]
+          predicted4, _ = cv2.projectPoints(
+              np.ascontiguousarray(withheld_points),
+              rotation4, translation4, intrinsic, None,
+          )
+          predicted4 = predicted4.reshape(-1, 2)
+          assert np.isfinite(predicted4).all()
+          fourth_rmse = float(np.sqrt(np.mean(
+              np.sum(np.square(predicted4 - withheld_pixels), axis=1)
+          )))
+          assert fourth_rmse < 0.85, fourth_rmse
+          overlay4 = views[3].copy()
+          for predicted, observed4 in zip(predicted4, withheld_pixels):
+              cv2.circle(overlay4, tuple(np.rint(observed4).astype(int)), 3, (0, 255, 0), 1)
+              cv2.circle(overlay4, tuple(np.rint(predicted).astype(int)), 1, (0, 0, 255), -1)
+          assert cv2.imwrite(
+              str(output / "wre-sift-fourth-view-heldout-overlay.png"), overlay4
+          )
+          fourth_report = {
+              "algorithm": "SIFT + calibrated OpenCV PnP against refined 3D",
+              "fourth_view_seen_by_three_view_bundle_adjustment": False,
+              "pose_fit_correspondences": int(fourth_train.sum()),
+              "pose_fit_inliers": int(len(inliers4)),
+              "withheld_correspondences": int((~fourth_train).sum()),
+              "withheld_reprojection_rmse_px": fourth_rmse,
+              "withheld_pixels_used_to_fit_pose": False,
+              "known_intrinsics": True,
+              "synthetic_image_fixture": True,
+              "real_photo_reconstruction": False,
+              "metric_scale_known": False,
+              "gpu_training": False,
+              "four_dimensional_scene": False,
+          }
+          (output / "wre-sift-fourth-view-heldout.json").write_text(
+              json.dumps(fourth_report, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print(
+              f"Independent fourth SIFT view: {len(inliers4)} PnP inliers; "
+              f"{int((~fourth_train).sum())} withheld landmarks, "
+              f"RMSE {fourth_rmse:.4f}px; GPU unverified."
+          )
+
           # View the actual SIFT-reconstructed 3D from two camera positions
           # absent from the input dataset. This is a sparse colored point
           # projection, NOT a Gaussian radiance render or a quality benchmark.
@@ -1189,13 +1275,16 @@ jobs:
             wre-sift-cpu-metrics.json \
             wre-sift-cpu-view-0.png \
             wre-sift-cpu-view-1.png \
-            wre-sift-cpu-view-2.png
+            wre-sift-cpu-view-2.png \
+            wre-sift-cpu-view-3.png \
+            wre-sift-fourth-view-heldout-overlay.png \
+            wre-sift-fourth-view-heldout.json
           do
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 18
-          echo "Staged all 18 real PLY/PNG/NPY/JSON/ZIP files for artifact upload"
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 21
+          echo "Staged all 21 real PLY/PNG/NPY/JSON/ZIP files for artifact upload"
 
       - name: Publish CPU COLMAP 3D preview and measured reprojection
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
