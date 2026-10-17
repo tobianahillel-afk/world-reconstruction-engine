@@ -2158,6 +2158,39 @@ jobs:
                     "relative units only, no exact surface correspondence or metric scale.";
                 }
               }
+              // Inspect up to 64 actually saved PFM observations together. These
+              // hotspots do not imply metric depth or exact mesh alignment.
+              const savedParam = inspectedParams.get("stereo_points");
+              if (savedParam !== null && savedParam.length <= 8192) {
+                let savedPoints = null;
+                try { savedPoints = JSON.parse(savedParam); } catch (_) {}
+                if (Array.isArray(savedPoints) && savedPoints.length > 0 &&
+                    savedPoints.length <= 64 &&
+                    savedPoints.every(point => Array.isArray(point) && point.length === 3 &&
+                      point.every(value => typeof value === "number" &&
+                        Number.isFinite(value) && Math.abs(value) < 1000000) &&
+                      point[2] > 0)) {
+                  savedPoints.forEach((point, index) => {
+                    const marker = document.createElement("button");
+                    marker.type = "button";
+                    marker.slot = "hotspot-wre-saved-stereo-" + index;
+                    marker.className = "wre-observed-stereo-marker";
+                    marker.dataset.position =
+                      [point[0], -point[1], -point[2]].map(v => v + "m").join(" ");
+                    marker.dataset.normal = "0m 1m 0m";
+                    marker.textContent = String(index + 1);
+                    marker.setAttribute("aria-label",
+                      "Nonmetric saved stereo observation " + (index + 1));
+                    scene.appendChild(marker);
+                    chooser.addEventListener("change", () => {
+                      marker.hidden = chooser.value !== "surface";
+                    });
+                  });
+                  document.getElementById("wre-observed-stereo-marker-status").textContent =
+                    savedPoints.length + " real-photo stereo observations in relative units " +
+                    "only; no metric scale or exact mesh correspondence.";
+                }
+              }
               const compareChoice = document.getElementById("wre-compare-choice");
               const compareScene = document.getElementById("wre-compare-scene");
               const compareSync = document.getElementById("wre-compare-sync");
@@ -7097,6 +7130,9 @@ jobs:
           <a id="wre-inspected-point-live-3d" aria-disabled="true">
             Localiser ce point observé dans le modèle 3D approximatif
           </a>
+          <a id="wre-saved-points-live-3d" aria-disabled="true">
+            Afficher tous les points conservés sur la 3D approximative
+          </a>
           <span id="wre-stereo-point-count" role="status" aria-live="polite">0 point enregistré</span>
           <figure id="wre-stereo-match" style="margin:12px 0;max-width:960px">
             <div style="position:relative">
@@ -7122,6 +7158,7 @@ jobs:
             const exportPoints = document.getElementById('wre-export-stereo-points');
             const exportPly = document.getElementById('wre-export-stereo-ply');
             const open3d = document.getElementById('wre-inspected-point-live-3d');
+            const openSaved3d = document.getElementById('wre-saved-points-live-3d');
             const pointCount = document.getElementById('wre-stereo-point-count');
             const observations = [];
             let selected = null;
@@ -7131,6 +7168,13 @@ jobs:
               pointCount.textContent = observations.length + ' points relatifs conservés (max 64)';
               exportPoints.disabled = false;
               exportPly.disabled = false;
+              // Only already-saved real PFM XYZ can reach the model-viewer.
+              const params = new URLSearchParams({
+                stereo_points: JSON.stringify(
+                  observations.map(point => point.xyz_relative_model_units))
+              });
+              openSaved3d.href = './wre-real-stereo-cpu-viewer.html?' + params.toString();
+              openSaved3d.setAttribute('aria-disabled', 'false');
             });
             function downloadObserved(blob, filename) {
               const url = URL.createObjectURL(blob);
