@@ -1972,6 +1972,7 @@ jobs:
               <button id="wre-measure-toggle" type="button" aria-pressed="false">Measure surface distance</button>
               <button id="wre-path-toggle" type="button" aria-pressed="false">Trace 3D path</button>
               <button id="wre-area-toggle" type="button" aria-pressed="false">Estimate 3D polygon area</button>
+              <button id="wre-angle-toggle" type="button" aria-pressed="false">Measure 3D chord angle</button>
               <button id="wre-measure-export" type="button" disabled
                 aria-label="Download relative surface measurement as JSON">Download measurement JSON</button>
             </div>
@@ -1990,11 +1991,13 @@ jobs:
               const measureButton = document.getElementById("wre-measure-toggle");
               const pathButton = document.getElementById("wre-path-toggle");
               const areaButton = document.getElementById("wre-area-toggle");
+              const angleButton = document.getElementById("wre-angle-toggle");
               const exportButton = document.getElementById("wre-measure-export");
               const measureResult = document.getElementById("wre-measure-result");
               let measuring = false;
               let tracing = false;
               let areaMode = false;
+              let angleMode = false;
               let measured = [];
               let completedMeasurement = null;
               function clearPickMarkers() {
@@ -2016,7 +2019,9 @@ jobs:
                 measured = [];
                 completedMeasurement = null;
                 exportButton.disabled = true;
-                measureResult.textContent = tracing
+                measureResult.textContent = angleMode
+                  ? "Click three mesh points to measure the chord angle at the middle point (not surface curvature)."
+                  : tracing
                   ? "Click two or more mesh points to trace a 3D polyline (NOT geodesic or meters)."
                   : areaMode
                     ? "Click at least three mesh points: triangle-fan estimate, NOT true surface area or m²."
@@ -2025,9 +2030,12 @@ jobs:
                     : "Surface measurement off. Model units only (NOT meters).";
               }
               measureButton.addEventListener("click", () => {
-                measuring = !measuring || tracing || areaMode;
+                measuring = !measuring || tracing || areaMode || angleMode;
                 tracing = false;
                 areaMode = false;
+                angleMode = false;
+                angleButton.setAttribute("aria-pressed", "false");
+                angleButton.textContent = "Measure 3D chord angle";
                 areaButton.setAttribute("aria-pressed", "false");
                 areaButton.textContent = "Estimate 3D polygon area";
                 pathButton.setAttribute("aria-pressed", "false");
@@ -2042,6 +2050,9 @@ jobs:
                 tracing = !tracing;
                 measuring = tracing;
                 areaMode = false;
+                angleMode = false;
+                angleButton.setAttribute("aria-pressed", "false");
+                angleButton.textContent = "Measure 3D chord angle";
                 areaButton.setAttribute("aria-pressed", "false");
                 areaButton.textContent = "Estimate 3D polygon area";
                 measureButton.setAttribute("aria-pressed", "false");
@@ -2056,6 +2067,9 @@ jobs:
                 areaMode = !areaMode;
                 measuring = areaMode;
                 tracing = false;
+                angleMode = false;
+                angleButton.setAttribute("aria-pressed", "false");
+                angleButton.textContent = "Measure 3D chord angle";
                 measureButton.setAttribute("aria-pressed", "false");
                 measureButton.textContent = "Measure surface distance";
                 pathButton.setAttribute("aria-pressed", "false");
@@ -2063,6 +2077,23 @@ jobs:
                 areaButton.setAttribute("aria-pressed", String(areaMode));
                 areaButton.textContent = areaMode ? "Stop estimating area" : "Estimate 3D polygon area";
                 if (areaMode) scene.removeAttribute("auto-rotate");
+                else scene.setAttribute("auto-rotate", "");
+                resetMeasurement();
+              });
+              angleButton.addEventListener("click", () => {
+                angleMode = !angleMode;
+                measuring = angleMode;
+                tracing = false;
+                areaMode = false;
+                measureButton.setAttribute("aria-pressed", "false");
+                measureButton.textContent = "Measure surface distance";
+                pathButton.setAttribute("aria-pressed", "false");
+                pathButton.textContent = "Trace 3D path";
+                areaButton.setAttribute("aria-pressed", "false");
+                areaButton.textContent = "Estimate 3D polygon area";
+                angleButton.setAttribute("aria-pressed", String(angleMode));
+                angleButton.textContent = angleMode ? "Stop measuring angle" : "Measure 3D chord angle";
+                if (angleMode) scene.removeAttribute("auto-rotate");
                 else scene.setAttribute("auto-rotate", "");
                 resetMeasurement();
               });
@@ -2075,7 +2106,7 @@ jobs:
                 }
                 const point = [hit.position.x, hit.position.y, hit.position.z];
                 if (!point.every(Number.isFinite)) return;
-                if (!tracing && !areaMode && measured.length === 2) {
+                if (!tracing && !areaMode && (angleMode ? measured.length === 3 : measured.length === 2)) {
                   clearPickMarkers();
                   measured = [];
                   completedMeasurement = null;
@@ -2085,6 +2116,45 @@ jobs:
                 placePickMarker(point, measured.length);
                 if (measured.length === 1) {
                   measureResult.textContent = "First surface point selected; click another point.";
+                  return;
+                }
+                if (angleMode) {
+                  if (measured.length < 3) {
+                    measureResult.textContent = "Pick three points; the second is the angle vertex.";
+                    return;
+                  }
+                  const a = measured[0], v = measured[1], b = measured[2];
+                  const u = a.map((x, i) => x - v[i]);
+                  const w = b.map((x, i) => x - v[i]);
+                  const normU = Math.hypot(...u), normW = Math.hypot(...w);
+                  if (!(normU > 0 && normW > 0)) {
+                    measureResult.textContent = "Cannot measure angle: points coincide; choose three distinct points.";
+                    completedMeasurement = null;
+                    exportButton.disabled = true;
+                    return;
+                  }
+                  const cosine = Math.max(-1, Math.min(1,
+                    u.reduce((total, x, i) => total + x * w[i], 0) / (normU * normW)
+                  ));
+                  const degrees = Math.acos(cosine) * 180 / Math.PI;
+                  if (!Number.isFinite(degrees)) {
+                    resetMeasurement();
+                    return;
+                  }
+                  measureResult.textContent = "3D chord angle: " + degrees.toFixed(4) +
+                    " degrees (middle vertex, NOT mesh curvature or a calibrated surface normal).";
+                  completedMeasurement = {
+                    schema: "wre.relative_3d_chord_angle.v1",
+                    model_source: chooser.value || "user-supplied-local-glb",
+                    model_provenance: provenance.textContent.trim(),
+                    metric_scale_known: false,
+                    units: "degrees",
+                    points_xyz: measured.map(p => p.slice()),
+                    vertex_index: 1,
+                    angle_degrees: degrees,
+                    surface_curvature: false
+                  };
+                  exportButton.disabled = false;
                   return;
                 }
                 if (areaMode) {
@@ -2189,8 +2259,10 @@ jobs:
                 const link = document.createElement("a");
                 link.href = url;
                 link.download = completedMeasurement.schema ===
-                  "wre.relative_3d_triangle_fan_area.v1"
-                  ? "wre-relative-triangle-fan-area.json"
+                  "wre.relative_3d_chord_angle.v1"
+                  ? "wre-relative-chord-angle.json"
+                  : completedMeasurement.schema === "wre.relative_3d_triangle_fan_area.v1"
+                    ? "wre-relative-triangle-fan-area.json"
                   : completedMeasurement.schema === "wre.relative_3d_surface_polyline.v1"
                     ? "wre-relative-surface-polyline.json"
                     : "wre-relative-surface-measurement.json";
