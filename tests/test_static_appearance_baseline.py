@@ -1349,6 +1349,92 @@ def test_verified_gsplat_rgb_centers_glb_has_real_gltf_vertex_bytes(tmp_path: Pa
         )
 
 
+@pytest.mark.parametrize(
+    ("max_points", "expected_count", "expected_stride"),
+    ((1, 1, 3), (2, 2, 2), (3, 3, 1)),
+)
+def test_gsplat_glb_preview_has_bounded_deterministic_sampling(
+    tmp_path: Path, max_points: int, expected_count: int, expected_stride: int
+) -> None:
+    source = _gsplat_ply(vertices=3)
+    root, profile, ref = _gsplat_output(tmp_path, source)
+    folder = tmp_path / "viewer"
+    folder.mkdir()
+    target = folder / "reduced.glb"
+    digest = export_verified_gsplat_rgb_centers_glb(
+        artifact_ref=ref,
+        output_root=root,
+        profile=profile,
+        preview_path=target,
+        max_points=max_points,
+    )
+    output = target.read_bytes()
+    assert digest == _digest(output)
+    json_size, _ = struct.unpack_from("<I4s", output, 12)
+    scene = json.loads(output[20 : 20 + json_size])
+    assert scene["accessors"][0]["count"] == expected_count
+    assert scene["buffers"][0]["byteLength"] == expected_count * 16
+    assert scene["extras"]["source_gaussians"] == 3
+    assert scene["extras"]["shown_centers"] == expected_count
+    assert scene["extras"]["sample_stride"] == expected_stride
+    assert len(output) == 28 + json_size + expected_count * 16
+    assert (root / profile.expected_ply_relative_path).read_bytes() == source
+
+
+@pytest.mark.parametrize("invalid", (True, 0, 2_000_001))
+def test_gsplat_glb_preview_rejects_invalid_point_budgets(
+    tmp_path: Path, invalid: int | bool
+) -> None:
+    root, profile, ref = _gsplat_output(tmp_path, _gsplat_ply())
+    folder = tmp_path / "viewer"
+    folder.mkdir()
+    target = folder / "invalid.glb"
+    with pytest.raises(ValueError, match="max_points"):
+        export_verified_gsplat_rgb_centers_glb(
+            artifact_ref=ref,
+            output_root=root,
+            profile=profile,
+            preview_path=target,
+            max_points=invalid,
+        )
+    assert not target.exists()
+
+
+def test_gsplat_glb_cli_respects_requested_preview_density(tmp_path: Path) -> None:
+    import subprocess
+
+    root, profile, _ = _gsplat_output(tmp_path, _gsplat_ply(vertices=3))
+    folder = tmp_path / "viewer"
+    folder.mkdir()
+    preview = folder / "small.glb"
+    run = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "wre.reconstruction.static_appearance_baseline",
+            "--output-root",
+            str(root),
+            "--max-steps",
+            str(profile.max_steps),
+            "--preview",
+            str(preview),
+            "--max-points",
+            "1",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
+    assert run.returncode == 0, run.stderr
+    glb = preview.read_bytes()
+    json_size, _ = struct.unpack_from("<I4s", glb, 12)
+    scene = json.loads(glb[20 : 20 + json_size])
+    assert scene["accessors"][0]["count"] == 1
+    assert scene["extras"]["sample_stride"] == 3
+    assert run.stdout.strip() == f"{_digest(glb).value}  {preview}"
+
+
 def test_gsplat_rgb_glb_cli_executes_real_cpu_export(tmp_path: Path) -> None:
     """Run the production -m CLI, not a simulated subprocess or a CUDA training job."""
     import subprocess
