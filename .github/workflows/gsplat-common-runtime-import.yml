@@ -2231,7 +2231,7 @@ jobs:
                     measureImportStatus.textContent = "Saved 3D path restored on this model.";
                     return;
                   }
-                                    if (saved.schema === "wre.relative_3d_triangle_fan_area.v1") {
+                  if (saved.schema === "wre.relative_3d_triangle_fan_area.v1") {
                     const points=saved.points_xyz, recorded=saved.triangle_areas_model_units_squared;
                     if (saved.metric_scale_known !== false || saved.units !== "model_units_squared" ||
                         saved.physical_surface_area !== false || saved.triangulation !== "fan_from_first_point" ||
