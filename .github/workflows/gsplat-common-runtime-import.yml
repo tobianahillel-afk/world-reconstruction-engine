@@ -4298,32 +4298,58 @@ jobs:
               # Trace a THREE-point polyline on the same real Chrome mesh:
               # A -> B -> A gives two independent raycast events and two
               # straight 3D chord segments, not a mesh geodesic.
-              path_status = js(f"""
+              # Sample TWO actual mesh hits AFTER changing interaction mode:
+              # reuse neither an earlier camera pose nor stale screen pixels.
+              assert js("""
+                const scene=document.getElementById('wre-scene');
+                const button=document.getElementById('wre-path-toggle');
+                button.click();
+                return button.getAttribute('aria-pressed') === 'true' &&
+                  !scene.hasAttribute('auto-rotate');
+              """)
+              path_status = js("""
                 const scene=document.getElementById('wre-scene');
                 const pathButton=document.getElementById('wre-path-toggle');
-                pathButton.click();
+                const box=scene.getBoundingClientRect(), hits=[];
+                for (let yi=0; yi<=10; yi++) for (let xi=0; xi<=10; xi++) {
+                  const x=box.left+box.width*(0.15+0.7*xi/10);
+                  const y=box.top+box.height*(0.15+0.7*yi/10);
+                  const hit=scene.positionAndNormalFromPoint(x,y);
+                  if (hit && hit.position) {
+                    const pos=[hit.position.x,hit.position.y,hit.position.z];
+                    if (pos.every(Number.isFinite)) hits.push({x,y,pos});
+                  }
+                }
+                if (hits.length < 2) return {error:'not enough actual mesh raycasts'};
+                const a=hits[0];
+                let b=null, bestDistance=0;
+                for (const hit of hits.slice(1)) {
+                  const distance=Math.hypot(...hit.pos.map((v,i)=>v-a.pos[i]));
+                  if (distance>bestDistance) {b=hit; bestDistance=distance;}
+                }
+                if (!b || bestDistance <= 0.001) return {error:'mesh hits coincide'};
                 window.__wreClickedRaycasts=[];
-                for (const p of {json.dumps([measure_hits[0],measure_hits[1],measure_hits[0]])}) {{
+                for (const p of [a,b,a]) {
                   const hit=scene.positionAndNormalFromPoint(p.x,p.y);
-                  if (!hit || !hit.position) return {{error:'path click missed surface'}};
+                  if (!hit || !hit.position) return {error:'current path raycast failed'};
                   window.__wreCapturingClick=true;
-                  scene.dispatchEvent(new MouseEvent('click', {{
+                  scene.dispatchEvent(new MouseEvent('click', {
                     bubbles:true, clientX:p.x, clientY:p.y
-                  }}));
+                  }));
                   window.__wreCapturingClick=false;
-                }}
-                return {{
+                }
+                return {
                   status:document.getElementById('wre-measure-result').textContent,
                   pressed:pathButton.getAttribute('aria-pressed'),
                   enabled:!document.getElementById('wre-measure-export').disabled,
                   stoppedAutoRotate:!scene.hasAttribute('auto-rotate'),
                   clicked:window.__wreClickedRaycasts.slice(),
-                  markers:[...scene.querySelectorAll('.wre-pick-marker')].map(m => ({{
+                  markers:[...scene.querySelectorAll('.wre-pick-marker')].map(m => ({
                     slot:m.getAttribute('slot'),
                     position:m.dataset.position,
                     label:m.textContent
-                  }}))
-                }};
+                  }))
+                };
               """)
               assert path_status.get("clicked") and len(path_status["clicked"]) == 3, path_status
               assert len(path_status["markers"]) == 3, path_status
