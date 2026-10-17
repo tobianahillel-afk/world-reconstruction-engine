@@ -1081,6 +1081,166 @@ jobs:
               f"RMSE {fourth_rmse:.4f}px; GPU unverified."
           )
 
+          # FUNCTIONAL FOUR-VIEW HANDOFF, AFTER held-out scoring is complete.
+          # Fourth-view withheld pixels did not influence the preceding fit/metric.
+          # All matched fourth-view observations can now enter a separate final
+          # standard COLMAP model for subsequent reconstruction and visualization.
+          four_root = output / "wre-sift-four-view-colmap"
+          four_images = four_root / "images"
+          four_sparse = four_root / "sparse" / "0"
+          four_images.mkdir(parents=True)
+          four_sparse.mkdir(parents=True)
+          for image_file in sorted(estimated_images.glob("*.png")):
+              (four_images / image_file.name).write_bytes(image_file.read_bytes())
+          assert cv2.imwrite(str(four_images / "estimated-04.png"), views[3])
+          (four_sparse / "cameras.bin").write_bytes(
+              (estimated_sparse / "cameras.bin").read_bytes()
+          )
+          
+          original_images = (estimated_sparse / "images.bin").read_bytes()
+          assert struct.unpack_from("<Q", original_images)[0] == 3
+          images_four = bytearray(struct.pack("<Q", 4) + original_images[8:])
+          rotation_four, _ = cv2.Rodrigues(rotation4)
+          quat_xyzw = Rotation.from_matrix(rotation_four).as_quat()
+          quat_wxyz = [
+              float(quat_xyzw[3]), float(quat_xyzw[0]),
+              float(quat_xyzw[1]), float(quat_xyzw[2]),
+          ]
+          images_four.extend(struct.pack(
+              "<I4d3dI", 4, *quat_wxyz,
+              *[float(t) for t in translation4.reshape(-1)], 1,
+          ))
+          images_four.extend(b"estimated-04.png\x00")
+          images_four.extend(struct.pack("<Q", len(fourth_indices)))
+          # IDs here reference the original 3D points, not newly invented geometry.
+          fourth_point_indices = {
+              int(point_idx): observation_idx
+              for observation_idx, point_idx in enumerate(fourth_indices)
+          }
+          assert len(fourth_point_indices) == len(fourth_indices)
+          for point_idx, pixel in zip(fourth_indices, fourth_pixels):
+              images_four.extend(struct.pack(
+                  "<ddq", float(pixel[0]), float(pixel[1]), int(point_idx) + 1
+              ))
+          (four_sparse / "images.bin").write_bytes(images_four)
+          
+          # Reuse original COLMAP point records exactly; append a fourth image-track
+          # entry only for points actually observed in view 4. No synthetic 2D points
+          # or ground-truth camera pose are added to the dataset.
+          points_original = (estimated_sparse / "points3D.bin").read_bytes()
+          record_header_size = struct.calcsize("<Q3d3BdQ")
+          pair_size = struct.calcsize("<II")
+          record_size = record_header_size + 3 * pair_size
+          assert struct.unpack_from("<Q", points_original)[0] == len(reconstructed)
+          assert len(points_original) == 8 + len(reconstructed) * record_size
+          fourth_projected, _ = cv2.projectPoints(
+              np.ascontiguousarray(reconstructed[fourth_indices]),
+              rotation4, translation4, intrinsic, None,
+          )
+          fourth_residuals = np.linalg.norm(
+              fourth_projected.reshape(-1, 2) - fourth_pixels, axis=1
+          )
+          assert np.isfinite(fourth_residuals).all()
+          points_four = bytearray(struct.pack("<Q", len(reconstructed)))
+          for point_idx in range(len(reconstructed)):
+              start = 8 + point_idx * record_size
+              record = points_original[start : start + record_size]
+              assert struct.unpack_from("<Q", record, 0)[0] == point_idx + 1
+              assert struct.unpack_from("<Q", record, record_header_size - 8)[0] == 3
+              point_in_fourth = fourth_point_indices.get(point_idx)
+              if point_in_fourth is None:
+                  points_four.extend(record)
+              else:
+                  # COLMAP point3D.error is a per-track RMS pixel residual.
+                  # Preserve the original 3-view error and include the REAL
+                  # fourth image measurement now present in the saved track.
+                  previous_rms = struct.unpack_from(
+                      "<d", record, record_header_size - 16
+                  )[0]
+                  new_rms = float(np.sqrt(
+                      (3 * previous_rms**2 + fourth_residuals[point_in_fourth] ** 2) / 4
+                  ))
+                  assert np.isfinite(new_rms)
+                  points_four.extend(record[: record_header_size - 16])
+                  points_four.extend(struct.pack("<dQ", new_rms, 4))
+                  points_four.extend(record[record_header_size:])
+                  points_four.extend(struct.pack("<II", 4, point_in_fourth))
+          (four_sparse / "points3D.bin").write_bytes(points_four)
+          
+          # Crucial real native/CPU roundtrip: the upstream Parser and torch Dataset
+          # must accept variable-length 3- and 4-view feature tracks on disk.
+          four_parsed = Parser(str(four_root), factor=1, normalize=False, test_every=8)
+          assert len(four_parsed.image_names) == 4
+          assert four_parsed.points.shape == reconstructed.shape
+          assert np.allclose(four_parsed.points, reconstructed, rtol=0, atol=1e-5)
+          assert list(four_parsed.image_names) == [
+              "estimated-01.png", "estimated-02.png",
+              "estimated-03.png", "estimated-04.png",
+          ]
+          assert set(four_parsed.point_indices["estimated-04.png"]) == set(
+              fourth_indices.tolist()
+          ), "Upstream COLMAP parser lost fourth-image 3D track references"
+          assert len(four_parsed.point_indices["estimated-04.png"]) == len(fourth_indices)
+          four_train = Dataset(four_parsed, split="train")
+          four_test = Dataset(four_parsed, split="test")
+          assert len(four_train) == 3 and len(four_test) == 1
+          for batch in (four_train[0], four_train[1], four_train[2], four_test[0]):
+              assert batch["image"].shape == (240, 320, 3)
+              assert batch["image"].device.type == "cpu"
+              assert torch.isfinite(batch["camtoworld"]).all()
+          four_camera_to_world = four_parsed.camtoworlds[3]
+          four_world_to_camera = np.linalg.inv(four_camera_to_world)
+          predicted_all = (
+              intrinsic
+              @ (
+                  four_world_to_camera[:3, :3] @ reconstructed[fourth_indices].T
+                  + four_world_to_camera[:3, 3:4]
+              )
+          )
+          predicted_all = (predicted_all[:2] / predicted_all[2]).T
+          four_roundtrip_rmse = float(np.sqrt(np.mean(
+              np.sum(np.square(predicted_all - fourth_pixels), axis=1)
+          )))
+          assert np.isfinite(four_roundtrip_rmse)
+          assert np.allclose(
+              predicted_all[~fourth_train],
+              predicted4,
+              rtol=0,
+              atol=1e-5,
+          ), "COLMAP serialization altered the withheld fourth-view projection"
+          four_handoff = {
+              "algorithm": "OpenCV SIFT + EssentialMat + PnP + SciPy sparse BA",
+              "registered_cameras": 4,
+              "triangulated_3d_points": len(reconstructed),
+              "fourth_view_observed_3d_points": len(fourth_indices),
+              "sparse_track_observations": 3 * len(reconstructed) + len(fourth_indices),
+              "fourth_view_roundtrip_reprojection_rmse_px": four_roundtrip_rmse,
+              "independently_measured_fourth_view_heldout_rmse_px": fourth_rmse,
+              "heldout_scored_before_fourth_view_export": True,
+              "colmap_reloaded_by": "pinned gsplat Parser/Dataset (CPU)",
+              "intrinsics_known": True,
+              "metric_scale_known": False,
+              "synthetic_image_fixture": True,
+              "real_photo_reconstruction": False,
+              "gpu_training": False,
+              "four_dimensional_scene": False,
+          }
+          (output / "wre-sift-four-view-colmap-handoff.json").write_text(
+              json.dumps(four_handoff, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          with zipfile.ZipFile(
+              output / "wre-sift-four-view-colmap-model.zip", "w", zipfile.ZIP_DEFLATED
+          ) as archive:
+              for file in sorted(four_root.rglob("*")):
+                  if file.is_file():
+                      archive.write(file, file.relative_to(four_root).as_posix())
+          print(
+              f"Four-view COLMAP CPU model: {len(reconstructed)} 3D points, "
+              f"{len(fourth_indices)} fourth-view observations, "
+              f"{four_roundtrip_rmse:.4f}px verified roundtrip; GPU unverified."
+          )
+
           # View the actual SIFT-reconstructed 3D from two camera positions
           # absent from the input dataset. This is a sparse colored point
           # projection, NOT a Gaussian radiance render or a quality benchmark.
@@ -1278,13 +1438,15 @@ jobs:
             wre-sift-cpu-view-2.png \
             wre-sift-cpu-view-3.png \
             wre-sift-fourth-view-heldout-overlay.png \
-            wre-sift-fourth-view-heldout.json
+            wre-sift-fourth-view-heldout.json \
+            wre-sift-four-view-colmap-model.zip \
+            wre-sift-four-view-colmap-handoff.json
           do
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 21
-          echo "Staged all 21 real PLY/PNG/NPY/JSON/ZIP files for artifact upload"
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 23
+          echo "Staged all 23 real PLY/PNG/NPY/JSON/ZIP files for artifact upload"
 
       - name: Publish CPU COLMAP 3D preview and measured reprojection
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
