@@ -1266,6 +1266,52 @@ def test_external_gsplat_runner_spawns_real_process_and_assembles_appearance(
     assert b"CPU subprocess smoke" in (output / "wre-reference-training.log").read_bytes()
 
 
+def test_real_trainer_refuses_foreign_native_geometry_before_cuda_launch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Geometry mismatch is a material blocker, not a synthetic GPU pass."""
+    request, source, staged, output, profile, ref, producer = _retained_gsplat_fixture(tmp_path)
+    interpreter = tmp_path / "external-python"
+    interpreter.write_bytes(b"stub")
+    previous = (output / profile.expected_ply_relative_path).read_bytes()
+    validated = False
+
+    def reject_foreign_geometry(*_args: Any, **_kwargs: Any) -> None:
+        nonlocal validated
+        validated = True
+        raise GsplatStaticAppearancePreflightError(
+            "native COLMAP camera poses, calibration, points, frame or scale disagree"
+        )
+
+    def must_not_train(*_args: Any, **_kwargs: Any) -> None:
+        raise AssertionError("CUDA training must not start on mismatched geometry")
+
+    monkeypatch.setattr(
+        baseline_module, "verify_gsplat_static_appearance_native_geometry",
+        reject_foreign_geometry,
+    )
+    monkeypatch.setattr(baseline_module.subprocess, "run", must_not_train)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="native COLMAP camera poses"):
+        run_gsplat_reference_training(
+            request=request,
+            source=source,
+            staged=staged,
+            profile=profile,
+            features=cast(ColmapFeatureExtractionResult, object()),
+            expected_environment=cast(ColmapEnvironmentIdentity, object()),
+            source_root=tmp_path,
+            python_executable=interpreter,
+            output_root=output,
+            artifact_ref=ref,
+            producer=producer,
+            cuda_device_index=0,
+            timeout_seconds=30,
+        )
+    assert validated
+    assert (output / profile.expected_ply_relative_path).read_bytes() == previous
+    assert not (output / "wre-reference-training.log").exists()
+
+
 @pytest.mark.parametrize("mutation", ("missing_revision", "wrong_configuration"))
 def test_external_gsplat_runner_rejects_false_producer_before_gpu_start(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mutation: str
