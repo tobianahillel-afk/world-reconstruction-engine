@@ -4945,23 +4945,34 @@ jobs:
                         const hash=await crypto.subtle.digest('SHA-256',bytes);
                         const hex=Array.from(new Uint8Array(hash))
                           .map(b=>b.toString(16).padStart(2,'0')).join('');
+                        // Compare at native pixel resolution: thumbnail interpolation can
+                        // disagree even when two images represent the same observed pixels.
                         const sample=document.createElement('canvas');
-                        sample.width=12; sample.height=12;
+                        sample.width=bitmap.width; sample.height=bitmap.height;
                         const ctx=sample.getContext('2d', {willReadFrequently:true});
-                        ctx.drawImage(bitmap,0,0,bitmap.width,bitmap.height,0,0,12,12);
-                        const saved=Array.from(ctx.getImageData(0,0,12,12).data);
+                        ctx.drawImage(bitmap,0,0);
+                        const saved=ctx.getImageData(0,0,sample.width,sample.height).data;
                         const original=document.createElement('canvas');
-                        original.width=12; original.height=12;
+                        original.width=bitmap.width; original.height=bitmap.height;
                         const origCtx=original.getContext('2d', {willReadFrequently:true});
                         const half=img.naturalWidth/2;
                         origCtx.drawImage(img,frame==='right'?half:0,0,
-                          frame==='pair'?img.naturalWidth:half,img.naturalHeight,0,0,12,12);
-                        const expected=Array.from(origCtx.getImageData(0,0,12,12).data);
+                          frame==='pair'?img.naturalWidth:half,img.naturalHeight,
+                          0,0,original.width,original.height);
+                        const expected=origCtx.getImageData(0,0,original.width,original.height).data;
+                        let pixelDifferences=0, largestPixelDifference=0;
+                        for(let i=0;i<saved.length;i++) {
+                          const delta=Math.abs(saved[i]-expected[i]);
+                          if(delta>0) pixelDifferences++;
+                          if(delta>largestPixelDifference) largestPixelDifference=delta;
+                        }
                         window.__wreSourceExports.push({
                           frame,sha256:hex,width:bitmap.width,height:bitmap.height,
                           bytes:bytes.byteLength,
                           png:Array.from(new Uint8Array(bytes).slice(0,8)).join(','),
-                          pixelsMatch:JSON.stringify(saved)===JSON.stringify(expected)
+                          pixelsMatch:pixelDifferences===0,
+                          pixelDifferences,
+                          largestPixelDifference
                         });
                         bitmap.close();
                       })().catch(error=>window.__wreSourceExports.push(
