@@ -2779,7 +2779,12 @@ def _write_verified_xyz_rgb_points_glb(
     try:
         with rgb.open("rb") as source, destination.open("xb") as output:
             created = True
-            source.seek(len(header))
+            second_header = source.read(len(header))
+            if second_header != header:
+                raise GsplatStaticAppearancePreflightError(
+                    "WRE RGB source PLY header changed before GLB export"
+                )
+            verified_source_digest = hashlib.sha256(second_header)
             for chunk in (
                 struct.pack("<4sII", b"glTF", 2, total_length),
                 struct.pack("<I4s", len(document), b"JSON"),
@@ -2796,6 +2801,7 @@ def _write_verified_xyz_rgb_points_glb(
                     raise GsplatStaticAppearancePreflightError(
                         "gsplat RGB centers changed during GLB export"
                     )
+                verified_source_digest.update(record)
                 if index == next_index:
                     vertex = record + b"\x00"
                     output.write(vertex)
@@ -2805,6 +2811,10 @@ def _write_verified_xyz_rgb_points_glb(
             if source.read(1):
                 raise GsplatStaticAppearancePreflightError(
                     "gsplat RGB centers gained data during GLB export"
+                )
+            if verified_source_digest.digest() != source_digest.digest():
+                raise GsplatStaticAppearancePreflightError(
+                    "WRE RGB source PLY bytes changed before GLB export finished"
                 )
     except Exception:
         if created:
