@@ -4929,6 +4929,74 @@ jobs:
               assert 0.95 < frames["pair"]["ratio"] < 1.05
               assert abs(frames["left"]["leftOffset"]) < 3
               assert abs(frames["right"]["rightOffset"]) < 3
+              # Real browser PNG export: inspect the actual downloaded Blob
+              # while still delegating to the native URL API.
+              assert js("""const img=document.getElementById('wre-live-source-photos');
+                  const button=document.getElementById('wre-source-export');
+                  if (button.disabled || !img.complete || img.naturalWidth < 640) return false;
+                  window.__wreSourceExports=[];
+                  window.__wreSourceURL=URL.createObjectURL;
+                  URL.createObjectURL=function(blob) {
+                    const frame=document.getElementById('wre-source-frame').value;
+                    if (blob.type==='image/png') {
+                      (async()=>{
+                        const bitmap=await createImageBitmap(blob);
+                        const bytes=await blob.arrayBuffer();
+                        const hash=await crypto.subtle.digest('SHA-256',bytes);
+                        const hex=Array.from(new Uint8Array(hash))
+                          .map(b=>b.toString(16).padStart(2,'0')).join('');
+                        const sample=document.createElement('canvas');
+                        sample.width=12; sample.height=12;
+                        const ctx=sample.getContext('2d', {willReadFrequently:true});
+                        ctx.drawImage(bitmap,0,0,bitmap.width,bitmap.height,0,0,12,12);
+                        const saved=Array.from(ctx.getImageData(0,0,12,12).data);
+                        const original=document.createElement('canvas');
+                        original.width=12; original.height=12;
+                        const origCtx=original.getContext('2d', {willReadFrequently:true});
+                        const half=img.naturalWidth/2;
+                        origCtx.drawImage(img,frame==='right'?half:0,0,
+                          frame==='pair'?img.naturalWidth:half,img.naturalHeight,0,0,12,12);
+                        const expected=Array.from(origCtx.getImageData(0,0,12,12).data);
+                        window.__wreSourceExports.push({
+                          frame,sha256:hex,width:bitmap.width,height:bitmap.height,
+                          bytes:bytes.byteLength,
+                          png:Array.from(new Uint8Array(bytes).slice(0,8)).join(','),
+                          pixelsMatch:JSON.stringify(saved)===JSON.stringify(expected)
+                        });
+                        bitmap.close();
+                      })().catch(error=>window.__wreSourceExports.push(
+                        {frame,error:String(error)}));
+                    }
+                    return window.__wreSourceURL.call(URL,blob);
+                  };
+                  return true;""")
+              for observed_frame in ("left", "right", "pair"):
+                  js(f"""const choice=document.getElementById('wre-source-frame');
+                      choice.value='{observed_frame}';
+                      choice.dispatchEvent(new Event('change', {{bubbles:true}}));
+                      document.getElementById('wre-source-export').click();""")
+                  until(f"""return window.__wreSourceExports.some(
+                      item=>item.frame==='{observed_frame}');""")
+              observed_exports = js("""URL.createObjectURL=window.__wreSourceURL;
+                  delete window.__wreSourceURL;
+                  return window.__wreSourceExports;""")
+              assert {item["frame"] for item in observed_exports} == {"left", "right", "pair"}
+              assert all(item.get("pixelsMatch") is True for item in observed_exports)
+              assert all(item["bytes"] > 1000 and len(item["sha256"]) == 64 and
+                         item["png"] == "137,80,78,71,13,10,26,10"
+                         for item in observed_exports)
+              assert {item["width"] for item in observed_exports if item["frame"] != "pair"} == {
+                  frames["imageWidth"] // 2
+              }
+              assert next(item["width"] for item in observed_exports if item["frame"] == "pair") == (
+                  frames["imageWidth"]
+              )
+              assert len({item["sha256"] for item in observed_exports}) == 3
+              observed_export_hashes = {
+                  item["frame"]: item["sha256"] for item in observed_exports
+              }
+              assert js("""return document.getElementById('wre-scene').loaded &&
+                  Boolean(document.getElementById('wre-scene').model);""")
               live_2d_3d_png = base64.b64decode(
                   call("GET", f"/session/{session}/screenshot"), validate=True
               )
@@ -6515,6 +6583,8 @@ jobs:
                       "dual_3d_linked_orbit_verified_in_chrome": True,
                       "source_photos_and_live_3d_verified_in_chrome": True,
                       "individual_left_right_photos_verified_in_chrome": True,
+                      "observed_source_png_export_verified_in_chrome": True,
+                      "observed_source_png_export_sha256": observed_export_hashes,
                       "source_photos_live_3d_screenshot_sha256": live_2d_3d_sha256,
                       "side_by_side_screenshot_sha256": side_by_side_sha256,
                       "local_glb_file_loaded_in_chrome": True,
@@ -6661,6 +6731,13 @@ jobs:
               raise ValueError("Actual Chrome did not show source photos beside a live GLB")
           if receipt.get("individual_left_right_photos_verified_in_chrome") is not True:
               raise ValueError("Actual Chrome did not verify both individual source-photo views")
+          if receipt.get("observed_source_png_export_verified_in_chrome") is not True:
+              raise ValueError("Actual Chrome did not export original source image pixels")
+          hashes = receipt.get("observed_source_png_export_sha256")
+          if not isinstance(hashes, dict) or set(hashes) != {"pair", "left", "right"} or any(
+              not isinstance(v, str) or len(v) != 64 for v in hashes.values()
+          ):
+              raise ValueError("Actual Chrome source PNG export SHA evidence is incomplete")
           if receipt.get("dual_3d_linked_orbit_verified_in_chrome") is not True:
               raise ValueError("Actual Chrome did not verify independent linked 3D orbit angles")
           if receipt.get("surface_distance_measured_in_chrome") is not True:
