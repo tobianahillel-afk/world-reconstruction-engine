@@ -819,6 +819,11 @@ jobs:
           import numpy as np
           import torch
           from scipy.spatial import cKDTree
+          import sys
+          sys.path.insert(
+              0,
+              str(Path(os.environ["RUNNER_TEMP"]) / "wre-gsplat-parser-source" / "gsplat" / "examples"),
+          )
           from datasets.colmap import Parser
 
           root = Path(os.environ["RUNNER_TEMP"]) / "wre-real-photo-colmap-rgb"
