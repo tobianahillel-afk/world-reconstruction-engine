@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from types import SimpleNamespace
@@ -473,6 +474,85 @@ def test_missing_geometry_result_is_rejected_and_partial_output_removed(tmp_path
 
     assert matching.database_path.exists()
     assert not request.database_path.exists()
+
+
+@pytest.mark.parametrize("omitted_raw_count", (0, 7))
+def test_native_geometry_can_omit_only_zero_match_pairs(
+    tmp_path: Path, omitted_raw_count: int
+) -> None:
+    matching = _matching_result(tmp_path)
+    connection = sqlite3.connect(matching.database_path)
+    try:
+        connection.execute("INSERT INTO images(image_id, name) VALUES(3, 'b.pgm')")
+        connection.execute(
+            "INSERT INTO matches(pair_id, rows, cols, data) VALUES(1000003, ?, 2, NULL)",
+            (omitted_raw_count,),
+        )
+        connection.execute(
+            "INSERT INTO two_view_geometries("
+            "pair_id, rows, cols, data, config, F, E, H, qvec, tvec, camera1, camera2"
+            ") VALUES(1000003, 0, 2, NULL, 0, NULL, NULL, NULL, NULL, NULL, NULL, NULL)"
+        )
+        connection.commit()
+    finally:
+        connection.close()
+    source_hash = hash_file_content(matching.database_path)
+    missing_pair = ColmapPairMatchSummary(
+        observation_id1=ObservationId("obs:b"),
+        observation_id2=ObservationId("obs:z"),
+        image_name1="b.pgm",
+        image_name2="z.pgm",
+        num_matches=omitted_raw_count,
+    )
+    matching = replace(
+        matching,
+        provenance=DerivedArtifactProvenance(
+            producing_run_id=matching.provenance.producing_run_id,
+            source_observation_ids=(
+                ObservationId("obs:a"),
+                ObservationId("obs:b"),
+                ObservationId("obs:z"),
+            ),
+        ),
+        attempted_pair_count=3,
+        unverified_two_view_placeholder_count=2,
+        pairs=(*matching.pairs, missing_pair),
+        database_sha256=source_hash.sha256,
+        database_byte_length=source_hash.byte_length,
+    )
+    parent_before = matching.database_path.read_bytes()
+    fake = _FakePycolmap()
+    original_open = fake._open_database
+
+    def native_database_open(path: Path) -> _FakeDatabase:
+        database = original_open(path)
+        original_read = database.read_num_matches
+
+        def omit_unverified_pair() -> tuple[list[int], list[int]]:
+            ids, counts = original_read()
+            kept = [(pair_id, count) for pair_id, count in zip(ids, counts, strict=True)
+                    if pair_id != 1_000_003]
+            return [pair_id for pair_id, _ in kept], [count for _, count in kept]
+
+        database.read_num_matches = omit_unverified_pair  # type: ignore[method-assign]
+        return database
+
+    fake.Database = SimpleNamespace(open=native_database_open)
+    request = _request(tmp_path, matching)
+    if omitted_raw_count != 0:
+        with pytest.raises(
+            ColmapGeometricVerificationError, match="geometry evidence membership"
+        ):
+            verify_colmap_geometry(request, module=fake)
+        assert not request.database_path.exists()
+    else:
+        result = verify_colmap_geometry(request, module=fake)
+        assert len(result.geometries) == 1
+        assert result.geometries[0].raw_match_count == 25
+        assert result.provenance.source_observation_ids == matching.provenance.source_observation_ids
+        assert result.source_matching_database_sha256 == matching.database_sha256
+        assert hash_file_content(result.database_path).sha256 == result.database_sha256
+    assert matching.database_path.read_bytes() == parent_before
 
 
 def test_run_revision_must_match_current_verification_environment(tmp_path: Path) -> None:
