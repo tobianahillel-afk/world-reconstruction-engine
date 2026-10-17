@@ -1025,11 +1025,17 @@ def test_one_call_gsplat_reconstruction_stages_real_files_and_returns_candidate(
         return SimpleNamespace(returncode=0)
 
     monkeypatch.setattr(baseline_module.subprocess, "run", fake_trainer)
+    monkeypatch.setattr(
+        baseline_module, "verify_gsplat_static_appearance_native_geometry",
+        lambda *_args, **_kwargs: None,
+    )
     result = reconstruct_gsplat_static_appearance(
         request=request,
         source=source,
         dataset_root=staged.dataset_root,
         profile=profile,
+        features=cast(ColmapFeatureExtractionResult, object()),
+        expected_environment=cast(ColmapEnvironmentIdentity, object()),
         source_root=reference,
         python_executable=interpreter,
         output_root=output,
@@ -1062,6 +1068,8 @@ def test_one_call_gsplat_reconstruction_does_not_stage_false_producer(
             source=source,
             dataset_root=staged.dataset_root,
             profile=profile,
+            features=cast(ColmapFeatureExtractionResult, object()),
+            expected_environment=cast(ColmapEnvironmentIdentity, object()),
             source_root=tmp_path,
             python_executable=tmp_path / "no-interpreter",
             output_root=tmp_path / "no-output",
@@ -1099,11 +1107,17 @@ def test_external_gsplat_runner_builds_complete_canonical_candidate_with_process
         return SimpleNamespace(returncode=0)
 
     monkeypatch.setattr(baseline_module.subprocess, "run", fake_cuda_process)
+    monkeypatch.setattr(
+        baseline_module, "verify_gsplat_static_appearance_native_geometry",
+        lambda *_args, **_kwargs: None,
+    )
     result = run_gsplat_reference_training(
         request=request,
         source=source,
         staged=staged,
         profile=profile,
+        features=cast(ColmapFeatureExtractionResult, object()),
+        expected_environment=cast(ColmapEnvironmentIdentity, object()),
         source_root=source_root,
         python_executable=runtime,
         output_root=output,
@@ -1227,11 +1241,17 @@ def test_external_gsplat_runner_spawns_real_process_and_assembles_appearance(
     monkeypatch.setattr(
         baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
     )
+    monkeypatch.setattr(
+        baseline_module, "verify_gsplat_static_appearance_native_geometry",
+        lambda *_args, **_kwargs: None,
+    )
     result = run_gsplat_reference_training(
         request=request,
         source=source,
         staged=staged,
         profile=profile,
+        features=cast(ColmapFeatureExtractionResult, object()),
+        expected_environment=cast(ColmapEnvironmentIdentity, object()),
         source_root=source_root,
         python_executable=runtime,
         output_root=output,
@@ -1269,6 +1289,8 @@ def test_external_gsplat_runner_rejects_false_producer_before_gpu_start(
             source=source,
             staged=staged,
             profile=profile,
+            features=cast(ColmapFeatureExtractionResult, object()),
+            expected_environment=cast(ColmapEnvironmentIdentity, object()),
             source_root=tmp_path / "does-not-exist",
             python_executable=tmp_path / "does-not-exist-python",
             output_root=output,
@@ -1302,11 +1324,17 @@ def test_external_gsplat_runner_rejects_failure_or_missing_output(
         lambda *_args, **_kwargs: SimpleNamespace(returncode=return_code),
     )
     with pytest.raises(GsplatStaticAppearancePreflightError):
+    monkeypatch.setattr(
+        baseline_module, "verify_gsplat_static_appearance_native_geometry",
+        lambda *_args, **_kwargs: None,
+    )
         run_gsplat_reference_training(
             request=request,
             source=source,
             staged=staged,
             profile=profile,
+            features=cast(ColmapFeatureExtractionResult, object()),
+            expected_environment=cast(ColmapEnvironmentIdentity, object()),
             source_root=source_root,
             python_executable=runtime,
             output_root=output,
