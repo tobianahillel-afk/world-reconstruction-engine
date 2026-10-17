@@ -477,10 +477,15 @@ def _read_geometry_evidence(
         int(pair_id): geometry
         for pair_id, geometry in zip(geometry_pair_ids, geometries, strict=True)
     }
-    if set(raw_count_by_pair_id) != set(geometry_by_pair_id):
+    # Native COLMAP may omit the two-view geometry row of a recorded pair
+    # with zero raw matches. Keep the L3.3 raw record but never invent L3.4
+    # geometry; every nonempty raw pair must still be accounted for.
+    missing_geometry = set(raw_count_by_pair_id) - set(geometry_by_pair_id)
+    if set(geometry_by_pair_id) - set(raw_count_by_pair_id) or any(
+        raw_count_by_pair_id[pair_id] != 0 for pair_id in missing_geometry
+    ):
         raise ColmapGeometricVerificationError(
-            "COLMAP geometric verification did not produce exactly one geometry result "
-            "per raw match pair"
+            "COLMAP geometric verification lacks a nonempty pair or returned unexpected geometry"
         )
 
     evidence: list[ColmapPairGeometryEvidence] = []
@@ -504,9 +509,8 @@ def _read_geometry_evidence(
                 "COLMAP verified geometry cannot pair an observation with itself"
             )
 
-        geometry = geometry_by_pair_id[pair_id]
-        if observation_id2.value < observation_id1.value:
-            geometry.invert()
+        inverted = observation_id2.value < observation_id1.value
+        if inverted:
             observation_id1, observation_id2 = observation_id2, observation_id1
             name1, name2 = name2, name1
 
@@ -524,6 +528,12 @@ def _read_geometry_evidence(
         raw_match_count = raw_count_by_pair_id[pair_id]
         if raw_match_count != expected_count:
             raise ColmapGeometricVerificationError("raw match count changed between L3.3 and L3.4")
+        geometry = geometry_by_pair_id.get(pair_id)
+        if geometry is None:
+            # The L3.3 zero-match record remains in its hashed source database.
+            continue
+        if inverted:
+            geometry.invert()
 
         tri_angle = float(geometry.tri_angle)
         tri_angle_value = None if tri_angle < 0 else tri_angle
