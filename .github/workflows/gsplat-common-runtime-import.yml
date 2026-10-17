@@ -4766,6 +4766,60 @@ jobs:
                 return document.getElementById('wre-camera-status')
                   .textContent.includes('restore refused');
               """)
+              # Record and play camera keyframes in REAL Chrome/WebGL.
+              # This animates the viewer, never an inferred dynamic 4D scene.
+              assert js("""
+                const scene=document.getElementById('wre-scene');
+                scene.removeAttribute('auto-rotate');
+                scene.cameraOrbit='0.35rad 1.0rad 4m';
+                scene.cameraTarget='0m 0m 0m';
+                scene.fieldOfView='35deg';
+                scene.jumpCameraToGoal();
+                document.getElementById('wre-tour-record').click();
+                return document.getElementById('wre-tour-status').textContent
+                  .includes('1 viewpoint(s) saved') &&
+                  document.getElementById('wre-tour-play').disabled;
+              """)
+              assert js("""
+                const scene=document.getElementById('wre-scene');
+                scene.cameraOrbit='0.8rad 1.1rad 5m';
+                scene.cameraTarget='0.2m 0.1m -0.1m';
+                scene.fieldOfView='42deg';
+                scene.jumpCameraToGoal();
+                document.getElementById('wre-tour-record').click();
+                return document.getElementById('wre-tour-status').textContent
+                  .includes('2 viewpoint(s) saved') &&
+                  !document.getElementById('wre-tour-play').disabled;
+              """)
+              assert js("""
+                const scene=document.getElementById('wre-scene');
+                scene.cameraOrbit='1.5rad 0.6rad 9m';
+                scene.cameraTarget='1m 1m 1m';
+                scene.fieldOfView='60deg';
+                scene.jumpCameraToGoal();
+                document.getElementById('wre-tour-play').click();
+                return document.getElementById('wre-tour-play').disabled;
+              """)
+              played_tour = until("""
+                const scene=document.getElementById('wre-scene');
+                const status=document.getElementById('wre-tour-status').textContent;
+                if (!status.includes('Tour complete: 2 viewpoints') ||
+                    !status.includes('NOT 4D reconstruction')) return null;
+                const orbit=scene.getCameraOrbit();
+                const target=scene.getCameraTarget();
+                const actual=[orbit.theta,orbit.phi,orbit.radius,target.x,target.y,target.z,
+                              scene.getFieldOfView()];
+                const expected=[0.8,1.1,5,0.2,0.1,-0.1,42];
+                return actual.every((v,i)=>Math.abs(v-expected[i])<0.1) &&
+                  !document.getElementById('wre-tour-play').disabled ? actual : null;
+              """)
+              assert len(played_tour) == 7
+              assert js("""
+                document.getElementById('wre-tour-clear').click();
+                return document.getElementById('wre-tour-play').disabled &&
+                  document.getElementById('wre-tour-status')
+                    .textContent === 'No saved camera tour.';
+              """)
               # Raycast the ACTUAL Chrome-loaded photo mesh, not a mocked
               # geometry API. Click two different hit points via the viewer
               # measurement control, then verify the relative distance.
@@ -5781,6 +5835,7 @@ jobs:
                       "surface_chord_angle_export_verified_in_chrome": True,
                       "surface_chord_angle_restore_verified_in_chrome": True,
                       "relative_3d_camera_bookmark_roundtrip_verified_in_chrome": True,
+                      "user_camera_tour_verified_in_chrome": True,
               "current_view_png_export_verified_in_chrome": True,
                       "current_view_png_dimensions": [view_png["width"], view_png["height"]],
                       "surface_reload": True,
@@ -5923,6 +5978,8 @@ jobs:
               raise ValueError("Actual Chrome did not roundtrip a saved 3D chord angle")
           if receipt.get("relative_3d_camera_bookmark_roundtrip_verified_in_chrome") is not True:
               raise ValueError("Actual Chrome did not roundtrip a relative 3D camera bookmark")
+          if receipt.get("user_camera_tour_verified_in_chrome") is not True:
+              raise ValueError("Actual Chrome did not replay a user camera tour")
           if receipt.get("current_view_png_export_verified_in_chrome") is not True:
               raise ValueError("Actual Chrome did not export its current real-photo 3D view as PNG")
           dimensions = receipt.get("current_view_png_dimensions")
