@@ -172,6 +172,7 @@ jobs:
               "aloeR.jpg": "7ecdf48919be3ac7dd0cc6e594ab00398ac956b2",
           }
           photos = []
+          original_sha256 = {}
           for name, expected_blob in images.items():
               url = (
                   "https://raw.githubusercontent.com/opencv/opencv/"
@@ -196,6 +197,9 @@ jobs:
                   f"blob {len(data)}\0".encode("ascii") + data
               ).hexdigest()
               assert git_blob == expected_blob, "Pinned real photo Git blob mismatch"
+              original_bytes = Path(os.environ["RUNNER_TEMP"]) / f"wre-original-{name}"
+              original_bytes.write_bytes(data)
+              original_sha256[name] = hashlib.sha256(data).hexdigest()
               image = cv2.imdecode(
                   np.frombuffer(data, dtype=np.uint8), cv2.IMREAD_COLOR
               )
@@ -1185,6 +1189,7 @@ jobs:
               "dataset": "Middlebury 2006 Aloe (OpenCV example photographs)",
               "source_commit": opencv_sha,
               "source_git_blobs": images,
+              "original_photo_sha256": original_sha256,
               "original_photo_height_width": original_shape,
               "processed_photo_height_width": [height, width],
               "algorithm": "pinned OpenCV 4.10 StereoSGBM",
@@ -2066,6 +2071,9 @@ jobs:
                 </div>
                 <p id="wre-source-frame-status" role="status">
                   Both rectified source photographs; no 2D-to-3D camera registration.</p>
+                <p>Original unmodified JPEGs: <a href="./wre-original-aloeL.jpg" download>Download left Aloe source</a>
+                  · <a href="./wre-original-aloeR.jpg" download>Download right Aloe source</a>.
+                  The displayed PNG above is a separate rectified/resized derivative.</p>
                 <p>Original 2D observations (rectified/resized) alongside the live,
                   approximate 3D model. Camera views are not registered to photo pixels.
                   Unknown metric scale; NOT reconstructed 4D motion.</p>
@@ -3568,13 +3576,15 @@ jobs:
           )
           PY
 
-      - name: Stage thirty-seven real-photo CPU 3D and SIFT COLMAP outputs early
+      - name: Stage thirty-nine real-photo CPU 3D, original JPEG and SIFT COLMAP outputs early
         shell: bash
         run: |
           set -euo pipefail
           destination="$GITHUB_WORKSPACE/wre-real-stereo-cpu-preview"
           mkdir -p "$destination"
           for file in \
+            wre-original-aloeL.jpg \
+            wre-original-aloeR.jpg \
             wre-real-stereo-cpu-reconstruction.ply \
             wre-real-stereo-cpu-photometric-consistent.ply \
             wre-real-stereo-cpu-dense-consistent-rgb.ply \
@@ -3616,7 +3626,7 @@ jobs:
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 37
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 39
 
       - name: Publish real-photo CPU 3D plus COLMAP before native CUDA builds
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -6874,6 +6884,22 @@ jobs:
           }:
               raise ValueError("Original stereo photographs have different provenance")
           input_sha256 = hashlib.sha256(input_png).hexdigest()
+          raw_names = {
+              "aloeL.jpg": "wre-original-aloeL.jpg",
+              "aloeR.jpg": "wre-original-aloeR.jpg",
+          }
+          original_digests = provenance["original_photo_sha256"]
+          if set(original_digests) != set(raw_names):
+              raise ValueError("Missing original photo SHA-256 evidence")
+          for name, raw_name in raw_names.items():
+              raw = (bundle / raw_name).read_bytes()
+              if not 1000 < len(raw) <= 1_000_000 or raw[:3] != bytes((255, 216, 255)):
+                  raise ValueError(f"Original JPEG unavailable: {name}")
+              blob = hashlib.sha1(
+                  f"blob {len(raw)}".encode("ascii") + bytes((0,)) + raw
+              ).hexdigest()
+              if blob != source_blobs[name] or hashlib.sha256(raw).hexdigest() != original_digests[name]:
+                  raise ValueError(f"Original JPEG provenance mismatch: {name}")
 
           comparison = bundle / "wre-real-3d-comparison.html"
           page = comparison.read_text(encoding="utf-8")
@@ -6892,12 +6918,24 @@ jobs:
               '<details open><summary><strong>Entrées réelles 2D → reconstruction 3D</strong></summary>'
               '<figure><a href="./' + input_name + '">'
               '<img id="wre-source-photographs" loading="eager" '
-              'alt="Photographies originales stéréo Aloe gauche et droite" src="./'
+              'alt="Photographies stéréo Aloe rectifiées et redimensionnées" src="./'
               + input_name + '"></a><figcaption>'
               'Deux photos stéréo réellement utilisées, rectifiées et redimensionnées. '
               'JPEG Git blobs épinglés ; dimensions ' + str(input_width) + ' × '
               + str(input_height) + ' ; PNG SHA-256 ' + input_sha256
               + '. Le rendu 3D ci-dessous est une estimation, sans garantie métrique.'
+              '</figcaption></figure><p>JPEG originaux non modifiés, vérifiés par Git blob et SHA-256 :</p>'
+              '<figure><a href="./wre-original-aloeL.jpg" download>'
+              '<img id="wre-raw-left" loading="eager" style="max-width:46%;height:auto" '
+              'alt="JPEG original Aloe gauche" src="./wre-original-aloeL.jpg"></a>'
+              '<a href="./wre-original-aloeR.jpg" download>'
+              '<img id="wre-raw-right" loading="eager" style="max-width:46%;height:auto" '
+              'alt="JPEG original Aloe droit" src="./wre-original-aloeR.jpg"></a>'
+              '<figcaption>Sources OpenCV épinglées ' + provenance["source_commit"]
+              + ' · left SHA-256 ' + original_digests["aloeL.jpg"]
+              + ' · right SHA-256 ' + original_digests["aloeR.jpg"]
+              + '. Sources photographiques Middlebury Stereo 2006 '
+              '(D. Scharstein et al.); voir https://vision.middlebury.edu/stereo/data/.'
               '</figcaption></figure></details>'
           )
           comparison.write_text(
@@ -7059,6 +7097,19 @@ jobs:
                       img.getBoundingClientRect().width >= 200);
               })()"""
               wait_for(lambda: js(source_photo_loaded))
+              # This is the extracted ZIP: decode both unmodified JPEGs in real
+              # Chrome, independently of the processed side-by-side PNG.
+              raw_photo_loaded = """return (() => {
+                  const left = document.getElementById('wre-raw-left');
+                  const right = document.getElementById('wre-raw-right');
+                  return [left, right].every(img => img && img.complete &&
+                      img.naturalWidth >= 320 && img.naturalHeight >= 160) &&
+                      left.naturalWidth === right.naturalWidth &&
+                      left.naturalHeight === right.naturalHeight &&
+                      !!document.querySelector('a[href="./wre-original-aloeL.jpg"]') &&
+                      !!document.querySelector('a[href="./wre-original-aloeR.jpg"]');
+              })()"""
+              wait_for(lambda: js(raw_photo_loaded))
               browser("POST", f"/session/{session}/url", {
                   "url": "http://127.0.0.1:8877/wre-real-stereo-cpu-viewer.html",
               })
