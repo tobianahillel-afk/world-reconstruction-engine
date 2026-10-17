@@ -2330,7 +2330,6 @@ def export_verified_gsplat_rgb_centers_ply(
     return Sha256Digest(output_hash.hexdigest())
 
 
-
 def export_verified_gsplat_rgb_centers_glb(
     *,
     artifact_ref: ArtifactRef,
