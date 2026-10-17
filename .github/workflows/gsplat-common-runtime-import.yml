@@ -3566,6 +3566,15 @@ jobs:
               # Raycast the ACTUAL Chrome-loaded photo mesh, not a mocked
               # geometry API. Click two different hit points via the viewer
               # measurement control, then verify the relative distance.
+              # Stop model-viewer's auto-rotation BEFORE sampling the camera
+              # raycast coordinates; otherwise points drift before replay.
+              assert js("""
+                const scene=document.getElementById('wre-scene');
+                const button=document.getElementById('wre-measure-toggle');
+                button.click();
+                return button.getAttribute('aria-pressed') === 'true' &&
+                  !scene.hasAttribute('auto-rotate');
+              """)
               measure_hits = js("""
                 const scene=document.getElementById('wre-scene');
                 const box=scene.getBoundingClientRect();
@@ -3591,7 +3600,6 @@ jobs:
               measure_status = js(f"""
                 const scene=document.getElementById('wre-scene');
                 const toggle=document.getElementById('wre-measure-toggle');
-                toggle.click();
                 for (const p of {json.dumps(measure_hits)}) {{
                   scene.dispatchEvent(new MouseEvent('click', {{
                     bubbles:true, clientX:p.x, clientY:p.y
@@ -3604,7 +3612,7 @@ jobs:
                 }};
               """)
               assert measure_status["pressed"] == "true" and not measure_status["autoRotate"]
-              assert "Relative 3D distance:" in measure_status["status"]
+              assert "Relative 3D distance:" in measure_status["status"], measure_status
               assert "model units (NOT meters" in measure_status["status"]
               displayed_distance = float(
                 measure_status["status"].split("Relative 3D distance: ",1)[1]
