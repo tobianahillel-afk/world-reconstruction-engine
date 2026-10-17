@@ -3391,7 +3391,7 @@ jobs:
                       call("GET", f"/session/{session}/screenshot"),
                       validate=True,
                   )
-                  assert screenshot_data.startswith(b"\\x89PNG\\r\\n\\x1a\\n")
+                  assert screenshot_data.startswith(bytes.fromhex("89504e470d0a1a0a"))
                   assert len(screenshot_data) > 10000
                   (proof / f"real-stereo-3d-{name}.png").write_bytes(screenshot_data)
                   mode_screenshot_sha256[name] = hashlib.sha256(screenshot_data).hexdigest()
