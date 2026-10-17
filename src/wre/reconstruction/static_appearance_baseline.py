@@ -1861,6 +1861,8 @@ def run_gsplat_reference_training(
     producer: ArtifactProducerIdentity,
     cuda_device_index: int,
     timeout_seconds: int,
+    lpips_alexnet_weights: Path | None = None,
+    lpips_alexnet_sha256: str | None = None,
 ) -> StaticAppearanceCandidateResult:
     """Run the exact reference trainer on an EXPLICIT external CUDA environment.
 
@@ -1906,6 +1908,43 @@ def run_gsplat_reference_training(
     # Ownership is intentionally explicit: only WRE's new private output
     # directory is created, and is not removed when a run fails.
     output_root.mkdir(mode=0o700)
+    # Upstream Runner instantiates LPIPS/AlexNet even without evaluation.
+    # Torchvision expects the standard weight basename in torch.hub's cache.
+    # Supply a trusted, independently SHA-256-pinned local copy; never fetch it.
+    if (lpips_alexnet_weights is None) != (lpips_alexnet_sha256 is None):
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat LPIPS offline weights require both a local file and SHA-256"
+        )
+    torch_home: Path | None = None
+    if lpips_alexnet_weights is not None:
+        if not isinstance(lpips_alexnet_weights, Path) or not lpips_alexnet_weights.is_file():
+            raise GsplatStaticAppearancePreflightError(
+                "gsplat LPIPS pretrained weight file is unavailable"
+            )
+        if not isinstance(lpips_alexnet_sha256, str) or (
+            len(lpips_alexnet_sha256) != 64
+            or any(char not in "0123456789abcdef" for char in lpips_alexnet_sha256)
+        ):
+            raise GsplatStaticAppearancePreflightError(
+                "gsplat LPIPS pretrained weight digest must be lowercase SHA-256"
+            )
+        torch_home = output_root / "torch-cache"
+        cache = torch_home / "hub" / "checkpoints"
+        cache.mkdir(parents=True, mode=0o700)
+        destination = cache / "alexnet-owt-7be5be79.pth"
+        try:
+            shutil.copyfile(lpips_alexnet_weights, destination)
+            with destination.open("rb") as checked:
+                digest = hashlib.file_digest(checked, "sha256").hexdigest()
+        except OSError as exc:
+            raise GsplatStaticAppearancePreflightError(
+                "gsplat LPIPS offline weights could not be staged"
+            ) from exc
+        if digest != lpips_alexnet_sha256:
+            destination.unlink(missing_ok=True)
+            raise GsplatStaticAppearancePreflightError(
+                "gsplat LPIPS offline pretrained weight SHA-256 mismatch"
+            )
     log_path = output_root / "wre-reference-training.log"
     # The external interpreter executes third-party native code. Never
     # forward unrelated credentials (e.g. CI tokens or cloud keys).
@@ -1930,6 +1969,8 @@ def run_gsplat_reference_training(
     )
     env = {name: os.environ[name] for name in runtime_environment_names if name in os.environ}
     env["CUDA_VISIBLE_DEVICES"] = str(cuda_device_index)
+    if torch_home is not None:
+        env["TORCH_HOME"] = str(torch_home)
     env["PYTHONNOUSERSITE"] = "1"
     env["PIP_NO_INDEX"] = "1"
     try:
@@ -1988,6 +2029,8 @@ def reconstruct_gsplat_static_appearance(
     producer: ArtifactProducerIdentity,
     cuda_device_index: int,
     timeout_seconds: int,
+    lpips_alexnet_weights: Path | None = None,
+    lpips_alexnet_sha256: str | None = None,
 ) -> StaticAppearanceCandidateResult:
     """Stage real COLMAP/PNG files, execute the selected trainer, retain its 3D PLY.
 
@@ -2018,6 +2061,8 @@ def reconstruct_gsplat_static_appearance(
         producer=producer,
         cuda_device_index=cuda_device_index,
         timeout_seconds=timeout_seconds,
+        lpips_alexnet_weights=lpips_alexnet_weights,
+        lpips_alexnet_sha256=lpips_alexnet_sha256,
     )
 
 
