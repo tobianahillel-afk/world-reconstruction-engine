@@ -753,6 +753,27 @@ def _parts(
     return request, source
 
 
+def test_observed_rgb_allows_real_native_simple_radial_tracks_but_trainer_does_not(
+    tmp_path: Path,
+) -> None:
+    request, source = _parts(tmp_path)
+    camera = replace(
+        request.source_geometry.camera_solutions[0],
+        projection_model=CameraProjectionModelName("simple_radial"),
+        intrinsic_parameters=(2.0, 1.0, 0.5, 0.0),
+    )
+    geometry = replace(request.source_geometry, camera_solutions=(camera,))
+    request = replace(request, source_geometry=geometry)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="PINHOLE"):
+        preflight_gsplat_static_appearance_inputs(request, source)
+    observed = preflight_gsplat_static_appearance_inputs(
+        request, source, observed_rgb_only=True
+    )
+    assert observed.images[0].width_px == 2
+    assert observed.images[0].height_px == 1
+    assert observed.images[0].sha256 == source.images[0].observation.asset.sha256
+
+
 def test_exact_srgb_png_and_native_manifest_byte_gate(tmp_path: Path) -> None:
     request, source = _parts(tmp_path)
     evidence = preflight_gsplat_static_appearance_inputs(request, source)

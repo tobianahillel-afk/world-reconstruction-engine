@@ -646,6 +646,8 @@ def _png_srgb_dimensions(data: bytes) -> tuple[int, int]:
 def preflight_gsplat_static_appearance_inputs(
     request: StaticAppearanceCandidateRequest,
     source: GsplatStaticAppearancePreflightSource,
+    *,
+    observed_rgb_only: bool = False,
 ) -> GsplatStaticAppearancePreflightEvidence:
     """Reject image/source mismatches before invoking any optional trainer.
 
@@ -698,12 +700,22 @@ def preflight_gsplat_static_appearance_inputs(
             raise GsplatStaticAppearancePreflightError(
                 "baseline requires a safe single-level PNG image filename"
             )
-        if camera.projection_model.value != "pinhole" or len(camera.intrinsic_parameters) != 4:
+        intrinsics = camera.intrinsic_parameters
+        if camera.projection_model.value == "pinhole" and len(intrinsics) == 4:
+            focal_lengths = intrinsics[:2]
+        elif (
+            observed_rgb_only
+            and camera.projection_model.value == "simple_radial"
+            and len(intrinsics) == 4
+        ):
+            # Raw COLMAP Point2D coordinates already refer to distorted source pixels.
+            # This is NOT an undistortion or an approved gsplat training camera.
+            focal_lengths = intrinsics[:1]
+        else:
             raise GsplatStaticAppearancePreflightError(
                 "gsplat baseline supports only native undistorted PINHOLE cameras"
             )
-        fx, fy, _cx, _cy = camera.intrinsic_parameters
-        if fx <= 0 or fy <= 0:
+        if any(focal <= 0 for focal in focal_lengths):
             raise GsplatStaticAppearancePreflightError("camera focal length is invalid")
 
         source_file = image_root / name
@@ -757,6 +769,7 @@ def verify_gsplat_static_appearance_native_geometry(
     features: ColmapFeatureExtractionResult,
     expected_environment: ColmapEnvironmentIdentity,
     module: object | None = None,
+    observed_rgb_only: bool = False,
 ) -> CanonicalColmapSparseModel:
     """Require independently decoded native COLMAP geometry to equal WRE input.
 
@@ -766,7 +779,9 @@ def verify_gsplat_static_appearance_native_geometry(
     No gsplat or CUDA package is loaded.
     """
 
-    preflight_gsplat_static_appearance_inputs(request, source)
+    preflight_gsplat_static_appearance_inputs(
+        request, source, observed_rgb_only=observed_rgb_only
+    )
     if not isinstance(features, ColmapFeatureExtractionResult):
         raise TypeError("gsplat native geometry features must be ColmapFeatureExtractionResult")
     if not isinstance(expected_environment, ColmapEnvironmentIdentity):
@@ -2360,6 +2375,8 @@ def export_verified_colmap_observed_rgb_ply(
     Uses the native audited camera/point model, registered 2D feature tracks
     and exactly verified sRGB source pixels. The color of each reconstructed
     point is the first registered view by name, NOT calibrated radiance.
+    SIMPLE_RADIAL source tracks are sampled in their native distorted pixel domain.
+    This path never undistorts an image or authorizes a Gaussian trainer camera.
     No Gaussian fitting, synthetic points, world alignment or GPU is involved.
     """
 
@@ -2369,6 +2386,7 @@ def export_verified_colmap_observed_rgb_ply(
         features=features,
         expected_environment=expected_environment,
         module=module,
+        observed_rgb_only=True,
     )
     point_count = len(canonical.point_map.positions_xyz)
     if not 1 <= point_count <= 2_000_000:
