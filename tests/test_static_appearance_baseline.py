@@ -1774,6 +1774,30 @@ def test_colmap_observed_ply_colors_reconstructed_point_from_one_active_track(
     )
 
 
+def test_colmap_observed_ply_refuses_model_with_no_colorable_native_point(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    request, source = _two_view_parts(tmp_path)
+    features, environment = _native_feature_evidence(tmp_path)
+    monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_native_geometry",
+        lambda *_args, **_kwargs: _native_canonical(request, source),
+    )
+    module = cast(Any, _shared_track_fixture(track_image_ids=()))
+    native = module.Reconstruction(source.native_model_root / "0")
+    native.point3D = lambda _id: SimpleNamespace(
+        xyz=(1.0, 2.0, 3.0), track=SimpleNamespace(elements=())
+    )
+    target = tmp_path / "must-not-exist.ply"
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="no points"):
+        baseline_module.export_verified_colmap_observed_rgb_ply(
+            request, source, features=features,
+            expected_environment=environment, module=module, preview_path=target,
+        )
+    assert not target.exists()
+
+
 def test_colmap_sparse_observed_preview_rejects_tampered_photo_and_wrong_geometry(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

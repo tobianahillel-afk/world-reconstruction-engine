@@ -2440,85 +2440,98 @@ def export_verified_colmap_observed_rgb_ply(
     if len(point_ids) != point_count:
         raise GsplatStaticAppearancePreflightError("COLMAP observed point count changed")
 
+    encoded_points = bytearray()
+    for position, point_id in enumerate(point_ids):
+        point = native.point3D(point_id)
+        xyz = tuple(float(v) for v in point.xyz)
+        if len(xyz) != 3 or any(not math.isfinite(v) for v in xyz):
+            raise GsplatStaticAppearancePreflightError(
+                "COLMAP sparse point has invalid XYZ"
+            )
+        if xyz != canonical.point_map.positions_xyz[position]:
+            raise GsplatStaticAppearancePreflightError(
+                "COLMAP sparse point differs from canonical WRE geometry"
+            )
+        sampled: list[tuple[str, int, int, int]] = []
+        for track in point.track.elements:
+            image_id = int(track.image_id)
+            if image_id not in native_images:
+                raise GsplatStaticAppearancePreflightError(
+                    "COLMAP sparse point references an unknown image"
+                )
+            image = native_images[image_id]
+            keypoint_id = int(track.point2D_idx)
+            if not 0 <= keypoint_id < int(image.num_points2D()):
+                raise GsplatStaticAppearancePreflightError(
+                    "COLMAP sparse point has invalid image feature index"
+                )
+            feature = image.point2D(keypoint_id)
+            if int(feature.point3D_id) != point_id:
+                raise GsplatStaticAppearancePreflightError(
+                    "COLMAP sparse point track is not reciprocal"
+                )
+            width, height, pixels = pixels_by_name[image.name]
+            u, v = (float(value) for value in feature.xy)
+            if not math.isfinite(u) or not math.isfinite(v):
+                raise GsplatStaticAppearancePreflightError(
+                    "COLMAP point observation has invalid pixel coordinates"
+                )
+            x, y = math.floor(u), math.floor(v)
+            if not (0 <= x < width and 0 <= y < height):
+                raise GsplatStaticAppearancePreflightError(
+                    "COLMAP point observation is outside the original PNG"
+                )
+            offset = (y * width + x) * 3
+            sampled.append(
+                (image.name, pixels[offset], pixels[offset + 1], pixels[offset + 2])
+            )
+        # Point3D geometry is already bound to exact native SfM.
+        # Its observed color requires one reciprocal pixel, not a second solve.
+        if len({item[0] for item in sampled}) != len(sampled):
+            raise GsplatStaticAppearancePreflightError(
+                "COLMAP point track repeats a source observation"
+            )
+        if not sampled:
+            # Keep geometry in its original native model; do not invent RGB.
+            # One uncolorable native point must not suppress all valid output.
+            continue
+        _, red, green, blue = min(sampled)
+        try:
+            record = struct.pack("<3f3B", *xyz, red, green, blue)
+        except OverflowError as exc:
+            raise GsplatStaticAppearancePreflightError(
+                "COLMAP point XYZ cannot be represented by PLY float32"
+            ) from exc
+        encoded_points.extend(record)
+    colored_count = len(encoded_points) // struct.calcsize("<3f3B")
+    if colored_count == 0:
+        raise GsplatStaticAppearancePreflightError(
+            "native COLMAP model has no points with reciprocal source RGB observations"
+        )
     header = (
         "ply\nformat binary_little_endian 1.0\n"
         f"comment wre_colmap_source_sha256 {canonical.source_model_identity_sha256.value}\n"
         "comment wre_metric_scale_known false\n"
         "comment wre_color_source original_srgb8_feature_observation\n"
-        f"element vertex {point_count}\n"
+        f"comment wre_native_source_points {point_count}\n"
+        f"comment wre_excluded_unobserved_points {point_count - colored_count}\n"
+        f"element vertex {colored_count}\n"
         "property float x\nproperty float y\nproperty float z\n"
         "property uchar red\nproperty uchar green\nproperty uchar blue\nend_header\n"
     ).encode("ascii")
-    digest = hashlib.sha256()
     created = False
     try:
         with destination.open("xb") as output:
             created = True
             output.write(header)
-            digest.update(header)
-            for position, point_id in enumerate(point_ids):
-                point = native.point3D(point_id)
-                xyz = tuple(float(v) for v in point.xyz)
-                if len(xyz) != 3 or any(not math.isfinite(v) for v in xyz):
-                    raise GsplatStaticAppearancePreflightError(
-                        "COLMAP sparse point has invalid XYZ"
-                    )
-                if xyz != canonical.point_map.positions_xyz[position]:
-                    raise GsplatStaticAppearancePreflightError(
-                        "COLMAP sparse point differs from canonical WRE geometry"
-                    )
-                sampled: list[tuple[str, int, int, int]] = []
-                for track in point.track.elements:
-                    image_id = int(track.image_id)
-                    if image_id not in native_images:
-                        raise GsplatStaticAppearancePreflightError(
-                            "COLMAP sparse point references an unknown image"
-                        )
-                    image = native_images[image_id]
-                    keypoint_id = int(track.point2D_idx)
-                    if not 0 <= keypoint_id < int(image.num_points2D()):
-                        raise GsplatStaticAppearancePreflightError(
-                            "COLMAP sparse point has invalid image feature index"
-                        )
-                    feature = image.point2D(keypoint_id)
-                    if int(feature.point3D_id) != point_id:
-                        raise GsplatStaticAppearancePreflightError(
-                            "COLMAP sparse point track is not reciprocal"
-                        )
-                    width, height, pixels = pixels_by_name[image.name]
-                    u, v = (float(value) for value in feature.xy)
-                    if not math.isfinite(u) or not math.isfinite(v):
-                        raise GsplatStaticAppearancePreflightError(
-                            "COLMAP point observation has invalid pixel coordinates"
-                        )
-                    x, y = math.floor(u), math.floor(v)
-                    if not (0 <= x < width and 0 <= y < height):
-                        raise GsplatStaticAppearancePreflightError(
-                            "COLMAP point observation is outside the original PNG"
-                        )
-                    offset = (y * width + x) * 3
-                    sampled.append(
-                        (image.name, pixels[offset], pixels[offset + 1], pixels[offset + 2])
-                    )
-                # Point3D geometry is already bound to exact native SfM.
-                # Its observed color requires one reciprocal pixel, not a second solve.
-                if not sampled or len({item[0] for item in sampled}) != len(sampled):
-                    raise GsplatStaticAppearancePreflightError(
-                        "COLMAP point lacks a unique reciprocal source observation"
-                    )
-                _, red, green, blue = min(sampled)
-                try:
-                    record = struct.pack("<3f3B", *xyz, red, green, blue)
-                except OverflowError as exc:
-                    raise GsplatStaticAppearancePreflightError(
-                        "COLMAP point XYZ cannot be represented by PLY float32"
-                    ) from exc
-                output.write(record)
-                digest.update(record)
+            output.write(encoded_points)
     except Exception:
         if created:
             destination.unlink(missing_ok=True)
         raise
+    digest = hashlib.sha256()
+    digest.update(header)
+    digest.update(encoded_points)
     return Sha256Digest(digest.hexdigest())
 
 

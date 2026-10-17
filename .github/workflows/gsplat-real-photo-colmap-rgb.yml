@@ -343,14 +343,21 @@ jobs:
           payload = preview.read_bytes()
           assert hashlib.sha256(payload).hexdigest() == digest.value
           header, separator, body = payload.partition(b"end_header\n")
-          assert separator and len(body) == model.num_points3d * struct.calcsize("<3f3B")
-          assert f"element vertex {model.num_points3d}".encode() in header
+          exported_points = int(
+              next(line.split()[2] for line in header.splitlines() if line.startswith(b"element vertex "))
+          )
+          assert 0 < exported_points <= model.num_points3d
+          assert len(body) == exported_points * struct.calcsize("<3f3B")
+          assert f"element vertex {exported_points}".encode() in header
+          assert f"comment wre_native_source_points {model.num_points3d}".encode() in header
           assert b"comment wre_metric_scale_known false" in header
           assert len(canonical.camera_solutions) == len(inputs)
           assert any(sum(item[3:]) > 0 for item in struct.iter_unpack("<3f3B", body))
           RECEIPT["reconstruction"] = {
               "registered_images": model.num_registered_images,
               "sparse_points": model.num_points3d,
+          "exported_rgb_points": exported_points,
+          "excluded_unobserved_points": model.num_points3d - exported_points,
               "source_sparse_identity_sha256": canonical.source_model_identity_sha256.value,
               "source_geometry_id": canonical.geometry_solution.geometry_solution_id.value,
               "scale_status": canonical.geometry_solution.scale_status.value,
