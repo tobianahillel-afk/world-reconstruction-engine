@@ -654,38 +654,42 @@ jobs:
           import math
           from PIL import ImageDraw
 
-          images_by_id = {
-              int(i): loaded.image(int(i)) for i in loaded.reg_image_ids()
-          }
-          links = {name: [] for name in sorted(views)}
-          track_count = 0
+          native_points = {}
           for point_id in sorted(int(i) for i in loaded.point3D_ids()):
-              point = loaded.point3D(point_id)
-              xyz = [float(v) for v in point.xyz]
+              xyz = [float(v) for v in loaded.point3D(point_id).xyz]
               original_xyz = [float(v) for v in raw_model.point3D(point_id).xyz]
               assert all(math.isfinite(v) for v in xyz)
               assert max(abs(a - b) for a, b in zip(xyz, original_xyz)) < 1e-8
-              seen = set()
-              for element in point.track.elements:
-                  image_id = int(element.image_id)
-                  index = int(element.point2D_idx)
-                  assert image_id in images_by_id and image_id not in seen
-                  registered = images_by_id[image_id]
-                  assert 0 <= index < int(registered.num_points2D())
+              native_points[point_id] = xyz
+
+          # The undistorter may rewrite native 3D tracks. Instead of relying
+          # on original track elements, use the actual *undistorted* image
+          # point2D -> point3D identities consumed by COLMAP/gsplat.
+          links = {name: [] for name in sorted(views)}
+          track_count = 0
+          views_by_point = {}
+          for image_id in sorted(int(i) for i in loaded.reg_image_ids()):
+              registered = loaded.image(image_id)
+              name = registered.name
+              assert name in links
+              for index in range(int(registered.num_points2D())):
                   point2d = registered.point2D(index)
-                  assert int(point2d.point3D_id) == point_id
-                  seen.add(image_id)
+                  point_id = int(point2d.point3D_id)
+                  if point_id not in native_points:
+                      continue  # Native feature without a recovered 3D point.
                   u, v = [float(value) for value in point2d.xy]
                   assert math.isfinite(u) and math.isfinite(v)
-                  name = registered.name
-                  if 0 <= u < views[name]["width"] and 0 <= v < views[name]["height"]:
-                      links[name].append({
-                          "point3d_id": point_id,
-                          "pixel_xy": [u, v],
-                          "native_xyz": xyz,
-                      })
-                      track_count += 1
-              assert len(seen) >= 2
+                  if not (0 <= u < views[name]["width"] and 0 <= v < views[name]["height"]):
+                      continue
+                  links[name].append({
+                      "point3d_id": point_id,
+                      "pixel_xy": [u, v],
+                      "native_xyz": native_points[point_id],
+                  })
+                  views_by_point.setdefault(point_id, set()).add(name)
+                  track_count += 1
+          assert len(views_by_point) >= 100
+          assert sum(len(images) >= 2 for images in views_by_point.values()) >= 100
 
           inspection = staged / "inspection"
           inspection.mkdir()
