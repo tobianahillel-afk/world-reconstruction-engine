@@ -2446,11 +2446,7 @@ def export_verified_gsplat_rgb_centers_glb(
             def target_index(sample_number: int) -> int:
                 if sample_number >= sampled:
                     return count
-                return (
-                    sample_number * (count - 1) // (sampled - 1)
-                    if sampled > 1
-                    else 0
-                )
+                return sample_number * (count - 1) // (sampled - 1) if sampled > 1 else 0
 
             low = [math.inf, math.inf, math.inf]
             high = [-math.inf, -math.inf, -math.inf]
@@ -2488,22 +2484,28 @@ def export_verified_gsplat_rgb_centers_glb(
             "scene": 0,
             "scenes": [{"nodes": [0]}],
             "nodes": [{"mesh": 0}],
-            "meshes": [{
-                "primitives": [{
-                    "attributes": {"POSITION": 0, "COLOR_0": 1},
-                    "material": 0,
-                    "mode": 0,
-                }]
-            }],
+            "meshes": [
+                {
+                    "primitives": [
+                        {
+                            "attributes": {"POSITION": 0, "COLOR_0": 1},
+                            "material": 0,
+                            "mode": 0,
+                        }
+                    ]
+                }
+            ],
             "materials": [{"extensions": {"KHR_materials_unlit": {}}}],
             "buffers": [{"byteLength": vertex_bytes}],
-            "bufferViews": [{
-                "buffer": 0,
-                "byteOffset": 0,
-                "byteLength": vertex_bytes,
-                "byteStride": 16,
-                "target": 34962,
-            }],
+            "bufferViews": [
+                {
+                    "buffer": 0,
+                    "byteOffset": 0,
+                    "byteLength": vertex_bytes,
+                    "byteStride": 16,
+                    "target": 34962,
+                }
+            ],
             "accessors": [
                 {
                     "bufferView": 0,
@@ -2531,9 +2533,9 @@ def export_verified_gsplat_rgb_centers_glb(
                 "requested_max_points": max_points,
             },
         }
-        document = json.dumps(
-            gltf, sort_keys=True, separators=(",", ":"), allow_nan=False
-        ).encode("utf-8")
+        document = json.dumps(gltf, sort_keys=True, separators=(",", ":"), allow_nan=False).encode(
+            "utf-8"
+        )
         document += b" " * (-len(document) % 4)
         total_length = 12 + 8 + len(document) + 8 + vertex_bytes
         digest = hashlib.sha256()
@@ -2573,7 +2575,6 @@ def export_verified_gsplat_rgb_centers_glb(
                 destination.unlink(missing_ok=True)
             raise
     return Sha256Digest(digest.hexdigest())
-
 
 
 def assemble_verified_gsplat_static_appearance_result(
@@ -2633,7 +2634,6 @@ def assemble_verified_gsplat_static_appearance_result(
         source_artifacts=ancestry,
     )
     return build_static_appearance_candidate_result(request, candidate, materialization)
-
 
 
 def _gsplat_rgb_preview_cli(argv: list[str] | None = None) -> int:
