@@ -5208,7 +5208,13 @@ jobs:
                 window.__wreExportedMeasurement=null;
                 document.getElementById('wre-measure-export').click();
               """)
-              assert json.loads(until("return window.__wreExportedMeasurement;")) == secondary_measure
+              secondary_export = json.loads(until("return window.__wreExportedMeasurement;"))
+              assert secondary_export["metric_scale_known"] is False
+              assert secondary_export["units"] == "model_units"
+              assert secondary_export["model_provenance"] == secondary_measure["model_provenance"]
+              assert secondary_export["point_a_xyz"] == secondary_a
+              assert secondary_export["point_b_xyz"] == secondary_b
+              assert abs(secondary_export["distance_model_units"] - secondary_units) < 1e-6
               second_reference_consistency_verified_in_chrome = True
 
               # The fourth interactive mode measures the 3D chord angle at
