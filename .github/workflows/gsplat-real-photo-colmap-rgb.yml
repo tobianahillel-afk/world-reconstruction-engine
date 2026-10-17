@@ -1112,6 +1112,7 @@ jobs:
           parser = Parser(str(dataset), factor=1, normalize=False, test_every=8)
           assert len(parser.image_names) == 16
           actual_cameras = []
+          source_camera_rig = []
           for index, image_name in enumerate(parser.image_names):
               camera_id = parser.camera_ids[index]
               K = np.asarray(parser.Ks_dict[camera_id])
@@ -1129,12 +1130,40 @@ jobs:
                   "fx": float(K[0, 0]),
                   "fy": float(K[1, 1]),
               })
+              source_camera_rig.append({
+                  "index": index,
+                  "image_name": image_name,
+                  "colmap_camera_id": int(camera_id),
+                  "image_width_px": int(width),
+                  "image_height_px": int(height),
+                  "intrinsics_K": K.tolist(),
+                  "camera_to_world_4x4": c2w.tolist(),
+              })
           assert len({cam["img_name"] for cam in actual_cameras}) == 16
           assert all(
               np.linalg.norm(
                   np.asarray(actual_cameras[0]["position"]) - np.asarray(cam["position"])
               ) > 1e-6 for cam in actual_cameras[1:]
           )
+          camera_rig_path = output / "wre-real-gaussian-source-camera-rig.json"
+          camera_rig_bytes = (
+              json.dumps({
+                  "schema": "wre.experimental.gsplat_real_photo_camera_rig.v1",
+                  "source_geometry_sha256": evidence["source_native_colmap_geometry_sha256"],
+                  "coordinate_convention": "pinned gsplat Parser.camtoworlds, normalize=False",
+                  "scale_metric_known": False,
+                  "temporal_4d_verified": False,
+                  "camera_count": len(source_camera_rig),
+                  "cameras": source_camera_rig,
+              }, sort_keys=True, indent=2, allow_nan=False) + "\n"
+          ).encode("utf-8")
+          camera_rig_path.write_bytes(camera_rig_bytes)
+          roundtrip = json.loads(camera_rig_path.read_bytes())
+          assert [row["index"] for row in roundtrip["cameras"]] == list(range(16))
+          assert [row["image_name"] for row in roundtrip["cameras"]] == [
+              cam["img_name"] for cam in actual_cameras
+          ]
+          camera_rig_sha256 = hashlib.sha256(camera_rig_bytes).hexdigest()
           view_matrix = np.linalg.inv(np.asarray(parser.camtoworlds[0])).T.reshape(-1).tolist()
 
           js = files["main.js"].decode("utf-8")
@@ -1210,6 +1239,8 @@ jobs:
               "real_splat_count": expected_points,
               "registered_camera_names": [cam["img_name"] for cam in actual_cameras],
               "registered_camera_count": len(actual_cameras),
+              "native_camera_rig_sha256": camera_rig_sha256,
+              "native_camera_rig_file": camera_rig_path.name,
               "training_steps": 0,
               "gpu_training_verified": False,
           }
@@ -1361,6 +1392,15 @@ jobs:
                   hashlib.sha256(path.read_bytes()).hexdigest()
                   for path in camera_images
               ]
+              camera_rig_path = dst / "wre-real-gaussian-source-camera-rig.json"
+              rig_bytes = camera_rig_path.read_bytes()
+              rig = json.loads(rig_bytes)
+              assert rig["camera_count"] == len(camera_images) == 16
+              assert [camera["index"] for camera in rig["cameras"]] == list(range(16))
+              rig_sha256 = hashlib.sha256(rig_bytes).hexdigest()
+              assert rig_sha256 == json.loads(
+                  (dst / "untrained-gaussian-provenance.json").read_text()
+              )["real_gaussian_webgl"]["native_camera_rig_sha256"]
               assert len(camera_images) == 16
               assert len(set(frame_hashes)) > 1, "Recovered camera views are identical"
               frames = []
@@ -1388,6 +1428,8 @@ jobs:
                       "source_camera_count": len(camera_images),
                       "frame_duration_ms": 700,
                       "frame_png_sha256": frame_hashes,
+                      "camera_rig_file": camera_rig_path.name,
+                      "camera_rig_sha256": rig_sha256,
                       "gif_sha256": digest,
                       "source": "real COLMAP recovered cameras via pinned offline WebGL",
                       "gaussians_trained": False,
