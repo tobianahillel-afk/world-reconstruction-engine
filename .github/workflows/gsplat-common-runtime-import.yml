@@ -617,6 +617,47 @@ jobs:
               photo_gif.seek(15)
               assert photo_gif.convert("RGB").tobytes() != first_photo_frame
 
+          # Standard MP4 preserves true-color frames without GIF palette limits.
+          # This uses the pinned OpenCV/FFmpeg codec, not another 3D renderer.
+          # MPEG-4 Part 2 encoding remains lossy; decoded RGB is not original.
+          photo_video_name = "wre-real-stereo-cpu-photo-flythrough.mp4"
+          photo_video_path = output / photo_video_name
+          # FFmpeg's mp4v encoder can silently crop odd frame dimensions.
+          # Keep the GIF unchanged; encode an explicit even-sized crop.
+          video_size = (gif_size[0] - gif_size[0] % 2, gif_size[1] - gif_size[1] % 2)
+          assert min(video_size) >= 2, "video frame is too small for MP4"
+          encoder = cv2.VideoWriter(
+              str(photo_video_path), cv2.VideoWriter_fourcc(*"mp4v"), 10.0, video_size
+          )
+          assert encoder.isOpened(), "pinned OpenCV MP4V writer unavailable"
+          try:
+              for frame in photo_frames:
+                  rgb = np.asarray(frame)
+                  assert rgb.shape == (gif_size[1], gif_size[0], 3)
+                  encoder.write(cv2.cvtColor(
+                      rgb[:video_size[1], :video_size[0]], cv2.COLOR_RGB2BGR
+                  ))
+          finally:
+              encoder.release()
+          assert 100 < photo_video_path.stat().st_size < 8_000_000
+          decoder = cv2.VideoCapture(str(photo_video_path))
+          assert decoder.isOpened(), "pinned OpenCV cannot decode generated MP4"
+          try:
+              decoded_frames = []
+              while True:
+                  ok, image = decoder.read()
+                  if not ok:
+                      break
+                  assert image.shape == (video_size[1], video_size[0], 3), (
+                      f"decoded MP4 frame has {image.shape}, expected {video_size}"
+                  )
+                  decoded_frames.append(image)
+          finally:
+              decoder.release()
+          assert len(decoded_frames) == len(photo_frames) == 16
+          assert not np.array_equal(decoded_frames[0], decoded_frames[-1])
+          assert any(np.count_nonzero(frame) for frame in decoded_frames)
+
           # Measure a real reprojection at the observed right-camera baseline.
           # The right photo ALSO contributed to StereoSGBM: this is in-sample
           # photometric consistency, NOT an independent held-out quality score.
@@ -704,6 +745,13 @@ jobs:
               "dense_cpu_warp_method": "CPU source-disparity forward projection with nearest-depth z-buffer",
               "dense_cpu_warp_occlusion_policy": "nearest positive depth; unobserved holes black",
               "photographic_stereo_flythrough_file": photo_gif_name,
+              "photographic_stereo_flythrough_mp4_file": photo_video_name,
+              "photographic_stereo_flythrough_mp4_codec": "MPEG-4 Part 2 mp4v; lossy",
+              "photographic_stereo_flythrough_mp4_width_height": list(video_size),
+              "photographic_stereo_flythrough_mp4_even_crop_from_gif": (
+                  list(gif_size) != list(video_size)
+              ),
+              "photographic_stereo_flythrough_mp4_decoded_frames": len(decoded_frames),
               "photographic_stereo_flythrough_frames": len(photo_frames),
               "photographic_stereo_flythrough_camera_shifts_arbitrary_units": [
                   float(value) for value in photo_shifts
@@ -839,7 +887,7 @@ jobs:
       # Run the actual-photo CPU reconstruction BEFORE expensive native CUDA
       # compilation. Keep the original photo pipeline in one place and make
       # its real 3D/preview outputs inspectable even while CUDA builds run.
-      - name: Stage fifteen real-photo CPU 3D, animated mesh, GLB and COLMAP outputs early
+      - name: Stage seventeen real-photo CPU 3D, mesh, GLB, MP4 and COLMAP outputs early
         shell: bash
         run: |
           set -euo pipefail
@@ -852,6 +900,7 @@ jobs:
             wre-real-stereo-cpu-textured.glb \
             wre-real-stereo-cpu-3d-flythrough.gif \
             wre-real-stereo-cpu-photo-flythrough.gif \
+            wre-real-stereo-cpu-photo-flythrough.mp4 \
             wre-real-stereo-cpu-textured.mtl \
             wre-real-stereo-cpu-texture.png \
             wre-real-stereo-cpu-disparity.png \
@@ -866,7 +915,7 @@ jobs:
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 16
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 17
 
       - name: Publish real-photo CPU 3D plus COLMAP before native CUDA builds
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -1862,6 +1911,7 @@ jobs:
             wre-real-stereo-cpu-textured.glb \
             wre-real-stereo-cpu-3d-flythrough.gif \
             wre-real-stereo-cpu-photo-flythrough.gif \
+            wre-real-stereo-cpu-photo-flythrough.mp4 \
             wre-real-stereo-cpu-textured.mtl \
             wre-real-stereo-cpu-texture.png \
             wre-real-stereo-cpu-disparity.png \
@@ -1874,8 +1924,8 @@ jobs:
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 32
-          echo "Staged all 32 real PLY/OBJ/GLB/GIF/MTL/PNG/NPY/JSON/ZIP files for artifact upload"
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 33
+          echo "Staged all 33 real PLY/OBJ/GLB/GIF/MP4/MTL/PNG/NPY/JSON/ZIP files for artifact upload"
 
       - name: Publish CPU COLMAP 3D preview and measured reprojection
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
