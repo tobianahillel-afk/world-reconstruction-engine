@@ -1975,9 +1975,9 @@ jobs:
               <button id="wre-angle-toggle" type="button" aria-pressed="false">Measure 3D chord angle</button>
               <button id="wre-measure-export" type="button" disabled
                 aria-label="Download relative surface measurement as JSON">Download measurement JSON</button>
-              <label for="wre-measure-import">Restore 3D distance:</label>
+              <label for="wre-measure-import">Restore distance or 3D path:</label>
               <input id="wre-measure-import" type="file" accept=".json,application/json"
-                aria-label="Restore previously exported two-point relative 3D measurement" disabled>
+                aria-label="Restore previously exported 3D distance or polyline JSON" disabled>
               <span id="wre-measure-import-status" role="status">3D measure restore available after load.</span>
               <button id="wre-view-export" type="button" disabled
                 aria-label="Save current 3D view as PNG">Save current 3D view PNG</button>
@@ -2018,7 +2018,7 @@ jobs:
                 cameraExport.disabled = false;
                 cameraImport.disabled = false;
                 measureImport.disabled = false;
-                measureImportStatus.textContent = "Restore an exported distance on this exact 3D model.";
+                measureImportStatus.textContent = "Restore an exported distance or path on this exact 3D model.";
                 cameraStatus.textContent = "Export or restore this model's relative 3D viewpoint.";
                 viewExportButton.disabled = false;
                 viewExportStatus.textContent = "Capture the current rendered view; nonmetric PNG.";
@@ -2175,6 +2175,62 @@ jobs:
                     throw new Error("3D measurement JSON must be between 20 bytes and 8 KB.");
                   }
                   const saved = JSON.parse(await file.text());
+                  measureImportStatus.textContent = "Checking saved 3D measurement.";
+                  if (saved.schema === "wre.relative_3d_surface_polyline.v1") {
+                    const points = saved.points_xyz, recorded = saved.segment_lengths_model_units;
+                    if (saved.metric_scale_known !== false || saved.units !== "model_units" ||
+                        saved.surface_geodesic !== false ||
+                        saved.model_source !== (chooser.value || "user-supplied-local-glb") ||
+                        saved.model_provenance !== beforeModel ||
+                        !Array.isArray(points) || points.length < 2 || points.length > 64 ||
+                        !points.every(p => Array.isArray(p) && p.length === 3 &&
+                          p.every(v => typeof v === "number" && Number.isFinite(v))) ||
+                        !Array.isArray(recorded) || recorded.length !== points.length - 1 ||
+                        !recorded.every(v => typeof v === "number" && Number.isFinite(v) && v >= 0) ||
+                        typeof saved.total_length_model_units !== "number" ||
+                        !Number.isFinite(saved.total_length_model_units) ||
+                        saved.total_length_model_units < 0 ||
+                        !scene.loaded || scene.getAttribute("src") !== beforeSource ||
+                        provenance.textContent.trim() !== beforeModel) {
+                      throw new Error("Saved path is invalid or belongs to another 3D model.");
+                    }
+                    const segments = [];
+                    for (let i = 1; i < points.length; i++) {
+                      segments.push(Math.hypot(...points[i].map((v, k) => v - points[i - 1][k])));
+                    }
+                    const total = segments.reduce((sum, length) => sum + length, 0);
+                    if (!Number.isFinite(total) ||
+                        segments.some((length, i) => !Number.isFinite(length) ||
+                          Math.abs(length - recorded[i]) > 1e-6 * Math.max(1, length)) ||
+                        Math.abs(total - saved.total_length_model_units) > 1e-6 * Math.max(1, total)) {
+                      throw new Error("Saved path length does not match its 3D points.");
+                    }
+                    measuring = false; tracing = false; areaMode = false; angleMode = false;
+                    for (const button of [measureButton, pathButton, areaButton, angleButton]) {
+                      button.setAttribute("aria-pressed", "false");
+                    }
+                    measureButton.textContent = "Measure surface distance";
+                    pathButton.textContent = "Trace 3D path";
+                    areaButton.textContent = "Estimate 3D polygon area";
+                    angleButton.textContent = "Measure 3D chord angle";
+                    resetMeasurement();
+                    measured = points.map(p => p.slice());
+                    measured.forEach((point, index) => placePickMarker(point, index + 1));
+                    completedMeasurement = {
+                      schema: saved.schema, model_source: saved.model_source,
+                      model_provenance: saved.model_provenance, metric_scale_known: false,
+                      units: "model_units", points_xyz: measured.map(p => p.slice()),
+                      segment_lengths_model_units: segments, total_length_model_units: total,
+                      surface_geodesic: false
+                    };
+                    exportButton.disabled = false;
+                    scene.removeAttribute("auto-rotate");
+                    measureResult.textContent = "Restored 3D polyline length: " +
+                      total.toFixed(5) + " model units (" + segments.length +
+                      " straight segments; NOT geodesic or meters).";
+                    measureImportStatus.textContent = "Saved 3D path restored on this model.";
+                    return;
+                  }
                   const a = saved.point_a_xyz, b = saved.point_b_xyz;
                   if (saved.schema !== "wre.relative_3d_surface_measurement.v1" ||
                       saved.metric_scale_known !== false || saved.units !== "model_units" ||
@@ -2226,7 +2282,7 @@ jobs:
                     actual.toFixed(5) + " model units (NOT meters).";
                   measureImportStatus.textContent = "Saved 3D distance restored on this model.";
                 } catch (error) {
-                  measureImportStatus.textContent = "3D distance restore refused: " + String(error);
+                  measureImportStatus.textContent = "3D measurement restore refused: " + String(error);
                 }
               });
               measureButton.addEventListener("click", () => {
