@@ -995,14 +995,11 @@ def _gsplat_output(
     return output, profile, ref
 
 
-
 def test_reference_runner_rejects_missing_photometry_before_any_cuda(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """A verified COLMAP source without V2L17 evidence must not reach CUDA."""
-    request, source, staged, output, profile, ref, producer = _retained_gsplat_fixture(
-        tmp_path
-    )
+    request, source, staged, output, profile, ref, producer = _retained_gsplat_fixture(tmp_path)
     python_executable = tmp_path / "external-python"
     python_executable.write_bytes(b"stub")
     previous = (output / profile.expected_ply_relative_path).read_bytes()
@@ -1087,6 +1084,7 @@ def test_reference_runner_accepts_real_two_view_capture_evidence_before_native_g
             timeout_seconds=30,
         )
     assert not output.exists()
+
 
 def test_external_gsplat_training_is_exposed_by_public_reconstruction_package() -> None:
     from wre import reconstruction
@@ -1618,6 +1616,207 @@ def test_external_gsplat_runner_rejects_failure_or_missing_output(
     assert (output / "wre-reference-training.log").exists()
 
 
+def test_real_colmap_sparse_coordinates_and_original_png_colors_export_to_ply(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Native file bytes and original PNG pixels become actual RGB 3D PLY bytes.
+
+    Native solver is substituted; this is NOT real photo SfM or a GPU run.
+    """
+    request, source = _two_view_parts(tmp_path)
+    features, environment = _native_feature_evidence(tmp_path)
+    monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_native_geometry",
+        lambda *_args, **_kwargs: _native_canonical(request, source),
+    )
+    module = cast(Any, _shared_track_fixture())
+    native = module.Reconstruction(source.native_model_root / "0")
+    original_point = native.point3D
+    native.point3D = lambda identifier: SimpleNamespace(
+        xyz=(1.0, 2.0, 3.0),
+        track=original_point(identifier).track,
+    )
+    preview = tmp_path / "observed-sparse.ply"
+    digest = baseline_module.export_verified_colmap_observed_rgb_ply(
+        request,
+        source,
+        features=features,
+        expected_environment=environment,
+        module=module,
+        preview_path=preview,
+    )
+    data = preview.read_bytes()
+    assert digest == _digest(data)
+    assert b"comment wre_metric_scale_known false\n" in data
+    assert colmap_sparse_model_content_identity(source.native_model_artifact).value.encode() in data
+    body = data.split(b"end_header\n", 1)[1]
+    assert body == struct.pack("<3f3B", 1.0, 2.0, 3.0, 64, 128, 192)
+    assert request.source_geometry.point_maps[0].positions_xyz == ((1.0, 2.0, 3.0),)
+
+
+def test_real_colmap_sparse_observations_export_viewable_rgb_glb(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Actual PNG colors + canonical 3D become valid GLB bytes, no CUDA trainer."""
+    request, source = _two_view_parts(tmp_path)
+    features, environment = _native_feature_evidence(tmp_path)
+    monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_native_geometry",
+        lambda *_args, **_kwargs: _native_canonical(request, source),
+    )
+    module = cast(Any, _shared_track_fixture())
+    native = module.Reconstruction(source.native_model_root / "0")
+    original_point = native.point3D
+    native.point3D = lambda identifier: SimpleNamespace(
+        xyz=(1.0, 2.0, 3.0),
+        track=original_point(identifier).track,
+    )
+    output = tmp_path / "observed-sparse.glb"
+    digest = baseline_module.export_verified_colmap_observed_rgb_glb(
+        request,
+        source,
+        features=features,
+        expected_environment=environment,
+        module=module,
+        preview_path=output,
+    )
+    glb = output.read_bytes()
+    assert digest == _digest(glb)
+    assert struct.unpack_from("<4sII", glb) == (b"glTF", 2, len(glb))
+    json_size, json_kind = struct.unpack_from("<I4s", glb, 12)
+    assert json_kind == b"JSON"
+    scene = json.loads(glb[20 : 20 + json_size])
+    assert scene["meshes"][0]["primitives"][0]["mode"] == 0
+    assert scene["accessors"][0]["count"] == 1
+    assert scene["extras"]["source_colmap_points"] == 1
+    assert scene["extras"]["shown_points"] == 1
+    assert scene["extras"]["metric_scale_known"] is False
+    native_source_hash = colmap_sparse_model_content_identity(source.native_model_artifact).value
+    assert scene["extras"]["source_colmap_model_sha256"] == native_source_hash
+    # A separate real PLY export of identical sources must match the lineage
+    # embedded in the portable GLB, even after the temporary PLY is deleted.
+    separate_ply = tmp_path / "same-observations.ply"
+    source_ply_digest = baseline_module.export_verified_colmap_observed_rgb_ply(
+        request,
+        source,
+        features=features,
+        expected_environment=environment,
+        module=module,
+        preview_path=separate_ply,
+    )
+    assert scene["extras"]["source_rgb_ply_sha256"] == source_ply_digest.value
+    assert glb[28 + json_size :] == struct.pack("<3f3B", 1.0, 2.0, 3.0, 64, 128, 192) + b"\x00"
+    summary = baseline_module.inspect_verified_gsplat_rgb_centers_glb(path=output)
+    assert summary["sha256"] == digest.value
+    assert summary["kind"] == "wre_colmap_observed_rgb_points"
+    assert summary["source_colmap_points"] == summary["shown_points"] == 1
+    assert summary["source_colmap_model_sha256"] == native_source_hash
+    assert summary["source_rgb_ply_sha256"] == source_ply_digest.value
+    assert summary["gpu_training_verified"] is False
+    command = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "wre.reconstruction.static_appearance_baseline",
+            "--inspect-glb",
+            str(output),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=25,
+        check=False,
+    )
+    assert command.returncode == 0, command.stderr
+    assert json.loads(command.stdout) == summary
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="new distinct"):
+        baseline_module.export_verified_colmap_observed_rgb_glb(
+            request,
+            source,
+            features=features,
+            expected_environment=environment,
+            module=module,
+            preview_path=output,
+        )
+
+
+def test_colmap_rgb_glb_refuses_source_ply_changed_between_two_passes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source = tmp_path / "observed-colmap.ply"
+    header = (
+        b"ply\nformat binary_little_endian 1.0\n"
+        + b"comment wre_colmap_source_sha256 "
+        + b"a" * 64
+        + b"\nelement vertex 1\nproperty float x\nproperty float y\nproperty float z\n"
+        + b"property uchar red\nproperty uchar green\nproperty uchar blue\nend_header\n"
+    )
+    first = header + struct.pack("<3f3B", 1.0, 2.0, 3.0, 64, 128, 192)
+    source.write_bytes(first)
+    output = tmp_path / "observed-colmap.glb"
+    actual_open = Path.open
+    reads = 0
+
+    def swap_between_passes(path: Path, mode: str = "r", *args: Any, **kwargs: Any) -> Any:
+        nonlocal reads
+        if path == source and mode == "rb":
+            reads += 1
+            if reads == 2:
+                # Same valid shape, point geometry and byte count, different RGB.
+                source.write_bytes(first[:-1] + b"\x03")
+        return actual_open(path, mode, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", swap_between_passes)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="PLY bytes changed"):
+        baseline_module._write_verified_xyz_rgb_points_glb(
+            rgb=source, preview_path=output, max_points=1, observed_colmap=True
+        )
+    assert reads == 2
+    assert not output.exists()
+
+
+def test_colmap_sparse_observed_preview_rejects_tampered_photo_and_wrong_geometry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    request, source = _two_view_parts(tmp_path)
+    features, environment = _native_feature_evidence(tmp_path)
+    monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_native_geometry",
+        lambda *_args, **_kwargs: _native_canonical(request, source),
+    )
+    module = cast(Any, _shared_track_fixture())
+    native = module.Reconstruction(source.native_model_root / "0")
+    original_point = native.point3D
+    native.point3D = lambda identifier: SimpleNamespace(
+        xyz=(99.0, 2.0, 3.0),
+        track=original_point(identifier).track,
+    )
+    preview = tmp_path / "not-produced.ply"
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="canonical WRE geometry"):
+        baseline_module.export_verified_colmap_observed_rgb_ply(
+            request,
+            source,
+            features=features,
+            expected_environment=environment,
+            module=module,
+            preview_path=preview,
+        )
+    assert not preview.exists()
+    source.images[0].source_path.write_bytes(b"modified PNG source")
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="SHA-256"):
+        baseline_module.export_verified_colmap_observed_rgb_ply(
+            request,
+            source,
+            features=features,
+            expected_environment=environment,
+            module=module,
+            preview_path=preview,
+        )
+    assert not preview.exists()
+
+
 def test_exported_gsplat_glb_can_be_reopened_and_inspected_offline(tmp_path: Path) -> None:
     """A real GLB created by the CPU exporter is independently readable by WRE."""
     original = _gsplat_ply(vertices=4)
@@ -1637,6 +1836,8 @@ def test_exported_gsplat_glb_can_be_reopened_and_inspected_offline(tmp_path: Pat
     assert summary["shown_centers"] == 3
     assert summary["source_gaussians"] == 4
     assert summary["kind"] == "wre_gsplat_rgb_centers_only"
+    assert isinstance(summary["source_rgb_ply_sha256"], str)
+    assert len(summary["source_rgb_ply_sha256"]) == 64
     assert summary["gpu_training_verified"] is False
     assert summary["metric_scale_known"] is False
     command = subprocess.run(

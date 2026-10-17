@@ -2346,6 +2346,164 @@ def materialize_verified_gsplat_ply(
     )
 
 
+def export_verified_colmap_observed_rgb_ply(
+    request: StaticAppearanceCandidateRequest,
+    source: GsplatStaticAppearancePreflightSource,
+    *,
+    features: ColmapFeatureExtractionResult,
+    expected_environment: ColmapEnvironmentIdentity,
+    module: object,
+    preview_path: Path,
+) -> Sha256Digest:
+    """Export observed, *untrained* COLMAP sparse XYZ with true source PNG colors.
+
+    Uses the native audited camera/point model, registered 2D feature tracks
+    and exactly verified sRGB source pixels. The color of each reconstructed
+    point is the first registered view by name, NOT calibrated radiance.
+    No Gaussian fitting, synthetic points, world alignment or GPU is involved.
+    """
+
+    canonical = verify_gsplat_static_appearance_native_geometry(
+        request,
+        source,
+        features=features,
+        expected_environment=expected_environment,
+        module=module,
+    )
+    point_count = len(canonical.point_map.positions_xyz)
+    if not 1 <= point_count <= 2_000_000:
+        raise GsplatStaticAppearancePreflightError(
+            "COLMAP RGB preview supports 1 to 2000000 source sparse points"
+        )
+    if (
+        not isinstance(preview_path, Path)
+        or not preview_path.is_absolute()
+        or preview_path.suffix.lower() != ".ply"
+    ):
+        raise GsplatStaticAppearancePreflightError(
+            "COLMAP observed preview requires a new absolute .ply file"
+        )
+    parent = _safe_root(preview_path.parent, "COLMAP observed preview parent")
+    destination = parent / preview_path.name
+    if destination.exists() or destination.is_symlink():
+        raise GsplatStaticAppearancePreflightError(
+            "COLMAP observed preview must not replace an existing file"
+        )
+
+    root = _safe_root(source.image_root, "COLMAP source image root")
+    pixels_by_name: dict[str, tuple[int, int, bytes]] = {}
+    for item in source.images:
+        path = root / item.image_name
+        if path.is_symlink() or item.source_path.is_symlink():
+            raise GsplatStaticAppearancePreflightError("COLMAP source PNG is a symlink")
+        if path.resolve(strict=True) != item.source_path.resolve(strict=True):
+            raise GsplatStaticAppearancePreflightError("COLMAP source PNG identity changed")
+        payload = path.read_bytes()
+        if (
+            len(payload) != item.observation.asset.byte_length
+            or hashlib.sha256(payload).hexdigest() != item.observation.asset.sha256.value
+        ):
+            raise GsplatStaticAppearancePreflightError("COLMAP source PNG SHA-256 changed")
+        pixels_by_name[item.image_name] = _decode_audited_gsplat_png_rgb8(payload)
+
+    native_path = _verified_native_model_path(
+        source.native_model_root, source.native_model_artifact
+    )
+    native = cast(Any, module).Reconstruction(native_path)
+    if not bool(native.is_valid()):
+        raise GsplatStaticAppearancePreflightError("COLMAP observed sparse model is invalid")
+    registered = tuple(sorted(int(i) for i in native.reg_image_ids()))
+    native_images = {i: native.image(i) for i in registered}
+    if len(registered) != len(pixels_by_name) or {
+        image.name for image in native_images.values()
+    } != set(pixels_by_name):
+        raise GsplatStaticAppearancePreflightError(
+            "COLMAP observed registered images do not match original PNGs"
+        )
+    point_ids = tuple(sorted(int(i) for i in native.point3D_ids()))
+    if len(point_ids) != point_count:
+        raise GsplatStaticAppearancePreflightError("COLMAP observed point count changed")
+
+    header = (
+        "ply\nformat binary_little_endian 1.0\n"
+        f"comment wre_colmap_source_sha256 {canonical.source_model_identity_sha256.value}\n"
+        "comment wre_metric_scale_known false\n"
+        "comment wre_color_source original_srgb8_feature_observation\n"
+        f"element vertex {point_count}\n"
+        "property float x\nproperty float y\nproperty float z\n"
+        "property uchar red\nproperty uchar green\nproperty uchar blue\nend_header\n"
+    ).encode("ascii")
+    digest = hashlib.sha256()
+    created = False
+    try:
+        with destination.open("xb") as output:
+            created = True
+            output.write(header)
+            digest.update(header)
+            for position, point_id in enumerate(point_ids):
+                point = native.point3D(point_id)
+                xyz = tuple(float(v) for v in point.xyz)
+                if len(xyz) != 3 or any(not math.isfinite(v) for v in xyz):
+                    raise GsplatStaticAppearancePreflightError(
+                        "COLMAP sparse point has invalid XYZ"
+                    )
+                if xyz != canonical.point_map.positions_xyz[position]:
+                    raise GsplatStaticAppearancePreflightError(
+                        "COLMAP sparse point differs from canonical WRE geometry"
+                    )
+                sampled: list[tuple[str, int, int, int]] = []
+                for track in point.track.elements:
+                    image_id = int(track.image_id)
+                    if image_id not in native_images:
+                        raise GsplatStaticAppearancePreflightError(
+                            "COLMAP sparse point references an unknown image"
+                        )
+                    image = native_images[image_id]
+                    keypoint_id = int(track.point2D_idx)
+                    if not 0 <= keypoint_id < int(image.num_points2D()):
+                        raise GsplatStaticAppearancePreflightError(
+                            "COLMAP sparse point has invalid image feature index"
+                        )
+                    feature = image.point2D(keypoint_id)
+                    if int(feature.point3D_id) != point_id:
+                        raise GsplatStaticAppearancePreflightError(
+                            "COLMAP sparse point track is not reciprocal"
+                        )
+                    width, height, pixels = pixels_by_name[image.name]
+                    u, v = (float(value) for value in feature.xy)
+                    if not math.isfinite(u) or not math.isfinite(v):
+                        raise GsplatStaticAppearancePreflightError(
+                            "COLMAP point observation has invalid pixel coordinates"
+                        )
+                    x, y = math.floor(u), math.floor(v)
+                    if not (0 <= x < width and 0 <= y < height):
+                        raise GsplatStaticAppearancePreflightError(
+                            "COLMAP point observation is outside the original PNG"
+                        )
+                    offset = (y * width + x) * 3
+                    sampled.append(
+                        (image.name, pixels[offset], pixels[offset + 1], pixels[offset + 2])
+                    )
+                if len(sampled) < 2 or len({item[0] for item in sampled}) != len(sampled):
+                    raise GsplatStaticAppearancePreflightError(
+                        "COLMAP point lacks distinct reciprocal multiview observations"
+                    )
+                _, red, green, blue = min(sampled)
+                try:
+                    record = struct.pack("<3f3B", *xyz, red, green, blue)
+                except OverflowError as exc:
+                    raise GsplatStaticAppearancePreflightError(
+                        "COLMAP point XYZ cannot be represented by PLY float32"
+                    ) from exc
+                output.write(record)
+                digest.update(record)
+    except Exception:
+        if created:
+            destination.unlink(missing_ok=True)
+        raise
+    return Sha256Digest(digest.hexdigest())
+
+
 def export_verified_gsplat_rgb_centers_ply(
     *,
     artifact_ref: ArtifactRef,
@@ -2448,6 +2606,223 @@ def export_verified_gsplat_rgb_centers_ply(
     return Sha256Digest(output_hash.hexdigest())
 
 
+def _write_verified_xyz_rgb_points_glb(
+    *, rgb: Path, preview_path: Path, max_points: int, observed_colmap: bool
+) -> Sha256Digest:
+    """Reuse WRE's bounded CPU POINTS glTF 2.0 writer for verified source RGB PLYs."""
+    if not isinstance(preview_path, Path) or not preview_path.is_absolute():
+        raise TypeError("WRE RGB GLB preview requires an absolute pathlib.Path")
+    parent = _safe_root(preview_path.parent, "WRE RGB GLB preview parent")
+    destination = parent / preview_path.name
+    if destination.suffix.lower() != ".glb" or destination.exists() or destination.is_symlink():
+        raise GsplatStaticAppearancePreflightError(
+            "WRE RGB GLB preview must use a new distinct .glb file"
+        )
+    if type(max_points) is not int or not 1 <= max_points <= 2_000_000:
+        raise ValueError("WRE GLB max_points must be an integer from 1 to 2000000")
+
+    with rgb.open("rb") as source:
+        header = bytearray()
+        while not header.endswith(b"end_header\n"):
+            line = source.readline(_MAX_GSPLAT_PLY_HEADER_BYTES + 1 - len(header))
+            if not line or len(header) + len(line) > _MAX_GSPLAT_PLY_HEADER_BYTES:
+                raise GsplatStaticAppearancePreflightError(
+                    "gsplat RGB centers preview has an invalid PLY header"
+                )
+            header.extend(line)
+        try:
+            vertex_lines = [
+                line for line in header.splitlines() if line.startswith(b"element vertex ")
+            ]
+            if len(vertex_lines) != 1:
+                raise ValueError("missing or duplicate vertex declaration")
+            count = int(vertex_lines[0].split()[2])
+        except (IndexError, ValueError) as exc:
+            raise GsplatStaticAppearancePreflightError(
+                "gsplat RGB centers preview lacks a vertex count"
+            ) from exc
+        sampled = min(count, max_points)
+        source_colmap_sha256: str | None = None
+        if observed_colmap:
+            source_hash_lines = [
+                line.split(b" ", 2)[2]
+                for line in header.splitlines()
+                if line.startswith(b"comment wre_colmap_source_sha256 ")
+            ]
+            if len(source_hash_lines) != 1:
+                raise GsplatStaticAppearancePreflightError(
+                    "COLMAP RGB preview lacks one native sparse model source identity"
+                )
+            source_colmap_sha256 = source_hash_lines[0].decode("ascii", errors="replace")
+            if len(source_colmap_sha256) != 64 or any(
+                char not in "0123456789abcdef" for char in source_colmap_sha256
+            ):
+                raise GsplatStaticAppearancePreflightError(
+                    "COLMAP RGB preview has an invalid native sparse model source identity"
+                )
+        source_digest = hashlib.sha256(header)
+
+        # Fill the requested point budget rather than dropping almost
+        # half the cloud when count exceeds the limit by only one point.
+        # The integer mapping is deterministic and retains both endpoints.
+        def target_index(sample_number: int) -> int:
+            if sample_number >= sampled:
+                return count
+            return sample_number * (count - 1) // (sampled - 1) if sampled > 1 else 0
+
+        low = [math.inf, math.inf, math.inf]
+        high = [-math.inf, -math.inf, -math.inf]
+        picked = 0
+        next_index = target_index(picked)
+        for index in range(count):
+            record = source.read(15)
+            if len(record) != 15:
+                raise GsplatStaticAppearancePreflightError(
+                    "gsplat RGB centers preview was truncated"
+                )
+            source_digest.update(record)
+            if index == next_index:
+                coords = struct.unpack_from("<3f", record)
+                for axis in range(3):
+                    low[axis] = min(low[axis], coords[axis])
+                    high[axis] = max(high[axis], coords[axis])
+                picked += 1
+                next_index = target_index(picked)
+        if source.read(1):
+            raise GsplatStaticAppearancePreflightError(
+                "gsplat RGB centers preview has trailing data"
+            )
+        if not sampled:
+            raise GsplatStaticAppearancePreflightError(
+                "gsplat RGB centers preview must contain points"
+            )
+
+    vertex_bytes = sampled * 16
+    gltf = {
+        "asset": {
+            "version": "2.0",
+            "generator": "WRE gsplat RGB Gaussian centers — not radiance",
+        },
+        "extensionsUsed": ["KHR_materials_unlit"],
+        "scene": 0,
+        "scenes": [{"nodes": [0]}],
+        "nodes": [{"mesh": 0}],
+        "meshes": [
+            {
+                "primitives": [
+                    {
+                        "attributes": {"POSITION": 0, "COLOR_0": 1},
+                        "material": 0,
+                        "mode": 0,
+                    }
+                ]
+            }
+        ],
+        "materials": [{"extensions": {"KHR_materials_unlit": {}}}],
+        "buffers": [{"byteLength": vertex_bytes}],
+        "bufferViews": [
+            {
+                "buffer": 0,
+                "byteOffset": 0,
+                "byteLength": vertex_bytes,
+                "byteStride": 16,
+                "target": 34962,
+            }
+        ],
+        "accessors": [
+            {
+                "bufferView": 0,
+                "componentType": 5126,
+                "count": sampled,
+                "type": "VEC3",
+                "min": low,
+                "max": high,
+            },
+            {
+                "bufferView": 0,
+                "byteOffset": 12,
+                "componentType": 5121,
+                "normalized": True,
+                "count": sampled,
+                "type": "VEC3",
+            },
+        ],
+        "extras": {
+            "wre_visualization": "Gaussian centers only, not Gaussian splatting",
+            "metric_scale_known": False,
+            "source_gaussians": count,
+            "shown_centers": sampled,
+            "sampling": "even-endpoints",
+            "requested_max_points": max_points,
+            "source_rgb_ply_sha256": source_digest.hexdigest(),
+        },
+    }
+    if observed_colmap:
+        gltf["asset"]["generator"] = "WRE observed COLMAP sparse RGB points — not Gaussian training"
+        gltf["extras"] = {
+            "wre_visualization": "COLMAP observed sparse RGB points, not Gaussian training",
+            "metric_scale_known": False,
+            "source_colmap_points": count,
+            "source_colmap_model_sha256": source_colmap_sha256,
+            "source_rgb_ply_sha256": source_digest.hexdigest(),
+            "shown_points": sampled,
+            "sampling": "even-endpoints",
+            "requested_max_points": max_points,
+        }
+    document = json.dumps(gltf, sort_keys=True, separators=(",", ":"), allow_nan=False).encode(
+        "utf-8"
+    )
+    document += b" " * (-len(document) % 4)
+    total_length = 12 + 8 + len(document) + 8 + vertex_bytes
+    digest = hashlib.sha256()
+    created = False
+    try:
+        with rgb.open("rb") as source, destination.open("xb") as output:
+            created = True
+            second_header = source.read(len(header))
+            if second_header != header:
+                raise GsplatStaticAppearancePreflightError(
+                    "WRE RGB source PLY header changed before GLB export"
+                )
+            verified_source_digest = hashlib.sha256(second_header)
+            for chunk in (
+                struct.pack("<4sII", b"glTF", 2, total_length),
+                struct.pack("<I4s", len(document), b"JSON"),
+                document,
+                struct.pack("<I4s", vertex_bytes, b"BIN\x00"),
+            ):
+                output.write(chunk)
+                digest.update(chunk)
+            picked = 0
+            next_index = target_index(picked)
+            for index in range(count):
+                record = source.read(15)
+                if len(record) != 15:
+                    raise GsplatStaticAppearancePreflightError(
+                        "gsplat RGB centers changed during GLB export"
+                    )
+                verified_source_digest.update(record)
+                if index == next_index:
+                    vertex = record + b"\x00"
+                    output.write(vertex)
+                    digest.update(vertex)
+                    picked += 1
+                    next_index = target_index(picked)
+            if source.read(1):
+                raise GsplatStaticAppearancePreflightError(
+                    "gsplat RGB centers gained data during GLB export"
+                )
+            if verified_source_digest.digest() != source_digest.digest():
+                raise GsplatStaticAppearancePreflightError(
+                    "WRE RGB source PLY bytes changed before GLB export finished"
+                )
+    except Exception:
+        if created:
+            destination.unlink(missing_ok=True)
+        raise
+    return Sha256Digest(digest.hexdigest())
+
+
 def export_verified_gsplat_rgb_centers_glb(
     *,
     artifact_ref: ArtifactRef,
@@ -2456,26 +2831,10 @@ def export_verified_gsplat_rgb_centers_glb(
     preview_path: Path,
     max_points: int = 2_000_000,
 ) -> Sha256Digest:
-    """Create a portable glTF POINTS view of audited Gaussian RGB centers.
-
-    Reuse the pinned Gaussian-to-RGB PLY converter; GLB uses interleaved
-    POSITION float32 and normalized COLOR_0 uint8 with an unlit material.
-    Deterministically sample very large clouds for interactive inspection.
-    This is NOT Gaussian radiance rendering, physical geometry, or metric 3D.
-    """
-
+    """Export verified Gaussian SH0 centers as portable CPU RGB glTF POINTS."""
     if not isinstance(preview_path, Path) or not preview_path.is_absolute():
         raise TypeError("gsplat GLB preview requires an absolute pathlib.Path")
     parent = _safe_root(preview_path.parent, "gsplat GLB preview parent")
-    destination = parent / preview_path.name
-    if destination.suffix.lower() != ".glb" or destination.exists():
-        raise GsplatStaticAppearancePreflightError(
-            "gsplat GLB preview must use a new distinct .glb file"
-        )
-
-    if type(max_points) is not int or not 1 <= max_points <= 2_000_000:
-        raise ValueError("gsplat GLB max_points must be an integer from 1 to 2000000")
-    # At most 32 MB of interleaved vertex attributes, smaller on request.
     with tempfile.TemporaryDirectory(prefix="wre-gsplat-rgb-", dir=parent) as staging:
         rgb = Path(staging) / "centers-rgb.ply"
         export_verified_gsplat_rgb_centers_ply(
@@ -2484,158 +2843,38 @@ def export_verified_gsplat_rgb_centers_glb(
             profile=profile,
             preview_path=rgb,
         )
-        with rgb.open("rb") as source:
-            header = bytearray()
-            while not header.endswith(b"end_header\n"):
-                line = source.readline(_MAX_GSPLAT_PLY_HEADER_BYTES + 1 - len(header))
-                if not line or len(header) + len(line) > _MAX_GSPLAT_PLY_HEADER_BYTES:
-                    raise GsplatStaticAppearancePreflightError(
-                        "gsplat RGB centers preview has an invalid PLY header"
-                    )
-                header.extend(line)
-            try:
-                count = int(header.splitlines()[2].split()[2])
-            except (IndexError, ValueError) as exc:
-                raise GsplatStaticAppearancePreflightError(
-                    "gsplat RGB centers preview lacks a vertex count"
-                ) from exc
-            sampled = min(count, max_points)
-
-            # Fill the requested point budget rather than dropping almost
-            # half the cloud when count exceeds the limit by only one point.
-            # The integer mapping is deterministic and retains both endpoints.
-            def target_index(sample_number: int) -> int:
-                if sample_number >= sampled:
-                    return count
-                return sample_number * (count - 1) // (sampled - 1) if sampled > 1 else 0
-
-            low = [math.inf, math.inf, math.inf]
-            high = [-math.inf, -math.inf, -math.inf]
-            picked = 0
-            next_index = target_index(picked)
-            for index in range(count):
-                record = source.read(15)
-                if len(record) != 15:
-                    raise GsplatStaticAppearancePreflightError(
-                        "gsplat RGB centers preview was truncated"
-                    )
-                if index == next_index:
-                    coords = struct.unpack_from("<3f", record)
-                    for axis in range(3):
-                        low[axis] = min(low[axis], coords[axis])
-                        high[axis] = max(high[axis], coords[axis])
-                    picked += 1
-                    next_index = target_index(picked)
-            if source.read(1):
-                raise GsplatStaticAppearancePreflightError(
-                    "gsplat RGB centers preview has trailing data"
-                )
-            if not sampled:
-                raise GsplatStaticAppearancePreflightError(
-                    "gsplat RGB centers preview must contain points"
-                )
-
-        vertex_bytes = sampled * 16
-        gltf = {
-            "asset": {
-                "version": "2.0",
-                "generator": "WRE gsplat RGB Gaussian centers — not radiance",
-            },
-            "extensionsUsed": ["KHR_materials_unlit"],
-            "scene": 0,
-            "scenes": [{"nodes": [0]}],
-            "nodes": [{"mesh": 0}],
-            "meshes": [
-                {
-                    "primitives": [
-                        {
-                            "attributes": {"POSITION": 0, "COLOR_0": 1},
-                            "material": 0,
-                            "mode": 0,
-                        }
-                    ]
-                }
-            ],
-            "materials": [{"extensions": {"KHR_materials_unlit": {}}}],
-            "buffers": [{"byteLength": vertex_bytes}],
-            "bufferViews": [
-                {
-                    "buffer": 0,
-                    "byteOffset": 0,
-                    "byteLength": vertex_bytes,
-                    "byteStride": 16,
-                    "target": 34962,
-                }
-            ],
-            "accessors": [
-                {
-                    "bufferView": 0,
-                    "componentType": 5126,
-                    "count": sampled,
-                    "type": "VEC3",
-                    "min": low,
-                    "max": high,
-                },
-                {
-                    "bufferView": 0,
-                    "byteOffset": 12,
-                    "componentType": 5121,
-                    "normalized": True,
-                    "count": sampled,
-                    "type": "VEC3",
-                },
-            ],
-            "extras": {
-                "wre_visualization": "Gaussian centers only, not Gaussian splatting",
-                "metric_scale_known": False,
-                "source_gaussians": count,
-                "shown_centers": sampled,
-                "sampling": "even-endpoints",
-                "requested_max_points": max_points,
-            },
-        }
-        document = json.dumps(gltf, sort_keys=True, separators=(",", ":"), allow_nan=False).encode(
-            "utf-8"
+        return _write_verified_xyz_rgb_points_glb(
+            rgb=rgb, preview_path=preview_path, max_points=max_points, observed_colmap=False
         )
-        document += b" " * (-len(document) % 4)
-        total_length = 12 + 8 + len(document) + 8 + vertex_bytes
-        digest = hashlib.sha256()
-        created = False
-        try:
-            with rgb.open("rb") as source, destination.open("xb") as output:
-                created = True
-                source.seek(len(header))
-                for chunk in (
-                    struct.pack("<4sII", b"glTF", 2, total_length),
-                    struct.pack("<I4s", len(document), b"JSON"),
-                    document,
-                    struct.pack("<I4s", vertex_bytes, b"BIN\x00"),
-                ):
-                    output.write(chunk)
-                    digest.update(chunk)
-                picked = 0
-                next_index = target_index(picked)
-                for index in range(count):
-                    record = source.read(15)
-                    if len(record) != 15:
-                        raise GsplatStaticAppearancePreflightError(
-                            "gsplat RGB centers changed during GLB export"
-                        )
-                    if index == next_index:
-                        vertex = record + b"\x00"
-                        output.write(vertex)
-                        digest.update(vertex)
-                        picked += 1
-                        next_index = target_index(picked)
-                if source.read(1):
-                    raise GsplatStaticAppearancePreflightError(
-                        "gsplat RGB centers gained data during GLB export"
-                    )
-        except Exception:
-            if created:
-                destination.unlink(missing_ok=True)
-            raise
-    return Sha256Digest(digest.hexdigest())
+
+
+def export_verified_colmap_observed_rgb_glb(
+    request: StaticAppearanceCandidateRequest,
+    source: GsplatStaticAppearancePreflightSource,
+    *,
+    features: ColmapFeatureExtractionResult,
+    expected_environment: ColmapEnvironmentIdentity,
+    module: object,
+    preview_path: Path,
+    max_points: int = 2_000_000,
+) -> Sha256Digest:
+    """Export observed native COLMAP XYZ/source PNG RGB as a portable glTF POINTS."""
+    if not isinstance(preview_path, Path) or not preview_path.is_absolute():
+        raise TypeError("COLMAP observed GLB requires an absolute pathlib.Path")
+    parent = _safe_root(preview_path.parent, "COLMAP observed GLB parent")
+    with tempfile.TemporaryDirectory(prefix="wre-colmap-rgb-", dir=parent) as staging:
+        rgb = Path(staging) / "observed-rgb.ply"
+        export_verified_colmap_observed_rgb_ply(
+            request,
+            source,
+            features=features,
+            expected_environment=expected_environment,
+            module=module,
+            preview_path=rgb,
+        )
+        return _write_verified_xyz_rgb_points_glb(
+            rgb=rgb, preview_path=preview_path, max_points=max_points, observed_colmap=True
+        )
 
 
 def inspect_verified_gsplat_rgb_centers_glb(*, path: Path) -> dict[str, object]:
@@ -2676,6 +2915,7 @@ def inspect_verified_gsplat_rgb_centers_glb(*, path: Path) -> dict[str, object]:
         ) from exc
     extras: dict[str, Any] = {}
     count = 0
+    observed_colmap = False
     bounds_low: list[float] = []
     bounds_high: list[float] = []
     try:
@@ -2686,15 +2926,37 @@ def inspect_verified_gsplat_rgb_centers_glb(*, path: Path) -> dict[str, object]:
         bounds_high = scene["accessors"][0]["max"]
         preview_view = scene["bufferViews"][0]
         primitive = scene["meshes"][0]["primitives"][0]
+        observed_colmap = (
+            extras["wre_visualization"]
+            == "COLMAP observed sparse RGB points, not Gaussian training"
+        )
+        shown_key = "shown_points" if observed_colmap else "shown_centers"
+        source_key = "source_colmap_points" if observed_colmap else "source_gaussians"
         expected = (
             isinstance(count, int)
             and not isinstance(count, bool)
             and 1 <= count <= 2_000_000
             and scene["asset"]["version"] == "2.0"
-            and extras["wre_visualization"] == "Gaussian centers only, not Gaussian splatting"
-            and extras["shown_centers"] == count
-            and isinstance(extras["source_gaussians"], int)
-            and extras["source_gaussians"] >= count
+            and extras["wre_visualization"]
+            in (
+                "Gaussian centers only, not Gaussian splatting",
+                "COLMAP observed sparse RGB points, not Gaussian training",
+            )
+            and extras[shown_key] == count
+            and isinstance(extras[source_key], int)
+            and not isinstance(extras[source_key], bool)
+            and extras[source_key] >= count
+            and isinstance(extras["source_rgb_ply_sha256"], str)
+            and len(extras["source_rgb_ply_sha256"]) == 64
+            and all(c in "0123456789abcdef" for c in extras["source_rgb_ply_sha256"])
+            and (
+                not observed_colmap
+                or (
+                    isinstance(extras["source_colmap_model_sha256"], str)
+                    and len(extras["source_colmap_model_sha256"]) == 64
+                    and all(c in "0123456789abcdef" for c in extras["source_colmap_model_sha256"])
+                )
+            )
             and primitive["mode"] == 0
             and primitive["attributes"] == {"POSITION": 0, "COLOR_0": 1}
             and scene["accessors"][0]["type"] == "VEC3"
@@ -2731,16 +2993,25 @@ def inspect_verified_gsplat_rgb_centers_glb(*, path: Path) -> dict[str, object]:
         raise GsplatStaticAppearancePreflightError(
             "WRE RGB-center GLB bounds disagree with the actual point positions"
         )
-    return {
-        "kind": "wre_gsplat_rgb_centers_only",
+    result: dict[str, object] = {
+        "kind": (
+            "wre_colmap_observed_rgb_points" if observed_colmap else "wre_gsplat_rgb_centers_only"
+        ),
         "sha256": hashlib.sha256(payload).hexdigest(),
-        "source_gaussians": extras["source_gaussians"],
-        "shown_centers": count,
         "bounds_min": low,
         "bounds_max": high,
         "metric_scale_known": False,
         "gpu_training_verified": False,
+        "source_rgb_ply_sha256": extras["source_rgb_ply_sha256"],
     }
+    if observed_colmap:
+        result["source_colmap_model_sha256"] = extras["source_colmap_model_sha256"]
+        result["source_colmap_points"] = extras["source_colmap_points"]
+        result["shown_points"] = count
+    else:
+        result["source_gaussians"] = extras["source_gaussians"]
+        result["shown_centers"] = count
+    return result
 
 
 def assemble_verified_gsplat_static_appearance_result(
@@ -2894,6 +3165,7 @@ __all__ = [
     "GsplatStaticAppearanceTrainingProfile",
     "GsplatStaticAppearanceVerifiedImage",
     "assemble_verified_gsplat_static_appearance_result",
+    "export_verified_colmap_observed_rgb_ply",
     "export_verified_gsplat_rgb_centers_glb",
     "export_verified_gsplat_rgb_centers_ply",
     "inspect_gsplat_static_appearance_shared_track_pixels",
