@@ -3963,12 +3963,18 @@ jobs:
                 return document.getElementById('wre-camera-status')
                   .textContent.includes('viewpoint restored');
               """)
-              restored_camera = js("""
+              # jumpCameraToGoal applies at the next rendered frame, not
+              # synchronously at the input event dispatch.
+              restored_camera = until("""
                 const scene=document.getElementById('wre-scene');
                 const orbit=scene.getCameraOrbit();
                 const target=scene.getCameraTarget();
-                return [orbit.theta,orbit.phi,orbit.radius,target.x,target.y,target.z,
-                        scene.getFieldOfView()];
+                const actual=[orbit.theta,orbit.phi,orbit.radius,target.x,target.y,target.z,
+                              scene.getFieldOfView()];
+                const saved=window.__wreCameraBookmark;
+                const expected=[...saved.orbit_radians,saved.orbit_radius_model_units,
+                                ...saved.target_model_units,saved.field_of_view_degrees];
+                return actual.every((v,i)=>Math.abs(v-expected[i])<0.1) ? actual : null;
               """)
               expected_camera = (
                   saved_camera["orbit_radians"]
