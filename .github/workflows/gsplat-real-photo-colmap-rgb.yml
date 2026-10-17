@@ -1031,6 +1031,302 @@ jobs:
           print("REAL OBSERVED GAUSSIAN INITIALIZATION PASS:", count, "points; PLY", len(ply_data), "bytes; splat", len(splat_data), "bytes; GPU training 0")
           PY
 
+      - name: Bundle pinned MIT Gaussian WebGL renderer around ACTUAL untrained real-photo splats
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/wre-gsplat-parser-venv/bin/python" - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          import urllib.request
+          import sys
+          from pathlib import Path
+          import numpy as np
+          sys.path.insert(
+              0, str(Path(os.environ["RUNNER_TEMP"]) / "wre-gsplat-parser-source" / "gsplat" / "examples")
+          )
+          from datasets.colmap import Parser
+
+          root = Path(os.environ["RUNNER_TEMP"]) / "wre-real-photo-colmap-rgb"
+          output = root / "real-photo-initial-gaussians"
+          splat = output / "observed-GAUSSIANS-UNTRAINED.splat"
+          evidence = json.loads((output / "untrained-gaussian-provenance.json").read_text())
+          splat_data = splat.read_bytes()
+          expected_points = evidence["gaussians_original_rgb_observed"]
+          assert evidence["training_steps"] == 0 and evidence["gpu_kernel_executed"] is False
+          assert expected_points == 854 and len(splat_data) == expected_points * 32
+          assert hashlib.sha256(splat_data).hexdigest() == evidence["upstream_exporter_splat_sha256"]
+
+          upstream = "ba182b51b7c2ad5738cdd6741cd63336d27470fb"
+          checks = {
+              "main.js": "8f7f5279d553da8053af2a2275dc2157c1b91fc5",
+              "index.html": "c25c8953d56e43f3ce696e7f9ee8cd27a2cc7b33",
+              "LICENSE": "39a8dff394d8af03f2463f709b95cf206e240c0c",
+          }
+          files = {}
+          for name, expected in checks.items():
+              url = f"https://raw.githubusercontent.com/antimatter15/splat/{upstream}/{name}"
+              with urllib.request.urlopen(url, timeout=45) as response:
+                  payload = response.read(65_001)
+              assert 100 <= len(payload) <= 65_000
+              git_blob = hashlib.sha1(
+                  b"blob " + str(len(payload)).encode() + b"\0" + payload
+              ).hexdigest()
+              assert git_blob == expected, name
+              files[name] = payload
+          assert files["LICENSE"].startswith(b"MIT License\n")
+          assert b"Copyright (c) 2023 Kevin Kwok" in files["LICENSE"]
+
+          # Use the ACTUAL photogrammetric camera, not the vendor demo pose.
+          dataset = root / "gsplat-capture"
+          parser = Parser(str(dataset), factor=1, normalize=False, test_every=8)
+          assert len(parser.image_names) == 3
+          actual_cameras = []
+          for index, image_name in enumerate(parser.image_names):
+              camera_id = parser.camera_ids[index]
+              K = np.asarray(parser.Ks_dict[camera_id])
+              c2w = np.asarray(parser.camtoworlds[index])
+              width, height = parser.imsize_dict[camera_id]
+              assert K.shape == (3, 3) and c2w.shape == (4, 4)
+              assert np.isfinite(K).all() and np.isfinite(c2w).all()
+              actual_cameras.append({
+                  "id": index,
+                  "img_name": image_name,
+                  "width": int(width),
+                  "height": int(height),
+                  "position": c2w[:3, 3].tolist(),
+                  "rotation": c2w[:3, :3].tolist(),
+                  "fx": float(K[0, 0]),
+                  "fy": float(K[1, 1]),
+              })
+          assert len({cam["img_name"] for cam in actual_cameras}) == 3
+          assert all(
+              np.linalg.norm(
+                  np.asarray(actual_cameras[0]["position"]) - np.asarray(cam["position"])
+              ) > 1e-6 for cam in actual_cameras[1:]
+          )
+          view_matrix = np.linalg.inv(np.asarray(parser.camtoworlds[0])).T.reshape(-1).tolist()
+
+          js = files["main.js"].decode("utf-8")
+          begin = js.index("let cameras = [")
+          end = js.index("let camera = cameras[0];", begin)
+          js = js[:begin] + (
+              "let cameras = " + json.dumps(actual_cameras, separators=(",", ":"))
+              + ";\n\n"
+          ) + js[end:]
+          old_matrix = re.findall(
+              r"let defaultViewMatrix = \[[^\]]+\];", js, flags=re.DOTALL
+          )
+          assert len(old_matrix) == 1
+          js = js.replace(
+              old_matrix[0],
+              "let defaultViewMatrix = " + json.dumps(view_matrix) + ";"
+          )
+          assert js.count('params.get("url") || "train.splat"') == 1
+          js = js.replace(
+              'params.get("url") || "train.splat"',
+              'params.get("url") || "observed-GAUSSIANS-UNTRAINED.splat"',
+          )
+          upstream_base = '"https://huggingface.co/cakewalk/splat-data/resolve/main/"'
+          assert js.count(upstream_base) == 1
+          js = js.replace(upstream_base, "location.href")
+          call = "gl.drawArraysInstanced(gl.TRIANGLE_FAN, 0, 4, vertexCount);"
+          assert js.count(call) == 1
+          js = js.replace(
+              call, call + "\n            window.__wreRenderedGaussianCount = vertexCount;"
+          )
+          camera_marker = 'camid.innerText = "cam  " + currentCameraIndex;'
+          assert js.count(camera_marker) == 1
+          js = js.replace(
+              camera_marker,
+              camera_marker + "\n        window.__wreSelectedCamera = currentCameraIndex;",
+          )
+          assert "https://huggingface.co/cakewalk/splat-data/resolve/main/" not in js
+          (output / "main.js").write_text(js, encoding="utf-8")
+
+          html = files["index.html"].decode("utf-8")
+          assert html.count("<body>") == 1
+          html = html.replace(
+              "<body>",
+              '<body><aside style="position:absolute;bottom:35px;left:14px;'
+              'padding:8px;background:#17212ddd;z-index:101;color:white;'
+              'font:13px sans-serif;pointer-events:none">WRE · 854 source-observed '
+              'Gaussian seeds · UNTRAINED (0 steps) · nonmetric / noncommercial '
+              '· keys 0/1/2: recovered cameras · no CUDA or 4D</aside>',
+          )
+          (output / "index.html").write_text(html, encoding="utf-8")
+          (output / "Gaussian-WebGL-viewer-MIT-LICENSE.txt").write_bytes(files["LICENSE"])
+          (output / "HOW_TO_VIEW_GAUSSIANS.txt").write_text(
+              "WRE experimental actual-photo Gaussian seed viewer, UNTRAINED.\n"
+              "Noncommercial source photos CC BY-NC 4.0, copyright Pierre Moulon.\n"
+              "Viewer MIT licensed by Kevin Kwok (see bundled license).\n"
+              "After unzipping the GitHub Actions Gaussian artifact, run:\n"
+              "  python3 -m http.server 8767 --bind 127.0.0.1\n"
+              "Then open http://127.0.0.1:8767/index.html and orbit/zoom.\n"
+              "Press keys 0, 1, 2 to inspect the three recovered COLMAP views.\n"
+              "All bytes are local after unzipping; no third-party requests.\n"
+              "Gaussians are initialized from real SfM, NOT trained photorealism.\n",
+              encoding="utf-8",
+          )
+          evidence["real_gaussian_webgl"] = {
+              "vendor": "antimatter15/splat",
+              "vendor_revision": upstream,
+              "vendor_mit_license": "Copyright (c) 2023 Kevin Kwok",
+              "verified_upstream_git_blobs_sha1": checks,
+              "instrumentation": "real SfM camera, local splat URL, draw-call count",
+              "local_main_js_sha256": hashlib.sha256(
+                  (output / "main.js").read_bytes()
+              ).hexdigest(),
+              "real_splat_count": expected_points,
+              "registered_camera_names": [cam["img_name"] for cam in actual_cameras],
+              "registered_camera_count": len(actual_cameras),
+              "training_steps": 0,
+              "gpu_training_verified": False,
+          }
+          (output / "untrained-gaussian-provenance.json").write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + "\n"
+          )
+          print("REAL SOURCE GAUSSIAN WEBGL BUNDLE:", expected_points, "untrained splats")
+          PY
+
+      - name: Render ACTUAL photo-derived Gaussian seeds in Chrome WebGL (software, not CUDA)
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/wre-real-photo-colmap-rgb/real-photo-initial-gaussians"
+          google-chrome --version
+          driver="$CHROMEWEBDRIVER/chromedriver"
+          test -x "$driver"
+          python3 -m http.server 8767 --bind 127.0.0.1 --directory "$root" >/tmp/wre-real-gaussians-http.log 2>&1 &
+          http_pid="$!"
+          "$driver" --port=9517 --allowed-ips=127.0.0.1 >/tmp/wre-real-gaussians-driver.log 2>&1 &
+          driver_pid="$!"
+          trap 'kill "$http_pid" "$driver_pid" 2>/dev/null || true' EXIT
+          .venv/bin/python - <<'PY'
+          import base64
+          import io
+          import json
+          import os
+          import time
+          from pathlib import Path
+          from urllib.request import Request, urlopen
+          from PIL import Image
+
+          endpoint = "http://127.0.0.1:9517"
+          def browser(method, route, payload=None):
+              body = None if payload is None else json.dumps(payload).encode()
+              req = Request(
+                  endpoint + route, data=body, method=method,
+                  headers={"Content-Type": "application/json"},
+              )
+              with urlopen(req, timeout=45) as response:
+                  result = json.load(response)["value"]
+              if isinstance(result, dict) and result.get("error"):
+                  raise RuntimeError(str(result))
+              return result
+
+          for _ in range(75):
+              try:
+                  if browser("GET", "/status")["ready"]:
+                      break
+              except (OSError, KeyError):
+                  pass
+              time.sleep(0.2)
+          else:
+              raise RuntimeError("ChromeDriver not ready")
+          opts = {"browserName": "chrome", "goog:chromeOptions": {
+              "args": [
+                  "--headless=new", "--no-sandbox", "--disable-dev-shm-usage",
+                  "--enable-unsafe-swiftshader", "--use-gl=angle",
+                  "--use-angle=swiftshader", "--window-size=1280,900",
+                  "--disable-background-networking",
+                  "--host-resolver-rules=MAP * 0.0.0.0, EXCLUDE localhost",
+              ],
+          }}
+          session = browser("POST", "/session", {
+              "capabilities": {"alwaysMatch": opts}
+          })["sessionId"]
+          def execute(script):
+              return browser("POST", f"/session/{session}/execute/sync", {
+                  "script": script, "args": []
+              })
+          try:
+              browser("POST", f"/session/{session}/url", {
+                  "url": "http://127.0.0.1:8767/index.html"
+              })
+              for _ in range(125):
+                  state = execute("""
+                    const canvas = document.getElementById('canvas');
+                    return {
+                      count: window.__wreRenderedGaussianCount || 0,
+                      error: document.getElementById('message')?.textContent || '',
+                      width: canvas?.width || 0,
+                      height: canvas?.height || 0,
+                      webgl: Boolean(canvas?.getContext('webgl2')),
+                    };
+                  """)
+                  if state["error"]:
+                      raise RuntimeError("Gaussian WebGL renderer: " + state["error"])
+                  if state["count"] == 854 and state["webgl"] and state["width"] >= 640:
+                      break
+                  time.sleep(0.35)
+              else:
+                  raise RuntimeError(
+                      "Real pinned gaussian .splat never reached WebGL drawArraysInstanced: "
+                      + json.dumps(state)
+                  )
+              screenshot = base64.b64decode(
+                  browser("GET", f"/session/{session}/screenshot")
+              )
+              image = Image.open(io.BytesIO(screenshot))
+              image.load()
+              assert image.width >= 1100 and image.height >= 700
+              assert len(screenshot) > 10_000
+              root = Path(os.environ["RUNNER_TEMP"]) / "wre-real-photo-colmap-rgb"
+              dst = root / "real-photo-initial-gaussians"
+              (dst / "wre-real-gaussian-webgl-chrome.png").write_bytes(screenshot)
+              # Use the upstream viewer's existing keyboard camera selection.
+              for index in (1, 2):
+                  execute(
+                      "window.__wreRenderedGaussianCount = 0;"
+                      "window.dispatchEvent(new KeyboardEvent('keydown', {"
+                      f"key:'{index}',code:'Digit{index}',bubbles:true"
+                      "}));"
+                  )
+                  for _ in range(50):
+                      switched = execute("""
+                        return {
+                          camera: window.__wreSelectedCamera,
+                          count: window.__wreRenderedGaussianCount || 0,
+                          error: document.getElementById('message')?.textContent || ''
+                        };
+                      """)
+                      if switched["error"]:
+                          raise RuntimeError("Gaussian camera switch: " + switched["error"])
+                      if switched["camera"] == index and switched["count"] == 854:
+                          break
+                      time.sleep(0.15)
+                  else:
+                      raise RuntimeError(
+                          f"Real COLMAP camera {index} did not render: " + json.dumps(switched)
+                      )
+                  view = base64.b64decode(
+                      browser("GET", f"/session/{session}/screenshot")
+                  )
+                  assert len(view) > 10_000
+                  (dst / f"wre-real-gaussian-webgl-camera-{index}.png").write_bytes(view)
+              print("REAL MULTIVIEW GAUSSIAN WEBGL PASS: 3 source COLMAP camera views")
+              print(
+                  "ACTUAL UNTRAINED GAUSSIAN WEBGL PASS:",
+                  state["count"], "real SfM splats;",
+                  "Chrome drew instanced quads; screenshot saved; CUDA 0"
+              )
+          finally:
+              browser("DELETE", f"/session/{session}")
+          PY
+
       - name: Publish actual upstream Gaussian seed PLY and splat (NOT TRAINED)
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
