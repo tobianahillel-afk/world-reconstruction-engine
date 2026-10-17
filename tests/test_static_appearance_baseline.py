@@ -1618,7 +1618,6 @@ def test_external_gsplat_runner_rejects_failure_or_missing_output(
     assert (output / "wre-reference-training.log").exists()
 
 
-
 def test_real_colmap_sparse_coordinates_and_original_png_colors_export_to_ply(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1633,7 +1632,7 @@ def test_real_colmap_sparse_coordinates_and_original_png_colors_export_to_ply(
         "verify_gsplat_static_appearance_native_geometry",
         lambda *_args, **_kwargs: _native_canonical(request, source),
     )
-    module = _shared_track_fixture()
+    module = cast(Any, _shared_track_fixture())
     native = module.Reconstruction(source.native_model_root / "0")
     original_point = native.point3D
     native.point3D = lambda identifier: SimpleNamespace(
@@ -1651,12 +1650,12 @@ def test_real_colmap_sparse_coordinates_and_original_png_colors_export_to_ply(
     )
     data = preview.read_bytes()
     assert digest == _digest(data)
-    assert b"comment wre_metric_scale_known false\\n" in data
+    assert b"comment wre_metric_scale_known false\n" in data
     assert (
         colmap_sparse_model_content_identity(source.native_model_artifact).value.encode()
         in data
     )
-    body = data.split(b"end_header\\n", 1)[1]
+    body = data.split(b"end_header\n", 1)[1]
     assert body == struct.pack("<3f3B", 1.0, 2.0, 3.0, 64, 128, 192)
     assert request.source_geometry.point_maps[0].positions_xyz == ((1.0, 2.0, 3.0),)
 

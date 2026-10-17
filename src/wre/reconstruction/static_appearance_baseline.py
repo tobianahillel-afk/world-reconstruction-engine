@@ -2346,7 +2346,6 @@ def materialize_verified_gsplat_ply(
     )
 
 
-
 def export_verified_colmap_observed_rgb_ply(
     request: StaticAppearanceCandidateRequest,
     source: GsplatStaticAppearancePreflightSource,
@@ -2427,13 +2426,13 @@ def export_verified_colmap_observed_rgb_ply(
         raise GsplatStaticAppearancePreflightError("COLMAP observed point count changed")
 
     header = (
-        "ply\\nformat binary_little_endian 1.0\\n"
-        f"comment wre_colmap_source_sha256 {canonical.source_model_identity_sha256.value}\\n"
-        "comment wre_metric_scale_known false\\n"
-        "comment wre_color_source original_srgb8_feature_observation\\n"
-        f"element vertex {point_count}\\n"
-        "property float x\\nproperty float y\\nproperty float z\\n"
-        "property uchar red\\nproperty uchar green\\nproperty uchar blue\\nend_header\\n"
+        "ply\nformat binary_little_endian 1.0\n"
+        f"comment wre_colmap_source_sha256 {canonical.source_model_identity_sha256.value}\n"
+        "comment wre_metric_scale_known false\n"
+        "comment wre_color_source original_srgb8_feature_observation\n"
+        f"element vertex {point_count}\n"
+        "property float x\nproperty float y\nproperty float z\n"
+        "property uchar red\nproperty uchar green\nproperty uchar blue\nend_header\n"
     ).encode("ascii")
     digest = hashlib.sha256()
     created = False
