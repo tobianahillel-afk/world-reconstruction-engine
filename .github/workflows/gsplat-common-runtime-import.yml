@@ -1979,6 +1979,13 @@ jobs:
               <input id="wre-measure-import" type="file" accept=".json,application/json"
                 aria-label="Restore exported 3D distance, path, polygon area or chord angle JSON" disabled>
               <span id="wre-measure-import-status" role="status">3D measure restore available after load.</span>
+              <label for="wre-reference-metres">Known straight-line reference length (metres, user supplied):</label>
+              <input id="wre-reference-metres" type="number" min="0" max="10000000"
+                step="any" inputmode="decimal" aria-label="Known reference distance in metres">
+              <button id="wre-reference-apply" type="button">Calibrate from selected two-point distance</button>
+              <button id="wre-reference-estimate" type="button">Show user-scaled estimate</button>
+              <button id="wre-reference-clear" type="button">Clear reference scale</button>
+              <span id="wre-reference-status" role="status">No user-supplied scale; all model geometry is nonmetric.</span>
               <button id="wre-view-export" type="button" disabled
                 aria-label="Save current 3D view as PNG">Save current 3D view PNG</button>
               <span id="wre-view-export-status" role="status">3D view loading.</span>
@@ -2014,6 +2021,11 @@ jobs:
               const cameraExport = document.getElementById("wre-camera-export");
               const cameraImport = document.getElementById("wre-camera-import");
               const cameraStatus = document.getElementById("wre-camera-status");
+              const referenceMetres = document.getElementById("wre-reference-metres");
+              const referenceApply = document.getElementById("wre-reference-apply");
+              const referenceEstimate = document.getElementById("wre-reference-estimate");
+              const referenceClear = document.getElementById("wre-reference-clear");
+              const referenceStatus = document.getElementById("wre-reference-status");
               scene.addEventListener("load", () => {
                 cameraExport.disabled = false;
                 cameraImport.disabled = false;
@@ -2129,6 +2141,79 @@ jobs:
                   cameraStatus.textContent = "Viewpoint restore refused: " + String(error);
                 }
               });
+              // Scene-specific USER calibration, not measured ground truth.
+              // Canonical measurement JSON stays strictly nonmetric.
+              let metresPerModelUnit = null;
+              let calibrationSource = null;
+              let calibrationIdentity = null;
+              function clearUserCalibration() {
+                metresPerModelUnit = null;
+                calibrationSource = null;
+                calibrationIdentity = null;
+                referenceStatus.textContent =
+                  "No user-supplied scale; all model geometry is nonmetric.";
+              }
+              function showUserCalibratedEstimate() {
+                if (!scene.loaded || !Number.isFinite(metresPerModelUnit) ||
+                    calibrationSource !== scene.getAttribute("src") ||
+                    calibrationIdentity !== provenance.textContent.trim()) {
+                  referenceStatus.textContent = "No reference scale for the current 3D model.";
+                  return;
+                }
+                const measurement = completedMeasurement;
+                if (!measurement) {
+                  referenceStatus.textContent =
+                    "User reference active; select or restore a 3D measurement.";
+                  return;
+                }
+                let value, units, type;
+                if (measurement.schema === "wre.relative_3d_surface_measurement.v1") {
+                  value = measurement.distance_model_units * metresPerModelUnit;
+                  units = "m"; type = "straight-line distance";
+                } else if (measurement.schema === "wre.relative_3d_surface_polyline.v1") {
+                  value = measurement.total_length_model_units * metresPerModelUnit;
+                  units = "m"; type = "chord polyline";
+                } else if (measurement.schema === "wre.relative_3d_triangle_fan_area.v1") {
+                  value = measurement.total_area_model_units_squared *
+                    metresPerModelUnit * metresPerModelUnit;
+                  units = "m²"; type = "planar triangle-fan area";
+                } else {
+                  referenceStatus.textContent =
+                    "Chord angle is scale-independent; reference does not change its value.";
+                  return;
+                }
+                if (!Number.isFinite(value) || value < 0) {
+                  referenceStatus.textContent = "Scaled value is outside numerical limits.";
+                  return;
+                }
+                referenceStatus.textContent = "User-scaled " + type + ": " +
+                  value.toFixed(5) + " " + units +
+                  " (approximate geometry, manually supplied reference; NOT certified accuracy).";
+              }
+              referenceApply.addEventListener("click", () => {
+                const knownMetres = Number(referenceMetres.value);
+                const measurement = completedMeasurement;
+                const referenceUnits = measurement && measurement.distance_model_units;
+                if (!scene.loaded || !referenceMetres.value.trim() ||
+                    !measurement || measurement.schema !== "wre.relative_3d_surface_measurement.v1" ||
+                    !(knownMetres > 0 && knownMetres <= 1e7) ||
+                    !(referenceUnits > 1e-9) || !Number.isFinite(referenceUnits)) {
+                  referenceStatus.textContent =
+                    "Reference refused: first select two distinct 3D mesh points and enter known metres.";
+                  return;
+                }
+                const factor = knownMetres / referenceUnits;
+                if (!(factor >= 1e-12 && factor <= 1e12) || !Number.isFinite(factor)) {
+                  referenceStatus.textContent = "Reference refused: scale is out of range.";
+                  return;
+                }
+                metresPerModelUnit = factor;
+                calibrationSource = scene.getAttribute("src");
+                calibrationIdentity = provenance.textContent.trim();
+                showUserCalibratedEstimate();
+              });
+              referenceEstimate.addEventListener("click", showUserCalibratedEstimate);
+              referenceClear.addEventListener("click", clearUserCalibration);
               let measuring = false;
               let tracing = false;
               let areaMode = false;
@@ -2651,6 +2736,7 @@ jobs:
                   return;
                 }
                 releaseLocalUrl();
+                clearUserCalibration();
                 resetMeasurement();
                 viewExportButton.disabled = true;
                 cameraExport.disabled = true;
@@ -2692,6 +2778,7 @@ jobs:
                 const mode = modes[chooser.value];
                 if (!mode) return;
                 releaseLocalUrl();
+                clearUserCalibration();
                 resetMeasurement();
                 viewExportButton.disabled = true;
                 cameraExport.disabled = true;
