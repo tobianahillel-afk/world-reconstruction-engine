@@ -2125,6 +2125,11 @@ jobs:
               Photo-textured stereo surface · SHA-256 WRE_GLB_SHA256</p>
             <p id="wre-observed-stereo-marker-status" role="status" aria-live="polite">
               No selected stereo observation linked to this static 3D preview.</p>
+            <div id="wre-saved-stereo-navigation" role="group"
+              aria-label="Navigate saved stereo points in approximate 3D"></div>
+            <p id="wre-saved-stereo-distance" role="status" aria-live="polite">
+              Select two different saved photo observations to measure their relative 3D distance.
+              No metric calibration is available.</p>
             <p id="wre-measure-result" class="metrics" aria-live="polite">
               Surface measurement off. Coordinates are arbitrary 3D model units, NOT meters.</p>
             <script>
@@ -2156,6 +2161,85 @@ jobs:
                   document.getElementById("wre-observed-stereo-marker-status").textContent =
                     "Observed stereo point marked in approximate photo-derived 3D; " +
                     "relative units only, no exact surface correspondence or metric scale.";
+                }
+              }
+              // Inspect up to 64 actually saved PFM observations together. These
+              // hotspots do not imply metric depth or exact mesh alignment.
+              const savedParam = inspectedParams.get("stereo_points");
+              if (savedParam !== null && savedParam.length <= 8192) {
+                let savedPoints = null;
+                try { savedPoints = JSON.parse(savedParam); } catch (_) {}
+                if (Array.isArray(savedPoints) && savedPoints.length > 0 &&
+                    savedPoints.length <= 64 &&
+                    savedPoints.every(point => Array.isArray(point) && point.length === 3 &&
+                      point.every(value => typeof value === "number" &&
+                        Number.isFinite(value) && Math.abs(value) < 1000000) &&
+                      point[2] > 0)) {
+                  const navigation = document.getElementById("wre-saved-stereo-navigation");
+                  const observedStatus =
+                    document.getElementById("wre-observed-stereo-marker-status");
+                  const stereoDistance = document.getElementById("wre-saved-stereo-distance");
+                  let previousObservedIndex = null;
+                  savedPoints.forEach((point, index) => {
+                    const marker = document.createElement("button");
+                    marker.type = "button";
+                    marker.slot = "hotspot-wre-saved-stereo-" + index;
+                    marker.className = "wre-observed-stereo-marker";
+                    marker.dataset.position =
+                      [point[0], -point[1], -point[2]].map(v => v + "m").join(" ");
+                    marker.dataset.normal = "0m 1m 0m";
+                    marker.textContent = String(index + 1);
+                    marker.setAttribute("aria-label",
+                      "Nonmetric saved stereo observation " + (index + 1));
+                    scene.appendChild(marker);
+                    // Keyboard-accessible selection also works when an approximate
+                    // reconstructed surface occludes its WebGL hotspot.
+                    const focus = document.createElement("button");
+                    focus.type = "button";
+                    focus.textContent = "Inspect stereo point " + (index + 1);
+                    focus.dataset.observationIndex = String(index);
+                    focus.setAttribute("aria-pressed", "false");
+                    focus.disabled = chooser.value !== "surface";
+                    navigation.appendChild(focus);
+                    const inspect = () => {
+                      if (!scene.loaded || chooser.value !== "surface") return;
+                      scene.removeAttribute("auto-rotate");
+                      scene.cameraTarget = marker.dataset.position;
+                      scene.jumpCameraToGoal();
+                      if (previousObservedIndex !== null && previousObservedIndex !== index) {
+                        const previous = savedPoints[previousObservedIndex];
+                        const distance = Math.hypot(
+                          point[0] - previous[0], point[1] - previous[1],
+                          point[2] - previous[2]);
+                        stereoDistance.dataset.distance = String(distance);
+                        stereoDistance.dataset.firstIndex = String(previousObservedIndex);
+                        stereoDistance.dataset.secondIndex = String(index);
+                        stereoDistance.textContent =
+                          "3D separation of saved observations " +
+                          (previousObservedIndex + 1) + " and " + (index + 1) +
+                          ": " + distance.toFixed(4) +
+                          " relative model units; NOT calibrated meters.";
+                      }
+                      previousObservedIndex = index;
+                      for (const button of navigation.querySelectorAll("button")) {
+                        button.setAttribute("aria-pressed", String(button === focus));
+                      }
+                      observedStatus.textContent =
+                        "Inspecting real-photo stereo observation " + (index + 1) +
+                        " in approximate 3D relative units only; " +
+                        "not metric or an exact mesh correspondence.";
+                    };
+                    marker.addEventListener("click", inspect);
+                    focus.addEventListener("click", inspect);
+                    chooser.addEventListener("change", () => {
+                      const surface = chooser.value === "surface";
+                      marker.hidden = !surface;
+                      focus.disabled = !surface;
+                    });
+                  });
+                  observedStatus.textContent =
+                    savedPoints.length + " real-photo stereo observations in relative units " +
+                    "only; no metric scale or exact mesh correspondence.";
                 }
               }
               const compareChoice = document.getElementById("wre-compare-choice");
@@ -7097,6 +7181,9 @@ jobs:
           <a id="wre-inspected-point-live-3d" aria-disabled="true">
             Localiser ce point observé dans le modèle 3D approximatif
           </a>
+          <a id="wre-saved-points-live-3d" aria-disabled="true">
+            Afficher tous les points conservés sur la 3D approximative
+          </a>
           <span id="wre-stereo-point-count" role="status" aria-live="polite">0 point enregistré</span>
           <figure id="wre-stereo-match" style="margin:12px 0;max-width:960px">
             <div style="position:relative">
@@ -7122,6 +7209,7 @@ jobs:
             const exportPoints = document.getElementById('wre-export-stereo-points');
             const exportPly = document.getElementById('wre-export-stereo-ply');
             const open3d = document.getElementById('wre-inspected-point-live-3d');
+            const openSaved3d = document.getElementById('wre-saved-points-live-3d');
             const pointCount = document.getElementById('wre-stereo-point-count');
             const observations = [];
             let selected = null;
@@ -7131,6 +7219,13 @@ jobs:
               pointCount.textContent = observations.length + ' points relatifs conservés (max 64)';
               exportPoints.disabled = false;
               exportPly.disabled = false;
+              // Only already-saved real PFM XYZ can reach the model-viewer.
+              const params = new URLSearchParams({
+                stereo_points: JSON.stringify(
+                  observations.map(point => point.xyz_relative_model_units))
+              });
+              openSaved3d.href = './wre-real-stereo-cpu-viewer.html?' + params.toString();
+              openSaved3d.setAttribute('aria-disabled', 'false');
             });
             function downloadObserved(blob, filename) {
               const url = URL.createObjectURL(blob);
@@ -7788,6 +7883,21 @@ jobs:
                              zip(row[:3], point["xyz_relative_model_units"]))
                   assert [int(value) for value in row[3:]] == rgb
               print("PASS: actual Chrome exported real-photo colored relative XYZ as PLY")
+              # The new public multi-observation link must carry EXACTLY the
+              # same two PFM-derived XYZ already checked against real file bytes.
+              saved_link = js("""return (() => {
+                  const anchor=document.getElementById('wre-saved-points-live-3d');
+                  if (!anchor || anchor.getAttribute('aria-disabled')!=='false' ||
+                      !anchor.href) return null;
+                  const url=new URL(anchor.href);
+                  const encoded=url.searchParams.get('stereo_points');
+                  return {url:anchor.href, path:url.pathname,
+                    points:encoded===null?null:JSON.parse(encoded)};
+              })()""")
+              assert saved_link and saved_link["path"].endswith(
+                  "/wre-real-stereo-cpu-viewer.html")
+              assert saved_link["points"] == [
+                  point["xyz_relative_model_units"] for point in exported["points"]]
               # Functional 2D -> 3D navigation: the last point comes from the
               # SHA-256 verified on-disk PFM, not an invented camera landmark.
               link = js("""return (() => {
@@ -7887,6 +7997,111 @@ jobs:
                   return marker && marker.dataset.position.split(' ').length === 3;
               })()""")
               print("PASS: real stereo hotspot survives SIFT-to-surface model switching")
+              # Now open the NEW multi-point link in that same extracted ZIP.
+              # Verify both existing PFM observations independently, not
+              # merely the count of DOM buttons.
+              browser("POST", f"/session/{session}/url", {"url": saved_link["url"]})
+              wait_for(lambda: js(loaded))
+              markers = js("""return (() => {
+                  const scene=document.getElementById('wre-scene');
+                  const status=document.getElementById('wre-observed-stereo-marker-status');
+                  if (!scene.loaded || !scene.model ||
+                      !status?.textContent.includes('2 real-photo stereo observations') ||
+                      !status?.textContent.includes('no metric scale')) return null;
+                  return Array.from(scene.querySelectorAll(
+                    '[slot^="hotspot-wre-saved-stereo-"]')).map(node=>({
+                      slot:node.slot, label:node.getAttribute('aria-label'),
+                      position:node.dataset.position.split(' ').map(Number.parseFloat),
+                      hidden:node.hidden, text:node.textContent
+                    }));
+              })()""")
+              assert markers is not None and len(markers) == 2
+              controls = js("""return Array.from(document.querySelectorAll(
+                  '#wre-saved-stereo-navigation button')).map(button=>({
+                    text:button.textContent, disabled:button.disabled,
+                    index:button.dataset.observationIndex,
+                    pressed:button.getAttribute('aria-pressed')
+                  }));""")
+              assert controls == [
+                  {"text":f"Inspect stereo point {i+1}", "disabled":False,
+                   "index":str(i), "pressed":"false"} for i in range(2)]
+              for index, (point, marker) in enumerate(zip(exported["points"], markers)):
+                  xyz = point["xyz_relative_model_units"]
+                  expected = (xyz[0], -xyz[1], -xyz[2])
+                  assert marker["slot"] == f"hotspot-wre-saved-stereo-{index}"
+                  assert marker["label"] == f"Nonmetric saved stereo observation {index+1}"
+                  assert marker["text"] == str(index+1) and not marker["hidden"]
+                  assert all(abs(actual-target) < 1e-4 for actual, target in
+                             zip(marker["position"], expected))
+              # Focus both real-PFM observations in turn using public 3D controls.
+              # The source glTF transformation, not status text, is the oracle.
+              for index, point in enumerate(exported["points"]):
+                  js(f"""document.querySelectorAll(
+                      '#wre-saved-stereo-navigation button')[{index}].click();""")
+                  xyz = point["xyz_relative_model_units"]
+                  expected_target = (xyz[0], -xyz[1], -xyz[2])
+                  def focused():
+                      result = js("""return (() => {
+                          const scene=document.getElementById('wre-scene');
+                          const target=scene.getCameraTarget();
+                          return {
+                            xyz:[target.x,target.y,target.z],
+                            pressed:Array.from(document.querySelectorAll(
+                              '#wre-saved-stereo-navigation button')).map(
+                                button=>button.getAttribute('aria-pressed')),
+                            status:document.getElementById(
+                              'wre-observed-stereo-marker-status').textContent
+                          };
+                      })()""")
+                      return (result["pressed"] == [
+                          "true" if i == index else "false" for i in range(2)] and
+                          result["status"].startswith(
+                              f"Inspecting real-photo stereo observation {index+1}") and
+                          all(abs(actual - target) < 1e-3 for actual, target in
+                              zip(result["xyz"], expected_target)))
+                  wait_for(focused)
+              # Independently calculate the distance between the two actual
+              # SHA-verified real-photo PFM observations, not just DOM counters.
+              distance = js("""return (() => {
+                  const status=document.getElementById('wre-saved-stereo-distance');
+                  return status ? {value:Number(status.dataset.distance),
+                      from:status.dataset.firstIndex, to:status.dataset.secondIndex,
+                      text:status.textContent} : null;
+              })()""")
+              from math import dist as euclidean_distance
+              relative_xyz = [point["xyz_relative_model_units"] for point in exported["points"]]
+              expected_distance = euclidean_distance(relative_xyz[0], relative_xyz[1])
+              assert distance and distance["from"] == "0" and distance["to"] == "1"
+              assert abs(distance["value"] - expected_distance) < 1e-5
+              assert expected_distance > 0
+              assert "relative model units" in distance["text"]
+              assert "NOT calibrated meters" in distance["text"]
+              print("PASS: real PFM-derived 3D observation distance rendered in live Chrome")
+              js("""const choice=document.getElementById('wre-scene-choice');
+                  choice.value='sift';
+                  choice.dispatchEvent(new Event('change', {bubbles:true}));""")
+              wait_for(lambda: js(loaded) and js("""return (() => {
+                  const scene=document.getElementById('wre-scene');
+                  return document.getElementById('wre-scene-choice').value==='sift' &&
+                    Array.from(scene.querySelectorAll(
+                      '[slot^="hotspot-wre-saved-stereo-"]')).length===2 &&
+                    Array.from(scene.querySelectorAll(
+                      '[slot^="hotspot-wre-saved-stereo-"]')).every(node=>node.hidden);
+              })()"""))
+              js("""const choice=document.getElementById('wre-scene-choice');
+                  choice.value='surface';
+                  choice.dispatchEvent(new Event('change', {bubbles:true}));""")
+              wait_for(lambda: js(loaded) and js("""return (() => {
+                  const scene=document.getElementById('wre-scene');
+                  return document.getElementById('wre-scene-choice').value==='surface' &&
+                    Array.from(scene.querySelectorAll(
+                      '[slot^="hotspot-wre-saved-stereo-"]')).length===2 &&
+                    Array.from(scene.querySelectorAll(
+                      '[slot^="hotspot-wre-saved-stereo-"]')).every(node=>!node.hidden);
+              })()"""))
+              assert js("""return Array.from(document.querySelectorAll(
+                  '#wre-saved-stereo-navigation button')).every(button=>!button.disabled)""")
+              print("PASS: real PFM-derived 3D observations focus the actual camera and survive model switching")
               print("PASS: archived real source photos and SIFT GLB rendered in Chrome WebGL")
           finally:
               browser("DELETE", f"/session/{session}")
