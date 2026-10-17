@@ -26,7 +26,7 @@ from wre.domain.artifact_materialization import (
     ArtifactMaterializationEntry,
     ArtifactMaterializationMetadata,
 )
-from wre.domain.artifacts import ArtifactRef
+from wre.domain.artifacts import ArtifactId, ArtifactRef
 from wre.domain.color_conventions import (
     ColorConversionStatus,
     DecodedPixelColorEncoding,
@@ -2389,6 +2389,47 @@ def assemble_verified_gsplat_static_appearance_result(
     return build_static_appearance_candidate_result(request, candidate, materialization)
 
 
+
+def _gsplat_rgb_preview_cli(argv: list[str] | None = None) -> int:
+    """Provide a CPU-only export command for an already-produced Gaussian PLY.
+
+    This never launches a training job or claims a canonical provenance identity.
+    The source is inspected by the same checked PLY reader as the public API.
+    """
+
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Export verified gsplat Gaussian centers as a standard RGB point-cloud PLY"
+    )
+    parser.add_argument(
+        "--output-root", required=True, type=Path, help="Existing gsplat trainer results directory"
+    )
+    parser.add_argument(
+        "--max-steps", type=int, required=True, help="Original trainer max_steps / PLY step number"
+    )
+    parser.add_argument(
+        "--preview", type=Path, required=True, help="New output RGB .ply file; parent must exist"
+    )
+    args = parser.parse_args(argv)
+    try:
+        profile = GsplatStaticAppearanceTrainingProfile(max_steps=args.max_steps)
+        preview = args.preview.absolute()
+        digest = export_verified_gsplat_rgb_centers_ply(
+            artifact_ref=ArtifactRef(
+                ArtifactId("appearance:gsplat:preview-source"),
+                APPEARANCE_MODEL_ARTIFACT_KIND,
+            ),
+            output_root=args.output_root.absolute(),
+            profile=profile,
+            preview_path=preview,
+        )
+    except (GsplatStaticAppearancePreflightError, ValueError, TypeError, OSError) as exc:
+        parser.error(str(exc))
+    print(f"{digest.value}  {preview}")
+    return 0
+
+
 __all__ = [
     "GSPLAT_REFERENCE_PYCOLMAP_REVISION",
     "GSPLAT_STATIC_APPEARANCE_REPRESENTATION",
@@ -2418,3 +2459,7 @@ __all__ = [
     "verify_gsplat_static_appearance_source_photometry",
     "verify_gsplat_static_appearance_staged_dataset",
 ]
+
+
+if __name__ == "__main__":
+    raise SystemExit(_gsplat_rgb_preview_cli())
