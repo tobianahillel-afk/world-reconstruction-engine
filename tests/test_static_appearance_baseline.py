@@ -1351,11 +1351,11 @@ def test_verified_gsplat_rgb_centers_glb_has_real_gltf_vertex_bytes(tmp_path: Pa
 
 
 @pytest.mark.parametrize(
-    ("max_points", "expected_count", "expected_stride"),
-    ((1, 1, 3), (2, 2, 2), (3, 3, 1)),
+    ("max_points", "expected_count"),
+    ((1, 1), (2, 2), (3, 3)),
 )
 def test_gsplat_glb_preview_has_bounded_deterministic_sampling(
-    tmp_path: Path, max_points: int, expected_count: int, expected_stride: int
+    tmp_path: Path, max_points: int, expected_count: int
 ) -> None:
     source = _gsplat_ply(vertices=3)
     root, profile, ref = _gsplat_output(tmp_path, source)
@@ -1377,9 +1377,47 @@ def test_gsplat_glb_preview_has_bounded_deterministic_sampling(
     assert scene["buffers"][0]["byteLength"] == expected_count * 16
     assert scene["extras"]["source_gaussians"] == 3
     assert scene["extras"]["shown_centers"] == expected_count
-    assert scene["extras"]["sample_stride"] == expected_stride
+    assert scene["extras"]["sampling"] == "even-endpoints"
+    assert scene["extras"]["requested_max_points"] == max_points
     assert len(output) == 28 + json_size + expected_count * 16
     assert (root / profile.expected_ply_relative_path).read_bytes() == source
+
+
+def test_gsplat_glb_preview_fills_budget_and_keeps_real_endpoint_positions(
+    tmp_path: Path,
+) -> None:
+    # Old ceil(N / budget) sampling would keep only 6 of these 11 points.
+    source = bytearray(_gsplat_ply(vertices=11))
+    payload_offset = source.index(b"end_header\n") + len(b"end_header\n")
+    for index in range(11):
+        struct.pack_into("<f", source, payload_offset + index * 59 * 4, float(index))
+    root, profile, ref = _gsplat_output(tmp_path, bytes(source))
+    viewer = tmp_path / "viewer"
+    viewer.mkdir()
+    dest = viewer / "near-budget.glb"
+    digest = export_verified_gsplat_rgb_centers_glb(
+        artifact_ref=ref,
+        output_root=root,
+        profile=profile,
+        preview_path=dest,
+        max_points=10,
+    )
+    actual = dest.read_bytes()
+    assert digest == _digest(actual)
+    json_size, _ = struct.unpack_from("<I4s", actual, 12)
+    scene = json.loads(actual[20 : 20 + json_size])
+    assert scene["accessors"][0]["count"] == 10
+    assert scene["extras"]["shown_centers"] == 10
+    assert scene["extras"]["source_gaussians"] == 11
+    assert scene["extras"]["sampling"] == "even-endpoints"
+    assert scene["extras"]["requested_max_points"] == 10
+    vertices = actual[28 + json_size :]
+    assert len(vertices) == 10 * 16
+    positions = [
+        struct.unpack_from("<f", vertices, 16 * index)[0] for index in range(10)
+    ]
+    assert positions == [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 10.0]
+    assert (root / profile.expected_ply_relative_path).read_bytes() == bytes(source)
 
 
 @pytest.mark.parametrize("invalid", (True, 0, 2_000_001))
@@ -1432,7 +1470,8 @@ def test_gsplat_glb_cli_respects_requested_preview_density(tmp_path: Path) -> No
     json_size, _ = struct.unpack_from("<I4s", glb, 12)
     scene = json.loads(glb[20 : 20 + json_size])
     assert scene["accessors"][0]["count"] == 1
-    assert scene["extras"]["sample_stride"] == 3
+    assert scene["extras"]["sampling"] == "even-endpoints"
+    assert scene["extras"]["requested_max_points"] == 1
     assert run.stdout.strip() == f"{_digest(glb).value}  {preview}"
 
 
