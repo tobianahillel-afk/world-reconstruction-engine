@@ -1320,7 +1320,10 @@ jobs:
         run: |
           set -euo pipefail
           "$COMMON_PYTHON" - <<'PY'
+          import hashlib
           import json
+          import math
+          import struct
           import os
           from pathlib import Path
 
@@ -1419,6 +1422,111 @@ jobs:
               json.dumps(record, sort_keys=True, indent=2) + "\n"
           )
           assert ply.stat().st_size > 250
+          # Reuse the project glTF 2.0 exporter layout (binary views + JSON chunk).
+          # These are REAL SIFT-triangulated photo RGB points, not a synthetic mesh.
+          axis = np.diag([1.0, -1.0, -1.0])
+          world = np.ascontiguousarray(xyz @ axis, dtype="<f4")
+          color = np.ascontiguousarray(rgb, dtype="u1")
+          assert len(world) >= 20 and len(world) == len(color)
+          # Upstream R,t are world->right OpenCV camera; glTF cameras look along -Z.
+          right_camera = np.eye(4, dtype=np.float64)
+          right_camera[:3, :3] = axis @ R.T @ axis
+          right_camera[:3, 3] = axis @ (-R.T @ t.ravel())
+          assert np.allclose(right_camera[:3, :3].T @ right_camera[:3, :3],
+                             np.eye(3), atol=1e-4)
+          assert abs(np.linalg.det(right_camera[:3, :3]) - 1) < 1e-4
+          assert np.isclose(np.linalg.norm(right_camera[:3, 3]), 1, atol=1e-2)
+          # Include visible camera wireframes; glTF camera nodes alone may be invisible.
+          distance = 0.35
+          half_w = distance * w / (2 * K[0, 0])
+          half_h = distance * h / (2 * K[1, 1])
+          local = np.array([[0,0,0], [-half_w,-half_h,-distance],
+                            [half_w,-half_h,-distance], [half_w,half_h,-distance],
+                            [-half_w,half_h,-distance]], dtype=np.float64)
+          first_camera = np.eye(4)
+          rig_vertices = np.ascontiguousarray(np.concatenate([
+              local,
+              local @ right_camera[:3, :3].T + right_camera[:3, 3]
+          ]), dtype="<f4")
+          rig_colors = np.array([[255,210,30]] * 5 + [[20,230,255]] * 5, dtype="u1")
+          edges = np.array([0,1, 0,2, 0,3, 0,4, 1,2, 2,3, 3,4, 4,1], dtype="<u2")
+          rig_edges = np.concatenate([edges, edges + 5]).astype("<u2")
+          blob, views = bytearray(), []
+          sections = (world.tobytes(), color.tobytes(), rig_vertices.tobytes(),
+                      rig_colors.tobytes(), rig_edges.tobytes())
+          for raw, target in zip(sections, (34962, 34962, 34962, 34962, 34963), strict=True):
+              offset = len(blob)
+              blob.extend(raw)
+              blob.extend(b"\x00" * (-len(blob) % 4))
+              views.append({"buffer": 0, "byteOffset": offset, "byteLength": len(raw),
+                            "target": target})
+          accessors = [
+              {"bufferView": 0, "componentType": 5126, "count": len(world), "type": "VEC3",
+               "min": world.min(axis=0).tolist(), "max": world.max(axis=0).tolist()},
+              {"bufferView": 1, "componentType": 5121, "normalized": True,
+               "count": len(color), "type": "VEC3"},
+              {"bufferView": 2, "componentType": 5126, "count": len(rig_vertices),
+               "type": "VEC3", "min": rig_vertices.min(axis=0).tolist(),
+               "max": rig_vertices.max(axis=0).tolist()},
+              {"bufferView": 3, "componentType": 5121, "normalized": True,
+               "count": len(rig_colors), "type": "VEC3"},
+              {"bufferView": 4, "componentType": 5123, "count": len(rig_edges),
+               "type": "SCALAR"},
+          ]
+          pose_bytes = (root / "wre-real-stereo-sift-estimated-pose.json").read_bytes()
+          doc = {
+              "asset": {"version": "2.0", "generator": "WRE actual-photo SIFT CPU",
+                        "extras": {"source_ply_sha256": hashlib.sha256(ply.read_bytes()).hexdigest(),
+                                   "pose_json_sha256": hashlib.sha256(pose_bytes).hexdigest(),
+                                   "metric_scale_known": False, "pose_in_sample": True}},
+              "scene": 0, "scenes": [{"nodes": [0,1,2,3]}],
+              "nodes": [
+                  {"mesh": 0, "name": "Recovered observed RGB 3D points"},
+                  {"mesh": 1, "name": "Camera frustums: left yellow; right cyan"},
+                  {"camera": 0, "name": "Left photographed camera"},
+                  {"camera": 0, "name": "Right SIFT recovered camera",
+                   "matrix": right_camera.flatten(order="F").tolist()},
+              ],
+              "cameras": [{"type": "perspective", "perspective": {
+                  "yfov": 2 * math.atan(h / (2 * K[1,1])), "aspectRatio": w/h, "znear": 0.01}}],
+              "meshes": [
+                  {"primitives": [{"mode": 0, "attributes": {"POSITION": 0, "COLOR_0": 1}}]},
+                  {"primitives": [{"mode": 1, "indices": 4,
+                                   "attributes": {"POSITION": 2, "COLOR_0": 3}}]},
+              ],
+              "buffers": [{"byteLength": len(blob)}], "bufferViews": views,
+              "accessors": accessors,
+          }
+          json_chunk = json.dumps(doc, separators=(",", ":"), allow_nan=False).encode()
+          json_chunk += b" " * (-len(json_chunk) % 4)
+          glb = (
+              struct.pack("<4sII", b"glTF", 2, 12 + 8 + len(json_chunk) + 8 + len(blob))
+              + struct.pack("<I4s", len(json_chunk), b"JSON") + json_chunk
+              + struct.pack("<I4s", len(blob), b"BIN\x00") + blob
+          )
+          output_glb = root / "wre-real-stereo-sift-estimated-cameras.glb"
+          output_glb.write_bytes(glb)
+          # Independently reopen and validate the actual serialized GLB and its two cameras.
+          loaded = output_glb.read_bytes()
+          assert struct.unpack_from("<4sII", loaded) == (b"glTF", 2, len(loaded))
+          size, kind = struct.unpack_from("<I4s", loaded, 12)
+          assert kind == b"JSON"
+          decoded = json.loads(loaded[20:20 + size])
+          bin_at = 20 + size
+          bin_size, kind = struct.unpack_from("<I4s", loaded, bin_at)
+          assert kind == b"BIN\x00" and bin_at + 8 + bin_size == len(loaded)
+          assert decoded["accessors"][0]["count"] == len(xyz)
+          assert decoded["accessors"][4]["count"] == 32
+          assert decoded["cameras"][0]["type"] == "perspective"
+          assert np.allclose(
+              np.array(decoded["nodes"][3]["matrix"]).reshape((4,4), order="F"),
+              right_camera
+          )
+          actual_bin = loaded[bin_at + 8:]
+          for view, original in zip(decoded["bufferViews"], sections, strict=True):
+              assert actual_bin[view["byteOffset"]:view["byteOffset"]+view["byteLength"]] == original
+          print(f"SIFT 3D camera GLB: {len(xyz)} real-photo RGB points and two "
+                "camera views; arbitrary scale; no GPU training")
           print(f"Real-photo image-only pose: {len(xyz)} RGB 3D points; "
                 f"in-sample reprojection RMSE={rmse:.3f} pixels")
           PY
@@ -1554,12 +1662,13 @@ jobs:
             wre-real-stereo-colmap-dataset.zip \
             wre-real-stereo-colmap-handoff.json \
             wre-real-stereo-sift-estimated-3d.ply \
-            wre-real-stereo-sift-estimated-pose.json
+            wre-real-stereo-sift-estimated-pose.json \
+            wre-real-stereo-sift-estimated-cameras.glb
           do
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 29
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 30
 
       - name: Publish real-photo CPU 3D plus COLMAP before native CUDA builds
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -2575,13 +2684,14 @@ jobs:
             wre-real-stereo-cpu-right-reprojection.png \
             wre-real-stereo-cpu-metrics.json \
             wre-real-stereo-sift-estimated-3d.ply \
-            wre-real-stereo-sift-estimated-pose.json
+            wre-real-stereo-sift-estimated-pose.json \
+            wre-real-stereo-sift-estimated-cameras.glb
           do
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 45
-          echo "Staged all 45 real PLY/OBJ/GLB/GIF/MTL/PNG/PFM/NPY/JSON/ZIP files for artifact upload"
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 46
+          echo "Staged all 46 real PLY/OBJ/GLB/GIF/MTL/PNG/PFM/NPY/JSON/ZIP files for artifact upload"
 
       - name: Publish CPU COLMAP 3D preview and measured reprojection
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
