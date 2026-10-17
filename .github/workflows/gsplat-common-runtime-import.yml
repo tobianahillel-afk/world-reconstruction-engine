@@ -6451,6 +6451,8 @@ jobs:
                report["mode_screenshot_sha256"]["sift"]),
               ("dual", "Comparaison simultanée de deux vrais modèles 3D",
                "real-stereo-3d-side-by-side.png", report["side_by_side_screenshot_sha256"]),
+              ("source-2d-3d", "Photographies observées face au modèle 3D interactif",
+               "real-stereo-2d-and-3d.png", report["source_photos_live_3d_screenshot_sha256"]),
               ("storyboard", "Deux vues WebGL du même modèle 3D statique",
                "real-stereo-3d-camera-storyboard.png",
                report["camera_tour_storyboard_png_sha256"]),
@@ -6527,6 +6529,8 @@ jobs:
               raise ValueError("Actual Chrome did not open a user-selected GLB")
           if receipt.get("two_real_3d_models_compared_side_by_side") is not True:
               raise ValueError("Actual Chrome did not compare two real 3D GLBs side by side")
+          if receipt.get("source_photos_and_live_3d_verified_in_chrome") is not True:
+              raise ValueError("Actual Chrome did not show source photos beside a live GLB")
           if receipt.get("dual_3d_linked_orbit_verified_in_chrome") is not True:
               raise ValueError("Actual Chrome did not verify independent linked 3D orbit angles")
           if receipt.get("surface_distance_measured_in_chrome") is not True:
@@ -6603,6 +6607,7 @@ jobs:
           png_hashes = {
               "real-stereo-3d-browser.png": receipt["screenshot_sha256"],
               "real-stereo-3d-side-by-side.png": receipt["side_by_side_screenshot_sha256"],
+              "real-stereo-2d-and-3d.png": receipt["source_photos_live_3d_screenshot_sha256"],
               "real-stereo-3d-camera-storyboard.png": receipt["camera_tour_storyboard_png_sha256"],
               **{
                   f"real-stereo-3d-{mode}.png": digest
@@ -6612,12 +6617,13 @@ jobs:
           if set(png_hashes) != {
               "real-stereo-3d-browser.png",
               "real-stereo-3d-side-by-side.png",
+              "real-stereo-2d-and-3d.png",
               "real-stereo-3d-camera-storyboard.png",
               "real-stereo-3d-stereo.png",
               "real-stereo-3d-quality.png",
               "real-stereo-3d-sift.png",
           }:
-              raise ValueError("Six Chrome screenshot identities required")
+              raise ValueError("Seven Chrome screenshot identities required")
           for name, digest in png_hashes.items():
               data = (proof / name).read_bytes()
               if not data.startswith(bytes.fromhex("89504e470d0a1a0a")):
@@ -6758,7 +6764,7 @@ jobs:
           assert all(hashlib.sha256((bundle / name).read_bytes()).hexdigest() == digest
                      for name, digest in {**source_hashes, **png_hashes, input_name: input_sha256}.items())
           print(f"One offline 3D exploration bundle: {len(list(bundle.iterdir()))} entries, "
-                "four GLBs, six real Chrome PNGs, interactive viewer, report, receipts")
+                "four GLBs, seven real Chrome PNGs, interactive viewer, report, receipts")
           PY
           python3 wre-unified-offline-3d/open-wre-3d.py --check
 
@@ -6843,6 +6849,21 @@ jobs:
                   return Boolean(scene && scene.loaded && scene.model &&
                       document.getElementById("wre-camera-export").disabled === false);
               })()"""
+              wait_for(lambda: js(loaded))
+              # Reopen the EXTRACTED archive and repeat the actual source-vs-3D
+              # interaction; browser evidence must not rely on a staging page.
+              js("""document.getElementById('wre-photo-toggle').click();""")
+              wait_for(lambda: js("""return (() => {
+                  const pane=document.getElementById('wre-source-panel');
+                  const img=document.getElementById('wre-live-source-photos');
+                  const scene=document.getElementById('wre-scene');
+                  return !pane.hidden && img.complete && img.naturalWidth >= 640 &&
+                      img.naturalHeight >= 160 &&
+                      img.getBoundingClientRect().width >= 200 &&
+                      scene.loaded && scene.model &&
+                      scene.getBoundingClientRect().width >= 260;
+              })()"""))
+              js("""document.getElementById('wre-photo-toggle').click();""")
               wait_for(lambda: js(loaded))
               js("""const choice = document.getElementById("wre-scene-choice");
                   choice.value = "sift";
