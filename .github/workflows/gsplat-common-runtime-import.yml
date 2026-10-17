@@ -5046,6 +5046,15 @@ jobs:
                         width:view.getUint32(16),
                         height:view.getUint32(20)
                       };
+                      // Retain actual browser-rendered contact-sheet bytes in this run.
+                      const reader=new FileReader();
+                      reader.onload=() => {
+                        window.__wreStoryboardPng.base64=String(reader.result).split(',')[1];
+                      };
+                      reader.onerror=() => {
+                        window.__wreStoryboardPng.error='PNG FileReader failed';
+                      };
+                      reader.readAsDataURL(blob);
                     }).catch(e=>window.__wreStoryboardPng={error:String(e)});
                   }
                   return originalCreateURL(blob);
@@ -5060,12 +5069,20 @@ jobs:
               storyboard_png=until("""
                 const receipt=window.__wreStoryboardPng;
                 const status=document.getElementById('wre-tour-status').textContent;
-                return receipt && status.includes('Saved 2 real-rendered 3D viewpoints')
+                return receipt && receipt.base64 &&
+                  status.includes('Saved 2 real-rendered 3D viewpoints')
                   ? receipt : null;
               """, limit=20)
               assert storyboard_png["signature"] == [137,80,78,71,13,10,26,10]
               assert storyboard_png["width"] == 640 and storyboard_png["height"] == 240
               assert storyboard_png["size"] > 1000
+              storyboard_bytes=base64.b64decode(storyboard_png["base64"], validate=True)
+              assert len(storyboard_bytes) == storyboard_png["size"]
+              assert storyboard_bytes[:8] == bytes.fromhex("89504e470d0a1a0a")
+              assert int.from_bytes(storyboard_bytes[16:20], "big") == 640
+              assert int.from_bytes(storyboard_bytes[20:24], "big") == 240
+              storyboard_sha256=hashlib.sha256(storyboard_bytes).hexdigest()
+              (proof / "real-stereo-3d-camera-storyboard.png").write_bytes(storyboard_bytes)
               frame_hashes=js("return window.__wreStoryboardFrameHashes;")
               assert len(frame_hashes) == 2 and len(set(frame_hashes)) == 2, (
                   "Real WebGL viewpoints did not produce two distinct image renders"
@@ -6286,6 +6303,7 @@ jobs:
                       "smooth_camera_tour_interpolation_verified_in_chrome": True,
                       "camera_tour_storyboard_verified_in_chrome": True,
                       "camera_tour_storyboard_png_dimensions": [storyboard_png["width"], storyboard_png["height"]],
+                      "camera_tour_storyboard_png_sha256": storyboard_sha256,
               "current_view_png_export_verified_in_chrome": True,
                       "current_view_png_dimensions": [view_png["width"], view_png["height"]],
                       "surface_reload": True,
@@ -6328,6 +6346,9 @@ jobs:
                report["mode_screenshot_sha256"]["sift"]),
               ("dual", "Comparaison simultanée de deux vrais modèles 3D",
                "real-stereo-3d-side-by-side.png", report["side_by_side_screenshot_sha256"]),
+              ("storyboard", "Deux vues WebGL du même modèle 3D statique",
+               "real-stereo-3d-camera-storyboard.png",
+               report["camera_tour_storyboard_png_sha256"]),
           )
           cards = []
           for mode, label, name, expected in modes:
@@ -6440,6 +6461,10 @@ jobs:
               raise ValueError("Actual Chrome did not export actual 3D camera views as one PNG")
           if receipt.get("camera_tour_storyboard_png_dimensions") != [640, 240]:
               raise ValueError("Real WebGL camera storyboard dimensions are invalid")
+          if not isinstance(receipt.get("camera_tour_storyboard_png_sha256"), str) or len(
+              receipt["camera_tour_storyboard_png_sha256"]
+          ) != 64:
+              raise ValueError("Missing same-run camera storyboard SHA-256")
           if receipt.get("current_view_png_export_verified_in_chrome") is not True:
               raise ValueError("Actual Chrome did not export its current real-photo 3D view as PNG")
           dimensions = receipt.get("current_view_png_dimensions")
@@ -6474,6 +6499,7 @@ jobs:
           png_hashes = {
               "real-stereo-3d-browser.png": receipt["screenshot_sha256"],
               "real-stereo-3d-side-by-side.png": receipt["side_by_side_screenshot_sha256"],
+              "real-stereo-3d-camera-storyboard.png": receipt["camera_tour_storyboard_png_sha256"],
               **{
                   f"real-stereo-3d-{mode}.png": digest
                   for mode, digest in receipt["mode_screenshot_sha256"].items()
@@ -6482,11 +6508,12 @@ jobs:
           if set(png_hashes) != {
               "real-stereo-3d-browser.png",
               "real-stereo-3d-side-by-side.png",
+              "real-stereo-3d-camera-storyboard.png",
               "real-stereo-3d-stereo.png",
               "real-stereo-3d-quality.png",
               "real-stereo-3d-sift.png",
           }:
-              raise ValueError("Five Chrome screenshot identities required")
+              raise ValueError("Six Chrome screenshot identities required")
           for name, digest in png_hashes.items():
               data = (proof / name).read_bytes()
               if not data.startswith(bytes.fromhex("89504e470d0a1a0a")):
@@ -6573,6 +6600,7 @@ jobs:
               "source": "same GitHub Actions run, actual Chrome + real-photo CPU previews",
               "source_glb_sha256": source_hashes,
               "chrome_png_sha256": png_hashes,
+              "camera_tour_storyboard_png": "real-stereo-3d-camera-storyboard.png",
               "real_gpu_training": False,
               "metric_scale_known": False,
               "four_d_reconstruction": False,
@@ -6585,7 +6613,7 @@ jobs:
           assert all(hashlib.sha256((bundle / name).read_bytes()).hexdigest() == digest
                      for name, digest in {**source_hashes, **png_hashes}.items())
           print(f"One offline 3D exploration bundle: {len(list(bundle.iterdir()))} entries, "
-                "four GLBs, four real Chrome PNGs, interactive viewer, report, receipts")
+                "four GLBs, six real Chrome PNGs, interactive viewer, report, receipts")
           PY
           python3 wre-unified-offline-3d/open-wre-3d.py --check
 
