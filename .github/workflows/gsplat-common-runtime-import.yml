@@ -1392,6 +1392,59 @@ jobs:
           xy[:, 0] = np.clip(xy[:, 0], 0, w - 1)
           xy[:, 1] = np.clip(xy[:, 1], 0, h - 1)
           rgb = left[xy[:, 1], xy[:, 0], ::-1]
+          # Visual proof using ACTUAL image observations and SIFT-derived 3D.
+          # Circles=observed pixels; white crosses=reprojected XYZ; lines=residuals.
+          # Metrics are in-sample, NEVER held-out reconstruction accuracy.
+          residuals = np.sqrt(
+              (np.square(uv0 - p0).sum(axis=1)
+               + np.square(uv1 - p1).sum(axis=1)) / 2.0
+          )
+          assert len(residuals) == len(xyz) and np.all(np.isfinite(residuals))
+          assert np.isclose(np.sqrt(np.mean(residuals**2)), rmse, atol=1e-8)
+          banner = 38
+          diagnostic = np.zeros((h + banner, 2 * w, 3), dtype=np.uint8)
+          diagnostic[banner:, :w] = left
+          diagnostic[banner:, w:] = right
+          for i, (observed, projected) in enumerate(((p0, uv0), (p1, uv1))):
+              horizontal_offset = i * w
+              for obs, pred, error in zip(observed, projected, residuals, strict=True):
+                  observed_at = (
+                      int(round(obs[0])) + horizontal_offset, int(round(obs[1])) + banner
+                  )
+                  predicted_at = (
+                      int(round(pred[0])) + horizontal_offset, int(round(pred[1])) + banner
+                  )
+                  if not (horizontal_offset <= observed_at[0] < horizontal_offset + w
+                          and banner <= observed_at[1] < banner + h):
+                      continue
+                  color = (20, 200, 40) if error <= 2.0 else (20, 100, 255)
+                  if (horizontal_offset <= predicted_at[0] < horizontal_offset + w
+                          and banner <= predicted_at[1] < banner + h):
+                      cv2.line(diagnostic, observed_at, predicted_at, color, 1)
+                      cv2.drawMarker(
+                          diagnostic, predicted_at, (255, 255, 255),
+                          cv2.MARKER_CROSS, markerSize=5, thickness=1,
+                      )
+                  cv2.circle(diagnostic, observed_at, 2, color, thickness=-1)
+          p95 = float(np.percentile(residuals, 95))
+          median = float(np.median(residuals))
+          cv2.putText(
+              diagnostic,
+              f"REAL SIFT observed vs 3D projection | in-sample RMSE {rmse:.2f}px",
+              (8, 15), cv2.FONT_HERSHEY_SIMPLEX, 0.41, (255, 255, 255), 1,
+          )
+          cv2.putText(
+              diagnostic,
+              f"Left / right | {len(xyz)} tracks | p95 {p95:.2f}px | green <=2px",
+              (8, 31), cv2.FONT_HERSHEY_SIMPLEX, 0.41, (255, 255, 255), 1,
+          )
+          diagnostic_path = root / "wre-real-stereo-sift-observed-reprojection.png"
+          assert cv2.imwrite(str(diagnostic_path), diagnostic)
+          decoded_diagnostic = cv2.imread(str(diagnostic_path), cv2.IMREAD_COLOR)
+          assert decoded_diagnostic is not None
+          assert decoded_diagnostic.shape == (h + banner, 2 * w, 3)
+          diagnostic_sha256 = hashlib.sha256(diagnostic_path.read_bytes()).hexdigest()
+          assert diagnostic_path.stat().st_size > 1000
           ply = root / "wre-real-stereo-sift-estimated-3d.ply"
           with ply.open("w", encoding="ascii") as file:
               file.write("ply\nformat ascii 1.0\n" +
@@ -1410,6 +1463,10 @@ jobs:
               "pose_ransac_inliers": int(inlier_count),
               "triangulated_positive_depth_rgb_points": int(len(xyz)),
               "two_view_in_sample_reprojection_rmse_pixels": rmse,
+              "two_view_in_sample_reprojection_median_pixels": median,
+              "two_view_in_sample_reprojection_p95_pixels": p95,
+              "reprojection_diagnostic_png": diagnostic_path.name,
+              "reprojection_diagnostic_sha256": diagnostic_sha256,
               "estimated_rotation_world_to_right_camera": R.tolist(),
               "estimated_translation_direction_world_to_right_camera": t.ravel().tolist(),
               "intrinsics_approximate": K.tolist(),
@@ -1745,7 +1802,158 @@ jobs:
       # Run the actual-photo CPU reconstruction BEFORE expensive native CUDA
       # compilation. Keep the original photo pipeline in one place and make
       # its real 3D/preview outputs inspectable even while CUDA builds run.
-      - name: Stage thirty-three real-photo CPU 3D and SIFT COLMAP outputs early
+      - name: Package interactive browser preview of real-photo textured GLB (CPU)
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$COMMON_PYTHON" - <<'PY'
+          import base64
+          import hashlib
+          import json
+          import math
+          import os
+          import struct
+          from pathlib import Path
+
+          output = Path(os.environ["RUNNER_TEMP"])
+          source = output / "wre-real-stereo-cpu-textured.glb"
+          payload = source.read_bytes()
+          # glTF 2.0 binary header: magic, version, complete byte length.
+          assert 1024 < len(payload) <= 40_000_000
+          assert payload[:4] == b"glTF"
+          assert struct.unpack_from("<I", payload, 4)[0] == 2
+          assert struct.unpack_from("<I", payload, 8)[0] == len(payload)
+          digest = hashlib.sha256(payload).hexdigest()
+          encoded = base64.b64encode(payload).decode("ascii")
+          # Keep the observed source and reconstruction errors visible beside
+          # the GLB. Every diagnostic is a previously measured CPU output,
+          # never an inferred or generated photograph.
+          metrics = json.loads(
+              (output / "wre-real-stereo-cpu-metrics.json").read_text(encoding="utf-8")
+          )
+          sift_pose = json.loads(
+              (output / "wre-real-stereo-sift-estimated-pose.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          assert metrics["photos_are_real"] is True
+          assert sift_pose["real_photographs"] is True
+          mae = float(metrics["right_reprojection_photometric_mae_0_255"])
+          rmse = float(sift_pose["two_view_in_sample_reprojection_rmse_pixels"])
+          tracks = int(sift_pose["triangulated_positive_depth_rgb_points"])
+          assert math.isfinite(mae) and 0 <= mae <= 255
+          assert math.isfinite(rmse) and rmse >= 0 and tracks > 0
+          images = (
+              ("SOURCE_PHOTOS", "wre-real-stereo-cpu-photos.png"),
+              ("SIFT_REPROJECTION", "wre-real-stereo-sift-observed-reprojection.png"),
+              ("STEREO_REPROJECTION", "wre-real-stereo-cpu-right-reprojection.png"),
+          )
+          evidence = {}
+          for marker, name in images:
+              data = (output / name).read_bytes()
+              assert 64 < len(data) <= 8_000_000
+              assert data[:8] == bytes.fromhex("89504e470d0a1a0a")
+              evidence[marker] = (
+                  base64.b64encode(data).decode("ascii"),
+                  hashlib.sha256(data).hexdigest(),
+              )
+          # Embed the actual previously generated GLB directly. Opening the
+          # HTML file needs no local web server or separately hosted model;
+          # only the pinned free open-source browser component needs network.
+          page = """<!doctype html>
+          <html lang="en">
+          <head>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width,initial-scale=1">
+            <title>WRE · Real-photograph CPU 3D preview</title>
+            <script type="module"
+              src="https://cdnjs.cloudflare.com/ajax/libs/model-viewer/4.1.0/model-viewer.min.js"
+              integrity="sha512-PMy/x5h09gVKwc21Cdcgu/VWJwgmeJ7uivJkbTar3vh5t8uzYo3NQgTkZE0fsfUd+9vihkAcLNAh6mv9mEXkZQ=="
+              crossorigin="anonymous"></script>
+            <style>
+              html,body { margin:0; height:100%; background:#101722; color:#e6edf7;
+                font:15px system-ui,sans-serif; }
+              main { height:100%; display:flex; flex-direction:column; }
+              header { padding:12px 18px; background:#192332; }
+              h1 { font-size:18px; margin:0 0 5px; }
+              p { margin:3px 0; line-height:1.35; }
+              model-viewer { display:block; width:100%; flex:1; min-height:320px; }
+              .metrics { font-variant-numeric:tabular-nums; padding:8px 18px;
+                background:#202d3e; }
+              .evidence { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+                gap:10px; padding:10px; max-height:36vh; overflow:auto; }
+              figure { margin:0; min-width:0; }
+              figure img { display:block; width:100%; height:auto; object-fit:contain; }
+              figcaption { font-size:12px; padding:4px 0; overflow-wrap:anywhere; }
+              footer { padding:8px 18px; background:#192332;
+                overflow-wrap:anywhere; font-size:12px; }
+            </style>
+          </head>
+          <body>
+          <main>
+            <header>
+              <h1>WRE · Interactive real-photo stereo 3D</h1>
+              <p>Drag to orbit, scroll to zoom. Geometry and texture come from two
+              pinned real photographs reconstructed on CPU.</p>
+              <p>Static approximate stereo mesh. Uncalibrated scene scale;
+              incomplete/occluded surfaces. NOT 4D, Gaussian training or GPU rendering.</p>
+            </header>
+            <model-viewer camera-controls auto-rotate interaction-prompt="auto"
+              alt="Approximate CPU stereo 3D reconstruction from two real photos"
+              src="data:model/gltf-binary;base64,WRE_GLB_BASE64"></model-viewer>
+            <div class="metrics">Observed right-view photometric MAE: WRE_STEREO_MAE/255
+              (in-sample). SIFT two-view reprojection RMSE: WRE_SIFT_RMSE px
+              (in-sample, WRE_TRACKS measured 3D tracks). Neither is held-out accuracy.</div>
+            <section class="evidence" aria-label="Observed photographs and diagnostics">
+              <figure><img alt="Two original observed photographs"
+                src="data:image/png;base64,WRE_SOURCE_PHOTOS_BASE64">
+                <figcaption>Original observed photos · SHA-256 WRE_SOURCE_PHOTOS_SHA</figcaption></figure>
+              <figure><img alt="Observed pixels versus estimated camera reprojections"
+                src="data:image/png;base64,WRE_SIFT_REPROJECTION_BASE64">
+                <figcaption>Measured SIFT projection errors · SHA-256
+                  WRE_SIFT_REPROJECTION_SHA</figcaption></figure>
+              <figure><img alt="Observed right camera versus stereo depth reprojection"
+                src="data:image/png;base64,WRE_STEREO_REPROJECTION_BASE64">
+                <figcaption>Depth-based right view errors · SHA-256
+                  WRE_STEREO_REPROJECTION_SHA</figcaption></figure>
+            </section>
+            <footer>GLB SHA-256: WRE_GLB_SHA256. The mesh and diagnostic photos are embedded;
+              the free model-viewer 4.1.0 renderer requires an internet connection.
+              Downloaded model bytes are not sent to an AI or paid API.</footer>
+          </main>
+          </body>
+          </html>
+          """
+          page = page.replace("WRE_GLB_BASE64", encoded).replace("WRE_GLB_SHA256", digest)
+          page = (
+              page.replace("WRE_STEREO_MAE", f"{mae:.3f}")
+              .replace("WRE_SIFT_RMSE", f"{rmse:.3f}")
+              .replace("WRE_TRACKS", str(tracks))
+          )
+          for marker, (content, image_hash) in evidence.items():
+              page = page.replace("WRE_" + marker + "_BASE64", content)
+              page = page.replace("WRE_" + marker + "_SHA", image_hash)
+          # Verify the browser artifact carries EXACTLY the validated source GLB.
+          inline = page.split("data:model/gltf-binary;base64,", 1)[1].split('"', 1)[0]
+          assert base64.b64decode(inline, validate=True) == payload
+          assert page.count("data:model/gltf-binary;base64,") == 1
+          assert page.count("data:image/png;base64,") == len(evidence)
+          for marker, (image_bytes_base64, image_hash) in evidence.items():
+              assert image_hash in page
+              assert page.count(image_bytes_base64) == 1
+              assert base64.b64decode(image_bytes_base64, validate=True) == (
+                  output / dict(images)[marker]
+              ).read_bytes()
+          viewer = output / "wre-real-stereo-cpu-viewer.html"
+          viewer.write_text(page, encoding="utf-8")
+          assert viewer.stat().st_size > len(payload)
+          print(
+              f"Real-photo stereo 3D viewer: {viewer.name}; GLB SHA256 {digest}; "
+              f"HTML bytes {viewer.stat().st_size}. Browser render not CI-tested."
+          )
+          PY
+
+      - name: Stage thirty-five real-photo CPU 3D and SIFT COLMAP outputs early
         shell: bash
         run: |
           set -euo pipefail
@@ -1763,6 +1971,7 @@ jobs:
             wre-real-stereo-cpu-surface.ply \
             wre-real-stereo-cpu-textured.obj \
             wre-real-stereo-cpu-textured.glb \
+            wre-real-stereo-cpu-viewer.html \
             wre-real-stereo-cpu-3d-flythrough.gif \
             wre-real-stereo-cpu-photo-flythrough.gif \
             wre-real-stereo-cpu-dual-photo-flythrough.gif \
@@ -1783,13 +1992,14 @@ jobs:
             wre-real-stereo-sift-estimated-pose.json \
             wre-real-stereo-sift-estimated-cameras.glb \
             wre-real-stereo-sift-observed-tracks.json \
+            wre-real-stereo-sift-observed-reprojection.png \
             wre-real-stereo-sift-colmap-dataset.zip \
             wre-real-stereo-sift-colmap-handoff.json
           do
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 33
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 35
 
       - name: Publish real-photo CPU 3D plus COLMAP before native CUDA builds
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -2862,6 +3072,7 @@ jobs:
             wre-real-stereo-cpu-surface.ply \
             wre-real-stereo-cpu-textured.obj \
             wre-real-stereo-cpu-textured.glb \
+            wre-real-stereo-cpu-viewer.html \
             wre-real-stereo-cpu-3d-flythrough.gif \
             wre-real-stereo-cpu-photo-flythrough.gif \
             wre-real-stereo-cpu-dual-photo-flythrough.gif \
@@ -2880,14 +3091,15 @@ jobs:
             wre-real-stereo-sift-estimated-pose.json \
             wre-real-stereo-sift-estimated-cameras.glb \
             wre-real-stereo-sift-observed-tracks.json \
+            wre-real-stereo-sift-observed-reprojection.png \
             wre-real-stereo-sift-colmap-dataset.zip \
             wre-real-stereo-sift-colmap-handoff.json
           do
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 49
-          echo "Staged all 49 real PLY/OBJ/GLB/GIF/MTL/PNG/PFM/NPY/JSON/ZIP files for artifact upload"
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 51
+          echo "Staged all 51 real PLY/OBJ/GLB/HTML/GIF/MTL/PNG/PFM/NPY/JSON/ZIP files for artifact upload"
 
       - name: Publish CPU COLMAP 3D preview and measured reprojection
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
