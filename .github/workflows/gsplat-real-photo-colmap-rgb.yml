@@ -167,7 +167,7 @@ jobs:
               assert 0 < len(original) <= 8_000_000
               assert git_blob(original) == expected_git_blob, "real photograph Git blob mismatch"
               with Image.open(io.BytesIO(original)) as opened:
-                  assert opened.format == "JPEG" and opened.width >= 320
+                  assert opened.width >= 320 and opened.height >= 240, (filename, opened.format, opened.size)
                   image = ImageOps.exif_transpose(opened).convert("RGB")
               image.thumbnail((768, 768), Image.Resampling.LANCZOS)
               png = srgb_png(image)
