@@ -1217,7 +1217,7 @@ jobs:
               "original_photo_sha256": original_sha256,
               "original_photo_height_width": original_shape,
               "processed_photo_height_width": [height, width],
-              "algorithm": "pinned OpenCV 4.10 StereoSGBM",
+              "algorithm": f"OpenCV {cv2.__version__} StereoSGBM (runtime)",
               "calibrated_metric_depth": False,
               "baseline_model_units_arbitrary": baseline_gauge,
               "approximate_focal_pixels": focal_guess,
