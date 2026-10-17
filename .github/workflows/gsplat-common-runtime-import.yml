@@ -1217,9 +1217,52 @@ jobs:
           rgb_colors = np.ascontiguousarray(colors, dtype="u1")
           assert rgb_positions.shape == rgb_colors.shape
           assert np.isfinite(rgb_positions).all()
+
+          # Functional camera overlay: every frustum comes from a REAL COLMAP
+          # pose loaded by the pinned upstream Parser (normalize=False).
+          # Neither image ground-truth nor a fabricated metric scale is used.
+          assert len(four_parsed.camtoworlds) == 4
+          frustum_depth = 0.08 * float(np.linalg.norm(np.ptp(reconstructed, axis=0)))
+          assert np.isfinite(frustum_depth) and frustum_depth > 0.0
+          image_height, image_width = views[0].shape[:2]
+          fx, fy = float(intrinsic[0, 0]), float(intrinsic[1, 1])
+          cx, cy = float(intrinsic[0, 2]), float(intrinsic[1, 2])
+          assert fx > 0.0 and fy > 0.0
+          local_frustum = np.asarray(
+              [
+                  (0.0, 0.0, 0.0),
+                  (-cx / fx, -cy / fy, 1.0),
+                  ((image_width - cx) / fx, -cy / fy, 1.0),
+                  ((image_width - cx) / fx, (image_height - cy) / fy, 1.0),
+                  (-cx / fx, (image_height - cy) / fy, 1.0),
+              ],
+              dtype=np.float64,
+          ) * frustum_depth
+          edges = ((0, 1), (0, 2), (0, 3), (0, 4),
+                   (1, 2), (2, 3), (3, 4), (4, 1))
+          camera_palette = (
+              (255, 87, 87), (80, 200, 120),
+              (80, 160, 255), (250, 203, 80),
+          )
+          line_positions, line_colors = [], []
+          for camera_index, pose in enumerate(four_parsed.camtoworlds):
+              assert np.isfinite(pose).all()
+              world_vertices = (pose[:3, :3] @ local_frustum.T).T + pose[:3, 3]
+              world_vertices[:, 1:] *= -1.0  # Same COLMAP -> glTF as the points.
+              for first, second in edges:
+                  line_positions.extend((world_vertices[first], world_vertices[second]))
+                  line_colors.extend((camera_palette[camera_index],) * 2)
+          frustum_positions = np.ascontiguousarray(line_positions, dtype="<f4")
+          frustum_colors = np.ascontiguousarray(line_colors, dtype="u1")
+          assert frustum_positions.shape == frustum_colors.shape == (64, 3)
+          assert np.isfinite(frustum_positions).all()
+
           glb_binary = bytearray()
           glb_views = []
-          for payload in (rgb_positions.tobytes(), rgb_colors.tobytes()):
+          for payload in (
+              rgb_positions.tobytes(), rgb_colors.tobytes(),
+              frustum_positions.tobytes(), frustum_colors.tobytes(),
+          ):
               offset = len(glb_binary)
               glb_binary.extend(payload)
               glb_binary.extend(b"\0" * (-len(glb_binary) % 4))
@@ -1234,11 +1277,17 @@ jobs:
               },
               "scene": 0,
               "scenes": [{"nodes": [0]}],
-              "nodes": [{"mesh": 0, "name": "Four-view measured RGB 3D points"}],
-              "meshes": [{"primitives": [{
-                  "attributes": {"POSITION": 0, "COLOR_0": 1},
-                  "material": 0, "mode": 0,
-              }]}],
+              "nodes": [{"mesh": 0, "name": "Measured 3D points and four COLMAP cameras"}],
+              "meshes": [{"primitives": [
+                  {
+                      "attributes": {"POSITION": 0, "COLOR_0": 1},
+                      "material": 0, "mode": 0,
+                  },
+                  {
+                      "attributes": {"POSITION": 2, "COLOR_0": 3},
+                      "material": 0, "mode": 1,
+                  },
+              ]}],
               "materials": [{
                   "name": "Observed source RGB",
                   "doubleSided": True,
@@ -1257,6 +1306,17 @@ jobs:
                   {
                       "bufferView": 1, "componentType": 5121,
                       "normalized": True, "count": len(rgb_colors),
+                      "type": "VEC3",
+                  },
+                  {
+                      "bufferView": 2, "componentType": 5126,
+                      "count": len(frustum_positions), "type": "VEC3",
+                      "min": frustum_positions.min(axis=0).tolist(),
+                      "max": frustum_positions.max(axis=0).tolist(),
+                  },
+                  {
+                      "bufferView": 3, "componentType": 5121,
+                      "normalized": True, "count": len(frustum_colors),
                       "type": "VEC3",
                   },
               ],
@@ -1284,6 +1344,9 @@ jobs:
           decoded_glb = json.loads(reopened_glb[20:20 + json_length])
           assert decoded_glb["accessors"][0]["count"] == len(reconstructed)
           assert decoded_glb["accessors"][1]["normalized"] is True
+          assert [part["mode"] for part in decoded_glb["meshes"][0]["primitives"]] == [0, 1]
+          assert decoded_glb["accessors"][2]["count"] == 64
+          assert decoded_glb["accessors"][3]["normalized"] is True
           bin_header = 20 + json_length
           bin_length, bin_type = struct.unpack_from("<I4s", reopened_glb, bin_header)
           assert bin_type == b"BIN\0"
@@ -1291,7 +1354,10 @@ jobs:
           raw_glb = reopened_glb[bin_header + 8:]
           for view, expected in zip(
               decoded_glb["bufferViews"],
-              (rgb_positions.tobytes(), rgb_colors.tobytes()),
+              (
+                  rgb_positions.tobytes(), rgb_colors.tobytes(),
+                  frustum_positions.tobytes(), frustum_colors.tobytes(),
+              ),
               strict=True,
           ):
               begin = view["byteOffset"]
@@ -1309,8 +1375,15 @@ jobs:
               "colmap_reloaded_by": "pinned gsplat Parser/Dataset (CPU)",
               "rgb_glb_filename": "wre-sift-four-view-rgb.glb",
               "rgb_glb_point_count": int(len(reconstructed)),
+              "rgb_glb_estimated_camera_count": 4,
+              "rgb_glb_camera_frustum_line_segments": 32,
+              "rgb_glb_camera_poses": "four poses reloaded by pinned gsplat COLMAP Parser",
+              "rgb_glb_camera_geometry_scale": "arbitrary; derived from reconstructed XYZ extent",
               "rgb_glb_sha256": hashlib.sha256(reopened_glb).hexdigest(),
-              "rgb_glb_representation": "glTF 2.0 POINTS from observed RGB and BA XYZ",
+              "rgb_glb_representation": (
+                  "glTF 2.0 POINTS from observed RGB and BA XYZ, "
+                  "plus LINE camera frusta from estimated COLMAP poses"
+              ),
               "intrinsics_known": True,
               "metric_scale_known": False,
               "synthetic_image_fixture": True,
