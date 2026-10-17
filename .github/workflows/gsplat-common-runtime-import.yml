@@ -1979,6 +1979,13 @@ jobs:
               <input id="wre-measure-import" type="file" accept=".json,application/json"
                 aria-label="Restore exported 3D distance, path, polygon area or chord angle JSON" disabled>
               <span id="wre-measure-import-status" role="status">3D measure restore available after load.</span>
+              <label for="wre-reference-metres">Known straight-line reference length (metres, user supplied):</label>
+              <input id="wre-reference-metres" type="number" min="0" max="10000000"
+                step="any" inputmode="decimal" aria-label="Known reference distance in metres">
+              <button id="wre-reference-apply" type="button">Calibrate from selected two-point distance</button>
+              <button id="wre-reference-estimate" type="button">Show user-scaled estimate</button>
+              <button id="wre-reference-clear" type="button">Clear reference scale</button>
+              <span id="wre-reference-status" role="status">No user-supplied scale; all model geometry is nonmetric.</span>
               <button id="wre-view-export" type="button" disabled
                 aria-label="Save current 3D view as PNG">Save current 3D view PNG</button>
               <span id="wre-view-export-status" role="status">3D view loading.</span>
@@ -2014,6 +2021,11 @@ jobs:
               const cameraExport = document.getElementById("wre-camera-export");
               const cameraImport = document.getElementById("wre-camera-import");
               const cameraStatus = document.getElementById("wre-camera-status");
+              const referenceMetres = document.getElementById("wre-reference-metres");
+              const referenceApply = document.getElementById("wre-reference-apply");
+              const referenceEstimate = document.getElementById("wre-reference-estimate");
+              const referenceClear = document.getElementById("wre-reference-clear");
+              const referenceStatus = document.getElementById("wre-reference-status");
               scene.addEventListener("load", () => {
                 cameraExport.disabled = false;
                 cameraImport.disabled = false;
@@ -2129,6 +2141,79 @@ jobs:
                   cameraStatus.textContent = "Viewpoint restore refused: " + String(error);
                 }
               });
+              // Scene-specific USER calibration, not measured ground truth.
+              // Canonical measurement JSON stays strictly nonmetric.
+              let metresPerModelUnit = null;
+              let calibrationSource = null;
+              let calibrationIdentity = null;
+              function clearUserCalibration() {
+                metresPerModelUnit = null;
+                calibrationSource = null;
+                calibrationIdentity = null;
+                referenceStatus.textContent =
+                  "No user-supplied scale; all model geometry is nonmetric.";
+              }
+              function showUserCalibratedEstimate() {
+                if (!scene.loaded || !Number.isFinite(metresPerModelUnit) ||
+                    calibrationSource !== scene.getAttribute("src") ||
+                    calibrationIdentity !== provenance.textContent.trim()) {
+                  referenceStatus.textContent = "No reference scale for the current 3D model.";
+                  return;
+                }
+                const measurement = completedMeasurement;
+                if (!measurement) {
+                  referenceStatus.textContent =
+                    "User reference active; select or restore a 3D measurement.";
+                  return;
+                }
+                let value, units, type;
+                if (measurement.schema === "wre.relative_3d_surface_measurement.v1") {
+                  value = measurement.distance_model_units * metresPerModelUnit;
+                  units = "m"; type = "straight-line distance";
+                } else if (measurement.schema === "wre.relative_3d_surface_polyline.v1") {
+                  value = measurement.total_length_model_units * metresPerModelUnit;
+                  units = "m"; type = "chord polyline";
+                } else if (measurement.schema === "wre.relative_3d_triangle_fan_area.v1") {
+                  value = measurement.total_area_model_units_squared *
+                    metresPerModelUnit * metresPerModelUnit;
+                  units = "m²"; type = "planar triangle-fan area";
+                } else {
+                  referenceStatus.textContent =
+                    "Chord angle is scale-independent; reference does not change its value.";
+                  return;
+                }
+                if (!Number.isFinite(value) || value < 0) {
+                  referenceStatus.textContent = "Scaled value is outside numerical limits.";
+                  return;
+                }
+                referenceStatus.textContent = "User-scaled " + type + ": " +
+                  value.toFixed(5) + " " + units +
+                  " (approximate geometry, manually supplied reference; NOT certified accuracy).";
+              }
+              referenceApply.addEventListener("click", () => {
+                const knownMetres = Number(referenceMetres.value);
+                const measurement = completedMeasurement;
+                const referenceUnits = measurement && measurement.distance_model_units;
+                if (!scene.loaded || !referenceMetres.value.trim() ||
+                    !measurement || measurement.schema !== "wre.relative_3d_surface_measurement.v1" ||
+                    !(knownMetres > 0 && knownMetres <= 1e7) ||
+                    !(referenceUnits > 1e-9) || !Number.isFinite(referenceUnits)) {
+                  referenceStatus.textContent =
+                    "Reference refused: first select two distinct 3D mesh points and enter known metres.";
+                  return;
+                }
+                const factor = knownMetres / referenceUnits;
+                if (!(factor >= 1e-12 && factor <= 1e12) || !Number.isFinite(factor)) {
+                  referenceStatus.textContent = "Reference refused: scale is out of range.";
+                  return;
+                }
+                metresPerModelUnit = factor;
+                calibrationSource = scene.getAttribute("src");
+                calibrationIdentity = provenance.textContent.trim();
+                showUserCalibratedEstimate();
+              });
+              referenceEstimate.addEventListener("click", showUserCalibratedEstimate);
+              referenceClear.addEventListener("click", clearUserCalibration);
               let measuring = false;
               let tracing = false;
               let areaMode = false;
@@ -2651,6 +2736,7 @@ jobs:
                   return;
                 }
                 releaseLocalUrl();
+                clearUserCalibration();
                 resetMeasurement();
                 viewExportButton.disabled = true;
                 cameraExport.disabled = true;
@@ -2692,6 +2778,7 @@ jobs:
                 const mode = modes[chooser.value];
                 if (!mode) return;
                 releaseLocalUrl();
+                clearUserCalibration();
                 resetMeasurement();
                 viewExportButton.disabled = true;
                 cameraExport.disabled = true;
@@ -4255,7 +4342,7 @@ jobs:
                 return button.getAttribute('aria-pressed') === 'true' &&
                   !scene.hasAttribute('auto-rotate');
               """)
-              measure_hits = js("""
+              measure_scan = """
                 const scene=document.getElementById('wre-scene');
                 const box=scene.getBoundingClientRect();
                 const hits=[];
@@ -4275,8 +4362,8 @@ jobs:
                   }
                 }
                 return null;
-              """)
-              assert measure_hits is not None, "Chrome could not hit two distinct real mesh points"
+              """
+              assert js(measure_scan) is not None, "Chrome could not hit two distinct real mesh points"
               measure_status = js(f"""
                 const scene=document.getElementById('wre-scene');
                 const toggle=document.getElementById('wre-measure-toggle');
@@ -4295,9 +4382,14 @@ jobs:
                   }}
                   return hit;
                 }};
-                for (const p of {json.dumps(measure_hits)}) {{
+                // Scan and click in the SAME WebDriver script. Camera
+                // interpolation after bookmark restore made separately
+                // sampled pixels stale, even after stopping auto-rotate.
+                const fresh=(() => {{ {measure_scan} }})();
+                if (!fresh) return {{error:'fresh measure scan found no two points'}};
+                for (const p of fresh) {{
                   const hit=originalRaycast(p.x,p.y);
-                  if (!hit || !hit.position) return {{error:'click missed surface'}};
+                  if (!hit || !hit.position) return {{error:'fresh click missed surface'}};
                   window.__wreCapturingClick=true;
                   scene.dispatchEvent(new MouseEvent('click', {{
                     bubbles:true, clientX:p.x, clientY:p.y
@@ -4379,6 +4471,28 @@ jobs:
               """)
               assert restored_distance["markers"] == measure_status["clicked"]
               assert "NOT meters" in restored_distance["result"]
+              # Real mesh-raycast points -> portable distance -> manual
+              # user reference scale. This is NOT a calibrated 3D dataset.
+              assert js("""
+                const known=document.getElementById('wre-reference-metres');
+                known.value='-4';
+                document.getElementById('wre-reference-apply').click();
+                return document.getElementById('wre-reference-status')
+                  .textContent.includes('Reference refused');
+              """), "Negative user-provided reference distance was accepted"
+              calibrated_distance = js("""
+                document.getElementById('wre-reference-metres').value='2.5';
+                document.getElementById('wre-reference-apply').click();
+                return document.getElementById('wre-reference-status').textContent;
+              """)
+              assert "User-scaled straight-line distance: 2.50000 m" in calibrated_distance
+              assert "NOT certified accuracy" in calibrated_distance
+              assert js("""
+                window.__wreExportedMeasurement=null;
+                document.getElementById('wre-measure-export').click();
+                return true;
+              """)
+              assert json.loads(until("return window.__wreExportedMeasurement;")) == exported_measurement
               # Invalid foreign-model provenance or altered distance must not
               # replace the current saved annotation or its two markers.
               for invalid in (
@@ -4632,15 +4746,50 @@ jobs:
               area_status = js(f"""
                 const scene=document.getElementById('wre-scene');
                 const button=document.getElementById('wre-area-toggle');
+                // Sample the ACTUAL mesh again immediately before dispatch.
+                // The model-viewer camera may settle between WebDriver calls;
+                // stale screen pixels are not reliable points on the surface.
+                const fresh=(() => {{ {area_scan} }})();
+                if (!fresh.points) return {{error:'area mesh sample vanished', count:fresh.count}};
                 window.__wreClickedRaycasts=[];
-                for (const p of {json.dumps(area_hits)}) {{
+                for (const p of fresh.points) {{
                   const hit=scene.positionAndNormalFromPoint(p.x,p.y);
-                  if (!hit || !hit.position) return {{error:'area click missed surface'}};
+                  if (!hit || !hit.position) continue;
                   window.__wreCapturingClick=true;
                   scene.dispatchEvent(new MouseEvent('click', {{
                     bubbles:true, clientX:p.x, clientY:p.y
                   }}));
                   window.__wreCapturingClick=false;
+                }}
+                // Real hit-testing sometimes drops the third click when the
+                // model-viewer camera updates its hit surface after placing
+                // hotspots. Retry OTHER genuinely raycast mesh pixels; never
+                // inject synthetic XYZ or fake a successful user interaction.
+                if (window.__wreClickedRaycasts.length === 2 &&
+                    scene.querySelectorAll('.wre-pick-marker').length === 2) {{
+                  const [a,b]=window.__wreClickedRaycasts;
+                  const u=b.map((v,i)=>v-a[i]);
+                  const edge=Math.hypot(...u);
+                  const box=scene.getBoundingClientRect();
+                  for (let yi=0;yi<=10 && window.__wreClickedRaycasts.length<3;yi++) {{
+                    for (let xi=0;xi<=10 && window.__wreClickedRaycasts.length<3;xi++) {{
+                      const x=box.left+box.width*(0.15+0.7*xi/10);
+                      const y=box.top+box.height*(0.15+0.7*yi/10);
+                      const hit=scene.positionAndNormalFromPoint(x,y);
+                      if (!hit || !hit.position) continue;
+                      const v=[hit.position.x-a[0],hit.position.y-a[1],
+                               hit.position.z-a[2]];
+                      const cross=Math.hypot(
+                        u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],
+                        u[0]*v[1]-u[1]*v[0]);
+                      if (!(cross>edge*edge*1e-6)) continue;
+                      window.__wreCapturingClick=true;
+                      scene.dispatchEvent(new MouseEvent('click', {{
+                        bubbles:true, clientX:x, clientY:y
+                      }}));
+                      window.__wreCapturingClick=false;
+                    }}
+                  }}
                 }}
                 return {{
                   status:document.getElementById('wre-measure-result').textContent,
@@ -4713,6 +4862,21 @@ jobs:
               assert restored_area["markers"] == area_status["clicked"], restored_area
               assert restored_area["autoRotate"] is False
               assert "NOT physical surface area" in restored_area["result"]
+              # The same manually supplied metre/scene-unit factor applies
+              # quadratically to triangle-fan area, not to surface geodesics.
+              calibrated_area = js("""
+                document.getElementById('wre-reference-estimate').click();
+                return document.getElementById('wre-reference-status').textContent;
+              """)
+              assert "User-scaled planar triangle-fan area:" in calibrated_area
+              assert "NOT certified accuracy" in calibrated_area
+              expected_user_area = (
+                  area_json["total_area_model_units_squared"] *
+                  (2.5 / exported_measurement["distance_model_units"]) ** 2
+              )
+              value_user_area = float(calibrated_area.split("area: ", 1)[1].split(" m²", 1)[0])
+              assert abs(value_user_area - expected_user_area) < 0.00002
+              calibration_verified_in_chrome = True
               for invalid in (
                   dict(area_json, model_provenance="different 3D GLB"),
                   dict(area_json, total_area_model_units_squared=
@@ -4906,6 +5070,10 @@ jobs:
                     chooser.value={json.dumps(name)};
                     chooser.dispatchEvent(new Event('change', {{bubbles:true}}));
                   """)
+                  assert js("""
+                    return document.getElementById('wre-reference-status')
+                      .textContent.includes('No user-supplied scale');
+                  """), "Reference scale leaked into a different 3D scene"
                   assert until(f"""
                     const scene=document.getElementById('wre-scene');
                     return window.__wre3dLoads >= {sequence} &&
@@ -4976,6 +5144,7 @@ jobs:
                       "surface_polyline_restore_verified_in_chrome": True,
                       "surface_triangle_fan_area_export_verified_in_chrome": True,
                       "surface_triangle_fan_area_restore_verified_in_chrome": True,
+                      "user_reference_scale_verified_in_chrome": calibration_verified_in_chrome,
                       "surface_chord_angle_export_verified_in_chrome": True,
                       "surface_chord_angle_restore_verified_in_chrome": True,
                       "relative_3d_camera_bookmark_roundtrip_verified_in_chrome": True,
@@ -5105,6 +5274,8 @@ jobs:
               raise ValueError("Actual Chrome did not export a relative 3D polygon triangle-fan area")
           if receipt.get("surface_triangle_fan_area_restore_verified_in_chrome") is not True:
               raise ValueError("Actual Chrome did not restore the saved 3D polygon area")
+          if receipt.get("user_reference_scale_verified_in_chrome") is not True:
+              raise ValueError("Actual Chrome did not exercise user-supplied 3D scale")
           if receipt.get("surface_chord_angle_export_verified_in_chrome") is not True:
               raise ValueError("Actual Chrome did not export a real-raycast 3D chord angle")
           if receipt.get("surface_chord_angle_restore_verified_in_chrome") is not True:
