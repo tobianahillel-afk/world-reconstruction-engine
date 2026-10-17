@@ -1963,16 +1963,87 @@ jobs:
               <a href="./wre-real-stereo-cpu-photometric-consistent.glb" download>Download filtered points GLB</a>
               <a href="./wre-real-stereo-sift-estimated-cameras.glb" download>Download SIFT/cameras GLB</a>
               <a href="./wre-real-stereo-sift-colmap-dataset.zip" download>Download COLMAP dataset</a>
+              <label for="wre-local-glb">Open your own GLB:</label>
+              <input id="wre-local-glb" type="file" accept=".glb,model/gltf-binary"
+                aria-label="Open a local GLB model (max 250 MB)">
+              <button id="wre-measure-toggle" type="button" aria-pressed="false">Measure surface distance</button>
             </div>
             <model-viewer id="wre-scene" camera-controls auto-rotate interaction-prompt="auto"
               alt="Approximate CPU stereo 3D reconstruction from two real photos"
               src="data:model/gltf-binary;base64,WRE_GLB_BASE64"></model-viewer>
             <p id="wre-scene-provenance" class="metrics" aria-live="polite">
               Photo-textured stereo surface · SHA-256 WRE_GLB_SHA256</p>
+            <p id="wre-measure-result" class="metrics" aria-live="polite">
+              Surface measurement off. Coordinates are arbitrary 3D model units, NOT meters.</p>
             <script>
               const scene = document.getElementById("wre-scene");
               const chooser = document.getElementById("wre-scene-choice");
               const provenance = document.getElementById("wre-scene-provenance");
+              const localInput = document.getElementById("wre-local-glb");
+              const measureButton = document.getElementById("wre-measure-toggle");
+              const measureResult = document.getElementById("wre-measure-result");
+              let measuring = false;
+              let measured = [];
+              function resetMeasurement() {
+                measured = [];
+                measureResult.textContent = measuring
+                  ? "Click two points on the visible mesh. Model units only (NOT meters)."
+                  : "Surface measurement off. Model units only (NOT meters).";
+              }
+              measureButton.addEventListener("click", () => {
+                measuring = !measuring;
+                measureButton.setAttribute("aria-pressed", String(measuring));
+                measureButton.textContent = measuring ? "Stop measuring" : "Measure surface distance";
+                if (measuring) scene.removeAttribute("auto-rotate");
+                else scene.setAttribute("auto-rotate", "");
+                resetMeasurement();
+              });
+              scene.addEventListener("click", (event) => {
+                if (!measuring || !scene.loaded) return;
+                const hit = scene.positionAndNormalFromPoint(event.clientX, event.clientY);
+                if (!hit || !hit.position) {
+                  measureResult.textContent = "No mesh surface here; try a different point.";
+                  return;
+                }
+                const point = [hit.position.x, hit.position.y, hit.position.z];
+                if (!point.every(Number.isFinite)) return;
+                if (measured.length === 2) measured = [];
+                measured.push(point);
+                if (measured.length === 1) {
+                  measureResult.textContent = "First surface point selected; click a second point.";
+                  return;
+                }
+                const relativeDistance = Math.hypot(
+                  measured[0][0] - measured[1][0],
+                  measured[0][1] - measured[1][1],
+                  measured[0][2] - measured[1][2]
+                );
+                measureResult.textContent =
+                  "Relative 3D distance: " + relativeDistance.toFixed(5) +
+                  " model units (NOT meters; scene scale is unknown).";
+              });
+              let localUrl = null;
+              function releaseLocalUrl() {
+                if (localUrl) URL.revokeObjectURL(localUrl);
+                localUrl = null;
+              }
+              localInput.addEventListener("change", () => {
+                const file = localInput.files && localInput.files[0];
+                if (!file) return;
+                if (!file.name.toLowerCase().endsWith(".glb") ||
+                    file.size < 20 || file.size > 250_000_000) {
+                  provenance.textContent = "Choose a .glb file of 20 bytes to 250 MB.";
+                  return;
+                }
+                releaseLocalUrl();
+                resetMeasurement();
+                localUrl = URL.createObjectURL(file);
+                scene.setAttribute("src", localUrl);
+                scene.setAttribute("alt", "User-selected local GLB model");
+                chooser.selectedIndex = -1;
+                provenance.textContent = "Local GLB: " + file.name +
+                  " · user-supplied, not WRE-verified or reconstructed here";
+              });
               const modes = {
                 surface: {
                   src: scene.getAttribute("src"),
@@ -1998,6 +2069,9 @@ jobs:
               chooser.addEventListener("change", () => {
                 const mode = modes[chooser.value];
                 if (!mode) return;
+                releaseLocalUrl();
+                resetMeasurement();
+                localInput.value = "";
                 scene.setAttribute("src", mode.src);
                 scene.setAttribute("alt", mode.alt);
                 provenance.textContent = mode.label;
@@ -2027,7 +2101,12 @@ jobs:
               <code>python3 -m http.server 8765 --bind 127.0.0.1</code>
               in the extracted folder and open
               <code>http://127.0.0.1:8765/wre-real-stereo-cpu-viewer.html</code>.
-              No GPU training or held-out quality metric is implied.</footer>
+              You can also select a local GLB file using the file input; it stays
+              in your browser, is not uploaded, and its provenance is unverified.
+              Measure distance by clicking two points on a visible mesh. The reported
+              values are in arbitrary model units and must NOT be interpreted as meters.
+              Use only models you trust. No GPU training or held-out quality metric
+              is implied.</footer>
           </main>
           </body>
           </html>
@@ -2060,6 +2139,11 @@ jobs:
               ).read_bytes()
           assert 'src="./wre-model-viewer-4.1.0.min.js"' in page
           assert 'id="wre-scene-choice"' in page
+          assert 'id="wre-local-glb"' in page
+          assert 'id="wre-measure-toggle"' in page
+          assert 'positionAndNormalFromPoint' in page
+          assert 'model units (NOT meters' in page
+          assert 'URL.createObjectURL(file)' in page
           assert 'src="./wre-real-stereo-sift-estimated-cameras.glb"' not in page
           assert "./wre-real-stereo-sift-estimated-cameras.glb" in page
           assert "./wre-real-stereo-sift-colmap-dataset.zip" in page
@@ -3382,6 +3466,60 @@ jobs:
                   view.getAttribute('src').startsWith('data:model/gltf-binary;base64,');
               """)
               assert first
+              # Raycast the ACTUAL Chrome-loaded photo mesh, not a mocked
+              # geometry API. Click two different hit points via the viewer
+              # measurement control, then verify the relative distance.
+              measure_hits = js("""
+                const scene=document.getElementById('wre-scene');
+                const box=scene.getBoundingClientRect();
+                const hits=[];
+                if (typeof scene.positionAndNormalFromPoint !== 'function') return null;
+                for (let yi=0;yi<=10;yi++) for (let xi=0;xi<=10;xi++) {
+                  const x=box.left+box.width*(0.15+0.7*xi/10);
+                  const y=box.top+box.height*(0.15+0.7*yi/10);
+                  const hit=scene.positionAndNormalFromPoint(x,y);
+                  if (hit && hit.position &&
+                      [hit.position.x,hit.position.y,hit.position.z].every(Number.isFinite)) {
+                    const pos=[hit.position.x,hit.position.y,hit.position.z];
+                    if (hits.length && Math.hypot(
+                      pos[0]-hits[0].pos[0],pos[1]-hits[0].pos[1],
+                      pos[2]-hits[0].pos[2])>0.001)
+                      return [hits[0],{x,y,pos}];
+                    if (!hits.length) hits.push({x,y,pos});
+                  }
+                }
+                return null;
+              """)
+              assert measure_hits is not None, "Chrome could not hit two distinct real mesh points"
+              measure_status = js(f"""
+                const scene=document.getElementById('wre-scene');
+                const toggle=document.getElementById('wre-measure-toggle');
+                toggle.click();
+                for (const p of {json.dumps(measure_hits)}) {{
+                  scene.dispatchEvent(new MouseEvent('click', {{
+                    bubbles:true, clientX:p.x, clientY:p.y
+                  }}));
+                }}
+                return {{
+                  status:document.getElementById('wre-measure-result').textContent,
+                  pressed:toggle.getAttribute('aria-pressed'),
+                  autoRotate:scene.hasAttribute('auto-rotate')
+                }};
+              """)
+              assert measure_status["pressed"] == "true" and not measure_status["autoRotate"]
+              assert "Relative 3D distance:" in measure_status["status"]
+              assert "model units (NOT meters" in measure_status["status"]
+              displayed_distance = float(
+                measure_status["status"].split("Relative 3D distance: ",1)[1]
+                  .split(" model units",1)[0]
+              )
+              assert displayed_distance > 0.0
+              js("""
+                const button=document.getElementById('wre-measure-toggle');
+                button.click();
+                return button.getAttribute('aria-pressed') === 'false' &&
+                  document.getElementById('wre-scene').hasAttribute('auto-rotate');
+              """)
               js("""
                 window.__wre3dLoads=0;
                 document.getElementById('wre-scene').addEventListener(
@@ -3418,6 +3556,23 @@ jobs:
                   assert len(screenshot_data) > 10000
                   (proof / f"real-stereo-3d-{name}.png").write_bytes(screenshot_data)
                   mode_screenshot_sha256[name] = hashlib.sha256(screenshot_data).hexdigest()
+              # ChromeDriver sends REAL filesystem GLB bytes into the browser
+              # input, exercising the actual user-facing offline model loader.
+              local_file = str((root / "wre-real-stereo-cpu-textured.glb").resolve())
+              element = call("POST", f"/session/{session}/element", {
+                  "using": "css selector", "value": "#wre-local-glb"
+              })
+              element_id = element["element-6066-11e4-a52e-4f735466cecf"]
+              call("POST", f"/session/{session}/element/{element_id}/value", {
+                  "text": local_file, "value": list(local_file)
+              })
+              assert until("""
+                const scene=document.getElementById('wre-scene');
+                return window.__wre3dLoads >= 4 && scene.loaded === true &&
+                  scene.model && scene.getAttribute('src').startsWith('blob:') &&
+                  document.getElementById('wre-scene-provenance').textContent
+                    .includes('not WRE-verified');
+              """), "Actual Chrome could not open the user-selected GLB"
               js("""
                 const chooser=document.getElementById('wre-scene-choice');
                 chooser.value='surface';
@@ -3425,9 +3580,10 @@ jobs:
               """)
               assert until("""
                 const scene=document.getElementById('wre-scene');
-                return window.__wre3dLoads >= 4 && scene.loaded === true &&
+                return window.__wre3dLoads >= 5 && scene.loaded === true &&
                   scene.model &&
-                  scene.getAttribute('src').startsWith('data:model/gltf-binary;base64,');
+                  scene.getAttribute('src').startsWith('data:model/gltf-binary;base64,') &&
+                  document.getElementById('wre-local-glb').value === '';
               """)
               webgl = js("""
                 const c=document.createElement('canvas');
@@ -3446,6 +3602,8 @@ jobs:
                       "stereo_cloud_mode_loaded": True,
                       "photometric_cloud_mode_loaded": True,
                       "sift_camera_mode_loaded": True,
+                      "local_glb_file_loaded_in_chrome": True,
+                      "surface_distance_measured_in_chrome": True,
                       "surface_reload": True,
                       "webgl_context": True,
                       "input_glb_sha256": expected_hashes,
@@ -3531,6 +3689,180 @@ jobs:
           assert len(cards) == 4
           print("Offline visual comparison verified: four same-run Chrome PNGs and hashes")
           PY
+
+      - name: Package one complete offline interactive 3D exploration archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import hashlib
+          import json
+          import shutil
+          import struct
+          from pathlib import Path
+          
+          source = Path("wre-browser-preview")
+          proof = Path("wre-browser-proof")
+          bundle = Path("wre-unified-offline-3d")
+          receipt = json.loads((proof / "browser-verification.json").read_text(encoding="utf-8"))
+          if receipt.get("real_gpu_training") is not False or receipt.get("metric_scale_known") is not False:
+              raise ValueError("Missing explicit CPU/nonmetric proof")
+          if not all(receipt.get(k) is True for k in (
+              "surface_loaded", "stereo_cloud_mode_loaded", "photometric_cloud_mode_loaded",
+              "sift_camera_mode_loaded", "surface_reload", "webgl_context",
+          )):
+              raise ValueError("The same-run browser did not load all four real 3D modes")
+          if receipt.get("local_glb_file_loaded_in_chrome") is not True:
+              raise ValueError("Actual Chrome did not open a user-selected GLB")
+          if receipt.get("surface_distance_measured_in_chrome") is not True:
+              raise ValueError("Actual Chrome did not measure two real mesh points")
+          
+          glbs = (
+              "wre-real-stereo-cpu-textured.glb",
+              "wre-real-stereo-cpu-lr-consistent.glb",
+              "wre-real-stereo-cpu-photometric-consistent.glb",
+              "wre-real-stereo-sift-estimated-cameras.glb",
+          )
+          source_hashes = {}
+          for name in glbs:
+              data = (source / name).read_bytes()
+              if len(data) < 20 or data[:4] != b"glTF" or struct.unpack_from("<II", data, 4) != (2, len(data)):
+                  raise ValueError(f"Invalid glTF 2.0 source: {name}")
+              digest = hashlib.sha256(data).hexdigest()
+              if name in receipt["input_glb_sha256"] and digest != receipt["input_glb_sha256"][name]:
+                  raise ValueError(f"Chrome input and packaged GLB disagree: {name}")
+              source_hashes[name] = digest
+          for required in (
+              "wre-real-stereo-cpu-viewer.html",
+              "wre-model-viewer-4.1.0.min.js",
+              "wre-model-viewer-4.1.0-LICENSE.txt",
+          ):
+              if not (source / required).is_file():
+                  raise ValueError(f"Missing offline viewer dependency: {required}")
+          
+          png_hashes = {
+              "real-stereo-3d-browser.png": receipt["screenshot_sha256"],
+              **{
+                  f"real-stereo-3d-{mode}.png": digest
+                  for mode, digest in receipt["mode_screenshot_sha256"].items()
+              },
+          }
+          if set(png_hashes) != {
+              "real-stereo-3d-browser.png",
+              "real-stereo-3d-stereo.png",
+              "real-stereo-3d-quality.png",
+              "real-stereo-3d-sift.png",
+          }:
+              raise ValueError("Four Chrome screenshot identities required")
+          for name, digest in png_hashes.items():
+              data = (proof / name).read_bytes()
+              if not data.startswith(bytes.fromhex("89504e470d0a1a0a")):
+                  raise ValueError(f"Missing PNG signature: {name}")
+              if hashlib.sha256(data).hexdigest() != digest:
+                  raise ValueError(f"Corrupted same-run Chrome proof: {name}")
+          
+          shutil.copytree(source, bundle)
+          for name in (*png_hashes, "browser-verification.json", "wre-real-3d-comparison.html"):
+              shutil.copy2(proof / name, bundle / name)
+          
+          comparison = bundle / "wre-real-3d-comparison.html"
+          page = comparison.read_text(encoding="utf-8")
+          anchor = '<div class="gallery">'
+          if page.count(anchor) != 1:
+              raise ValueError("Unknown comparison HTML structure")
+          navigation = (
+              '<p><strong><a href="./wre-real-stereo-cpu-viewer.html">'
+              'Explorer les quatre représentations en 3D interactive</a></strong>. '
+              'Pour utiliser le visualiseur hors ligne, dans le dossier extrait lancez '
+              '<code>python3 -m http.server 8765 --bind 127.0.0.1</code> '
+              'et ouvrez <code>http://127.0.0.1:8765/wre-real-3d-comparison.html</code>.</p>'
+          )
+          comparison.write_text(page.replace(anchor, navigation + anchor), encoding="utf-8")
+          (bundle / "README-OPEN-OFFLINE-3D.txt").write_text(
+              "WRE — 3D depuis deux photographies réelles (CPU)\n"
+              "1. Décompressez entièrement cette archive dans un dossier local.\n"
+              "2. Linux/macOS : python3 open-wre-3d.py ; Windows : py -3 open-wre-3d.py\n"
+              "3. Le navigateur ouvre automatiquement la galerie locale (127.0.0.1).\n"
+              "4. Sélectionnez le visualiseur interactif 3D et ses quatre modes.\n"
+              "Tout est local après extraction, sans API payante ni accès Internet.\n"
+              "Limites : deux photos statiques ; échelle métrique inconnue ; aucun entraînement GPU/4D.\n",
+              encoding="utf-8",
+          )
+          from textwrap import dedent
+          launcher = dedent("""\
+          #!/usr/bin/env python3
+          # Open WRE's photo-derived 3D bundle using only Python's standard library.
+          from functools import partial
+          from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+          from pathlib import Path
+          from threading import Thread
+          from urllib.request import urlopen
+          import sys
+          import webbrowser
+          
+          
+          def main() -> None:
+              root = Path(__file__).resolve().parent
+              for name in ("wre-real-3d-comparison.html", "wre-real-stereo-cpu-viewer.html"):
+                  if not (root / name).is_file():
+                      raise SystemExit(f"Missing extracted 3D viewer file: {name}")
+              handler = partial(SimpleHTTPRequestHandler, directory=str(root))
+              with ThreadingHTTPServer(("127.0.0.1", 0), handler) as server:
+                  address = f"http://127.0.0.1:{server.server_port}/wre-real-3d-comparison.html"
+                  if sys.argv[1:] == ["--check"]:
+                      worker = Thread(target=server.serve_forever, daemon=True)
+                      worker.start()
+                      try:
+                          with urlopen(address, timeout=8) as response:
+                              assert response.status == 200
+                              assert b"wre-real-stereo-cpu-viewer.html" in response.read()
+                          print("PASS: offline 3D gallery served on loopback from extracted files")
+                      finally:
+                          server.shutdown()
+                          worker.join()
+                      return
+                  if len(sys.argv) != 1:
+                      raise SystemExit("Usage: python open-wre-3d.py [--check]")
+                  print(f"Opening WRE offline 3D gallery: {address}")
+                  print("Press Ctrl+C here when finished.")
+                  webbrowser.open(address)
+                  try:
+                      server.serve_forever()
+                  except KeyboardInterrupt:
+                      pass
+          
+          
+          if __name__ == "__main__":
+              main()
+          """)
+          (bundle / "open-wre-3d.py").write_text(launcher, encoding="utf-8")
+          manifest = {
+              "source": "same GitHub Actions run, actual Chrome + real-photo CPU previews",
+              "source_glb_sha256": source_hashes,
+              "chrome_png_sha256": png_hashes,
+              "real_gpu_training": False,
+              "metric_scale_known": False,
+              "four_d_reconstruction": False,
+              "viewer": "wre-real-stereo-cpu-viewer.html",
+              "comparison": comparison.name,
+          }
+          (bundle / "wre-offline-3d-manifest.json").write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          assert all(hashlib.sha256((bundle / name).read_bytes()).hexdigest() == digest
+                     for name, digest in {**source_hashes, **png_hashes}.items())
+          print(f"One offline 3D exploration bundle: {len(list(bundle.iterdir()))} entries, "
+                "four GLBs, four real Chrome PNGs, interactive viewer, report, receipts")
+          PY
+          python3 wre-unified-offline-3d/open-wre-3d.py --check
+
+      - name: Publish unified interactive 3D exploration archive
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wre-real-3d-unified-offline-explorer
+          path: wre-unified-offline-3d/
+          if-no-files-found: error
+          retention-days: 7
 
       - name: Publish real browser rendering evidence
         if: ${{ always() }}
