@@ -1863,6 +1863,7 @@ def run_gsplat_reference_training(
     timeout_seconds: int,
     lpips_alexnet_weights: Path | None = None,
     lpips_alexnet_sha256: str | None = None,
+    preview_path: Path | None = None,
 ) -> StaticAppearanceCandidateResult:
     """Run the exact reference trainer on an EXPLICIT external CUDA environment.
 
@@ -2003,7 +2004,7 @@ def run_gsplat_reference_training(
         raise GsplatStaticAppearancePreflightError(
             "gsplat reference training failed; inspect the private training log"
         )
-    return assemble_verified_gsplat_static_appearance_result(
+    result = assemble_verified_gsplat_static_appearance_result(
         request=request,
         source=source,
         staged=staged,
@@ -2012,6 +2013,21 @@ def run_gsplat_reference_training(
         profile=profile,
         producer=producer,
     )
+    if preview_path is not None:
+        if not isinstance(preview_path, Path):
+            raise TypeError("gsplat optional preview_path must be a pathlib.Path")
+        exporter = (
+            export_verified_gsplat_rgb_centers_glb
+            if preview_path.suffix.lower() == ".glb"
+            else export_verified_gsplat_rgb_centers_ply
+        )
+        exporter(
+            artifact_ref=artifact_ref,
+            output_root=output_root,
+            profile=profile,
+            preview_path=preview_path,
+        )
+    return result
 
 
 def reconstruct_gsplat_static_appearance(
@@ -2031,6 +2047,7 @@ def reconstruct_gsplat_static_appearance(
     timeout_seconds: int,
     lpips_alexnet_weights: Path | None = None,
     lpips_alexnet_sha256: str | None = None,
+    preview_path: Path | None = None,
 ) -> StaticAppearanceCandidateResult:
     """Stage real COLMAP/PNG files, execute the selected trainer, retain its 3D PLY.
 
@@ -2063,6 +2080,7 @@ def reconstruct_gsplat_static_appearance(
         timeout_seconds=timeout_seconds,
         lpips_alexnet_weights=lpips_alexnet_weights,
         lpips_alexnet_sha256=lpips_alexnet_sha256,
+        preview_path=preview_path,
     )
 
 
