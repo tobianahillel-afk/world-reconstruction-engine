@@ -1814,8 +1814,26 @@ jobs:
           import os
           import struct
           from pathlib import Path
+          from urllib.request import urlopen
 
           output = Path(os.environ["RUNNER_TEMP"])
+          # Bundle the same pinned Apache-2.0 model-viewer used previously
+          # from CDN, so viewing this real-photo GLB needs NO network.
+          url = "https://cdnjs.cloudflare.com/ajax/libs/model-viewer/4.1.0/model-viewer.min.js"
+          expected_sri = "PMy/x5h09gVKwc21Cdcgu/VWJwgmeJ7uivJkbTar3vh5t8uzYo3NQgTkZE0fsfUd+9vihkAcLNAh6mv9mEXkZQ=="
+          with urlopen(url, timeout=30) as response:
+              component = response.read(5_000_001)
+          assert 100_000 < len(component) <= 5_000_000
+          assert base64.b64encode(hashlib.sha512(component).digest()).decode("ascii") == expected_sri
+          component_name = "wre-model-viewer-4.1.0.min.js"
+          (output / component_name).write_bytes(component)
+          license_url = "https://raw.githubusercontent.com/google/model-viewer/v4.1.0/LICENSE"
+          with urlopen(license_url, timeout=30) as response:
+              license_bytes = response.read(20_001)
+          assert 11_000 < len(license_bytes) < 20_001
+          assert b"Apache License" in license_bytes[:110]
+          (output / "wre-model-viewer-4.1.0-LICENSE.txt").write_bytes(license_bytes)
+
           source = output / "wre-real-stereo-cpu-textured.glb"
           payload = source.read_bytes()
           # glTF 2.0 binary header: magic, version, complete byte length.
@@ -1857,9 +1875,8 @@ jobs:
                   base64.b64encode(data).decode("ascii"),
                   hashlib.sha256(data).hexdigest(),
               )
-          # Embed the actual previously generated GLB directly. Opening the
-          # HTML file needs no local web server or separately hosted model;
-          # only the pinned free open-source browser component needs network.
+          # GLB/PNG data is embedded; local serving loads the pinned vendor
+          # component from this same offline artifact, never a CDN at view time.
           page = """<!doctype html>
           <html lang="en">
           <head>
@@ -1867,9 +1884,8 @@ jobs:
             <meta name="viewport" content="width=device-width,initial-scale=1">
             <title>WRE · Real-photograph CPU 3D preview</title>
             <script type="module"
-              src="https://cdnjs.cloudflare.com/ajax/libs/model-viewer/4.1.0/model-viewer.min.js"
-              integrity="sha512-PMy/x5h09gVKwc21Cdcgu/VWJwgmeJ7uivJkbTar3vh5t8uzYo3NQgTkZE0fsfUd+9vihkAcLNAh6mv9mEXkZQ=="
-              crossorigin="anonymous"></script>
+              src="./wre-model-viewer-4.1.0.min.js"
+              integrity="sha512-PMy/x5h09gVKwc21Cdcgu/VWJwgmeJ7uivJkbTar3vh5t8uzYo3NQgTkZE0fsfUd+9vihkAcLNAh6mv9mEXkZQ=="></script>
             <style>
               html,body { margin:0; height:100%; background:#101722; color:#e6edf7;
                 font:15px system-ui,sans-serif; }
@@ -1917,9 +1933,13 @@ jobs:
                 <figcaption>Depth-based right view errors · SHA-256
                   WRE_STEREO_REPROJECTION_SHA</figcaption></figure>
             </section>
-            <footer>GLB SHA-256: WRE_GLB_SHA256. The mesh and diagnostic photos are embedded;
-              the free model-viewer 4.1.0 renderer requires an internet connection.
-              Downloaded model bytes are not sent to an AI or paid API.</footer>
+            <footer>GLB SHA-256: WRE_GLB_SHA256. All scene data, diagnostics
+              and the hash-pinned Apache-2.0 model-viewer 4.1.0 script ship together.
+              To view without internet, extract the archive, run
+              <code>python3 -m http.server 8765 --bind 127.0.0.1</code>
+              in the extracted folder and open
+              <code>http://127.0.0.1:8765/wre-real-stereo-cpu-viewer.html</code>.
+              No GPU training or held-out quality metric is implied.</footer>
           </main>
           </body>
           </html>
@@ -1944,6 +1964,8 @@ jobs:
               assert base64.b64decode(image_bytes_base64, validate=True) == (
                   output / dict(images)[marker]
               ).read_bytes()
+          assert 'src="./wre-model-viewer-4.1.0.min.js"' in page
+          assert "cdnjs.cloudflare.com" not in page
           viewer = output / "wre-real-stereo-cpu-viewer.html"
           viewer.write_text(page, encoding="utf-8")
           assert viewer.stat().st_size > len(payload)
@@ -1953,7 +1975,7 @@ jobs:
           )
           PY
 
-      - name: Stage thirty-five real-photo CPU 3D and SIFT COLMAP outputs early
+      - name: Stage thirty-seven real-photo CPU 3D and SIFT COLMAP outputs early
         shell: bash
         run: |
           set -euo pipefail
@@ -1972,6 +1994,8 @@ jobs:
             wre-real-stereo-cpu-textured.obj \
             wre-real-stereo-cpu-textured.glb \
             wre-real-stereo-cpu-viewer.html \
+            wre-model-viewer-4.1.0.min.js \
+            wre-model-viewer-4.1.0-LICENSE.txt \
             wre-real-stereo-cpu-3d-flythrough.gif \
             wre-real-stereo-cpu-photo-flythrough.gif \
             wre-real-stereo-cpu-dual-photo-flythrough.gif \
@@ -1999,7 +2023,7 @@ jobs:
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 35
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 37
 
       - name: Publish real-photo CPU 3D plus COLMAP before native CUDA builds
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -3073,6 +3097,8 @@ jobs:
             wre-real-stereo-cpu-textured.obj \
             wre-real-stereo-cpu-textured.glb \
             wre-real-stereo-cpu-viewer.html \
+            wre-model-viewer-4.1.0.min.js \
+            wre-model-viewer-4.1.0-LICENSE.txt \
             wre-real-stereo-cpu-3d-flythrough.gif \
             wre-real-stereo-cpu-photo-flythrough.gif \
             wre-real-stereo-cpu-dual-photo-flythrough.gif \
@@ -3098,8 +3124,8 @@ jobs:
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 51
-          echo "Staged all 51 real PLY/OBJ/GLB/HTML/GIF/MTL/PNG/PFM/NPY/JSON/ZIP files for artifact upload"
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 53
+          echo "Staged all 53 real assets including local model-viewer JS and Apache license"
 
       - name: Publish CPU COLMAP 3D preview and measured reprojection
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
