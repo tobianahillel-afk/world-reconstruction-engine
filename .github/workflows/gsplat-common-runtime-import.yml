@@ -1984,6 +1984,11 @@ jobs:
                 step="any" inputmode="decimal" aria-label="Known reference distance in metres">
               <button id="wre-reference-apply" type="button">Calibrate from selected two-point distance</button>
               <button id="wre-reference-estimate" type="button">Show user-scaled estimate</button>
+              <label for="wre-second-reference-metres">Second known distance (metres, user supplied):</label>
+              <input id="wre-second-reference-metres" type="number" min="0" max="10000000"
+                step="any" inputmode="decimal" aria-label="Second manually known 3D distance in metres">
+              <button id="wre-reference-crosscheck" type="button">Compare a second 3D reference</button>
+              <span id="wre-reference-crosscheck-status" role="status">No second reference checked.</span>
               <button id="wre-reference-clear" type="button">Clear reference scale</button>
               <button id="wre-reference-export" type="button" disabled
                 aria-label="Download user-supplied reference calibration JSON">Save reference JSON</button>
@@ -2029,6 +2034,9 @@ jobs:
               const referenceMetres = document.getElementById("wre-reference-metres");
               const referenceApply = document.getElementById("wre-reference-apply");
               const referenceEstimate = document.getElementById("wre-reference-estimate");
+              const secondReferenceMetres = document.getElementById("wre-second-reference-metres");
+              const referenceCrosscheck = document.getElementById("wre-reference-crosscheck");
+              const referenceCrosscheckStatus = document.getElementById("wre-reference-crosscheck-status");
               const referenceClear = document.getElementById("wre-reference-clear");
               const referenceExport = document.getElementById("wre-reference-export");
               const referenceImport = document.getElementById("wre-reference-import");
@@ -2155,7 +2163,11 @@ jobs:
               let calibrationIdentity = null;
               let referenceMetresValue = null;
               let referencePoints = null;
+              function resetReferenceCrosscheck() {
+                referenceCrosscheckStatus.textContent = "No second reference checked.";
+              }
               function clearUserCalibration() {
+                resetReferenceCrosscheck();
                 metresPerModelUnit = null;
                 calibrationSource = null;
                 calibrationIdentity = null;
@@ -2226,10 +2238,49 @@ jobs:
                 referencePoints = [
                   measurement.point_a_xyz.slice(), measurement.point_b_xyz.slice()
                 ];
+                resetReferenceCrosscheck();
                 referenceExport.disabled = chooser.selectedIndex < 0;
                 showUserCalibratedEstimate();
               });
               referenceEstimate.addEventListener("click", showUserCalibratedEstimate);
+              // A second user-supplied ruler does not change the primary scale.
+              // This is a consistency check, NOT an independent metric survey.
+              referenceCrosscheck.addEventListener("click", () => {
+                const measurement = completedMeasurement;
+                const knownMetres = Number(secondReferenceMetres.value);
+                if (!scene.loaded || !Number.isFinite(metresPerModelUnit) ||
+                    calibrationSource !== scene.getAttribute("src") ||
+                    calibrationIdentity !== provenance.textContent.trim() ||
+                    !referencePoints || !secondReferenceMetres.value.trim() ||
+                    !(knownMetres > 0 && knownMetres <= 1e7) ||
+                    !measurement ||
+                    measurement.schema !== "wre.relative_3d_surface_measurement.v1") {
+                  referenceCrosscheckStatus.textContent =
+                    "Second reference refused: select another two-point distance and enter known metres.";
+                  return;
+                }
+                const a = measurement.point_a_xyz, b = measurement.point_b_xyz;
+                const matches = (p, q) => p.every((value, i) => value === q[i]);
+                if ((matches(a, referencePoints[0]) && matches(b, referencePoints[1])) ||
+                    (matches(a, referencePoints[1]) && matches(b, referencePoints[0]))) {
+                  referenceCrosscheckStatus.textContent =
+                    "Second reference refused: use two different mesh points.";
+                  return;
+                }
+                const distance = Math.hypot(...a.map((value, i) => value - b[i]));
+                const secondFactor = knownMetres / distance;
+                const disagreement = 100 * Math.abs(secondFactor / metresPerModelUnit - 1);
+                if (!(distance > 1e-9) || !Number.isFinite(disagreement) ||
+                    !(secondFactor >= 1e-12 && secondFactor <= 1e12)) {
+                  referenceCrosscheckStatus.textContent =
+                    "Second reference refused: invalid distance or scale.";
+                  return;
+                }
+                referenceCrosscheckStatus.textContent = "Second reference scale disagreement: " +
+                  disagreement.toFixed(2) + "% (" +
+                  (disagreement > 5 ? "inconsistent" : "within 5%") +
+                  " between manually supplied references; NOT certified accuracy).";
+              });
               referenceClear.addEventListener("click", clearUserCalibration);
               // Separate from canonical NONMETRIC annotation JSON. This is only
               // a user assertion, bound to a built-in GLB with pinned SHA256.
@@ -2309,6 +2360,7 @@ jobs:
                   calibrationSource = currentSource;
                   referenceMetresValue = saved.reference_length_metres;
                   referencePoints = points.map(point => point.slice());
+                  resetReferenceCrosscheck();
                   referenceMetres.value = String(referenceMetresValue);
                   referenceExport.disabled = false;
                   showUserCalibratedEstimate();
