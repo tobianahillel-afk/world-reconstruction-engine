@@ -4187,6 +4187,58 @@ jobs:
                   document.getElementById('wre-scene').hasAttribute('auto-rotate') &&
                   document.getElementById('wre-measure-export').disabled;
               """)
+              # Roundtrip the ACTUAL exported measurement through its real
+              # browser File input, restoring the original real-mesh points.
+              # No raycast/geometry or local model-viewer API is mocked.
+              js(f"""
+                const input=document.getElementById('wre-measure-import');
+                const file=new File([JSON.stringify({json.dumps(exported_measurement)})],
+                  'original-3d-distance.json', {{type:'application/json'}});
+                const data=new DataTransfer();
+                data.items.add(file);
+                input.files=data.files;
+                input.dispatchEvent(new Event('change', {{bubbles:true}}));
+              """)
+              restored_distance = until("""
+                const result=document.getElementById('wre-measure-result').textContent;
+                const status=document.getElementById('wre-measure-import-status').textContent;
+                const markers=[...document.getElementById('wre-scene')
+                  .querySelectorAll('.wre-pick-marker')].map(m =>
+                    m.dataset.position.split(' ').map(Number));
+                return status.includes('Saved 3D distance restored') &&
+                  result.includes('Restored relative 3D distance:') &&
+                  markers.length === 2 &&
+                  !document.getElementById('wre-measure-export').disabled
+                  ? {status, result, markers} : null;
+              """)
+              assert restored_distance["markers"] == measure_status["clicked"]
+              assert "NOT meters" in restored_distance["result"]
+              # Invalid foreign-model provenance or altered distance must not
+              # replace the current saved annotation or its two markers.
+              for invalid in (
+                  dict(exported_measurement, model_provenance="other GLB identity"),
+                  dict(exported_measurement,
+                    distance_model_units=exported_measurement["distance_model_units"]+7.0),
+              ):
+                  js(f"""
+                    const input=document.getElementById('wre-measure-import');
+                    const file=new File([JSON.stringify({json.dumps(invalid)})],
+                      'invalid-distance.json', {{type:'application/json'}});
+                    const data=new DataTransfer();
+                    data.items.add(file);
+                    input.files=data.files;
+                    input.dispatchEvent(new Event('change', {{bubbles:true}}));
+                  """)
+                  assert until("""
+                    return document.getElementById('wre-measure-import-status')
+                      .textContent.includes('restore refused');
+                  """)
+                  assert js("""
+                    return [...document.getElementById('wre-scene')
+                      .querySelectorAll('.wre-pick-marker')].map(
+                        m => m.dataset.position.split(' ').map(Number));
+                  """) == measure_status["clicked"]
+              # Existing trace/area/angle modes must remain independent.
               # Trace a THREE-point polyline on the same real Chrome mesh:
               # A -> B -> A gives two independent raycast events and two
               # straight 3D chord segments, not a mesh geodesic.
@@ -4532,6 +4584,7 @@ jobs:
                       "local_glb_file_loaded_in_chrome": True,
                       "surface_distance_measured_in_chrome": True,
                       "surface_measurement_export_verified_in_chrome": True,
+                      "surface_distance_restore_verified_in_chrome": True,
                       "surface_polyline_export_verified_in_chrome": True,
                       "surface_triangle_fan_area_export_verified_in_chrome": True,
                       "surface_chord_angle_export_verified_in_chrome": True,
@@ -4652,6 +4705,8 @@ jobs:
               raise ValueError("Actual Chrome did not measure two real mesh points")
           if receipt.get("surface_measurement_export_verified_in_chrome") is not True:
               raise ValueError("Actual Chrome did not export a nonmetric 3D surface measurement")
+          if receipt.get("surface_distance_restore_verified_in_chrome") is not True:
+              raise ValueError("Actual Chrome did not roundtrip a saved 3D distance annotation")
           if receipt.get("surface_polyline_export_verified_in_chrome") is not True:
               raise ValueError("Actual Chrome did not export a measured multi-point 3D path")
           if receipt.get("surface_triangle_fan_area_export_verified_in_chrome") is not True:
