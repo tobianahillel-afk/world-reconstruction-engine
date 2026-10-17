@@ -779,9 +779,7 @@ def verify_gsplat_static_appearance_native_geometry(
     No gsplat or CUDA package is loaded.
     """
 
-    preflight_gsplat_static_appearance_inputs(
-        request, source, observed_rgb_only=observed_rgb_only
-    )
+    preflight_gsplat_static_appearance_inputs(request, source, observed_rgb_only=observed_rgb_only)
     if not isinstance(features, ColmapFeatureExtractionResult):
         raise TypeError("gsplat native geometry features must be ColmapFeatureExtractionResult")
     if not isinstance(expected_environment, ColmapEnvironmentIdentity):
@@ -2502,9 +2500,11 @@ def export_verified_colmap_observed_rgb_ply(
                     sampled.append(
                         (image.name, pixels[offset], pixels[offset + 1], pixels[offset + 2])
                     )
-                if len(sampled) < 2 or len({item[0] for item in sampled}) != len(sampled):
+                # Geometry is already bound to the exact native SfM PointMap.
+                # Color needs one real reciprocal pixel, not another triangulation.
+                if not sampled or len({item[0] for item in sampled}) != len(sampled):
                     raise GsplatStaticAppearancePreflightError(
-                        "COLMAP point lacks distinct reciprocal multiview observations"
+                        "COLMAP point lacks a unique reciprocal source observation"
                     )
                 _, red, green, blue = min(sampled)
                 try:

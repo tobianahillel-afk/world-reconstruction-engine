@@ -766,9 +766,7 @@ def test_observed_rgb_allows_real_native_simple_radial_tracks_but_trainer_does_n
     request = replace(request, source_geometry=geometry)
     with pytest.raises(GsplatStaticAppearancePreflightError, match="PINHOLE"):
         preflight_gsplat_static_appearance_inputs(request, source)
-    observed = preflight_gsplat_static_appearance_inputs(
-        request, source, observed_rgb_only=True
-    )
+    observed = preflight_gsplat_static_appearance_inputs(request, source, observed_rgb_only=True)
     assert observed.images[0].width_px == 2
     assert observed.images[0].height_px == 1
     assert observed.images[0].sha256 == source.images[0].observation.asset.sha256
@@ -1674,6 +1672,38 @@ def test_real_colmap_sparse_coordinates_and_original_png_colors_export_to_ply(
     body = data.split(b"end_header\n", 1)[1]
     assert body == struct.pack("<3f3B", 1.0, 2.0, 3.0, 64, 128, 192)
     assert request.source_geometry.point_maps[0].positions_xyz == ((1.0, 2.0, 3.0),)
+
+
+def test_colmap_observed_ply_colors_reconstructed_point_from_one_active_track(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    request, source = _two_view_parts(tmp_path)
+    features, environment = _native_feature_evidence(tmp_path)
+    monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_native_geometry",
+        lambda *_args, **_kwargs: _native_canonical(request, source),
+    )
+    module = cast(Any, _shared_track_fixture(track_image_ids=(1,)))
+    native = module.Reconstruction(source.native_model_root / "0")
+    prior = native.point3D
+    native.point3D = lambda i: SimpleNamespace(
+        xyz=(1.0, 2.0, 3.0), track=prior(i).track
+    )
+    target = tmp_path / "single-active-view.ply"
+    digest = baseline_module.export_verified_colmap_observed_rgb_ply(
+        request,
+        source,
+        features=features,
+        expected_environment=environment,
+        module=module,
+        preview_path=target,
+    )
+    contents = target.read_bytes()
+    assert digest == _digest(contents)
+    assert contents.split(b"end_header\n", 1)[1] == struct.pack(
+        "<3f3B", 1.0, 2.0, 3.0, 64, 128, 192
+    )
 
 
 def test_colmap_sparse_observed_preview_rejects_tampered_photo_and_wrong_geometry(
