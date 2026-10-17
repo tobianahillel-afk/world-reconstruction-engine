@@ -236,7 +236,7 @@ jobs:
               binary_images.extend(
                   struct.pack("<I4d3dI", image_id, 1., 0., 0., 0., tx, 0., 0., 1)
               )
-              binary_images.extend(name.encode() + b"\\x00")
+              binary_images.extend(name.encode() + b"\x00")
               binary_images.extend(struct.pack("<QddQ", 1, 4., 4., 1))
               rgb = np.zeros((8, 8, 3), dtype=np.uint8)
               rgb[..., 0] = 32 * image_id
