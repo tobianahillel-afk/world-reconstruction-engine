@@ -2125,6 +2125,8 @@ jobs:
               Photo-textured stereo surface · SHA-256 WRE_GLB_SHA256</p>
             <p id="wre-observed-stereo-marker-status" role="status" aria-live="polite">
               No selected stereo observation linked to this static 3D preview.</p>
+            <div id="wre-saved-stereo-navigation" role="group"
+              aria-label="Navigate saved stereo points in approximate 3D"></div>
             <p id="wre-measure-result" class="metrics" aria-live="polite">
               Surface measurement off. Coordinates are arbitrary 3D model units, NOT meters.</p>
             <script>
@@ -2170,6 +2172,9 @@ jobs:
                       point.every(value => typeof value === "number" &&
                         Number.isFinite(value) && Math.abs(value) < 1000000) &&
                       point[2] > 0)) {
+                  const navigation = document.getElementById("wre-saved-stereo-navigation");
+                  const observedStatus =
+                    document.getElementById("wre-observed-stereo-marker-status");
                   savedPoints.forEach((point, index) => {
                     const marker = document.createElement("button");
                     marker.type = "button";
@@ -2182,11 +2187,37 @@ jobs:
                     marker.setAttribute("aria-label",
                       "Nonmetric saved stereo observation " + (index + 1));
                     scene.appendChild(marker);
+                    // Keyboard-accessible selection also works when an approximate
+                    // reconstructed surface occludes its WebGL hotspot.
+                    const focus = document.createElement("button");
+                    focus.type = "button";
+                    focus.textContent = "Inspect stereo point " + (index + 1);
+                    focus.dataset.observationIndex = String(index);
+                    focus.setAttribute("aria-pressed", "false");
+                    focus.disabled = chooser.value !== "surface";
+                    navigation.appendChild(focus);
+                    const inspect = () => {
+                      if (!scene.loaded || chooser.value !== "surface") return;
+                      scene.removeAttribute("auto-rotate");
+                      scene.cameraTarget = marker.dataset.position;
+                      scene.jumpCameraToGoal();
+                      for (const button of navigation.querySelectorAll("button")) {
+                        button.setAttribute("aria-pressed", String(button === focus));
+                      }
+                      observedStatus.textContent =
+                        "Inspecting real-photo stereo observation " + (index + 1) +
+                        " in approximate 3D relative units only; " +
+                        "not metric or an exact mesh correspondence.";
+                    };
+                    marker.addEventListener("click", inspect);
+                    focus.addEventListener("click", inspect);
                     chooser.addEventListener("change", () => {
-                      marker.hidden = chooser.value !== "surface";
+                      const surface = chooser.value === "surface";
+                      marker.hidden = !surface;
+                      focus.disabled = !surface;
                     });
                   });
-                  document.getElementById("wre-observed-stereo-marker-status").textContent =
+                  observedStatus.textContent =
                     savedPoints.length + " real-photo stereo observations in relative units " +
                     "only; no metric scale or exact mesh correspondence.";
                 }
@@ -7965,6 +7996,15 @@ jobs:
                     }));
               })()""")
               assert markers is not None and len(markers) == 2
+              controls = js("""return Array.from(document.querySelectorAll(
+                  '#wre-saved-stereo-navigation button')).map(button=>({
+                    text:button.textContent, disabled:button.disabled,
+                    index:button.dataset.observationIndex,
+                    pressed:button.getAttribute('aria-pressed')
+                  }));""")
+              assert controls == [
+                  {"text":f"Inspect stereo point {i+1}", "disabled":False,
+                   "index":str(i), "pressed":"false"} for i in range(2)]
               for index, (point, marker) in enumerate(zip(exported["points"], markers)):
                   xyz = point["xyz_relative_model_units"]
                   expected = (xyz[0], -xyz[1], -xyz[2])
@@ -7973,6 +8013,33 @@ jobs:
                   assert marker["text"] == str(index+1) and not marker["hidden"]
                   assert all(abs(actual-target) < 1e-4 for actual, target in
                              zip(marker["position"], expected))
+              # Focus both real-PFM observations in turn using public 3D controls.
+              # The source glTF transformation, not status text, is the oracle.
+              for index, point in enumerate(exported["points"]):
+                  js(f"""document.querySelectorAll(
+                      '#wre-saved-stereo-navigation button')[{index}].click();""")
+                  xyz = point["xyz_relative_model_units"]
+                  expected_target = (xyz[0], -xyz[1], -xyz[2])
+                  def focused():
+                      result = js("""return (() => {
+                          const scene=document.getElementById('wre-scene');
+                          const target=scene.getCameraTarget();
+                          return {
+                            xyz:[target.x,target.y,target.z],
+                            pressed:Array.from(document.querySelectorAll(
+                              '#wre-saved-stereo-navigation button')).map(
+                                button=>button.getAttribute('aria-pressed')),
+                            status:document.getElementById(
+                              'wre-observed-stereo-marker-status').textContent
+                          };
+                      })()""")
+                      return (result["pressed"] == [
+                          "true" if i == index else "false" for i in range(2)] and
+                          result["status"].startswith(
+                              f"Inspecting real-photo stereo observation {index+1}") and
+                          all(abs(actual - target) < 1e-3 for actual, target in
+                              zip(result["xyz"], expected_target)))
+                  wait_for(focused)
               js("""const choice=document.getElementById('wre-scene-choice');
                   choice.value='sift';
                   choice.dispatchEvent(new Event('change', {bubbles:true}));""")
@@ -7995,7 +8062,9 @@ jobs:
                     Array.from(scene.querySelectorAll(
                       '[slot^="hotspot-wre-saved-stereo-"]')).every(node=>!node.hidden);
               })()"""))
-              print("PASS: real PFM-derived multiple 3D hotspots survive SIFT-to-surface switching")
+              assert js("""return Array.from(document.querySelectorAll(
+                  '#wre-saved-stereo-navigation button')).every(button=>!button.disabled)""")
+              print("PASS: real PFM-derived 3D observations focus the actual camera and survive model switching")
               print("PASS: archived real source photos and SIFT GLB rendered in Chrome WebGL")
           finally:
               browser("DELETE", f"/session/{session}")
