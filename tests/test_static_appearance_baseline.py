@@ -1665,7 +1665,7 @@ def test_colmap_sparse_observed_preview_rejects_tampered_photo_and_wrong_geometr
         "verify_gsplat_static_appearance_native_geometry",
         lambda *_args, **_kwargs: _native_canonical(request, source),
     )
-    module = _shared_track_fixture()
+    module = cast(Any, _shared_track_fixture())
     native = module.Reconstruction(source.native_model_root / "0")
     original_point = native.point3D
     native.point3D = lambda identifier: SimpleNamespace(
