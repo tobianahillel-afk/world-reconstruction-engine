@@ -2741,7 +2741,7 @@ def _write_verified_xyz_rgb_points_glb(
             "WRE observed COLMAP sparse RGB points — not Gaussian training"
         )
         gltf["extras"] = {
-            "wre_visualization": "COLMAP observed sparse RGB points, not trained Gaussian splatting",
+            "wre_visualization": "COLMAP observed sparse RGB points, not Gaussian training",
             "metric_scale_known": False,
             "source_colmap_points": count,
             "shown_points": sampled,
@@ -2897,7 +2897,7 @@ def inspect_verified_gsplat_rgb_centers_glb(*, path: Path) -> dict[str, object]:
         primitive = scene["meshes"][0]["primitives"][0]
         observed_colmap = (
             extras["wre_visualization"]
-            == "COLMAP observed sparse RGB points, not trained Gaussian splatting"
+            == "COLMAP observed sparse RGB points, not Gaussian training"
         )
         shown_key = "shown_points" if observed_colmap else "shown_centers"
         source_key = "source_colmap_points" if observed_colmap else "source_gaussians"
@@ -2909,7 +2909,7 @@ def inspect_verified_gsplat_rgb_centers_glb(*, path: Path) -> dict[str, object]:
             and extras["wre_visualization"]
             in (
                 "Gaussian centers only, not Gaussian splatting",
-                "COLMAP observed sparse RGB points, not trained Gaussian splatting",
+                "COLMAP observed sparse RGB points, not Gaussian training",
             )
             and extras[shown_key] == count
             and isinstance(extras[source_key], int)
