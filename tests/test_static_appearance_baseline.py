@@ -1567,9 +1567,7 @@ def test_gsplat_glb_preview_fills_budget_and_keeps_real_endpoint_positions(
     assert scene["extras"]["requested_max_points"] == 10
     vertices = actual[28 + json_size :]
     assert len(vertices) == 10 * 16
-    positions = [
-        struct.unpack_from("<f", vertices, 16 * index)[0] for index in range(10)
-    ]
+    positions = [struct.unpack_from("<f", vertices, 16 * index)[0] for index in range(10)]
     assert positions == [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 10.0]
     assert (root / profile.expected_ply_relative_path).read_bytes() == bytes(source)
 
@@ -1648,9 +1646,7 @@ def test_gsplat_rgb_glb_cli_executes_real_cpu_export(tmp_path: Path) -> None:
         "--preview",
         str(dest),
     ]
-    completed = subprocess.run(
-        command, capture_output=True, text=True, check=False, timeout=30
-    )
+    completed = subprocess.run(command, capture_output=True, text=True, check=False, timeout=30)
     assert completed.returncode == 0, completed.stderr
     data = dest.read_bytes()
     assert data[:4] == b"glTF"
