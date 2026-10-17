@@ -2021,6 +2021,10 @@ jobs:
               <input id="wre-camera-import" type="file" accept=".json,application/json"
                 aria-label="Restore a previously exported 3D camera viewpoint" disabled>
               <span id="wre-camera-status" role="status">Camera bookmark available after load.</span>
+              <button id="wre-tour-record" type="button" disabled>Record 3D viewpoint</button>
+              <button id="wre-tour-play" type="button" disabled>Play camera tour</button>
+              <button id="wre-tour-clear" type="button">Clear camera tour</button>
+              <span id="wre-tour-status" role="status">No saved camera tour.</span>
             </div>
             <div id="wre-views" class="wre-views">
               <model-viewer id="wre-scene" camera-controls auto-rotate interaction-prompt="auto"
@@ -2057,6 +2061,10 @@ jobs:
               const cameraExport = document.getElementById("wre-camera-export");
               const cameraImport = document.getElementById("wre-camera-import");
               const cameraStatus = document.getElementById("wre-camera-status");
+              const tourRecord = document.getElementById("wre-tour-record");
+              const tourPlay = document.getElementById("wre-tour-play");
+              const tourClear = document.getElementById("wre-tour-clear");
+              const tourStatus = document.getElementById("wre-tour-status");
               const referenceMetres = document.getElementById("wre-reference-metres");
               const referenceApply = document.getElementById("wre-reference-apply");
               const referenceEstimate = document.getElementById("wre-reference-estimate");
@@ -2067,12 +2075,82 @@ jobs:
               const referenceExport = document.getElementById("wre-reference-export");
               const referenceImport = document.getElementById("wre-reference-import");
               const referenceStatus = document.getElementById("wre-reference-status");
+              // Reuse the real model-viewer camera; never invent scene motion.
+              // Camera travel is NOT temporal reconstruction of the 3D scene.
+              let cameraTour = [];
+              let cameraTourSource = null;
+              let tourEpoch = 0;
+              let tourPlaying = false;
+              function resetCameraTour() {
+                ++tourEpoch;
+                cameraTour = [];
+                cameraTourSource = null;
+                tourPlaying = false;
+                tourPlay.disabled = true;
+                tourRecord.disabled = !scene.loaded;
+                tourStatus.textContent = "No saved camera tour.";
+              }
+              tourRecord.addEventListener("click", () => {
+                if (!scene.loaded || tourPlaying || cameraTour.length >= 8) return;
+                const src = scene.getAttribute("src");
+                if (cameraTourSource !== null && cameraTourSource !== src) resetCameraTour();
+                const orbit = scene.getCameraOrbit();
+                const target = scene.getCameraTarget();
+                const frame = [orbit.theta, orbit.phi, orbit.radius,
+                  target.x, target.y, target.z, scene.getFieldOfView()];
+                if (!frame.every(Number.isFinite) || frame[2] <= 0) {
+                  tourStatus.textContent = "Cannot record an invalid 3D camera.";
+                  return;
+                }
+                scene.removeAttribute("auto-rotate");
+                cameraTourSource = src;
+                cameraTour.push(frame);
+                tourPlay.disabled = cameraTour.length < 2;
+                tourRecord.disabled = cameraTour.length >= 8;
+                tourStatus.textContent = cameraTour.length +
+                  " viewpoint(s) saved for this model; camera-only, nonmetric.";
+              });
+              tourPlay.addEventListener("click", async () => {
+                if (!scene.loaded || tourPlaying || cameraTour.length < 2 ||
+                    cameraTourSource !== scene.getAttribute("src")) return;
+                const epoch = ++tourEpoch;
+                const frames = cameraTour.map(frame => frame.slice());
+                tourPlaying = true;
+                tourPlay.disabled = true;
+                tourRecord.disabled = true;
+                scene.removeAttribute("auto-rotate");
+                try {
+                  for (const [index, frame] of frames.entries()) {
+                    if (epoch !== tourEpoch || !scene.loaded ||
+                        cameraTourSource !== scene.getAttribute("src")) return;
+                    scene.cameraOrbit = frame[0] + "rad " + frame[1] + "rad " + frame[2] + "m";
+                    scene.cameraTarget = frame.slice(3, 6).map(value => value + "m").join(" ");
+                    scene.fieldOfView = frame[6] + "deg";
+                    scene.jumpCameraToGoal();
+                    tourStatus.textContent = "Playing camera viewpoint " + (index + 1) +
+                      "/" + frames.length + ".";
+                    await new Promise(resolve => setTimeout(resolve, 650));
+                  }
+                  if (epoch === tourEpoch) {
+                    tourStatus.textContent = "Tour complete: " + frames.length +
+                      " viewpoints (viewer motion only; NOT 4D reconstruction).";
+                  }
+                } finally {
+                  if (epoch === tourEpoch) {
+                    tourPlaying = false;
+                    tourPlay.disabled = cameraTour.length < 2 || !scene.loaded;
+                    tourRecord.disabled = cameraTour.length >= 8 || !scene.loaded;
+                  }
+                }
+              });
+              tourClear.addEventListener("click", resetCameraTour);
               scene.addEventListener("load", () => {
                 cameraExport.disabled = false;
                 cameraImport.disabled = false;
                 measureImport.disabled = false;
                 measureImportStatus.textContent = "Restore a saved 3D distance, path, polygon area or angle on this model.";
                 cameraStatus.textContent = "Export or restore this model's relative 3D viewpoint.";
+                tourRecord.disabled = false;
                 viewExportButton.disabled = false;
                 viewExportStatus.textContent = "Capture the current rendered view; nonmetric PNG.";
               });
@@ -2082,6 +2160,7 @@ jobs:
                 measureImport.disabled = true;
                 measureImportStatus.textContent = "3D measure restore unavailable until the model loads.";
                 cameraStatus.textContent = "Camera unavailable until the 3D model loads.";
+                resetCameraTour();
                 viewExportButton.disabled = true;
                 viewExportStatus.textContent = "3D view could not be loaded.";
               });
@@ -2916,6 +2995,7 @@ jobs:
                   return;
                 }
                 releaseLocalUrl();
+                resetCameraTour();
                 clearUserCalibration();
                 resetMeasurement();
                 viewExportButton.disabled = true;
@@ -3034,6 +3114,7 @@ jobs:
                 const mode = modes[chooser.value];
                 if (!mode) return;
                 releaseLocalUrl();
+                resetCameraTour();
                 clearUserCalibration();
                 resetMeasurement();
                 viewExportButton.disabled = true;
@@ -4685,6 +4766,60 @@ jobs:
                 return document.getElementById('wre-camera-status')
                   .textContent.includes('restore refused');
               """)
+              # Record and play camera keyframes in REAL Chrome/WebGL.
+              # This animates the viewer, never an inferred dynamic 4D scene.
+              assert js("""
+                const scene=document.getElementById('wre-scene');
+                scene.removeAttribute('auto-rotate');
+                scene.cameraOrbit='0.35rad 1.0rad 4m';
+                scene.cameraTarget='0m 0m 0m';
+                scene.fieldOfView='35deg';
+                scene.jumpCameraToGoal();
+                document.getElementById('wre-tour-record').click();
+                return document.getElementById('wre-tour-status').textContent
+                  .includes('1 viewpoint(s) saved') &&
+                  document.getElementById('wre-tour-play').disabled;
+              """)
+              assert js("""
+                const scene=document.getElementById('wre-scene');
+                scene.cameraOrbit='0.8rad 1.1rad 5m';
+                scene.cameraTarget='0.2m 0.1m -0.1m';
+                scene.fieldOfView='42deg';
+                scene.jumpCameraToGoal();
+                document.getElementById('wre-tour-record').click();
+                return document.getElementById('wre-tour-status').textContent
+                  .includes('2 viewpoint(s) saved') &&
+                  !document.getElementById('wre-tour-play').disabled;
+              """)
+              assert js("""
+                const scene=document.getElementById('wre-scene');
+                scene.cameraOrbit='1.5rad 0.6rad 9m';
+                scene.cameraTarget='1m 1m 1m';
+                scene.fieldOfView='60deg';
+                scene.jumpCameraToGoal();
+                document.getElementById('wre-tour-play').click();
+                return document.getElementById('wre-tour-play').disabled;
+              """)
+              played_tour = until("""
+                const scene=document.getElementById('wre-scene');
+                const status=document.getElementById('wre-tour-status').textContent;
+                if (!status.includes('Tour complete: 2 viewpoints') ||
+                    !status.includes('NOT 4D reconstruction')) return null;
+                const orbit=scene.getCameraOrbit();
+                const target=scene.getCameraTarget();
+                const actual=[orbit.theta,orbit.phi,orbit.radius,target.x,target.y,target.z,
+                              scene.getFieldOfView()];
+                const expected=[0.8,1.1,5,0.2,0.1,-0.1,42];
+                return actual.every((v,i)=>Math.abs(v-expected[i])<0.1) &&
+                  !document.getElementById('wre-tour-play').disabled ? actual : null;
+              """)
+              assert len(played_tour) == 7
+              assert js("""
+                document.getElementById('wre-tour-clear').click();
+                return document.getElementById('wre-tour-play').disabled &&
+                  document.getElementById('wre-tour-status')
+                    .textContent === 'No saved camera tour.';
+              """)
               # Raycast the ACTUAL Chrome-loaded photo mesh, not a mocked
               # geometry API. Click two different hit points via the viewer
               # measurement control, then verify the relative distance.
@@ -5700,6 +5835,7 @@ jobs:
                       "surface_chord_angle_export_verified_in_chrome": True,
                       "surface_chord_angle_restore_verified_in_chrome": True,
                       "relative_3d_camera_bookmark_roundtrip_verified_in_chrome": True,
+                      "user_camera_tour_verified_in_chrome": True,
               "current_view_png_export_verified_in_chrome": True,
                       "current_view_png_dimensions": [view_png["width"], view_png["height"]],
                       "surface_reload": True,
@@ -5842,6 +5978,8 @@ jobs:
               raise ValueError("Actual Chrome did not roundtrip a saved 3D chord angle")
           if receipt.get("relative_3d_camera_bookmark_roundtrip_verified_in_chrome") is not True:
               raise ValueError("Actual Chrome did not roundtrip a relative 3D camera bookmark")
+          if receipt.get("user_camera_tour_verified_in_chrome") is not True:
+              raise ValueError("Actual Chrome did not replay a user camera tour")
           if receipt.get("current_view_png_export_verified_in_chrome") is not True:
               raise ValueError("Actual Chrome did not export its current real-photo 3D view as PNG")
           dimensions = receipt.get("current_view_png_dimensions")
