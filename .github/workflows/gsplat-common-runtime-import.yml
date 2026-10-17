@@ -1985,6 +1985,11 @@ jobs:
               <button id="wre-reference-apply" type="button">Calibrate from selected two-point distance</button>
               <button id="wre-reference-estimate" type="button">Show user-scaled estimate</button>
               <button id="wre-reference-clear" type="button">Clear reference scale</button>
+              <button id="wre-reference-export" type="button" disabled
+                aria-label="Download user-supplied reference calibration JSON">Save reference JSON</button>
+              <label for="wre-reference-import">Restore user reference:</label>
+              <input id="wre-reference-import" type="file" accept=".json,application/json"
+                aria-label="Restore manually supplied reference scale JSON">
               <span id="wre-reference-status" role="status">No user-supplied scale; all model geometry is nonmetric.</span>
               <button id="wre-view-export" type="button" disabled
                 aria-label="Save current 3D view as PNG">Save current 3D view PNG</button>
@@ -2025,6 +2030,8 @@ jobs:
               const referenceApply = document.getElementById("wre-reference-apply");
               const referenceEstimate = document.getElementById("wre-reference-estimate");
               const referenceClear = document.getElementById("wre-reference-clear");
+              const referenceExport = document.getElementById("wre-reference-export");
+              const referenceImport = document.getElementById("wre-reference-import");
               const referenceStatus = document.getElementById("wre-reference-status");
               scene.addEventListener("load", () => {
                 cameraExport.disabled = false;
@@ -2146,10 +2153,15 @@ jobs:
               let metresPerModelUnit = null;
               let calibrationSource = null;
               let calibrationIdentity = null;
+              let referenceMetresValue = null;
+              let referencePoints = null;
               function clearUserCalibration() {
                 metresPerModelUnit = null;
                 calibrationSource = null;
                 calibrationIdentity = null;
+                referenceMetresValue = null;
+                referencePoints = null;
+                referenceExport.disabled = true;
                 referenceStatus.textContent =
                   "No user-supplied scale; all model geometry is nonmetric.";
               }
@@ -2210,10 +2222,100 @@ jobs:
                 metresPerModelUnit = factor;
                 calibrationSource = scene.getAttribute("src");
                 calibrationIdentity = provenance.textContent.trim();
+                referenceMetresValue = knownMetres;
+                referencePoints = [
+                  measurement.point_a_xyz.slice(), measurement.point_b_xyz.slice()
+                ];
+                referenceExport.disabled = chooser.selectedIndex < 0;
                 showUserCalibratedEstimate();
               });
               referenceEstimate.addEventListener("click", showUserCalibratedEstimate);
               referenceClear.addEventListener("click", clearUserCalibration);
+              // Separate from canonical NONMETRIC annotation JSON. This is only
+              // a user assertion, bound to a built-in GLB with pinned SHA256.
+              // Local GLBs have filenames but no verified content hash here.
+              referenceExport.addEventListener("click", () => {
+                if (referenceExport.disabled || !scene.loaded ||
+                    chooser.selectedIndex < 0 ||
+                    calibrationSource !== scene.getAttribute("src") ||
+                    calibrationIdentity !== provenance.textContent.trim() ||
+                    !referencePoints || !Number.isFinite(metresPerModelUnit)) return;
+                const record = {
+                  schema: "wre.user_reference_3d_calibration.v1",
+                  model_source: chooser.value,
+                  model_provenance: calibrationIdentity,
+                  metric_scale_known: false,
+                  reference_source: "manual_user_entry",
+                  reference_length_metres: referenceMetresValue,
+                  reference_distance_model_units:
+                    Math.hypot(...referencePoints[0].map(
+                      (value, i) => value - referencePoints[1][i])),
+                  reference_points_xyz: referencePoints.map(point => point.slice()),
+                  metres_per_model_unit: metresPerModelUnit,
+                  independently_verified: false
+                };
+                const blob = new Blob([JSON.stringify(record, null, 2)],
+                  {type: "application/json"});
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = "wre-user-reference-calibration.json";
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+              });
+              referenceImport.addEventListener("change", async () => {
+                const file = referenceImport.files && referenceImport.files[0];
+                referenceImport.value = "";
+                if (!file) return;
+                const currentSource = scene.getAttribute("src");
+                try {
+                  if (!scene.loaded || chooser.selectedIndex < 0 ||
+                      file.size < 60 || file.size > 8192) {
+                    throw new Error("Reference file or pinned 3D model is unavailable.");
+                  }
+                  const saved = JSON.parse(await file.text());
+                  const points = saved.reference_points_xyz;
+                  if (saved.schema !== "wre.user_reference_3d_calibration.v1" ||
+                      saved.model_source !== chooser.value ||
+                      saved.model_provenance !== provenance.textContent.trim() ||
+                      saved.metric_scale_known !== false ||
+                      saved.independently_verified !== false ||
+                      saved.reference_source !== "manual_user_entry" ||
+                      !Array.isArray(points) || points.length !== 2 ||
+                      !points.every(point => Array.isArray(point) &&
+                        point.length === 3 && point.every(value =>
+                          typeof value === "number" && Number.isFinite(value))) ||
+                      !(saved.reference_length_metres > 0 &&
+                        saved.reference_length_metres <= 1e7) ||
+                      !(saved.reference_distance_model_units > 1e-9) ||
+                      !Number.isFinite(saved.metres_per_model_unit)) {
+                    throw new Error("Reference schema, values or model identity are invalid.");
+                  }
+                  const distance = Math.hypot(...points[0].map(
+                    (value, i) => value - points[1][i]));
+                  const factor = saved.reference_length_metres / distance;
+                  if (!(factor >= 1e-12 && factor <= 1e12) ||
+                      Math.abs(distance - saved.reference_distance_model_units) >
+                        1e-8 * Math.max(1, distance) ||
+                      Math.abs(factor - saved.metres_per_model_unit) >
+                        1e-8 * Math.max(1, factor) ||
+                      !scene.loaded || currentSource !== scene.getAttribute("src")) {
+                    throw new Error("Reference distance, factor or scene changed.");
+                  }
+                  metresPerModelUnit = factor;
+                  calibrationIdentity = provenance.textContent.trim();
+                  calibrationSource = currentSource;
+                  referenceMetresValue = saved.reference_length_metres;
+                  referencePoints = points.map(point => point.slice());
+                  referenceMetres.value = String(referenceMetresValue);
+                  referenceExport.disabled = false;
+                  showUserCalibratedEstimate();
+                } catch (error) {
+                  referenceStatus.textContent = "Calibration restore refused: " + String(error);
+                }
+              });
               let measuring = false;
               let tracing = false;
               let areaMode = false;
