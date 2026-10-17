@@ -3629,7 +3629,7 @@ jobs:
           from textwrap import dedent
           launcher = dedent("""\
           #!/usr/bin/env python3
-          """Open WRE's photo-derived 3D bundle using only Python's standard library."""
+          # Open WRE's photo-derived 3D bundle using only Python's standard library.
           from functools import partial
           from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
           from pathlib import Path
