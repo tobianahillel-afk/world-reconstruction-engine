@@ -2888,7 +2888,6 @@ def export_verified_colmap_observed_rgb_glb(
         )
 
 
-
 def export_verified_colmap_camera_rig_json(
     canonical: CanonicalColmapSparseModel, *, path: Path
 ) -> Sha256Digest:
@@ -2912,9 +2911,7 @@ def export_verified_colmap_camera_rig_json(
         raise GsplatStaticAppearancePreflightError(
             "COLMAP camera rig may not replace an existing file"
         )
-    cameras = tuple(
-        sorted(canonical.camera_solutions, key=lambda item: item.observation_id.value)
-    )
+    cameras = tuple(sorted(canonical.camera_solutions, key=lambda item: item.observation_id.value))
     if not cameras or len({camera.observation_id.value for camera in cameras}) != len(cameras):
         raise GsplatStaticAppearancePreflightError("COLMAP camera rig has duplicate or no views")
     frame = canonical.geometry_solution.local_frame_id.value
