@@ -1050,6 +1050,70 @@ jobs:
               assert len(check.read()) == 15 * len(cxyz)
           agreement_known = consensus & known
           agreement_error = np.abs(predicted[agreement_known] - reference[agreement_known])
+          # Functional geometry: match in the reverse camera direction with the
+          # SAME OpenCV StereoSGBM algorithm, without using reference disparity.
+          # The right matcher predicts x_right - x_left (negative disparity).
+          right_min = -(min_disparity + 160 - 1)
+          reverse_matcher = cv2.StereoSGBM_create(
+              minDisparity=right_min,
+              numDisparities=160,
+              blockSize=5,
+              P1=8 * 3 * 25,
+              P2=32 * 3 * 25,
+              uniquenessRatio=10,
+              speckleWindowSize=50,
+              speckleRange=2,
+          )
+          reverse_predicted = (
+              reverse_matcher.compute(right_gray, left_gray).astype(np.float32) / 16.0
+          )
+          x_right_float = np.arange(width, dtype=np.float32)[None, :] - predicted
+          inside_right = (
+              np.isfinite(x_right_float)
+              & (x_right_float >= 0.0)
+              & (x_right_float < width)
+          )
+          right_x = np.clip(np.rint(x_right_float), 0, width - 1).astype(np.int32)
+          reverse_at_left = np.take_along_axis(reverse_predicted, right_x, axis=1)
+          lr_mask = reconstructed & inside_right
+          lr_mask &= np.isfinite(reverse_at_left)
+          lr_mask &= reverse_at_left >= right_min
+          lr_mask &= np.abs(predicted + reverse_at_left) <= 1.0
+          lr_count = int(np.count_nonzero(lr_mask))
+          lr_indices = np.flatnonzero(lr_mask)[
+              ::max(1, math.ceil(max(lr_count, 1) / 60_000))
+          ]
+          lr_y, lr_x = np.unravel_index(lr_indices, predicted.shape)
+          lr_disp = predicted[lr_y, lr_x].astype(np.float64)
+          lr_depth = focal_px * baseline_mm / lr_disp
+          lr_xyz = np.column_stack((
+              (lr_x - (width - 1) / 2.0) * lr_depth / focal_px,
+              (lr_y - (height - 1) / 2.0) * lr_depth / focal_px,
+              lr_depth,
+          )).astype(np.float32)
+          lr_rgb = cv2.cvtColor(left, cv2.COLOR_BGR2RGB)[lr_y, lr_x]
+          assert len(lr_xyz) <= 60_000
+          assert np.isfinite(lr_xyz).all() and np.all(lr_xyz[:, 2] > 0)
+          lr_header = ply_header.replace(
+              f"element vertex {len(points)}\n".encode(),
+              f"element vertex {len(lr_xyz)}\n".encode(),
+          )
+          lr_ply = (
+              Path(os.environ["RUNNER_TEMP"]) / "wre-middlebury-half-aloe-cpu-left-right-3d.ply"
+          )
+          with lr_ply.open("wb") as out:
+              out.write(lr_header)
+              for xyz, color in zip(lr_xyz, lr_rgb, strict=True):
+                  out.write(struct.pack(
+                      "<3f3B", float(xyz[0]), float(xyz[1]), float(xyz[2]),
+                      int(color[0]), int(color[1]), int(color[2]),
+                  ))
+          assert lr_ply.stat().st_size == len(lr_header) + 15 * len(lr_xyz)
+          with lr_ply.open("rb") as check:
+              assert check.read(len(lr_header)) == lr_header
+              assert len(check.read()) == 15 * len(lr_xyz)
+          lr_known = lr_mask & known
+          lr_error = np.abs(predicted[lr_known] - reference[lr_known])
 
           report = {
               "benchmark": "Middlebury 2006 HalfSize Aloe view1/view5 disp1",
@@ -1078,6 +1142,16 @@ jobs:
               "consensus_matchers": ["OpenCV StereoSGBM", "OpenCV StereoBM"],
               "consensus_abs_disparity_threshold_px": 2.0,
               "consensus_uses_groundtruth_visibility_mask": False,
+              "left_right_rgb_3d_ply_name": lr_ply.name,
+              "left_right_rgb_3d_points": int(len(lr_xyz)),
+              "left_right_consistent_pixels": lr_count,
+              "left_right_reverse_min_disparity": right_min,
+              "left_right_cycle_tolerance_px": 1.0,
+              "left_right_uses_groundtruth_visibility_mask": False,
+              "left_right_reference_overlap_for_evaluation_only": int(len(lr_error)),
+              "left_right_reference_rmse_px_for_evaluation_only": (
+                  float(np.sqrt(np.mean(lr_error * lr_error))) if len(lr_error) else None
+              ),
               "consensus_gt_overlap_pixels_for_evaluation_only": int(
                   len(agreement_error)
               ),
@@ -1129,13 +1203,14 @@ jobs:
           for name in \
             wre-middlebury-half-aloe-gt.json \
             wre-middlebury-half-aloe-cpu-3d.ply \
-            wre-middlebury-half-aloe-cpu-consensus-3d.ply
+            wre-middlebury-half-aloe-cpu-consensus-3d.ply \
+            wre-middlebury-half-aloe-cpu-left-right-3d.ply
           do
             test -s "$RUNNER_TEMP/$name"
             cp "$RUNNER_TEMP/$name" "$bundle/$name"
             test -s "$bundle/$name"
           done
-          test "$(find "$bundle" -maxdepth 1 -type f | wc -l)" -eq 3
+          test "$(find "$bundle" -maxdepth 1 -type f | wc -l)" -eq 4
 
       - name: Publish independently measured Middlebury stereo quality and RGB 3D
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
