@@ -1065,13 +1065,24 @@ jobs:
           print(json.dumps(report, sort_keys=True))
           PY
 
-      - name: Publish independently measured Middlebury stereo quality
+      - name: Stage the measured stereo report and actual RGB 3D PLY
+        shell: bash
+        run: |
+          set -euo pipefail
+          bundle="$RUNNER_TEMP/wre-middlebury-aloe-quality-bundle"
+          mkdir -p "$bundle"
+          for name in wre-middlebury-half-aloe-gt.json wre-middlebury-half-aloe-cpu-3d.ply; do
+            test -s "$RUNNER_TEMP/$name"
+            cp "$RUNNER_TEMP/$name" "$bundle/$name"
+            test -s "$bundle/$name"
+          done
+          test "$(find "$bundle" -maxdepth 1 -type f | wc -l)" -eq 2
+
+      - name: Publish independently measured Middlebury stereo quality and RGB 3D
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: wre-middlebury-aloe-official-gt-cpu-quality
-          path: |
-            ${{ runner.temp }}/wre-middlebury-half-aloe-gt.json
-            ${{ runner.temp }}/wre-middlebury-half-aloe-cpu-3d.ply
+          path: ${{ runner.temp }}/wre-middlebury-aloe-quality-bundle/
           if-no-files-found: error
           retention-days: 7
 
