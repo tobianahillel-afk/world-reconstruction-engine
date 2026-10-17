@@ -1083,29 +1083,37 @@ jobs:
           dataset = root / "gsplat-capture"
           parser = Parser(str(dataset), factor=1, normalize=False, test_every=8)
           assert len(parser.image_names) == 3
-          camera_id = parser.camera_ids[0]
-          K = np.asarray(parser.Ks_dict[camera_id])
-          c2w = np.asarray(parser.camtoworlds[0])
-          width, height = parser.imsize_dict[camera_id]
-          assert K.shape == (3, 3) and c2w.shape == (4, 4)
-          assert np.isfinite(K).all() and np.isfinite(c2w).all()
-          view_matrix = np.linalg.inv(c2w).T.reshape(-1).tolist()
-          actual_camera = {
-              "id": 0,
-              "img_name": parser.image_names[0],
-              "width": int(width),
-              "height": int(height),
-              "position": c2w[:3, 3].tolist(),
-              "rotation": c2w[:3, :3].tolist(),
-              "fx": float(K[0, 0]),
-              "fy": float(K[1, 1]),
-          }
+          actual_cameras = []
+          for index, image_name in enumerate(parser.image_names):
+              camera_id = parser.camera_ids[index]
+              K = np.asarray(parser.Ks_dict[camera_id])
+              c2w = np.asarray(parser.camtoworlds[index])
+              width, height = parser.imsize_dict[camera_id]
+              assert K.shape == (3, 3) and c2w.shape == (4, 4)
+              assert np.isfinite(K).all() and np.isfinite(c2w).all()
+              actual_cameras.append({
+                  "id": index,
+                  "img_name": image_name,
+                  "width": int(width),
+                  "height": int(height),
+                  "position": c2w[:3, 3].tolist(),
+                  "rotation": c2w[:3, :3].tolist(),
+                  "fx": float(K[0, 0]),
+                  "fy": float(K[1, 1]),
+              })
+          assert len({cam["img_name"] for cam in actual_cameras}) == 3
+          assert all(
+              np.linalg.norm(
+                  np.asarray(actual_cameras[0]["position"]) - np.asarray(cam["position"])
+              ) > 1e-6 for cam in actual_cameras[1:]
+          )
+          view_matrix = np.linalg.inv(np.asarray(parser.camtoworlds[0])).T.reshape(-1).tolist()
 
           js = files["main.js"].decode("utf-8")
           begin = js.index("let cameras = [")
           end = js.index("let camera = cameras[0];", begin)
           js = js[:begin] + (
-              "let cameras = " + json.dumps([actual_camera], separators=(",", ":"))
+              "let cameras = " + json.dumps(actual_cameras, separators=(",", ":"))
               + ";\n\n"
           ) + js[end:]
           old_matrix = re.findall(
@@ -1129,6 +1137,12 @@ jobs:
           js = js.replace(
               call, call + "\n            window.__wreRenderedGaussianCount = vertexCount;"
           )
+          camera_marker = 'camid.innerText = "cam  " + currentCameraIndex;'
+          assert js.count(camera_marker) == 1
+          js = js.replace(
+              camera_marker,
+              camera_marker + "\n        window.__wreSelectedCamera = currentCameraIndex;",
+          )
           assert "https://huggingface.co/cakewalk/splat-data/resolve/main/" not in js
           (output / "main.js").write_text(js, encoding="utf-8")
 
@@ -1140,7 +1154,7 @@ jobs:
               'padding:8px;background:#17212ddd;z-index:101;color:white;'
               'font:13px sans-serif;pointer-events:none">WRE · 854 source-observed '
               'Gaussian seeds · UNTRAINED (0 steps) · nonmetric / noncommercial '
-              '· no CUDA or 4D</aside>',
+              '· keys 0/1/2: recovered cameras · no CUDA or 4D</aside>',
           )
           (output / "index.html").write_text(html, encoding="utf-8")
           (output / "Gaussian-WebGL-viewer-MIT-LICENSE.txt").write_bytes(files["LICENSE"])
@@ -1151,6 +1165,7 @@ jobs:
               "After unzipping the GitHub Actions Gaussian artifact, run:\n"
               "  python3 -m http.server 8767 --bind 127.0.0.1\n"
               "Then open http://127.0.0.1:8767/index.html and orbit/zoom.\n"
+              "Press keys 0, 1, 2 to inspect the three recovered COLMAP views.\n"
               "All bytes are local after unzipping; no third-party requests.\n"
               "Gaussians are initialized from real SfM, NOT trained photorealism.\n",
               encoding="utf-8",
@@ -1165,6 +1180,8 @@ jobs:
                   (output / "main.js").read_bytes()
               ).hexdigest(),
               "real_splat_count": expected_points,
+              "registered_camera_names": [cam["img_name"] for cam in actual_cameras],
+              "registered_camera_count": len(actual_cameras),
               "training_steps": 0,
               "gpu_training_verified": False,
           }
@@ -1270,6 +1287,37 @@ jobs:
               root = Path(os.environ["RUNNER_TEMP"]) / "wre-real-photo-colmap-rgb"
               dst = root / "real-photo-initial-gaussians"
               (dst / "wre-real-gaussian-webgl-chrome.png").write_bytes(screenshot)
+              # Use the upstream viewer's existing keyboard camera selection.
+              for index in (1, 2):
+                  execute(
+                      "window.__wreRenderedGaussianCount = 0;"
+                      "window.dispatchEvent(new KeyboardEvent('keydown', {"
+                      f"key:'{index}',code:'Digit{index}',bubbles:true"
+                      "}));"
+                  )
+                  for _ in range(50):
+                      switched = execute("""
+                        return {
+                          camera: window.__wreSelectedCamera,
+                          count: window.__wreRenderedGaussianCount || 0,
+                          error: document.getElementById('message')?.textContent || ''
+                        };
+                      """)
+                      if switched["error"]:
+                          raise RuntimeError("Gaussian camera switch: " + switched["error"])
+                      if switched["camera"] == index and switched["count"] == 854:
+                          break
+                      time.sleep(0.15)
+                  else:
+                      raise RuntimeError(
+                          f"Real COLMAP camera {index} did not render: " + json.dumps(switched)
+                      )
+                  view = base64.b64decode(
+                      browser("GET", f"/session/{session}/screenshot")
+                  )
+                  assert len(view) > 10_000
+                  (dst / f"wre-real-gaussian-webgl-camera-{index}.png").write_bytes(view)
+              print("REAL MULTIVIEW GAUSSIAN WEBGL PASS: 3 source COLMAP camera views")
               print(
                   "ACTUAL UNTRAINED GAUSSIAN WEBGL PASS:",
                   state["count"], "real SfM splats;",
