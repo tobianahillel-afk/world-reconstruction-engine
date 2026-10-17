@@ -2882,6 +2882,7 @@ def inspect_verified_gsplat_rgb_centers_glb(*, path: Path) -> dict[str, object]:
         ) from exc
     extras: dict[str, Any] = {}
     count = 0
+    observed_colmap = False
     bounds_low: list[float] = []
     bounds_high: list[float] = []
     try:
@@ -2892,15 +2893,26 @@ def inspect_verified_gsplat_rgb_centers_glb(*, path: Path) -> dict[str, object]:
         bounds_high = scene["accessors"][0]["max"]
         preview_view = scene["bufferViews"][0]
         primitive = scene["meshes"][0]["primitives"][0]
+        observed_colmap = (
+            extras["wre_visualization"]
+            == "COLMAP observed sparse RGB points, not trained Gaussian splatting"
+        )
+        shown_key = "shown_points" if observed_colmap else "shown_centers"
+        source_key = "source_colmap_points" if observed_colmap else "source_gaussians"
         expected = (
             isinstance(count, int)
             and not isinstance(count, bool)
             and 1 <= count <= 2_000_000
             and scene["asset"]["version"] == "2.0"
-            and extras["wre_visualization"] == "Gaussian centers only, not Gaussian splatting"
-            and extras["shown_centers"] == count
-            and isinstance(extras["source_gaussians"], int)
-            and extras["source_gaussians"] >= count
+            and extras["wre_visualization"]
+            in (
+                "Gaussian centers only, not Gaussian splatting",
+                "COLMAP observed sparse RGB points, not trained Gaussian splatting",
+            )
+            and extras[shown_key] == count
+            and isinstance(extras[source_key], int)
+            and not isinstance(extras[source_key], bool)
+            and extras[source_key] >= count
             and primitive["mode"] == 0
             and primitive["attributes"] == {"POSITION": 0, "COLOR_0": 1}
             and scene["accessors"][0]["type"] == "VEC3"
@@ -2937,16 +2949,25 @@ def inspect_verified_gsplat_rgb_centers_glb(*, path: Path) -> dict[str, object]:
         raise GsplatStaticAppearancePreflightError(
             "WRE RGB-center GLB bounds disagree with the actual point positions"
         )
-    return {
-        "kind": "wre_gsplat_rgb_centers_only",
+    result: dict[str, object] = {
+        "kind": (
+            "wre_colmap_observed_rgb_points"
+            if observed_colmap
+            else "wre_gsplat_rgb_centers_only"
+        ),
         "sha256": hashlib.sha256(payload).hexdigest(),
-        "source_gaussians": extras["source_gaussians"],
-        "shown_centers": count,
         "bounds_min": low,
         "bounds_max": high,
         "metric_scale_known": False,
         "gpu_training_verified": False,
     }
+    if observed_colmap:
+        result["source_colmap_points"] = extras["source_colmap_points"]
+        result["shown_points"] = count
+    else:
+        result["source_gaussians"] = extras["source_gaussians"]
+        result["shown_centers"] = count
+    return result
 
 
 def assemble_verified_gsplat_static_appearance_result(
