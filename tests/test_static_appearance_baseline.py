@@ -1344,7 +1344,7 @@ def test_verified_gsplat_gaussian_centers_export_standalone_glb(
     )
     assert (root / profile.expected_ply_relative_path).read_bytes() == real_splats
     assert sorted(path.name for path in viewer.iterdir()) == ["gsplat-centers.glb"]
-    with pytest.raises(GsplatStaticAppearancePreflightError, match="new .glb"):
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="requires a new"):
         export_verified_gsplat_rgb_centers_glb(
             artifact_ref=ref, output_root=root, profile=profile, preview_path=glb
         )
