@@ -5030,6 +5030,10 @@ jobs:
                     chooser.value={json.dumps(name)};
                     chooser.dispatchEvent(new Event('change', {{bubbles:true}}));
                   """)
+                  assert js("""
+                    return document.getElementById('wre-reference-status')
+                      .textContent.includes('No user-supplied scale');
+                  """), "Reference scale leaked into a different 3D scene"
                   assert until(f"""
                     const scene=document.getElementById('wre-scene');
                     return window.__wre3dLoads >= {sequence} &&
