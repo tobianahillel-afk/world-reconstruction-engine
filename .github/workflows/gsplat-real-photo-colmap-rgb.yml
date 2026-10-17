@@ -649,6 +649,90 @@ jobs:
                   "height": int(camera.height),
               }
           assert len(views) == expected_views
+          # Real 2D-to-3D tracks from the native undistorted SfM solution.
+          # Reuses actual PyCOLMAP geometry, without estimating new points.
+          import math
+          from PIL import ImageDraw
+
+          native_points = {}
+          for point_id in sorted(int(i) for i in loaded.point3D_ids()):
+              xyz = [float(v) for v in loaded.point3D(point_id).xyz]
+              original_xyz = [float(v) for v in raw_model.point3D(point_id).xyz]
+              assert all(math.isfinite(v) for v in xyz)
+              assert max(abs(a - b) for a, b in zip(xyz, original_xyz)) < 1e-8
+              native_points[point_id] = xyz
+
+          # The undistorter may rewrite native 3D tracks. Instead of relying
+          # on original track elements, use the actual *undistorted* image
+          # point2D -> point3D identities consumed by COLMAP/gsplat.
+          links = {name: [] for name in sorted(views)}
+          track_count = 0
+          views_by_point = {}
+          for image_id in sorted(int(i) for i in loaded.reg_image_ids()):
+              registered = loaded.image(image_id)
+              name = registered.name
+              assert name in links
+              for index in range(int(registered.num_points2D())):
+                  point2d = registered.point2D(index)
+                  point_id = int(point2d.point3D_id)
+                  if point_id not in native_points:
+                      continue  # Native feature without a recovered 3D point.
+                  u, v = [float(value) for value in point2d.xy]
+                  assert math.isfinite(u) and math.isfinite(v)
+                  if not (0 <= u < views[name]["width"] and 0 <= v < views[name]["height"]):
+                      continue
+                  links[name].append({
+                      "point3d_id": point_id,
+                      "pixel_xy": [u, v],
+                      "native_xyz": native_points[point_id],
+                  })
+                  views_by_point.setdefault(point_id, set()).add(name)
+                  track_count += 1
+          assert len(views_by_point) >= 100
+          assert sum(len(images) >= 2 for images in views_by_point.values()) >= 100
+
+          inspection = staged / "inspection"
+          inspection.mkdir()
+          overlays = {}
+          for name in sorted(links):
+              observations = links[name]
+              assert len(observations) >= 50, (name, len(observations))
+              with Image.open(staged / "images" / name) as image:
+                  annotated = image.convert("RGB")
+              draw = ImageDraw.Draw(annotated)
+              for item in observations:
+                  u, v = item["pixel_xy"]
+                  draw.ellipse((u - 2, v - 2, u + 2, v + 2), outline=(255, 32, 0), width=2)
+              overlay_name = Path(name).stem + "-colmap-observations.png"
+              overlay_path = inspection / overlay_name
+              annotated.save(overlay_path, format="PNG", optimize=False)
+              overlays[name] = {
+                  "filename": f"inspection/{overlay_name}",
+                  "sha256": hashlib.sha256(overlay_path.read_bytes()).hexdigest(),
+                  "linked_points": len(observations),
+              }
+          assert track_count >= 300, track_count
+          links_path = inspection / "native-2d-3d-correspondences.json"
+          links_receipt = {
+              "schema": "wre.experimental.real_colmap_observed_links.v1",
+              "source_sparse_sha256": receipt["reconstruction"]["source_sparse_identity_sha256"],
+              "coordinate_frame": "native COLMAP, unchanged by undistortion",
+              "metric_scale_known": False,
+              "registered_views": len(links),
+              "recovered_native_points3d": expected_points,
+              "linked_observations": track_count,
+              "observations_by_view": links,
+              "overlays_by_view": overlays,
+              "license": receipt["source_license"],
+              "credit": receipt["source_credit"],
+          }
+          links_path.write_text(json.dumps(links_receipt, sort_keys=True, indent=2) + "\n")
+          assert sum(v["linked_points"] for v in overlays.values()) == track_count
+          print(
+              "REAL CPU COLMAP 2D-3D OBSERVATIONS:",
+              track_count, "native pixel-to-point links across", len(links),
+              "undistorted photos; annotated PNGs in the capture artifact"
+          )
           files = sorted(
               p for p in staged.rglob("*")
               if p.is_file() and p.name != "wre-capture-manifest.json"
@@ -668,6 +752,13 @@ jobs:
               "undistortion": "actual pycolmap 4.2.0 undistort_images CPU",
               "camera_models_after_undistortion": sorted({v["camera_model"] for v in views.values()}),
               "views": views,
+              "observed_2d_3d_links": {
+                  "schema": links_receipt["schema"],
+                  "linked_observations": track_count,
+                  "registered_views": len(links),
+                  "file": "inspection/native-2d-3d-correspondences.json",
+                  "sha256": hashlib.sha256(links_path.read_bytes()).hexdigest(),
+              },
               "file_sha256": file_hashes,
               "license": receipt["source_license"],
               "credit": receipt["source_credit"],
