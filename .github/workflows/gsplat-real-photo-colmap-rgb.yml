@@ -118,7 +118,7 @@ jobs:
               "source_license": "CC BY-NC 4.0: Attribution-NonCommercial; experimental use only",
               "source_credit": "Copyright 2021 Pierre MOULON; openMVG/Image_datasets",
               "source_license_url": "https://creativecommons.org/licenses/by-nc/4.0/",
-              "opencv_git_revision": UPSTREAM,
+              "source_dataset_git_revision": UPSTREAM,
               "source_photographs": {},
               "sRGB_interpretation": "assumed for JPEG to RGB8 PNG preview only; no calibrated radiometry",
               "metric_scale_known": False,
@@ -169,9 +169,7 @@ jobs:
               with Image.open(io.BytesIO(original)) as opened:
                   assert opened.format == "JPEG" and opened.width >= 320
                   image = ImageOps.exif_transpose(opened).convert("RGB")
-              if image.width > 768:
-                  size = (image.width // 2, image.height // 2)
-                  image = image.resize(size, Image.Resampling.LANCZOS)
+              image.thumbnail((768, 768), Image.Resampling.LANCZOS)
               png = srgb_png(image)
               stem = Path(filename).stem
               path = IMAGES / f"{stem}.png"
@@ -376,9 +374,9 @@ jobs:
       - name: Publish exact-run real-photo sparse PLY and verified receipt
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: wre-real-aloe-colmap-observed-rgb
+          name: wre-real-photo-colmap-observed-rgb
           path: |
-            ${{ runner.temp }}/wre-real-drone-colmap-rgb/observed-real-colmap-rgb.ply
-            ${{ runner.temp }}/wre-real-drone-colmap-rgb/real-photo-colmap-rgb-receipt.json
+            ${{ runner.temp }}/wre-real-photo-colmap-rgb/observed-real-colmap-rgb.ply
+            ${{ runner.temp }}/wre-real-photo-colmap-rgb/real-photo-colmap-rgb-receipt.json
           if-no-files-found: error
           retention-days: 7
