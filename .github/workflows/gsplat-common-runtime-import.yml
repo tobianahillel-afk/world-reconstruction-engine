@@ -7175,6 +7175,11 @@ jobs:
           <button type="button" id="wre-export-stereo-points" disabled>
             Exporter les points observés (JSON)
           </button>
+          <label for="wre-import-stereo-points">Recharger les points observés (JSON)</label>
+          <input type="file" id="wre-import-stereo-points" accept=".json,application/json">
+          <span id="wre-stereo-import-status" role="status" aria-live="polite">
+            Aucun fichier de points importé.
+          </span>
           <button type="button" id="wre-export-stereo-ply" disabled>
             Exporter les points 3D en PLY coloré (échelle relative)
           </button>
@@ -7207,25 +7212,104 @@ jobs:
             const zoom = document.getElementById('wre-pixel-native-zoom');
             const savePoint = document.getElementById('wre-save-stereo-point');
             const exportPoints = document.getElementById('wre-export-stereo-points');
+            const importPoints = document.getElementById('wre-import-stereo-points');
+            const importStatus = document.getElementById('wre-stereo-import-status');
             const exportPly = document.getElementById('wre-export-stereo-ply');
             const open3d = document.getElementById('wre-inspected-point-live-3d');
             const openSaved3d = document.getElementById('wre-saved-points-live-3d');
             const pointCount = document.getElementById('wre-stereo-point-count');
             const observations = [];
             let selected = null;
-            savePoint.addEventListener('click', () => {
-              if (!selected || observations.length >= 64) return;
-              observations.push({...selected});
+            function refreshSavedPoints() {
               pointCount.textContent = observations.length + ' points relatifs conservés (max 64)';
-              exportPoints.disabled = false;
-              exportPly.disabled = false;
-              // Only already-saved real PFM XYZ can reach the model-viewer.
+              exportPoints.disabled = observations.length === 0;
+              exportPly.disabled = observations.length === 0;
+              if (!observations.length) {
+                openSaved3d.removeAttribute('href');
+                openSaved3d.setAttribute('aria-disabled', 'true');
+                return;
+              }
               const params = new URLSearchParams({
                 stereo_points: JSON.stringify(
                   observations.map(point => point.xyz_relative_model_units))
               });
               openSaved3d.href = './wre-real-stereo-cpu-viewer.html?' + params.toString();
               openSaved3d.setAttribute('aria-disabled', 'false');
+            }
+            savePoint.addEventListener('click', () => {
+              if (!selected || observations.length >= 64) return;
+              observations.push({...selected});
+              refreshSavedPoints();
+            });
+            importPoints.addEventListener('change', async () => {
+              const file = importPoints.files?.[0];
+              if (!file) return;
+              importPoints.value = '';
+              importStatus.dataset.result = 'pending';
+              try {
+                if (file.size > 100000) throw Error('Fichier JSON trop volumineux');
+                const payload = JSON.parse(await file.text());
+                const map = await getMap();
+                if (payload.schema !== 'wre.observed_stereo_points.v1' ||
+                    payload.source_pfm !== 'wre-real-stereo-cpu-disparity-f32.pfm' ||
+                    payload.source_pfm_sha256 !== '__WRE_VERIFIED_PFM_SHA256__' ||
+                    payload.metric_scale_known !== false ||
+                    payload.focal_assumption_pixels !== map.width ||
+                    payload.baseline_assumption_model_units !== 1 ||
+                    !Array.isArray(payload.points) ||
+                    payload.points.length < 1 || payload.points.length > 64) {
+                  throw Error('Archive ou modèle stéréo incompatible');
+                }
+                // Recompute imported XYZ from actual archive PFM; never trust JSON geometry.
+                const checked = payload.points.map(point => {
+                  if (!Array.isArray(point.left_pixel) ||
+                      point.left_pixel.length !== 2 ||
+                      !point.left_pixel.every(Number.isSafeInteger) ||
+                      !Array.isArray(point.right_pixel) ||
+                      point.right_pixel.length !== 2 ||
+                      !Array.isArray(point.xyz_relative_model_units) ||
+                      point.xyz_relative_model_units.length !== 3 ||
+                      ![point.disparity_pixels, ...point.right_pixel,
+                        ...point.xyz_relative_model_units].every(Number.isFinite)) {
+                    throw Error('Observation JSON invalide');
+                  }
+                  const [u, v] = point.left_pixel;
+                  if (u < 0 || v < 0 || u >= map.width || v >= map.height) {
+                    throw Error('Observation hors image');
+                  }
+                  const index = (map.height - 1 - v) * map.width + u;
+                  const d = map.view.getFloat32(map.offset + 4 * index, true);
+                  const rx = u - d;
+                  if (!Number.isFinite(d) || d <= 0 || rx < 0 || rx >= map.width) {
+                    throw Error('Disparité PFM invalide');
+                  }
+                  const xyz = [
+                    (u - (map.width - 1) / 2) / d,
+                    (v - (map.height - 1) / 2) / d,
+                    map.width / d
+                  ];
+                  if (Math.abs(point.disparity_pixels - d) >= 0.0001 ||
+                      Math.abs(point.right_pixel[0] - rx) >= 0.0001 ||
+                      Math.abs(point.right_pixel[1] - v) >= 0.0001 ||
+                      xyz.some((value, i) =>
+                        Math.abs(value - point.xyz_relative_model_units[i]) >= 0.0001)) {
+                    throw Error('Observation JSON différente du PFM vérifié');
+                  }
+                  return {
+                    left_pixel: [u, v], right_pixel: [rx, v],
+                    disparity_pixels: d, xyz_relative_model_units: xyz
+                  };
+                });
+                // Replace saved selections only after every observation has been verified.
+                observations.splice(0, observations.length, ...checked);
+                refreshSavedPoints();
+                importStatus.dataset.result = 'ok';
+                importStatus.textContent = checked.length +
+                  ' observations rétablies depuis le PFM réel; unités relatives uniquement.';
+              } catch (error) {
+                importStatus.dataset.result = 'error';
+                importStatus.textContent = 'Import refusé : ' + String(error.message);
+              }
             });
             function downloadObserved(blob, filename) {
               const url = URL.createObjectURL(blob);
