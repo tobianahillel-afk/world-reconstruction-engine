@@ -1966,17 +1966,62 @@ jobs:
               <label for="wre-local-glb">Open your own GLB:</label>
               <input id="wre-local-glb" type="file" accept=".glb,model/gltf-binary"
                 aria-label="Open a local GLB model (max 250 MB)">
+              <button id="wre-measure-toggle" type="button" aria-pressed="false">Measure surface distance</button>
             </div>
             <model-viewer id="wre-scene" camera-controls auto-rotate interaction-prompt="auto"
               alt="Approximate CPU stereo 3D reconstruction from two real photos"
               src="data:model/gltf-binary;base64,WRE_GLB_BASE64"></model-viewer>
             <p id="wre-scene-provenance" class="metrics" aria-live="polite">
               Photo-textured stereo surface · SHA-256 WRE_GLB_SHA256</p>
+            <p id="wre-measure-result" class="metrics" aria-live="polite">
+              Surface measurement off. Coordinates are arbitrary 3D model units, NOT meters.</p>
             <script>
               const scene = document.getElementById("wre-scene");
               const chooser = document.getElementById("wre-scene-choice");
               const provenance = document.getElementById("wre-scene-provenance");
               const localInput = document.getElementById("wre-local-glb");
+              const measureButton = document.getElementById("wre-measure-toggle");
+              const measureResult = document.getElementById("wre-measure-result");
+              let measuring = false;
+              let measured = [];
+              function resetMeasurement() {
+                measured = [];
+                measureResult.textContent = measuring
+                  ? "Click two points on the visible mesh. Model units only (NOT meters)."
+                  : "Surface measurement off. Model units only (NOT meters).";
+              }
+              measureButton.addEventListener("click", () => {
+                measuring = !measuring;
+                measureButton.setAttribute("aria-pressed", String(measuring));
+                measureButton.textContent = measuring ? "Stop measuring" : "Measure surface distance";
+                if (measuring) scene.removeAttribute("auto-rotate");
+                else scene.setAttribute("auto-rotate", "");
+                resetMeasurement();
+              });
+              scene.addEventListener("click", (event) => {
+                if (!measuring || !scene.loaded) return;
+                const hit = scene.positionAndNormalFromPoint(event.clientX, event.clientY);
+                if (!hit || !hit.position) {
+                  measureResult.textContent = "No mesh surface here; try a different point.";
+                  return;
+                }
+                const point = [hit.position.x, hit.position.y, hit.position.z];
+                if (!point.every(Number.isFinite)) return;
+                if (measured.length === 2) measured = [];
+                measured.push(point);
+                if (measured.length === 1) {
+                  measureResult.textContent = "First surface point selected; click a second point.";
+                  return;
+                }
+                const relativeDistance = Math.hypot(
+                  measured[0][0] - measured[1][0],
+                  measured[0][1] - measured[1][1],
+                  measured[0][2] - measured[1][2]
+                );
+                measureResult.textContent =
+                  "Relative 3D distance: " + relativeDistance.toFixed(5) +
+                  " model units (NOT meters; scene scale is unknown).";
+              });
               let localUrl = null;
               function releaseLocalUrl() {
                 if (localUrl) URL.revokeObjectURL(localUrl);
@@ -1991,6 +2036,7 @@ jobs:
                   return;
                 }
                 releaseLocalUrl();
+                resetMeasurement();
                 localUrl = URL.createObjectURL(file);
                 scene.setAttribute("src", localUrl);
                 scene.setAttribute("alt", "User-selected local GLB model");
@@ -2024,6 +2070,7 @@ jobs:
                 const mode = modes[chooser.value];
                 if (!mode) return;
                 releaseLocalUrl();
+                resetMeasurement();
                 localInput.value = "";
                 scene.setAttribute("src", mode.src);
                 scene.setAttribute("alt", mode.alt);
@@ -2056,6 +2103,8 @@ jobs:
               <code>http://127.0.0.1:8765/wre-real-stereo-cpu-viewer.html</code>.
               You can also select a local GLB file using the file input; it stays
               in your browser, is not uploaded, and its provenance is unverified.
+              Measure distance by clicking two points on a visible mesh. The reported
+              values are in arbitrary model units and must NOT be interpreted as meters.
               Use only models you trust. No GPU training or held-out quality metric
               is implied.</footer>
           </main>
@@ -2091,6 +2140,9 @@ jobs:
           assert 'src="./wre-model-viewer-4.1.0.min.js"' in page
           assert 'id="wre-scene-choice"' in page
           assert 'id="wre-local-glb"' in page
+          assert 'id="wre-measure-toggle"' in page
+          assert 'positionAndNormalFromPoint' in page
+          assert 'model units (NOT meters' in page
           assert 'URL.createObjectURL(file)' in page
           assert 'src="./wre-real-stereo-sift-estimated-cameras.glb"' not in page
           assert "./wre-real-stereo-sift-estimated-cameras.glb" in page
