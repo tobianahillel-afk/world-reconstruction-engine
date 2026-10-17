@@ -401,6 +401,31 @@ jobs:
           depth_pfm = write_and_verify_pfm(
               "wre-real-stereo-cpu-depth-model-f32.pfm", depth_field
           )
+          # Portable lossless 16-bit grayscale depth-input interchange.
+          # Value 0 = no observed correspondence; positive values encode
+          # SGBM horizontal disparity in pixels multiplied by 256.
+          # This is NOT depth in metres, and must not be used as a metric map.
+          disparity_u16_name = "wre-real-stereo-cpu-disparity-u16.png"
+          disparity_u16 = np.where(
+              valid, np.rint(disparity_field * 256.0), 0
+          ).astype(np.uint16)
+          assert np.array_equal(disparity_u16 > 0, valid)
+          portable_disparity = Path(os.environ["RUNNER_TEMP"]) / disparity_u16_name
+          assert cv2.imwrite(str(portable_disparity), disparity_u16)
+          restored_disparity = cv2.imread(
+              str(portable_disparity), cv2.IMREAD_UNCHANGED
+          )
+          assert restored_disparity is not None
+          assert restored_disparity.dtype == np.uint16
+          assert restored_disparity.shape == (height, width)
+          assert np.array_equal(restored_disparity, disparity_u16)
+          assert np.all(
+              np.abs(restored_disparity[valid].astype(np.float32) / 256.0
+                     - disparity_field[valid]) <= 1.0 / 512.0 + 1e-6
+          )
+          disparity_u16_sha256 = hashlib.sha256(
+              portable_disparity.read_bytes()
+          ).hexdigest()
           principal_x, principal_y = (width - 1) / 2.0, (height - 1) / 2.0
           yy_selected, xx_selected = np.where(valid[::3, ::3])
           yy_selected *= 3
@@ -1192,11 +1217,19 @@ jobs:
               "original_photo_sha256": original_sha256,
               "original_photo_height_width": original_shape,
               "processed_photo_height_width": [height, width],
-              "algorithm": "pinned OpenCV 4.10 StereoSGBM",
+              "algorithm": f"OpenCV {cv2.__version__} StereoSGBM (runtime)",
               "calibrated_metric_depth": False,
               "baseline_model_units_arbitrary": baseline_gauge,
               "approximate_focal_pixels": focal_guess,
               "dense_disparity_float32_pfm": disparity_pfm,
+              "dense_disparity_float32_pfm_sha256": hashlib.sha256(
+                  (Path(os.environ["RUNNER_TEMP"]) / disparity_pfm).read_bytes()
+              ).hexdigest(),
+              "dense_disparity_uint16_png": disparity_u16_name,
+              "dense_disparity_uint16_png_sha256": disparity_u16_sha256,
+              "dense_disparity_uint16_units_per_pixel": 256,
+              "dense_disparity_uint16_invalid_value": 0,
+              "dense_disparity_uint16_metric_scale_known": False,
               "dense_depth_float32_pfm": depth_pfm,
               "dense_pfm_invalid_pixel_value": 0.0,
               "dense_depth_pfm_units": "arbitrary baseline=1, not metres",
@@ -2000,6 +2033,9 @@ jobs:
               <a href="./wre-real-stereo-cpu-photometric-consistent.glb" download>Download filtered points GLB</a>
               <a href="./wre-real-stereo-sift-estimated-cameras.glb" download>Download SIFT/cameras GLB</a>
               <a href="./wre-real-stereo-sift-colmap-dataset.zip" download>Download COLMAP dataset</a>
+              <a href="./wre-real-stereo-cpu-disparity-u16.png" download>Download lossless 16-bit disparity PNG</a>
+              <span>Disparity PNG: uint16 pixel value / 256 = horizontal disparity in pixels;
+                zero means invalid. NOT metric depth.</span>
               <label for="wre-local-glb">Open your own GLB:</label>
               <input id="wre-local-glb" type="file" accept=".glb,model/gltf-binary"
                 aria-label="Open a local GLB model (max 250 MB)">
@@ -3607,6 +3643,7 @@ jobs:
             wre-real-stereo-cpu-disparity.png \
             wre-real-stereo-cpu-disparity-f32.pfm \
             wre-real-stereo-cpu-depth-model-f32.pfm \
+            wre-real-stereo-cpu-disparity-u16.png \
             wre-real-stereo-cpu-lr-consistency.png \
             wre-real-stereo-cpu-photos.png \
             wre-real-stereo-cpu-novel-views.png \
@@ -3626,7 +3663,7 @@ jobs:
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 39
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 40
 
       - name: Publish real-photo CPU 3D plus COLMAP before native CUDA builds
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -4710,6 +4747,7 @@ jobs:
             wre-real-stereo-cpu-disparity.png \
             wre-real-stereo-cpu-disparity-f32.pfm \
             wre-real-stereo-cpu-depth-model-f32.pfm \
+            wre-real-stereo-cpu-disparity-u16.png \
             wre-real-stereo-cpu-lr-consistency.png \
             wre-real-stereo-cpu-photos.png \
             wre-real-stereo-cpu-novel-views.png \
@@ -4727,8 +4765,8 @@ jobs:
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 53
-          echo "Staged all 53 real assets including local model-viewer JS and Apache license"
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 54
+          echo "Staged all 54 real assets including portable disparity and local model-viewer JS"
 
       - name: Publish CPU COLMAP 3D preview and measured reprojection
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -6884,6 +6922,38 @@ jobs:
           }:
               raise ValueError("Original stereo photographs have different provenance")
           input_sha256 = hashlib.sha256(input_png).hexdigest()
+          # Both browser inspection and portable downloads must refer to the
+          # same true OpenCV disparity, not an unrelated file in the archive.
+          pfm_name = provenance["dense_disparity_float32_pfm"]
+          if pfm_name != "wre-real-stereo-cpu-disparity-f32.pfm":
+              raise ValueError("Unexpected stereo floating-point disparity file")
+          pfm = (bundle / pfm_name).read_bytes()
+          expected_header = f"Pf\n{width} {height}\n-1.0\n".encode("ascii")
+          if (not pfm.startswith(expected_header)
+              or len(pfm) != len(expected_header) + height * width * 4
+              or hashlib.sha256(pfm).hexdigest() !=
+                  provenance["dense_disparity_float32_pfm_sha256"]):
+              raise ValueError("Stereo float32 disparity PFM payload or provenance mismatch")
+          # Verify the exact same-run, lossless data product BEFORE archiving.
+          portable_name = provenance["dense_disparity_uint16_png"]
+          if portable_name != "wre-real-stereo-cpu-disparity-u16.png":
+              raise ValueError("Unrecognized 16-bit disparity product")
+          portable = (bundle / portable_name).read_bytes()
+          if (len(portable) < 33 or portable[:16] != bytes.fromhex(
+              "89504e470d0a1a0a0000000d49484452"
+          )):
+              raise ValueError("Missing PNG-16 disparity payload")
+          png_width, png_height = struct.unpack_from(">II", portable, 16)
+          if (png_width, png_height) != (width, height) or portable[24:26] != bytes((16, 0)):
+              raise ValueError("Disparity PNG is not 16-bit grayscale at source resolution")
+          if (
+              provenance["dense_disparity_uint16_units_per_pixel"] != 256
+              or provenance["dense_disparity_uint16_invalid_value"] != 0
+              or provenance["dense_disparity_uint16_metric_scale_known"] is not False
+              or hashlib.sha256(portable).hexdigest() !=
+              provenance["dense_disparity_uint16_png_sha256"]
+          ):
+              raise ValueError("Portable disparity scaling/provenance mismatch")
           raw_names = {
               "aloeL.jpg": "wre-original-aloeL.jpg",
               "aloeR.jpg": "wre-original-aloeR.jpg",
@@ -6938,8 +7008,139 @@ jobs:
               '(D. Scharstein et al.); voir https://vision.middlebury.edu/stereo/data/.'
               '</figcaption></figure></details>'
           )
+          # Show the real same-run stereo evidence already in the offline ZIP.
+          # These are observed matching diagnostics, NOT an independent 3D GT.
+          diagnostics = (
+              '<details open id="wre-stereo-evidence">'
+              '<summary><strong>Qualité observée : photos vers 3D (CPU)</strong></summary>'
+              '<p id="wre-stereo-evidence-metrics">'
+              'Couverture disparité : '
+              + f'{100.0 * provenance["disparity_valid_fraction"]:.1f}%'
+              + ' des pixels ; cohérence gauche-droite parmi les pixels valides : '
+              + f'{100.0 * provenance["left_right_consistent_fraction_of_valid"]:.1f}%'
+              + ' ; erreur photométrique moyenne gauche-droite : '
+              + f'{provenance["stereo_photometric_mae_0_255"]:.2f}/255.'
+              + ' Ce sont des mesures internes sur observations, pas une précision '
+              'géométrique indépendante ni une échelle en mètres.</p>'
+              '<div style="display:flex;flex-wrap:wrap;gap:12px">'
+              '<figure style="flex:1 1 260px">'
+              '<a href="./wre-real-stereo-cpu-disparity.png" download>'
+              '<img id="wre-stereo-disparity" loading="eager" '
+              'style="width:100%;height:auto" alt="Disparité stéréo estimée sur vraies photos" '
+              'src="./wre-real-stereo-cpu-disparity.png"></a>'
+              '<figcaption>Disparité estimée, aperçu colorisé (pas une profondeur métrique).</figcaption>'
+              '</figure><figure style="flex:1 1 260px">'
+              '<a href="./wre-real-stereo-cpu-lr-consistency.png" download>'
+              '<img id="wre-stereo-consistency" loading="eager" '
+              'style="width:100%;height:auto" alt="Cohérence gauche-droite des correspondances" '
+              'src="./wre-real-stereo-cpu-lr-consistency.png"></a>'
+              '<figcaption>Vert : correspondance réciproque ; rouge : correspondance unilatérale.</figcaption>'
+              '</figure><figure style="flex:1 1 260px">'
+              '<a href="./wre-real-stereo-cpu-right-reprojection.png" download>'
+              '<img id="wre-stereo-reprojection" loading="eager" '
+              'style="width:100%;height:auto" alt="Comparaison réelle de reprojection entre images" '
+              'src="./wre-real-stereo-cpu-right-reprojection.png"></a>'
+              '<figcaption>Reprojection observée et différences, non vérité terrain 3D.</figcaption>'
+              '</figure></div></details>'
+          )
+          # Actual interactive pixel inspection of the SAME float32 PFM that
+          # the pinned OpenCV SGBM step generated. JavaScript merely reads the
+          # archived pixels: it is not a new stereo solver or physical depth.
+          pixel_inspector = """
+          <p id="wre-pixel-inspector" role="status" aria-live="polite">
+          Cliquez sur l'aperçu de disparité pour afficher une valeur observée
+          (pixels), et une profondeur relative (unités de modèle, PAS mètres).
+          </p>
+          <script>
+          (() => {
+            const picture = document.getElementById('wre-stereo-disparity');
+            const status = document.getElementById('wre-pixel-inspector');
+            picture.style.cursor = 'crosshair';
+            picture.title = 'Cliquez pour inspecter la disparité réelle à ce pixel';
+            let loading = null;
+            async function getMap() {
+              if (!loading) loading = (async () => {
+                const response = await fetch('./wre-real-stereo-cpu-disparity-f32.pfm');
+                if (!response.ok) throw Error('PFM absent de cette archive');
+                const buffer = await response.arrayBuffer();
+                if (buffer.byteLength < 24 || buffer.byteLength > 5000000) {
+                  throw Error('Taille PFM hors limites');
+                }
+                const raw = new Uint8Array(buffer);
+                let offset = 0;
+                for (let i = 0; i < 3; i++) {
+                  const end = raw.indexOf(10, offset);
+                  if (end < 0 || end > 80) throw Error('En-tête PFM incorrect');
+                  offset = end + 1;
+                }
+                const header = new TextDecoder().decode(raw.subarray(0, offset));
+                const lines = header.split(String.fromCharCode(10));
+                const dimensions = lines[1]?.split(' ');
+                if (lines.length !== 4 || lines[0] !== 'Pf' ||
+                    lines[2] !== '-1.0' || lines[3] !== '' ||
+                    dimensions?.length !== 2) {
+                  throw Error('Format PFM float32 little endian incorrect');
+                }
+                const width = Number(dimensions[0]);
+                const height = Number(dimensions[1]);
+                if (!Number.isSafeInteger(width) || !Number.isSafeInteger(height) ||
+                    width <= 0 || height <= 0) {
+                  throw Error('Dimensions du PFM invalides');
+                }
+                if (width !== picture.naturalWidth || height !== picture.naturalHeight ||
+                    width * height * 4 + offset !== raw.byteLength) {
+                  throw Error('PFM incompatible avec cette carte de disparité');
+                }
+                return {width, height, offset, view:new DataView(buffer)};
+              })();
+              return loading;
+            }
+            picture.addEventListener('click', async (event) => {
+              event.preventDefault();  // The image is also a download link.
+              try {
+                const map = await getMap();
+                const rect = picture.getBoundingClientRect();
+                if (rect.width <= 0 || rect.height <= 0) throw Error('Image masquée');
+                const u = Math.max(0, Math.min(map.width - 1,
+                    Math.floor((event.clientX - rect.left) * map.width / rect.width)));
+                const v = Math.max(0, Math.min(map.height - 1,
+                    Math.floor((event.clientY - rect.top) * map.height / rect.height)));
+                // A grayscale PFM is stored bottom-up, one float32 per pixel.
+                const index = (map.height - 1 - v) * map.width + u;
+                const disparity = map.view.getFloat32(map.offset + 4 * index, true);
+                status.dataset.x = String(u);
+                status.dataset.y = String(v);
+                status.dataset.disparity = String(disparity);
+                if (!Number.isFinite(disparity) || disparity <= 0) {
+                  status.textContent = 'Pixel (' + u + ',' + v +
+                    ') : aucune disparité stéréo valide observée.';
+                  return;
+                }
+                // WRE's existing uncalibrated preview uses f=width, baseline=1.
+                const relativeDepth = map.width / disparity;
+                status.textContent = 'Pixel (' + u + ',' + v + ') : disparité ' +
+                  disparity.toFixed(3) + ' px ; profondeur relative ' +
+                  relativeDepth.toFixed(3) +
+                  ' unités de modèle (PAS des mètres, ni une précision certifiée).';
+              } catch (error) {
+                status.dataset.error = String(error.message);
+                status.textContent = 'Inspection indisponible : ' + String(error.message);
+              }
+            });
+          })();
+          </script>
+          """
           comparison.write_text(
-              page.replace(anchor, navigation + source_panel + anchor), encoding="utf-8"
+              page.replace(anchor,
+                  navigation + source_panel + diagnostics + pixel_inspector
+                  + '<p><a href="./wre-real-stereo-cpu-disparity-f32.pfm" download>'
+                  'Télécharger la disparité float32 (PFM)</a> · '
+                  '<a href="./wre-real-stereo-cpu-disparity-u16.png" download>'
+                  'Télécharger la disparité 16 bits sans perte</a> · '
+                  'valeur PNG / 256 = disparité horizontale en pixels, '
+                  '0 = invalide ; PAS profondeur métrique.</p>'
+                  + anchor),
+              encoding="utf-8",
           )
           (bundle / "README-OPEN-OFFLINE-3D.txt").write_text(
               "WRE — 3D depuis deux photographies réelles (CPU)\n"
@@ -6947,6 +7148,9 @@ jobs:
               "2. Linux/macOS : python3 open-wre-3d.py ; Windows : py -3 open-wre-3d.py\n"
               "3. Le navigateur ouvre automatiquement la galerie locale (127.0.0.1).\n"
               "4. Sélectionnez le visualiseur interactif 3D et ses quatre modes.\n"
+              "5. Cliquez sur l'aperçu de disparité pour lire le pixel float32 réel.\n"
+              "   Vous pouvez télécharger PFM ou PNG 16 bits : valeur PNG/256 = disparité ;\n"
+              "   0 = pixel invalide. Ne PAS interpréter comme une profondeur en mètres.\n"
               "Tout est local après extraction, sans API payante ni accès Internet.\n"
               "Limites : deux photos statiques ; échelle métrique inconnue ; aucun entraînement GPU/4D.\n",
               encoding="utf-8",
@@ -7005,6 +7209,12 @@ jobs:
               "source_stereo_photo_png": input_name,
               "source_stereo_photo_png_sha256": input_sha256,
               "source_stereo_photo_dimensions": [input_width, input_height],
+              "portable_disparity_png": portable_name,
+              "portable_disparity_sha256": provenance["dense_disparity_uint16_png_sha256"],
+              "float32_disparity_pfm": pfm_name,
+              "float32_disparity_sha256": provenance["dense_disparity_float32_pfm_sha256"],
+              "portable_disparity_units_per_pixel": 256,
+              "portable_disparity_metric_scale_known": False,
               "source_stereo_jpeg_git_blobs": source_blobs,
               "chrome_png_sha256": png_hashes,
               "camera_tour_storyboard_png": "real-stereo-3d-camera-storyboard.png",
@@ -7110,6 +7320,130 @@ jobs:
                       !!document.querySelector('a[href="./wre-original-aloeR.jpg"]');
               })()"""
               wait_for(lambda: js(raw_photo_loaded))
+              # Decode the genuine stereo diagnostic PNGs in the final extracted
+              # archive, not a synthetic browser fixture or earlier staging page.
+              evidence_loaded = """return (() => {
+                  const details = document.getElementById('wre-stereo-evidence');
+                  const names = [
+                      ['wre-stereo-disparity', 'wre-real-stereo-cpu-disparity.png'],
+                      ['wre-stereo-consistency', 'wre-real-stereo-cpu-lr-consistency.png'],
+                      ['wre-stereo-reprojection', 'wre-real-stereo-cpu-right-reprojection.png']
+                  ];
+                  return Boolean(details && details.open &&
+                      names.every(([id, name]) => {
+                          const img = document.getElementById(id);
+                          return img && img.complete && img.naturalWidth >= 320 &&
+                              img.naturalHeight >= 160 &&
+                              img.currentSrc.endsWith('/' + name) &&
+                              img.getBoundingClientRect().width >= 100 &&
+                              document.querySelector('a[href="./' + name + '"][download]');
+                      }) && document.getElementById('wre-stereo-evidence-metrics')
+                          ?.textContent.includes('pas une précision'));
+              })()"""
+              wait_for(lambda: js(evidence_loaded))
+              # Read actual decoded consistency pixels; the upstream stereo
+              # algorithm must have produced some mutually consistent matches.
+              assert js("""return (() => {
+                  const img=document.getElementById('wre-stereo-consistency');
+                  const canvas=document.createElement('canvas');
+                  canvas.width=img.naturalWidth; canvas.height=img.naturalHeight;
+                  const context=canvas.getContext('2d', {willReadFrequently:true});
+                  context.drawImage(img, 0, 0);
+                  const data=context.getImageData(0,0,canvas.width,canvas.height).data;
+                  for(let i=0;i<data.length;i+=4) {
+                      if(data[i]===0 && data[i+1]===255 && data[i+2]===0) return true;
+                  }
+                  return false;
+              })()""")
+              print("PASS: actual offline Chrome decoded stereo quality evidence and consistent pixels")
+              # The final extracted archive must expose the ACTUAL numerical
+              # stereo product through its user-facing download link.
+              assert js("""return !!document.querySelector(
+                  'a[href="./wre-real-stereo-cpu-disparity-u16.png"][download]'
+              )""")
+              from hashlib import sha256
+              from struct import unpack_from
+              numeric_url = "http://127.0.0.1:8877/wre-real-stereo-cpu-disparity-u16.png"
+              with urlopen(numeric_url, timeout=10) as response:
+                  numeric_png = response.read(10_000_000)
+              with urlopen(
+                  "http://127.0.0.1:8877/wre-real-stereo-cpu-metrics.json", timeout=10
+              ) as response:
+                  numeric_metrics = json.loads(response.read())
+              assert numeric_png[:16] == bytes.fromhex("89504e470d0a1a0a0000000d49484452")
+              assert numeric_png[24:26] == bytes((16, 0))
+              height, width = numeric_metrics["processed_photo_height_width"]
+              assert unpack_from(">II", numeric_png, 16) == (width, height)
+              assert sha256(numeric_png).hexdigest() == numeric_metrics[
+                  "dense_disparity_uint16_png_sha256"
+              ]
+              assert numeric_metrics["dense_disparity_uint16_units_per_pixel"] == 256
+              print("PASS: actual archived 16-bit disparity PNG served over localhost")
+              # Exercise the USER-FACING interaction in REAL Chrome against
+              # the same SHA256-checked float32 data in the EXTRACTED archive.
+              pfm_url = "http://127.0.0.1:8877/wre-real-stereo-cpu-disparity-f32.pfm"
+              with urlopen(pfm_url, timeout=10) as response:
+                  actual_pfm = response.read(5_000_001)
+              header = f"Pf\n{width} {height}\n-1.0\n".encode("ascii")
+              assert actual_pfm.startswith(header)
+              assert len(actual_pfm) == len(header) + width * height * 4
+              assert sha256(actual_pfm).hexdigest() == numeric_metrics[
+                  "dense_disparity_float32_pfm_sha256"
+              ]
+              # A CSS-sized image may display several source pixels per screen
+              # pixel. Choose an observed valid 3x3 neighbourhood, so browser
+              # integer MouseEvent coordinates cannot land on an invalid edge.
+              from struct import iter_unpack
+              def actual_disparity(x, y):
+                  index = (height - 1 - y) * width + x
+                  return unpack_from("<f", actual_pfm, len(header) + 4 * index)[0]
+
+              measured = None
+              for index, (value,) in enumerate(iter_unpack("<f", actual_pfm[len(header):])):
+                  px, py = index % width, height - 1 - index // width
+                  if (1 <= px < width - 1 and 1 <= py < height - 1 and
+                      all(2.0 < actual_disparity(px + dx, py + dy) < 128.0
+                          for dx in (-1, 0, 1) for dy in (-1, 0, 1))):
+                      measured = (px, py)
+                      break
+              assert measured is not None, "No observed contiguous valid stereo pixels"
+              px, py = measured
+              js(f"""const image = document.getElementById('wre-stereo-disparity');
+                  const box = image.getBoundingClientRect();
+                  image.dispatchEvent(new MouseEvent('click', {{
+                      bubbles:true,cancelable:true,
+                      clientX:box.left + ({px} + 0.5) * box.width / image.naturalWidth,
+                      clientY:box.top + ({py} + 0.5) * box.height / image.naturalHeight
+                  }})); return true;""")
+              wait_for(lambda: js(
+                  "return !!document.getElementById('wre-pixel-inspector').dataset.disparity "
+                  "|| !!document.getElementById('wre-pixel-inspector').dataset.error"
+              ), timeout=15)
+              inspector_state = js("""return (() => {
+                  const el=document.getElementById('wre-pixel-inspector');
+                  return {x:el.dataset.x, y:el.dataset.y, disparity:el.dataset.disparity,
+                          error:el.dataset.error, text:el.textContent};
+              })()""")
+              assert not inspector_state["error"], inspector_state
+              # DOM MouseEvent client coordinates are CSS pixels, not exact
+              # intrinsic image pixels. Audit the actual selected source pixel
+              # against the independently decoded SHA256-checked PFM instead
+              # of assuming CSS -> intrinsic coordinates are lossless.
+              selected_x, selected_y = int(inspector_state["x"]), int(inspector_state["y"])
+              assert abs(selected_x - px) <= 1 and abs(selected_y - py) <= 1, (
+                  inspector_state, (px, py)
+              )
+              expected_disparity = actual_disparity(selected_x, selected_y)
+              assert 2.0 < expected_disparity < 128.0, inspector_state
+              observed = float(inspector_state["disparity"])
+              assert abs(observed - expected_disparity) < 0.0001
+              assert "PAS des mètres" in js(
+                  "return document.getElementById('wre-pixel-inspector').textContent"
+              )
+              assert js("""return !!document.querySelector(
+                  'a[href="./wre-real-stereo-cpu-disparity-f32.pfm"][download]'
+              )""")
+              print("PASS: actual Chrome inspected pixel float32 from the same real-photo PFM")
               browser("POST", f"/session/{session}/url", {
                   "url": "http://127.0.0.1:8877/wre-real-stereo-cpu-viewer.html",
               })
