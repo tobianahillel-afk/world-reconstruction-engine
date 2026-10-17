@@ -1531,7 +1531,7 @@ jobs:
               "colmap_zip_sha256": hashlib.sha256(siftdataset_zip.read_bytes()).hexdigest(),
               "approximate_intrinsics": True,
               "metric_scale_known": False,
-              "upstream_colmap_parser_execution": "verified in later native step",
+              "upstream_colmap_parser_execution": "pending_native_execution",
               "gpu_training_executed": False,
           }
           (root / "wre-real-stereo-sift-colmap-handoff.json").write_text(
@@ -1745,7 +1745,7 @@ jobs:
       # Run the actual-photo CPU reconstruction BEFORE expensive native CUDA
       # compilation. Keep the original photo pipeline in one place and make
       # its real 3D/preview outputs inspectable even while CUDA builds run.
-      - name: Stage twenty-seven real-photo CPU 3D, animated mesh, GLB and COLMAP outputs early
+      - name: Stage thirty-three real-photo CPU 3D and SIFT COLMAP outputs early
         shell: bash
         run: |
           set -euo pipefail
@@ -1782,12 +1782,14 @@ jobs:
             wre-real-stereo-sift-estimated-3d.ply \
             wre-real-stereo-sift-estimated-pose.json \
             wre-real-stereo-sift-estimated-cameras.glb \
-            wre-real-stereo-sift-observed-tracks.json
+            wre-real-stereo-sift-observed-tracks.json \
+            wre-real-stereo-sift-colmap-dataset.zip \
+            wre-real-stereo-sift-colmap-handoff.json
           do
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 31
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 33
 
       - name: Publish real-photo CPU 3D plus COLMAP before native CUDA builds
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -1883,6 +1885,78 @@ jobs:
           assert np.all(np.isfinite(parsed.points))
           print("Real stereo photographs: pinned gsplat COLMAP Parser and Dataset decoded")
           print("Two real images, >=500 estimated XYZ points, no CUDA or training")
+          PY
+
+      - name: Decode actual SIFT-estimated real-photo COLMAP in pinned gsplat Dataset (CPU)
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$COMMON_PYTHON" -I - <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          import numpy as np
+          import torch
+
+          root = Path(os.environ["RUNNER_TEMP"])
+          sys.path.insert(0, str(Path(os.environ["COMMON_SOURCES"]) / "gsplat" / "examples"))
+          from datasets.colmap import Dataset, Parser
+
+          dataset_root = root / "wre-real-stereo-sift-colmap"
+          measurements = json.loads(
+              (root / "wre-real-stereo-sift-observed-tracks.json").read_text()
+          )
+          metadata_path = root / "wre-real-stereo-sift-colmap-handoff.json"
+          metadata = json.loads(metadata_path.read_text())
+          assert metadata["tracks_sha256"] and metadata["metric_scale_known"] is False
+          parsed = Parser(str(dataset_root), factor=1, normalize=False, test_every=8)
+          assert parsed.image_names == ["aloe-sift-left.png", "aloe-sift-right.png"]
+          cloud = np.asarray(parsed.points, dtype=np.float64)
+          expected = np.asarray(measurements["triangulated_xyz"], dtype=np.float64)
+          assert cloud.shape == expected.shape and cloud.shape[0] >= 20
+          assert np.allclose(cloud, expected, rtol=0, atol=1e-6)
+          train = Dataset(parsed, split="train")
+          test = Dataset(parsed, split="test")
+          assert len(train) == len(test) == 1
+          for batch in (train[0], test[0]):
+              assert isinstance(batch["image"], torch.Tensor)
+              assert batch["image"].device.type == "cpu"
+              assert batch["image"].shape[-1] == 3
+              assert batch["K"].shape == (3, 3)
+              assert batch["camtoworld"].shape == (4, 4)
+              assert torch.isfinite(batch["image"]).all()
+          errors = []
+          for i, name in enumerate(parsed.image_names):
+              observed = np.asarray(
+                  measurements["left_observed_xy" if i == 0 else "right_observed_xy"],
+                  dtype=np.float64,
+              )
+              assert observed.shape == (len(cloud), 2)
+              world_to_camera = np.linalg.inv(parsed.camtoworlds[i])
+              camera_xyz = (
+                  world_to_camera[:3, :3] @ cloud.T
+                  + world_to_camera[:3, 3:4]
+              )
+              assert np.all(camera_xyz[2] > 0)
+              intrinsic = parsed.Ks_dict[parsed.camera_ids[i]]
+              homogeneous = intrinsic @ camera_xyz
+              pixels = (homogeneous[:2] / homogeneous[2]).T
+              errors.extend(np.linalg.norm(pixels - observed, axis=1).tolist())
+          rmse = float(np.sqrt(np.mean(np.square(errors))))
+          assert np.isfinite(rmse) and rmse < 8.0, rmse
+          metadata["upstream_colmap_parser_execution"] = "passed_on_cpu"
+          metadata["upstream_colmap_reprojection_rmse_px"] = rmse
+          metadata_path.write_text(
+              json.dumps(metadata, indent=2, sort_keys=True, allow_nan=False) + "\n"
+          )
+          print(
+              f"Actual real-photo SIFT-derived camera geometry: {len(cloud)} "
+              f"3D tracks, 2 real images decoded by pinned gsplat Dataset; "
+              f"observed 2-view reprojection RMSE={rmse:.3f}px (in-sample)"
+          )
+          print("No CUDA kernel, metric calibration, GPU training or 4D reconstruction.")
           PY
 
       - name: Decode a real 3-view COLMAP binary dataset with the pinned trainer (CPU)
@@ -2805,13 +2879,15 @@ jobs:
             wre-real-stereo-sift-estimated-3d.ply \
             wre-real-stereo-sift-estimated-pose.json \
             wre-real-stereo-sift-estimated-cameras.glb \
-            wre-real-stereo-sift-observed-tracks.json
+            wre-real-stereo-sift-observed-tracks.json \
+            wre-real-stereo-sift-colmap-dataset.zip \
+            wre-real-stereo-sift-colmap-handoff.json
           do
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 47
-          echo "Staged all 47 real PLY/OBJ/GLB/GIF/MTL/PNG/PFM/NPY/JSON/ZIP files for artifact upload"
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 49
+          echo "Staged all 49 real PLY/OBJ/GLB/GIF/MTL/PNG/PFM/NPY/JSON/ZIP files for artifact upload"
 
       - name: Publish CPU COLMAP 3D preview and measured reprojection
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
