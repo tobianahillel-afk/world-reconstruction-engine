@@ -1809,6 +1809,8 @@ jobs:
           "$COMMON_PYTHON" - <<'PY'
           import base64
           import hashlib
+          import json
+          import math
           import os
           import struct
           from pathlib import Path
@@ -1823,6 +1825,38 @@ jobs:
           assert struct.unpack_from("<I", payload, 8)[0] == len(payload)
           digest = hashlib.sha256(payload).hexdigest()
           encoded = base64.b64encode(payload).decode("ascii")
+          # Keep the observed source and reconstruction errors visible beside
+          # the GLB. Every diagnostic is a previously measured CPU output,
+          # never an inferred or generated photograph.
+          metrics = json.loads(
+              (output / "wre-real-stereo-cpu-metrics.json").read_text(encoding="utf-8")
+          )
+          sift_pose = json.loads(
+              (output / "wre-real-stereo-sift-estimated-pose.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          assert metrics["photos_are_real"] is True
+          assert sift_pose["real_photographs"] is True
+          mae = float(metrics["right_reprojection_photometric_mae_0_255"])
+          rmse = float(sift_pose["two_view_in_sample_reprojection_rmse_pixels"])
+          tracks = int(sift_pose["triangulated_positive_depth_rgb_points"])
+          assert math.isfinite(mae) and 0 <= mae <= 255
+          assert math.isfinite(rmse) and rmse >= 0 and tracks > 0
+          images = (
+              ("SOURCE_PHOTOS", "wre-real-stereo-cpu-photos.png"),
+              ("SIFT_REPROJECTION", "wre-real-stereo-sift-observed-reprojection.png"),
+              ("STEREO_REPROJECTION", "wre-real-stereo-cpu-right-reprojection.png"),
+          )
+          evidence = {}
+          for marker, name in images:
+              data = (output / name).read_bytes()
+              assert 64 < len(data) <= 8_000_000
+              assert data[:8] == bytes.fromhex("89504e470d0a1a0a")
+              evidence[marker] = (
+                  base64.b64encode(data).decode("ascii"),
+                  hashlib.sha256(data).hexdigest(),
+              )
           # Embed the actual previously generated GLB directly. Opening the
           # HTML file needs no local web server or separately hosted model;
           # only the pinned free open-source browser component needs network.
@@ -1844,6 +1878,13 @@ jobs:
               h1 { font-size:18px; margin:0 0 5px; }
               p { margin:3px 0; line-height:1.35; }
               model-viewer { display:block; width:100%; flex:1; min-height:320px; }
+              .metrics { font-variant-numeric:tabular-nums; padding:8px 18px;
+                background:#202d3e; }
+              .evidence { display:grid; grid-template-columns:repeat(auto-fit,minmax(260px,1fr));
+                gap:10px; padding:10px; max-height:36vh; overflow:auto; }
+              figure { margin:0; min-width:0; }
+              figure img { display:block; width:100%; height:auto; object-fit:contain; }
+              figcaption { font-size:12px; padding:4px 0; overflow-wrap:anywhere; }
               footer { padding:8px 18px; background:#192332;
                 overflow-wrap:anywhere; font-size:12px; }
             </style>
@@ -1860,7 +1901,23 @@ jobs:
             <model-viewer camera-controls auto-rotate interaction-prompt="auto"
               alt="Approximate CPU stereo 3D reconstruction from two real photos"
               src="data:model/gltf-binary;base64,WRE_GLB_BASE64"></model-viewer>
-            <footer>GLB SHA-256: WRE_GLB_SHA256. The mesh is embedded in this file;
+            <div class="metrics">Observed right-view photometric MAE: WRE_STEREO_MAE/255
+              (in-sample). SIFT two-view reprojection RMSE: WRE_SIFT_RMSE px
+              (in-sample, WRE_TRACKS measured 3D tracks). Neither is held-out accuracy.</div>
+            <section class="evidence" aria-label="Observed photographs and diagnostics">
+              <figure><img alt="Two original observed photographs"
+                src="data:image/png;base64,WRE_SOURCE_PHOTOS_BASE64">
+                <figcaption>Original observed photos · SHA-256 WRE_SOURCE_PHOTOS_SHA</figcaption></figure>
+              <figure><img alt="Observed pixels versus estimated camera reprojections"
+                src="data:image/png;base64,WRE_SIFT_REPROJECTION_BASE64">
+                <figcaption>Measured SIFT projection errors · SHA-256
+                  WRE_SIFT_REPROJECTION_SHA</figcaption></figure>
+              <figure><img alt="Observed right camera versus stereo depth reprojection"
+                src="data:image/png;base64,WRE_STEREO_REPROJECTION_BASE64">
+                <figcaption>Depth-based right view errors · SHA-256
+                  WRE_STEREO_REPROJECTION_SHA</figcaption></figure>
+            </section>
+            <footer>GLB SHA-256: WRE_GLB_SHA256. The mesh and diagnostic photos are embedded;
               the free model-viewer 4.1.0 renderer requires an internet connection.
               Downloaded model bytes are not sent to an AI or paid API.</footer>
           </main>
@@ -1868,10 +1925,25 @@ jobs:
           </html>
           """
           page = page.replace("WRE_GLB_BASE64", encoded).replace("WRE_GLB_SHA256", digest)
+          page = (
+              page.replace("WRE_STEREO_MAE", f"{mae:.3f}")
+              .replace("WRE_SIFT_RMSE", f"{rmse:.3f}")
+              .replace("WRE_TRACKS", str(tracks))
+          )
+          for marker, (content, image_hash) in evidence.items():
+              page = page.replace("WRE_" + marker + "_BASE64", content)
+              page = page.replace("WRE_" + marker + "_SHA", image_hash)
           # Verify the browser artifact carries EXACTLY the validated source GLB.
           inline = page.split("data:model/gltf-binary;base64,", 1)[1].split('"', 1)[0]
           assert base64.b64decode(inline, validate=True) == payload
           assert page.count("data:model/gltf-binary;base64,") == 1
+          assert page.count("data:image/png;base64,") == len(evidence)
+          for marker, (image_bytes_base64, image_hash) in evidence.items():
+              assert image_hash in page
+              assert page.count(image_bytes_base64) == 1
+              assert base64.b64decode(image_bytes_base64, validate=True) == (
+                  output / dict(images)[marker]
+              ).read_bytes()
           viewer = output / "wre-real-stereo-cpu-viewer.html"
           viewer.write_text(page, encoding="utf-8")
           assert viewer.stat().st_size > len(payload)
