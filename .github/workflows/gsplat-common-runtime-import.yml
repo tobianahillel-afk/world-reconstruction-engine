@@ -1967,6 +1967,8 @@ jobs:
               <input id="wre-local-glb" type="file" accept=".glb,model/gltf-binary"
                 aria-label="Open a local GLB model (max 250 MB)">
               <button id="wre-measure-toggle" type="button" aria-pressed="false">Measure surface distance</button>
+              <button id="wre-measure-export" type="button" disabled
+                aria-label="Download relative surface measurement as JSON">Download measurement JSON</button>
             </div>
             <model-viewer id="wre-scene" camera-controls auto-rotate interaction-prompt="auto"
               alt="Approximate CPU stereo 3D reconstruction from two real photos"
@@ -1981,11 +1983,15 @@ jobs:
               const provenance = document.getElementById("wre-scene-provenance");
               const localInput = document.getElementById("wre-local-glb");
               const measureButton = document.getElementById("wre-measure-toggle");
+              const exportButton = document.getElementById("wre-measure-export");
               const measureResult = document.getElementById("wre-measure-result");
               let measuring = false;
               let measured = [];
+              let completedMeasurement = null;
               function resetMeasurement() {
                 measured = [];
+                completedMeasurement = null;
+                exportButton.disabled = true;
                 measureResult.textContent = measuring
                   ? "Click two points on the visible mesh. Model units only (NOT meters)."
                   : "Surface measurement off. Model units only (NOT meters).";
@@ -2007,7 +2013,11 @@ jobs:
                 }
                 const point = [hit.position.x, hit.position.y, hit.position.z];
                 if (!point.every(Number.isFinite)) return;
-                if (measured.length === 2) measured = [];
+                if (measured.length === 2) {
+                  measured = [];
+                  completedMeasurement = null;
+                  exportButton.disabled = true;
+                }
                 measured.push(point);
                 if (measured.length === 1) {
                   measureResult.textContent = "First surface point selected; click a second point.";
@@ -2021,6 +2031,34 @@ jobs:
                 measureResult.textContent =
                   "Relative 3D distance: " + relativeDistance.toFixed(5) +
                   " model units (NOT meters; scene scale is unknown).";
+                if (Number.isFinite(relativeDistance)) {
+                  completedMeasurement = {
+                    schema: "wre.relative_3d_surface_measurement.v1",
+                    model_source: chooser.value || "user-supplied-local-glb",
+                    model_provenance: provenance.textContent.trim(),
+                    metric_scale_known: false,
+                    units: "model_units",
+                    point_a_xyz: measured[0],
+                    point_b_xyz: measured[1],
+                    distance_model_units: relativeDistance
+                  };
+                  exportButton.disabled = false;
+                }
+              });
+              exportButton.addEventListener("click", () => {
+                if (!completedMeasurement || exportButton.disabled) return;
+                const blob = new Blob(
+                  [JSON.stringify(completedMeasurement, null, 2) + "\\n"],
+                  {type: "application/json"}
+                );
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = "wre-relative-surface-measurement.json";
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
               });
               let localUrl = null;
               function releaseLocalUrl() {
@@ -2141,6 +2179,8 @@ jobs:
           assert 'id="wre-scene-choice"' in page
           assert 'id="wre-local-glb"' in page
           assert 'id="wre-measure-toggle"' in page
+          assert 'id="wre-measure-export"' in page
+          assert 'distance_model_units' in page
           assert 'positionAndNormalFromPoint' in page
           assert 'model units (NOT meters' in page
           assert 'URL.createObjectURL(file)' in page
@@ -3514,11 +3554,37 @@ jobs:
                   .split(" model units",1)[0]
               )
               assert displayed_distance > 0.0
+              assert js("""
+                return !document.getElementById('wre-measure-export').disabled;
+              """)
               js("""
+                window.__wreExportedMeasurement = null;
+                const originalCreateURL = URL.createObjectURL.bind(URL);
+                URL.createObjectURL = blob => {
+                  if (blob.type === 'application/json') {
+                    blob.text().then(text => window.__wreExportedMeasurement = text);
+                  }
+                  return originalCreateURL(blob);
+                };
+                document.getElementById('wre-measure-export').click();
+              """)
+              exported_measurement = json.loads(until("""
+                return window.__wreExportedMeasurement;
+              """))
+              assert exported_measurement["schema"] == "wre.relative_3d_surface_measurement.v1"
+              assert exported_measurement["model_source"] == "surface"
+              assert exported_measurement["metric_scale_known"] is False
+              assert exported_measurement["units"] == "model_units"
+              assert exported_measurement["point_a_xyz"] == measure_hits[0]["pos"]
+              assert exported_measurement["point_b_xyz"] == measure_hits[1]["pos"]
+              assert abs(exported_measurement["distance_model_units"] - displayed_distance) < 0.00001
+              assert exported_measurement["distance_model_units"] > 0.0
+              assert js("""
                 const button=document.getElementById('wre-measure-toggle');
                 button.click();
                 return button.getAttribute('aria-pressed') === 'false' &&
-                  document.getElementById('wre-scene').hasAttribute('auto-rotate');
+                  document.getElementById('wre-scene').hasAttribute('auto-rotate') &&
+                  document.getElementById('wre-measure-export').disabled;
               """)
               js("""
                 window.__wre3dLoads=0;
@@ -3604,6 +3670,7 @@ jobs:
                       "sift_camera_mode_loaded": True,
                       "local_glb_file_loaded_in_chrome": True,
                       "surface_distance_measured_in_chrome": True,
+                      "surface_measurement_export_verified_in_chrome": True,
                       "surface_reload": True,
                       "webgl_context": True,
                       "input_glb_sha256": expected_hashes,
@@ -3716,6 +3783,8 @@ jobs:
               raise ValueError("Actual Chrome did not open a user-selected GLB")
           if receipt.get("surface_distance_measured_in_chrome") is not True:
               raise ValueError("Actual Chrome did not measure two real mesh points")
+          if receipt.get("surface_measurement_export_verified_in_chrome") is not True:
+              raise ValueError("Actual Chrome did not export a nonmetric 3D surface measurement")
           
           glbs = (
               "wre-real-stereo-cpu-textured.glb",
