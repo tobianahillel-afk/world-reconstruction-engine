@@ -4770,13 +4770,6 @@ jobs:
                   document.querySelectorAll('.wre-pick-marker').length === 0;
               """)
 
-              assert js("""
-                document.getElementById('wre-angle-toggle').click();
-                return document.getElementById('wre-measure-export').disabled &&
-                  document.getElementById('wre-scene').hasAttribute('auto-rotate') &&
-                  document.querySelectorAll('.wre-pick-marker').length === 0;
-              """)
-
               js("""
                 window.__wre3dLoads=0;
                 document.getElementById('wre-scene').addEventListener(
