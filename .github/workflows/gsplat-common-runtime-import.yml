@@ -3839,6 +3839,106 @@ jobs:
                   document.querySelectorAll('.wre-pick-marker').length === 0;
               """)
 
+              # Real Chrome/WebGL raycasts and Blob export of relative 3D
+              # triangle-fan area on the actual photograph-derived mesh.
+              area_hits = js("""
+                const scene=document.getElementById('wre-scene');
+                const button=document.getElementById('wre-area-toggle');
+                button.click();
+                if (button.getAttribute('aria-pressed') !== 'true' ||
+                    scene.hasAttribute('auto-rotate')) return null;
+                const box=scene.getBoundingClientRect(), hits=[];
+                for (let yi=0;yi<=10;yi++) for (let xi=0;xi<=10;xi++) {
+                  const x=box.left+box.width*(0.15+0.7*xi/10);
+                  const y=box.top+box.height*(0.15+0.7*yi/10);
+                  const hit=scene.positionAndNormalFromPoint(x,y);
+                  if (hit && hit.position) {
+                    const pos=[hit.position.x,hit.position.y,hit.position.z];
+                    if (pos.every(Number.isFinite)) hits.push({x,y,pos});
+                  }
+                }
+                if (hits.length < 3) return null;
+                const a=hits[0];
+                let b=null, maxD=0;
+                for (const hit of hits.slice(1)) {
+                  const d=Math.hypot(...hit.pos.map((n,i)=>n-a.pos[i]));
+                  if (d>maxD) { maxD=d; b=hit; }
+                }
+                if (!b || maxD<0.001) return null;
+                let c=null, maxArea=0;
+                for (const hit of hits) {
+                  const u=b.pos.map((n,i)=>n-a.pos[i]);
+                  const v=hit.pos.map((n,i)=>n-a.pos[i]);
+                  const area=0.5*Math.hypot(
+                    u[1]*v[2]-u[2]*v[1],
+                    u[2]*v[0]-u[0]*v[2],
+                    u[0]*v[1]-u[1]*v[0]
+                  );
+                  if (area>maxArea) { maxArea=area; c=hit; }
+                }
+                return c && maxArea>1e-7 ? [a,b,c] : null;
+              """)
+              assert area_hits is not None, "Chrome could not find three non-collinear real mesh points"
+              area_status = js(f"""
+                const scene=document.getElementById('wre-scene');
+                const button=document.getElementById('wre-area-toggle');
+                window.__wreClickedRaycasts=[];
+                for (const p of {json.dumps(area_hits)}) {{
+                  const hit=scene.positionAndNormalFromPoint(p.x,p.y);
+                  if (!hit || !hit.position) return {{error:'area click missed surface'}};
+                  window.__wreCapturingClick=true;
+                  scene.dispatchEvent(new MouseEvent('click', {{
+                    bubbles:true, clientX:p.x, clientY:p.y
+                  }}));
+                  window.__wreCapturingClick=false;
+                }}
+                return {{
+                  status:document.getElementById('wre-measure-result').textContent,
+                  pressed:button.getAttribute('aria-pressed'),
+                  enabled:!document.getElementById('wre-measure-export').disabled,
+                  stoppedAutoRotate:!scene.hasAttribute('auto-rotate'),
+                  clicked:window.__wreClickedRaycasts.slice(),
+                  markerCount:scene.querySelectorAll('.wre-pick-marker').length
+                }};
+              """)
+              assert area_status.get("clicked") and len(area_status["clicked"]) == 3, area_status
+              assert area_status["markerCount"] == 3
+              assert area_status["pressed"] == "true"
+              assert area_status["enabled"] and area_status["stoppedAutoRotate"]
+              assert "3D triangle-fan area:" in area_status["status"]
+              assert "NOT physical surface area or m²" in area_status["status"]
+              js("""
+                window.__wreExportedMeasurement = null;
+                document.getElementById('wre-measure-export').click();
+              """)
+              area_json = json.loads(until("return window.__wreExportedMeasurement;"))
+              assert area_json["schema"] == "wre.relative_3d_triangle_fan_area.v1"
+              assert area_json["model_source"] == "surface"
+              assert area_json["metric_scale_known"] is False
+              assert area_json["units"] == "model_units_squared"
+              assert area_json["triangulation"] == "fan_from_first_point"
+              assert area_json["physical_surface_area"] is False
+              assert area_json["points_xyz"] == area_status["clicked"]
+              a,b,c = area_status["clicked"]
+              u=[b[i]-a[i] for i in range(3)]
+              v=[c[i]-a[i] for i in range(3)]
+              cross=(
+                  u[1]*v[2]-u[2]*v[1],
+                  u[2]*v[0]-u[0]*v[2],
+                  u[0]*v[1]-u[1]*v[0],
+              )
+              expected_area=0.5*math.sqrt(sum(x*x for x in cross))
+              assert expected_area > 1e-7
+              assert len(area_json["triangle_areas_model_units_squared"]) == 1
+              assert abs(area_json["triangle_areas_model_units_squared"][0]-expected_area) < 1e-6
+              assert abs(area_json["total_area_model_units_squared"]-expected_area) < 1e-6
+              assert js("""
+                document.getElementById('wre-area-toggle').click();
+                return document.getElementById('wre-measure-export').disabled &&
+                  document.getElementById('wre-scene').hasAttribute('auto-rotate') &&
+                  document.querySelectorAll('.wre-pick-marker').length === 0;
+              """)
+
               js("""
                 window.__wre3dLoads=0;
                 document.getElementById('wre-scene').addEventListener(
@@ -3925,6 +4025,7 @@ jobs:
                       "surface_distance_measured_in_chrome": True,
                       "surface_measurement_export_verified_in_chrome": True,
                       "surface_polyline_export_verified_in_chrome": True,
+                      "surface_triangle_fan_area_export_verified_in_chrome": True,
                       "surface_reload": True,
                       "webgl_context": True,
                       "input_glb_sha256": expected_hashes,
@@ -4041,6 +4142,8 @@ jobs:
               raise ValueError("Actual Chrome did not export a nonmetric 3D surface measurement")
           if receipt.get("surface_polyline_export_verified_in_chrome") is not True:
               raise ValueError("Actual Chrome did not export a measured multi-point 3D path")
+          if receipt.get("surface_triangle_fan_area_export_verified_in_chrome") is not True:
+              raise ValueError("Actual Chrome did not export a relative 3D polygon triangle-fan area")
           
           glbs = (
               "wre-real-stereo-cpu-textured.glb",
