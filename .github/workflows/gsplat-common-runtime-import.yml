@@ -5133,55 +5133,59 @@ jobs:
                 return [middle,options[Math.floor(options.length/2)].p];
               """
               assert js(measure_scan) is not None, "Chrome could not hit two distinct real mesh points"
-              measure_status = js(f"""
+              # A real model-viewer render frame may settle BETWEEN the first
+              # successful surface pick and the next one after a camera tour.
+              # Keep the browser raycast genuine; never inject XYZ. Observe
+              # each click in a separate WebDriver task and re-scan the model.
+              assert js("""
                 const scene=document.getElementById('wre-scene');
-                const toggle=document.getElementById('wre-measure-toggle');
-                // Observe the genuine raycast inside the actual click handler.
-                // Pre-click samples can differ during camera interpolation and
-                // are not the geometry saved by the user-facing export.
-                const originalRaycast=scene.positionAndNormalFromPoint.bind(scene);
+                const original=scene.positionAndNormalFromPoint.bind(scene);
                 window.__wreClickedRaycasts=[];
                 window.__wreCapturingClick=false;
-                scene.positionAndNormalFromPoint=(x,y) => {{
-                  const hit=originalRaycast(x,y);
-                  if (window.__wreCapturingClick && hit && hit.position) {{
+                scene.positionAndNormalFromPoint=(x,y) => {
+                  const hit=original(x,y);
+                  if (window.__wreCapturingClick && hit && hit.position) {
                     window.__wreClickedRaycasts.push([
                       hit.position.x,hit.position.y,hit.position.z
                     ]);
-                  }}
+                  }
                   return hit;
-                }};
-                // Scan and click in the SAME WebDriver script. Camera
-                // interpolation after bookmark restore made separately
-                // sampled pixels stale, even after stopping auto-rotate.
-                // A real model-viewer camera can settle after the first
-                // surface click. Rescan the current mesh before later clicks.
-                // Never inject fabricated XYZ: use actual viewer raycasts.
-                for (let attempt=0;attempt<8;attempt++) {{
-                  if (scene.querySelectorAll('.wre-pick-marker').length===2) break;
-                  scene.jumpCameraToGoal();
-                  const fresh=(() => {{ {measure_scan} }})();
-                  if (!fresh) return {{error:'current mesh has no distinct surface points'}};
-                  const hasFirst=scene.querySelectorAll('.wre-pick-marker').length>0;
-                  const p=fresh[hasFirst?1:0];
-                  const hit=originalRaycast(p.x,p.y);
-                  if (!hit || !hit.position) continue;
-                  window.__wreCapturingClick=true;
-                  try {{
-                    scene.dispatchEvent(new MouseEvent('click', {{
-                      bubbles:true, clientX:p.x, clientY:p.y
-                    }}));
-                  }} finally {{
-                    window.__wreCapturingClick=false;
-                  }}
-                }}
-                return {{
-                  status:document.getElementById('wre-measure-result').textContent,
-                  pressed:toggle.getAttribute('aria-pressed'),
-                  autoRotate:scene.hasAttribute('auto-rotate'),
-                  clicked:window.__wreClickedRaycasts.slice()
-                }};
+                };
+                return true;
               """)
+              measure_status = {}
+              for _ in range(20):
+                  measure_status = js(f"""
+                    const scene=document.getElementById('wre-scene');
+                    scene.jumpCameraToGoal();
+                    const current=scene.querySelectorAll('.wre-pick-marker').length;
+                    const candidate=(() => {{ {measure_scan} }})();
+                    if (candidate && current < 2) {{
+                      const p=candidate[current === 0 ? 0 : 1];
+                      const hit=scene.positionAndNormalFromPoint(p.x,p.y);
+                      if (hit && hit.position) {{
+                        window.__wreCapturingClick=true;
+                        try {{
+                          scene.dispatchEvent(new MouseEvent('click', {{
+                            bubbles:true, clientX:p.x, clientY:p.y
+                          }}));
+                        }} finally {{
+                          window.__wreCapturingClick=false;
+                        }}
+                      }}
+                    }}
+                    return {{
+                      status:document.getElementById('wre-measure-result').textContent,
+                      pressed:document.getElementById('wre-measure-toggle')
+                        .getAttribute('aria-pressed'),
+                      autoRotate:scene.hasAttribute('auto-rotate'),
+                      markers:scene.querySelectorAll('.wre-pick-marker').length,
+                      clicked:window.__wreClickedRaycasts.slice()
+                    }};
+                  """)
+                  if len(measure_status.get("clicked", [])) == 2 and measure_status["markers"] == 2:
+                      break
+                  time.sleep(0.15)
               assert measure_status.get("clicked") and len(measure_status["clicked"]) == 2, measure_status
               assert math.dist(*measure_status["clicked"]) > 0.001, measure_status
               assert measure_status["pressed"] == "true" and not measure_status["autoRotate"]
