@@ -1971,6 +1971,7 @@ jobs:
                 aria-label="Open a local GLB model (max 250 MB)">
               <button id="wre-measure-toggle" type="button" aria-pressed="false">Measure surface distance</button>
               <button id="wre-path-toggle" type="button" aria-pressed="false">Trace 3D path</button>
+              <button id="wre-area-toggle" type="button" aria-pressed="false">Estimate 3D polygon area</button>
               <button id="wre-measure-export" type="button" disabled
                 aria-label="Download relative surface measurement as JSON">Download measurement JSON</button>
             </div>
@@ -1988,10 +1989,12 @@ jobs:
               const localInput = document.getElementById("wre-local-glb");
               const measureButton = document.getElementById("wre-measure-toggle");
               const pathButton = document.getElementById("wre-path-toggle");
+              const areaButton = document.getElementById("wre-area-toggle");
               const exportButton = document.getElementById("wre-measure-export");
               const measureResult = document.getElementById("wre-measure-result");
               let measuring = false;
               let tracing = false;
+              let areaMode = false;
               let measured = [];
               let completedMeasurement = null;
               function clearPickMarkers() {
@@ -2015,13 +2018,18 @@ jobs:
                 exportButton.disabled = true;
                 measureResult.textContent = tracing
                   ? "Click two or more mesh points to trace a 3D polyline (NOT geodesic or meters)."
+                  : areaMode
+                    ? "Click at least three mesh points: triangle-fan estimate, NOT true surface area or m²."
                   : measuring
                     ? "Click two points on the visible mesh. Model units only (NOT meters)."
                     : "Surface measurement off. Model units only (NOT meters).";
               }
               measureButton.addEventListener("click", () => {
-                measuring = !measuring || tracing;
+                measuring = !measuring || tracing || areaMode;
                 tracing = false;
+                areaMode = false;
+                areaButton.setAttribute("aria-pressed", "false");
+                areaButton.textContent = "Estimate 3D polygon area";
                 pathButton.setAttribute("aria-pressed", "false");
                 pathButton.textContent = "Trace 3D path";
                 measureButton.setAttribute("aria-pressed", String(measuring));
@@ -2033,11 +2041,28 @@ jobs:
               pathButton.addEventListener("click", () => {
                 tracing = !tracing;
                 measuring = tracing;
+                areaMode = false;
+                areaButton.setAttribute("aria-pressed", "false");
+                areaButton.textContent = "Estimate 3D polygon area";
                 measureButton.setAttribute("aria-pressed", "false");
                 measureButton.textContent = "Measure surface distance";
                 pathButton.setAttribute("aria-pressed", String(tracing));
                 pathButton.textContent = tracing ? "Stop tracing" : "Trace 3D path";
                 if (tracing) scene.removeAttribute("auto-rotate");
+                else scene.setAttribute("auto-rotate", "");
+                resetMeasurement();
+              });
+              areaButton.addEventListener("click", () => {
+                areaMode = !areaMode;
+                measuring = areaMode;
+                tracing = false;
+                measureButton.setAttribute("aria-pressed", "false");
+                measureButton.textContent = "Measure surface distance";
+                pathButton.setAttribute("aria-pressed", "false");
+                pathButton.textContent = "Trace 3D path";
+                areaButton.setAttribute("aria-pressed", String(areaMode));
+                areaButton.textContent = areaMode ? "Stop estimating area" : "Estimate 3D polygon area";
+                if (areaMode) scene.removeAttribute("auto-rotate");
                 else scene.setAttribute("auto-rotate", "");
                 resetMeasurement();
               });
@@ -2050,7 +2075,7 @@ jobs:
                 }
                 const point = [hit.position.x, hit.position.y, hit.position.z];
                 if (!point.every(Number.isFinite)) return;
-                if (!tracing && measured.length === 2) {
+                if (!tracing && !areaMode && measured.length === 2) {
                   clearPickMarkers();
                   measured = [];
                   completedMeasurement = null;
@@ -2060,6 +2085,46 @@ jobs:
                 placePickMarker(point, measured.length);
                 if (measured.length === 1) {
                   measureResult.textContent = "First surface point selected; click another point.";
+                  return;
+                }
+                if (areaMode) {
+                  if (measured.length < 3) {
+                    measureResult.textContent = "Second point selected; click a third mesh point.";
+                    return;
+                  }
+                  // A triangle fan of straight chords, NOT curved surface area.
+                  const pivot = measured[0], triangleAreas = [];
+                  for (let i = 2; i < measured.length; i++) {
+                    const p = measured[i - 1], q = measured[i];
+                    const ax = p[0] - pivot[0], ay = p[1] - pivot[1],
+                          az = p[2] - pivot[2];
+                    const bx = q[0] - pivot[0], by = q[1] - pivot[1],
+                          bz = q[2] - pivot[2];
+                    triangleAreas.push(0.5 * Math.hypot(
+                      ay * bz - az * by, az * bx - ax * bz, ax * by - ay * bx
+                    ));
+                  }
+                  const total = triangleAreas.reduce((a, b) => a + b, 0);
+                  if (!Number.isFinite(total) || !triangleAreas.every(Number.isFinite)) {
+                    resetMeasurement();
+                    return;
+                  }
+                  measureResult.textContent = "3D triangle-fan area: " + total.toFixed(5) +
+                    " model units squared (" + triangleAreas.length +
+                    " planar triangles; NOT physical surface area or m²).";
+                  completedMeasurement = {
+                    schema: "wre.relative_3d_triangle_fan_area.v1",
+                    model_source: chooser.value || "user-supplied-local-glb",
+                    model_provenance: provenance.textContent.trim(),
+                    metric_scale_known: false,
+                    units: "model_units_squared",
+                    points_xyz: measured.map(p => p.slice()),
+                    triangle_areas_model_units_squared: triangleAreas,
+                    total_area_model_units_squared: total,
+                    triangulation: "fan_from_first_point",
+                    physical_surface_area: false
+                  };
+                  exportButton.disabled = false;
                   return;
                 }
                 if (tracing) {
@@ -2124,9 +2189,11 @@ jobs:
                 const link = document.createElement("a");
                 link.href = url;
                 link.download = completedMeasurement.schema ===
-                  "wre.relative_3d_surface_polyline.v1"
-                  ? "wre-relative-surface-polyline.json"
-                  : "wre-relative-surface-measurement.json";
+                  "wre.relative_3d_triangle_fan_area.v1"
+                  ? "wre-relative-triangle-fan-area.json"
+                  : completedMeasurement.schema === "wre.relative_3d_surface_polyline.v1"
+                    ? "wre-relative-surface-polyline.json"
+                    : "wre-relative-surface-measurement.json";
                 document.body.appendChild(link);
                 link.click();
                 link.remove();
@@ -2214,9 +2281,11 @@ jobs:
               You can also select a local GLB file using the file input; it stays
               in your browser, is not uploaded, and its provenance is unverified.
               Measure distance by clicking two points, or trace a multi-point 3D
-              polyline on the visible mesh. Path segments are straight 3D chords,
-              NOT shortest paths along the mesh, and values are arbitrary model
-              units that must NOT be interpreted as meters.
+              polyline on the visible mesh. A third mode estimates polygon area
+              by triangulating selected 3D points with a straight triangle fan.
+              Chords are NOT surface geodesics, and triangle fans are NOT true
+              curved physical surface areas. Units are arbitrary (or squared),
+              never meters or square meters.
               Use only models you trust. No GPU training or held-out quality metric
               is implied.</footer>
           </main>
