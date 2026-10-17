@@ -542,6 +542,8 @@ jobs:
           import cv2
           import numpy as np
           import torch
+          from scipy.optimize import least_squares
+          from scipy.sparse import lil_matrix
           from scipy.spatial.transform import Rotation
 
           # One deterministic, textured synthetic two-depth scene. Matching is
@@ -730,11 +732,6 @@ jobs:
               "third_view_pnp_reprojection_rmse_px": pnp_rmse,
               "true_cuda_execution": False,
           }
-          (output / "wre-sift-cpu-estimated-cameras.json").write_text(
-              json.dumps(estimated_cameras, indent=2, sort_keys=True) + "\n",
-              encoding="utf-8",
-          )
-
           # FUNCTIONAL HANDOFF: take SIFT + EssentialMat + PnP estimates
           # and construct a real standard COLMAP dataset, then round-trip it
           # through the pinned gsplat Parser and Dataset. No supplied 3D
@@ -763,6 +760,108 @@ jobs:
           ]
           assert len(reconstructed) >= 50
           assert np.all(np.isfinite(reconstructed))
+
+          # FUNCTIONAL REFINEMENT: optimize two camera rotations, third
+          # translation and all 3D points jointly over actual three-view
+          # SIFT pixel observations. Keep camera 0 fixed and the recovered
+          # unit-length first baseline fixed to remove monocular gauge.
+          # SciPy least_squares is the existing solver; no home-made optimizer.
+          track_count = len(reconstructed)
+          observed_pixels = np.stack(observed, axis=0)
+          initial_parameters = np.concatenate(
+              (
+                  Rotation.from_matrix(recovered_rotation).as_rotvec(),
+                  Rotation.from_matrix(pnp_rotation).as_rotvec(),
+                  pnp_translation.reshape(3),
+                  reconstructed.reshape(-1),
+              )
+          )
+
+          def ba_unpack(parameters):
+              rotation1 = Rotation.from_rotvec(parameters[:3]).as_matrix()
+              rotation2 = Rotation.from_rotvec(parameters[3:6]).as_matrix()
+              translation2 = parameters[6:9]
+              xyz = parameters[9:].reshape(track_count, 3)
+              return [
+                  (np.eye(3), np.zeros(3)),
+                  (rotation1, recovered_translation.reshape(3)),
+                  (rotation2, translation2),
+              ], xyz
+
+          def ba_residuals(parameters):
+              poses, xyz = ba_unpack(parameters)
+              errors = []
+              for (rotation, translation), pixels in zip(poses, observed_pixels):
+                  camera_xyz = (rotation @ xyz.T).T + translation
+                  image_homogeneous = (intrinsic @ camera_xyz.T).T
+                  reprojection = image_homogeneous[:, :2] / image_homogeneous[:, 2:3]
+                  errors.append((reprojection - pixels).reshape(-1))
+              return np.concatenate(errors)
+
+          # Sparse dependencies: each 2D observation depends on one 3D point,
+          # plus its camera's 3 or 6 pose variables (none for fixed view 0).
+          jacobian_pattern = lil_matrix(
+              (6 * track_count, 9 + 3 * track_count), dtype=np.int8
+          )
+          for view_index in range(3):
+              for point_index in range(track_count):
+                  row = 2 * (view_index * track_count + point_index)
+                  jacobian_pattern[row : row + 2, 9 + 3 * point_index : 12 + 3 * point_index] = 1
+                  if view_index == 1:
+                      jacobian_pattern[row : row + 2, :3] = 1
+                  elif view_index == 2:
+                      jacobian_pattern[row : row + 2, 3:9] = 1
+
+          before_errors = ba_residuals(initial_parameters)
+          before_rmse = float(np.sqrt(np.mean(
+              np.sum(before_errors.reshape(-1, 2) ** 2, axis=1)
+          )))
+          refined = least_squares(
+              ba_residuals,
+              initial_parameters,
+              method="trf",
+              jac_sparsity=jacobian_pattern.tocsr(),
+              loss="soft_l1",
+              f_scale=0.5,
+              max_nfev=50,
+          )
+          assert np.all(np.isfinite(refined.x))
+          after_errors = ba_residuals(refined.x)
+          after_rmse = float(np.sqrt(np.mean(
+              np.sum(after_errors.reshape(-1, 2) ** 2, axis=1)
+          )))
+          assert after_rmse <= before_rmse + 1e-6
+          assert after_rmse < 0.65, after_rmse
+          estimated_poses, reconstructed = ba_unpack(refined.x)
+          recovered_rotation = estimated_poses[1][0]
+          pnp_rotation, pnp_translation = estimated_poses[2]
+          assert np.all(np.isfinite(reconstructed))
+          assert np.all(reconstructed[:, 2] > 0)
+          for rotation, translation in estimated_poses:
+              depths = (rotation @ reconstructed.T + translation.reshape(3, 1))[2]
+              assert np.all(depths > 0.0), "Bundle adjustment lost COLMAP cheirality"
+
+          estimated_cameras["world_to_camera"][1]["rotation"] = recovered_rotation.tolist()
+          estimated_cameras["world_to_camera"][2]["rotation"] = pnp_rotation.tolist()
+          estimated_cameras["world_to_camera"][2]["translation"] = pnp_translation.tolist()
+          estimated_cameras["bundle_adjustment"] = {
+              "solver": "scipy.optimize.least_squares (sparse numeric Jacobian)",
+              "observations": int(3 * track_count),
+              "initial_in_sample_rmse_px": before_rmse,
+              "refined_in_sample_rmse_px": after_rmse,
+              "optimizer_nfev": int(refined.nfev),
+              "gauge": "camera 0 fixed, camera 1 translation fixed to unit norm",
+              "real_photo_validation": False,
+              "gpu_executed": False,
+          }
+          (output / "wre-sift-cpu-estimated-cameras.json").write_text(
+              json.dumps(estimated_cameras, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print(
+              f"Sparse three-view bundle adjustment: {before_rmse:.5f} -> "
+              f"{after_rmse:.5f} px in-sample RMSE on {3 * track_count} observations."
+          )
           for rotation, translation in estimated_poses:
               depths = (rotation @ reconstructed.T + translation.reshape(3, 1))[2]
               assert np.all(depths > 0.0), "Invalid estimated COLMAP cheirality"
@@ -870,6 +969,10 @@ jobs:
               "registered_camera_count": 3,
               "reprojection_observation_count": int(len(reprojection_errors)),
               "roundtrip_colmap_reprojection_rmse_px": handoff_rmse,
+              "sparse_bundle_adjustment_initial_rmse_px": before_rmse,
+              "sparse_bundle_adjustment_refined_rmse_px": after_rmse,
+              "sparse_bundle_adjustment_nfev": int(refined.nfev),
+              "bundle_adjustment_uses_all_three_views": True,
               "colmap_model_reloaded_by": "pinned gsplat upstream Parser/Dataset",
               "intrinsics_known": True,
               "scale": "arbitrary; monocular metric scale is unrecovered",
