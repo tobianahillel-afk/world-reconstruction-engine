@@ -1,0 +1,360 @@
+name: gsplat-real-photo-colmap-rgb
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/gsplat-real-photo-colmap-rgb.yml"
+      - "src/wre/reconstruction/static_appearance_baseline.py"
+      - "src/wre/reconstruction/__init__.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  observed-real-photo-sparse-rgb:
+    name: Actual Middlebury images -> PyCOLMAP sparse -> observed RGB PLY (CPU)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout pinned WRE code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install uv and Python 3.12
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.13"
+          python-version: "3.12"
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+            uv.lock
+      - name: Install locked WRE + pinned native PyCOLMAP and JPEG decoder
+        run: |
+          uv sync --frozen --group dev
+          uv pip install --python .venv/bin/python "numpy==2.5.3" "pycolmap==4.2.0" "pillow==11.3.0"
+          .venv/bin/python -c 'import numpy, pycolmap, PIL; assert numpy.__version__ == "2.5.3"; assert pycolmap.__version__ == "4.2.0"; assert PIL.__version__ == "11.3.0"'
+      - name: Real photo feature matching and native sparse model to verified RGB artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv/bin/python - <<'PY'
+          from __future__ import annotations
+          
+          import hashlib
+          import io
+          import json
+          import os
+          import struct
+          import urllib.request
+          import zlib
+          from datetime import UTC, datetime, timedelta
+          from pathlib import Path
+          
+          import pycolmap
+          from PIL import Image
+          
+          from wre.domain import (
+              ArtifactProducerIdentity,
+              ConfigurationIdentity,
+              ImageObservation,
+              MediaAssetRef,
+              ObservationId,
+              Sha256Digest,
+              SourceId,
+              SourceRef,
+          )
+          from wre.domain.appearance import AppearanceRepresentationName
+          from wre.domain.runs import ProducerRef, ReconstructionRun, ReconstructionRunId
+          from wre.reconstruction import (
+              ColmapFeatureExtractionConfig,
+              ColmapFeatureExtractionRequest,
+              ColmapFeatureInput,
+              ColmapGeometricVerificationConfig,
+              ColmapGeometricVerificationRequest,
+              ColmapIncrementalReconstructionConfig,
+              ColmapIncrementalReconstructionRequest,
+              ColmapPairMatchingConfig,
+              ColmapPairMatchingRequest,
+              ColmapReconstructionInput,
+              canonicalize_colmap_sparse_model,
+              extract_colmap_features,
+              match_colmap_pairs,
+              reconstruct_colmap_incrementally,
+              verify_colmap_geometry,
+          )
+          from wre.reconstruction.colmap_geometry_refinement import (
+              colmap_native_sparse_model_artifact_ref,
+          )
+          from wre.reconstruction.geometry_solution_comparison import GeometrySolutionCandidate
+          from wre.reconstruction.static_appearance_baseline import (
+              GSPLAT_STATIC_APPEARANCE_REPRESENTATION,
+              GsplatStaticAppearancePreflightSource,
+              export_verified_colmap_observed_rgb_ply,
+          )
+          from wre.reconstruction.static_appearance_candidate import StaticAppearanceCandidateRequest
+          
+          ROOT = Path(os.environ["RUNNER_TEMP"]).resolve() / "wre-real-aloe-colmap-rgb"
+          IMAGES = ROOT / "images"
+          IMAGES.mkdir(parents=True, exist_ok=False)
+          UPSTREAM = "9b6287ec500ef7b327ac74c4f6c9cd84a2cbc9cd"
+          PHOTOS = {
+              "aloeL.jpg": "4c192768e4ddd2ada20f91a5e0bd3648fbc78818",
+              "aloeR.jpg": "7ecdf48919be3ac7dd0cc6e594ab00398ac956b2",
+          }
+          RECEIPT = {
+              "source": "Middlebury Stereo 2006 Aloe, as redistributed in pinned OpenCV samples",
+              "opencv_git_revision": UPSTREAM,
+              "source_photographs": {},
+              "sRGB_interpretation": "assumed for JPEG to RGB8 PNG preview only; no calibrated radiometry",
+              "metric_scale_known": False,
+              "gpu_kernel_executed": False,
+              "gpu_training_executed": False,
+              "photometric_training_approved": False,
+              "environment": {
+                  "pycolmap": pycolmap.__version__,
+                  "colmap": str(pycolmap.COLMAP_version),
+              },
+          }
+          assert pycolmap.__version__ == "4.2.0"
+          
+          def git_blob(data: bytes) -> str:
+              return hashlib.sha1(f"blob {len(data)}\0".encode() + data).hexdigest()
+          
+          def png_chunk(kind: bytes, data: bytes) -> bytes:
+              return (
+                  struct.pack(">I", len(data)) + kind + data
+                  + struct.pack(">I", zlib.crc32(kind + data) & 0xffffffff)
+              )
+          
+          def srgb_png(rgb: Image.Image) -> bytes:
+              """Explicit PNG RGB8+sRGB declaration from decoded, size-limited real photos."""
+              width, height = rgb.size
+              assert 2 <= width <= 768 and 2 <= height <= 768
+              raster = rgb.tobytes()
+              stride = width * 3
+              scanlines = b"".join(
+                  b"\x00" + raster[start : start + stride]
+                  for start in range(0, len(raster), stride)
+              )
+              return (
+                  b"\x89PNG\r\n\x1a\n"
+                  + png_chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+                  + png_chunk(b"sRGB", b"\x00")
+                  + png_chunk(b"IDAT", zlib.compress(scanlines, 6))
+                  + png_chunk(b"IEND", b"")
+              )
+          
+          inputs = []
+          for filename, expected_git_blob in sorted(PHOTOS.items()):
+              url = f"https://raw.githubusercontent.com/opencv/opencv/{UPSTREAM}/samples/data/{filename}"
+              with urllib.request.urlopen(url, timeout=60) as response:
+                  original = response.read(1_000_001)
+              assert 0 < len(original) <= 1_000_000
+              assert git_blob(original) == expected_git_blob, "real photograph Git blob mismatch"
+              with Image.open(io.BytesIO(original)) as opened:
+                  assert opened.format == "JPEG" and opened.width >= 320
+                  image = opened.convert("RGB")
+              if image.width > 768:
+                  size = (image.width // 2, image.height // 2)
+                  image = image.resize(size, Image.Resampling.LANCZOS)
+              png = srgb_png(image)
+              stem = Path(filename).stem
+              path = IMAGES / f"{stem}.png"
+              path.write_bytes(png)
+              digest = hashlib.sha256(png).hexdigest()
+              observation = ImageObservation(
+                  observation_id=ObservationId(f"obs:middlebury:{stem}"),
+                  asset=MediaAssetRef(
+                      uri=path.as_uri(),
+                      sha256=Sha256Digest(digest),
+                      byte_length=len(png),
+                      mime_type="image/png",
+                  ),
+                  source=SourceRef(
+                      source_id=SourceId("middlebury:aloe"),
+                      locator=filename,
+                  ),
+                  received_at=datetime(2026, 10, 17, tzinfo=UTC),
+              )
+              inputs.append(ColmapReconstructionInput(
+                  observation=observation, source_path=path, image_name=path.name
+              ))
+              RECEIPT["source_photographs"][filename] = {
+                  "source_git_blob_sha1": expected_git_blob,
+                  "source_jpeg_sha256": hashlib.sha256(original).hexdigest(),
+                  "derived_srgb8_png_sha256": digest,
+                  "width": image.width,
+                  "height": image.height,
+              }
+          
+          inputs = tuple(inputs)
+          observation_ids = tuple(x.observation.observation_id for x in inputs)
+          revision = str(pycolmap.COLMAP_build)
+          
+          def run(step: str, config_sha: Sha256Digest, minute: int) -> ReconstructionRun:
+              return ReconstructionRun(
+                  run_id=ReconstructionRunId(f"run:real-aloe:{step}"),
+                  producer=ProducerRef(
+                      implementation={
+                          "features": "pycolmap.extract_features",
+                          "matching": "pycolmap.match_exhaustive",
+                          "verification": "pycolmap.geometric_verification",
+                          "mapping": "pycolmap.incremental_mapping",
+                      }[step],
+                      version="4.2.0",
+                      revision=revision,
+                  ),
+                  input_observation_ids=observation_ids,
+                  started_at=datetime(2026, 10, 17, tzinfo=UTC) + timedelta(minutes=minute),
+                  configuration_sha256=config_sha,
+              )
+          
+          feature_config = ColmapFeatureExtractionConfig()
+          features = extract_colmap_features(
+              ColmapFeatureExtractionRequest(
+                  run=run("features", feature_config.sha256, 0),
+                  inputs=tuple(
+                      ColmapFeatureInput(observation=x.observation, source_path=x.source_path)
+                      for x in inputs
+                  ),
+                  database_path=ROOT / "features.db",
+                  config=feature_config,
+              ),
+              module=pycolmap,
+          )
+          match_config = ColmapPairMatchingConfig()
+          matches = match_colmap_pairs(
+              ColmapPairMatchingRequest(
+                  run=run("matching", match_config.sha256, 1),
+                  features=features,
+                  database_path=ROOT / "matches.db",
+                  config=match_config,
+              ),
+              module=pycolmap,
+          )
+          verification_config = ColmapGeometricVerificationConfig()
+          verified = verify_colmap_geometry(
+              ColmapGeometricVerificationRequest(
+                  run=run("verification", verification_config.sha256, 2),
+                  matching=matches,
+                  database_path=ROOT / "verified.db",
+                  config=verification_config,
+              ),
+              module=pycolmap,
+          )
+          mapping_config = ColmapIncrementalReconstructionConfig(
+              min_model_size=2,
+              max_num_models=1,
+              max_runtime_seconds=900,
+          )
+          reconstruction = reconstruct_colmap_incrementally(
+              ColmapIncrementalReconstructionRequest(
+                  run=run("mapping", mapping_config.sha256, 3),
+                  verification=verified,
+                  inputs=inputs,
+                  output_path=ROOT / "native-sparse",
+                  config=mapping_config,
+              ),
+              module=pycolmap,
+          )
+          models = [
+              m for m in reconstruction.models
+              if m.num_registered_images == len(inputs) and m.num_points3d > 0
+          ]
+          if not models:
+              raise RuntimeError(
+                  "Real Aloe photos did not produce a verified two-view COLMAP sparse model; "
+                  f"produced {reconstruction.model_count} model(s), not a 3D proof"
+              )
+          model = models[0]
+          canonical = canonicalize_colmap_sparse_model(
+              output_path=reconstruction.output_path,
+              model_artifact=model,
+              features=features,
+              expected_environment=reconstruction.environment,
+              module=pycolmap,
+          )
+          source_ref = colmap_native_sparse_model_artifact_ref(model)
+          geometry_candidate = GeometrySolutionCandidate(
+              geometry_solution=canonical.geometry_solution,
+              camera_solutions=canonical.camera_solutions,
+              depth_fields=(),
+              point_maps=(canonical.point_map,),
+              producer=ArtifactProducerIdentity(
+                  producer=ProducerRef(
+                      implementation="pycolmap.incremental_mapping",
+                      version="4.2.0",
+                      revision=revision,
+                  ),
+                  configuration=ConfigurationIdentity(sha256=mapping_config.sha256),
+              ),
+              source_artifacts=(source_ref,),
+          )
+          appearance_request = StaticAppearanceCandidateRequest(
+              source_geometry=geometry_candidate,
+              source_surface=None,
+              source_observation_ids=tuple(
+                  sorted((x.observation.observation_id for x in inputs), key=lambda o: o.value)
+              ),
+              output_representation=AppearanceRepresentationName(
+                  GSPLAT_STATIC_APPEARANCE_REPRESENTATION
+              ),
+              supporting_artifacts=(source_ref,),
+          )
+          preflight_source = GsplatStaticAppearancePreflightSource(
+              image_root=IMAGES,
+              images=inputs,
+              native_model_root=reconstruction.output_path,
+              native_model_artifact=model,
+              native_model_ref=source_ref,
+          )
+          preview = ROOT / "observed-aloe-colmap-rgb.ply"
+          digest = export_verified_colmap_observed_rgb_ply(
+              appearance_request,
+              preflight_source,
+              features=features,
+              expected_environment=reconstruction.environment,
+              module=pycolmap,
+              preview_path=preview,
+          )
+          payload = preview.read_bytes()
+          assert hashlib.sha256(payload).hexdigest() == digest.value
+          header, separator, body = payload.partition(b"end_header\n")
+          assert separator and len(body) == model.num_points3d * struct.calcsize("<3f3B")
+          assert f"element vertex {model.num_points3d}".encode() in header
+          assert b"comment wre_metric_scale_known false" in header
+          assert len(canonical.camera_solutions) == 2
+          assert any(sum(item[3:]) > 0 for item in struct.iter_unpack("<3f3B", body))
+          RECEIPT["reconstruction"] = {
+              "registered_images": model.num_registered_images,
+              "sparse_points": model.num_points3d,
+              "source_sparse_identity_sha256": canonical.source_model_identity_sha256.value,
+              "source_geometry_id": canonical.geometry_solution.geometry_solution_id.value,
+              "scale_status": canonical.geometry_solution.scale_status.value,
+              "ply_sha256": digest.value,
+              "ply_bytes": len(payload),
+              "source_photo_reconstruction_executed_on_cpu": True,
+              "native_pycolmap_model_canonicalized": True,
+          }
+          (ROOT / "real-aloe-colmap-rgb-receipt.json").write_text(
+              json.dumps(RECEIPT, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          print("REAL ALOE CPU PHOTO->COLMAP->OBSERVED RGB PLY PASS")
+          print(json.dumps(RECEIPT["reconstruction"], sort_keys=True))
+          
+          PY
+      - name: Publish exact-run real-photo sparse PLY and verified receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wre-real-aloe-colmap-observed-rgb
+          path: |
+            ${{ runner.temp }}/wre-real-aloe-colmap-rgb/observed-aloe-colmap-rgb.ply
+            ${{ runner.temp }}/wre-real-aloe-colmap-rgb/real-aloe-colmap-rgb-receipt.json
+          if-no-files-found: error
+          retention-days: 7
