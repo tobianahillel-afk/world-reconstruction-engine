@@ -2912,15 +2912,13 @@ def export_verified_colmap_camera_rig_json(
             "COLMAP camera rig may not replace an existing file"
         )
     cameras = tuple(sorted(canonical.camera_solutions, key=lambda item: item.observation_id.value))
-    if not cameras or len({camera.observation_id.value for camera in cameras}) != len(cameras):
-        raise GsplatStaticAppearancePreflightError("COLMAP camera rig has duplicate or no views")
+    if len({camera.observation_id.value for camera in cameras}) != len(cameras):
+        raise GsplatStaticAppearancePreflightError(
+            "COLMAP camera rig has duplicate observation IDs"
+        )
     frame = canonical.geometry_solution.local_frame_id.value
     entries = []
     for camera in cameras:
-        if camera.local_frame_id.value != frame:
-            raise GsplatStaticAppearancePreflightError(
-                "COLMAP camera rig views must share the canonical local frame"
-            )
         rotation = camera.rotation_matrix
         translation = camera.translation_xyz
         center = [
