@@ -4845,6 +4845,10 @@ jobs:
                 scene.fieldOfView='35deg';
                 scene.jumpCameraToGoal();
                 document.getElementById('wre-tour-record').click();
+                const orbit=scene.getCameraOrbit();
+                const target=scene.getCameraTarget();
+                window.__wreRecordedFirst=[orbit.theta,orbit.phi,orbit.radius,
+                  target.x,target.y,target.z,scene.getFieldOfView()];
                 return document.getElementById('wre-tour-status').textContent
                   .includes('1 viewpoint(s) saved') &&
                   document.getElementById('wre-tour-play').disabled;
@@ -4856,8 +4860,16 @@ jobs:
                 scene.fieldOfView='42deg';
                 scene.jumpCameraToGoal();
                 document.getElementById('wre-tour-record').click();
-                return document.getElementById('wre-tour-status').textContent
-                  .includes('2 viewpoint(s) saved') &&
+                const orbit=scene.getCameraOrbit();
+                const target=scene.getCameraTarget();
+                window.__wreRecordedSecond=[orbit.theta,orbit.phi,orbit.radius,
+                  target.x,target.y,target.z,scene.getFieldOfView()];
+                return window.__wreRecordedSecond.every(Number.isFinite) &&
+                  window.__wreRecordedSecond[2] > 0 &&
+                  Math.abs(window.__wreRecordedSecond[0] -
+                    window.__wreRecordedFirst[0]) > 0.2 &&
+                  document.getElementById('wre-tour-status').textContent
+                    .includes('2 viewpoint(s) saved') &&
                   !document.getElementById('wre-tour-play').disabled;
               """)
               assert js("""
@@ -4878,8 +4890,12 @@ jobs:
                 const target=scene.getCameraTarget();
                 const actual=[orbit.theta,orbit.phi,orbit.radius,target.x,target.y,target.z,
                               scene.getFieldOfView()];
-                const expected=[0.8,1.1,5,0.2,0.1,-0.1,42];
-                return actual.every((v,i)=>Math.abs(v-expected[i])<0.1) &&
+                // The viewer can clamp camera radius to fit the real GLB:
+                // compare playback against the actual recorded camera, never
+                // a requested-but-possibly-clamped cameraOrbit attribute.
+                const expected=window.__wreRecordedSecond;
+                return expected && expected.length === 7 &&
+                  actual.every((v,i)=>Math.abs(v-expected[i])<0.1) &&
                   !document.getElementById('wre-tour-play').disabled ? actual : null;
               """)
               assert len(played_tour) == 7
