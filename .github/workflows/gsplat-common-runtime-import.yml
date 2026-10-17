@@ -1978,6 +1978,12 @@ jobs:
               <button id="wre-view-export" type="button" disabled
                 aria-label="Save current 3D view as PNG">Save current 3D view PNG</button>
               <span id="wre-view-export-status" role="status">3D view loading.</span>
+              <button id="wre-camera-export" type="button" disabled
+                aria-label="Export current 3D camera viewpoint JSON">Export 3D viewpoint JSON</button>
+              <label for="wre-camera-import">Restore 3D viewpoint:</label>
+              <input id="wre-camera-import" type="file" accept=".json,application/json"
+                aria-label="Restore a previously exported 3D camera viewpoint" disabled>
+              <span id="wre-camera-status" role="status">Camera bookmark available after load.</span>
             </div>
             <model-viewer id="wre-scene" camera-controls auto-rotate interaction-prompt="auto"
               alt="Approximate CPU stereo 3D reconstruction from two real photos"
@@ -1999,11 +2005,20 @@ jobs:
               const viewExportButton = document.getElementById("wre-view-export");
               const viewExportStatus = document.getElementById("wre-view-export-status");
               const measureResult = document.getElementById("wre-measure-result");
+              const cameraExport = document.getElementById("wre-camera-export");
+              const cameraImport = document.getElementById("wre-camera-import");
+              const cameraStatus = document.getElementById("wre-camera-status");
               scene.addEventListener("load", () => {
+                cameraExport.disabled = false;
+                cameraImport.disabled = false;
+                cameraStatus.textContent = "Export or restore this model's relative 3D viewpoint.";
                 viewExportButton.disabled = false;
                 viewExportStatus.textContent = "Capture the current rendered view; nonmetric PNG.";
               });
               scene.addEventListener("error", () => {
+                cameraExport.disabled = true;
+                cameraImport.disabled = true;
+                cameraStatus.textContent = "Camera unavailable until the 3D model loads.";
                 viewExportButton.disabled = true;
                 viewExportStatus.textContent = "3D view could not be loaded.";
               });
@@ -2032,6 +2047,76 @@ jobs:
                   viewExportStatus.textContent = "PNG capture failed: " + String(error);
                 } finally {
                   viewExportButton.disabled = !scene.loaded;
+                }
+              });
+              // These are model-viewer camera coordinates, NOT a measured
+              // physical camera pose or calibrated metre-scale reconstruction.
+              cameraExport.addEventListener("click", () => {
+                if (!scene.loaded || cameraExport.disabled) return;
+                const orbit = scene.getCameraOrbit();
+                const target = scene.getCameraTarget();
+                const fov = scene.getFieldOfView();
+                const values = [orbit.theta, orbit.phi, orbit.radius,
+                  target.x, target.y, target.z, fov];
+                if (!values.every(Number.isFinite) || orbit.radius <= 0) {
+                  cameraStatus.textContent = "Cannot export an invalid 3D camera.";
+                  return;
+                }
+                const bookmark = {
+                  schema: "wre.relative_3d_camera_view.v1",
+                  model_identity: provenance.textContent.trim(),
+                  orbit_radians: [orbit.theta, orbit.phi],
+                  orbit_radius_model_units: orbit.radius,
+                  target_model_units: [target.x, target.y, target.z],
+                  field_of_view_degrees: fov,
+                  metric_scale_known: false
+                };
+                const blob = new Blob([JSON.stringify(bookmark, null, 2) + "\\n"],
+                  {type: "application/json"});
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement("a");
+                link.href = url;
+                link.download = "wre-relative-3d-viewpoint.json";
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                setTimeout(() => URL.revokeObjectURL(url), 1000);
+                cameraStatus.textContent = "Relative 3D camera viewpoint exported locally.";
+              });
+              cameraImport.addEventListener("change", async () => {
+                const file = cameraImport.files && cameraImport.files[0];
+                cameraImport.value = "";
+                if (!file) return;
+                const currentSource = scene.getAttribute("src");
+                try {
+                  if (!scene.loaded || file.size > 4096 || file.size < 20) {
+                    throw new Error("Camera JSON file is missing or too large.");
+                  }
+                  const saved = JSON.parse(await file.text());
+                  const angles = saved.orbit_radians;
+                  const target = saved.target_model_units;
+                  const radius = saved.orbit_radius_model_units;
+                  const fov = saved.field_of_view_degrees;
+                  if (saved.schema !== "wre.relative_3d_camera_view.v1" ||
+                      saved.metric_scale_known !== false ||
+                      saved.model_identity !== provenance.textContent.trim() ||
+                      !Array.isArray(angles) || angles.length !== 2 ||
+                      !Array.isArray(target) || target.length !== 3 ||
+                      ![...angles, ...target, radius, fov].every(
+                        value => typeof value === "number" && Number.isFinite(value)
+                      ) ||
+                      radius <= 0 || radius > 1e9 || fov <= 0 || fov >= 180 ||
+                      !scene.loaded || currentSource !== scene.getAttribute("src")) {
+                    throw new Error("Viewpoint is invalid or belongs to another 3D model.");
+                  }
+                  scene.removeAttribute("auto-rotate");
+                  scene.cameraOrbit = angles[0] + "rad " + angles[1] + "rad " + radius + "m";
+                  scene.cameraTarget = target.map(value => value + "m").join(" ");
+                  scene.fieldOfView = fov + "deg";
+                  scene.jumpCameraToGoal();
+                  cameraStatus.textContent = "Relative 3D viewpoint restored; not a metric pose.";
+                } catch (error) {
+                  cameraStatus.textContent = "Viewpoint restore refused: " + String(error);
                 }
               });
               let measuring = false;
@@ -2327,6 +2412,9 @@ jobs:
                 releaseLocalUrl();
                 resetMeasurement();
                 viewExportButton.disabled = true;
+                cameraExport.disabled = true;
+                cameraImport.disabled = true;
+                cameraStatus.textContent = "Loading selected GLB.";
                 viewExportStatus.textContent = "Loading selected GLB.";
                 localUrl = URL.createObjectURL(file);
                 scene.setAttribute("src", localUrl);
@@ -2363,6 +2451,9 @@ jobs:
                 releaseLocalUrl();
                 resetMeasurement();
                 viewExportButton.disabled = true;
+                cameraExport.disabled = true;
+                cameraImport.disabled = true;
+                cameraStatus.textContent = "Loading selected 3D mode.";
                 viewExportStatus.textContent = "Loading selected 3D mode.";
                 localInput.value = "";
                 scene.setAttribute("src", mode.src);
