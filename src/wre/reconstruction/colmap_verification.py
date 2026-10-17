@@ -547,9 +547,7 @@ def _read_geometry_evidence(
         )
 
     evidence.sort(key=lambda item: (item.observation_id1.value, item.observation_id2.value))
-    observed_pairs = {
-        (item.observation_id1.value, item.observation_id2.value) for item in evidence
-    }
+    observed_pairs = {(item.observation_id1.value, item.observation_id2.value) for item in evidence}
     missing_pairs = set(expected_raw_counts) - observed_pairs
     # COLMAP need not emit two-view geometry for a pair with zero raw matches.
     # Its L3.3 zero-match record remains in the independently hashed parent
