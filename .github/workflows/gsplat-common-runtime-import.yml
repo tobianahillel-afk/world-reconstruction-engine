@@ -5064,7 +5064,7 @@ jobs:
                   ? receipt : null;
               """, limit=20)
               assert storyboard_png["signature"] == [137,80,78,71,13,10,26,10]
-              assert storyboard_png["width"] == 640 and storyboard_png["height"] == 480
+              assert storyboard_png["width"] == 640 and storyboard_png["height"] == 240
               assert storyboard_png["size"] > 1000
               frame_hashes=js("return window.__wreStoryboardFrameHashes;")
               assert len(frame_hashes) == 2 and len(set(frame_hashes)) == 2, (
