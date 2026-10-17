@@ -1674,6 +1674,76 @@ def test_real_colmap_sparse_coordinates_and_original_png_colors_export_to_ply(
     assert request.source_geometry.point_maps[0].positions_xyz == ((1.0, 2.0, 3.0),)
 
 
+def test_real_colmap_sparse_observations_export_viewable_rgb_glb(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Actual PNG colors + canonical 3D become valid GLB bytes, no CUDA trainer."""
+    request, source = _two_view_parts(tmp_path)
+    features, environment = _native_feature_evidence(tmp_path)
+    monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_native_geometry",
+        lambda *_args, **_kwargs: _native_canonical(request, source),
+    )
+    module = cast(Any, _shared_track_fixture())
+    native = module.Reconstruction(source.native_model_root / "0")
+    original_point = native.point3D
+    native.point3D = lambda identifier: SimpleNamespace(
+        xyz=(1.0, 2.0, 3.0),
+        track=original_point(identifier).track,
+    )
+    output = tmp_path / "observed-sparse.glb"
+    digest = baseline_module.export_verified_colmap_observed_rgb_glb(
+        request,
+        source,
+        features=features,
+        expected_environment=environment,
+        module=module,
+        preview_path=output,
+    )
+    glb = output.read_bytes()
+    assert digest == _digest(glb)
+    assert struct.unpack_from("<4sII", glb) == (b"glTF", 2, len(glb))
+    json_size, json_kind = struct.unpack_from("<I4s", glb, 12)
+    assert json_kind == b"JSON"
+    scene = json.loads(glb[20 : 20 + json_size])
+    assert scene["meshes"][0]["primitives"][0]["mode"] == 0
+    assert scene["accessors"][0]["count"] == 1
+    assert scene["extras"]["source_colmap_points"] == 1
+    assert scene["extras"]["shown_points"] == 1
+    assert scene["extras"]["metric_scale_known"] is False
+    assert glb[28 + json_size :] == struct.pack("<3f3B", 1.0, 2.0, 3.0, 64, 128, 192) + b"\x00"
+    summary = baseline_module.inspect_verified_gsplat_rgb_centers_glb(path=output)
+    assert summary["sha256"] == digest.value
+    assert summary["kind"] == "wre_colmap_observed_rgb_points"
+    assert summary["source_colmap_points"] == summary["shown_points"] == 1
+    assert summary["gpu_training_verified"] is False
+    command = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "wre.reconstruction.static_appearance_baseline",
+            "--inspect-glb",
+            str(output),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=25,
+        check=False,
+    )
+    assert command.returncode == 0, command.stderr
+    assert json.loads(command.stdout) == summary
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="new distinct"):
+        baseline_module.export_verified_colmap_observed_rgb_glb(
+            request,
+            source,
+            features=features,
+            expected_environment=environment,
+            module=module,
+            preview_path=output,
+        )
+
+
 def test_colmap_observed_ply_colors_reconstructed_point_from_one_active_track(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1687,9 +1757,7 @@ def test_colmap_observed_ply_colors_reconstructed_point_from_one_active_track(
     module = cast(Any, _shared_track_fixture(track_image_ids=(1,)))
     native = module.Reconstruction(source.native_model_root / "0")
     prior = native.point3D
-    native.point3D = lambda i: SimpleNamespace(
-        xyz=(1.0, 2.0, 3.0), track=prior(i).track
-    )
+    native.point3D = lambda i: SimpleNamespace(xyz=(1.0, 2.0, 3.0), track=prior(i).track)
     target = tmp_path / "single-active-view.ply"
     digest = baseline_module.export_verified_colmap_observed_rgb_ply(
         request,
