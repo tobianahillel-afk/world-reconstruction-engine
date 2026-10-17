@@ -7471,6 +7471,18 @@ jobs:
                       break
               assert measured is not None, "No observed contiguous valid stereo pixels"
               px, py = measured
+              # A real Chrome run previously failed: an intended valid (158,545)
+              # became invalid (156,545) on a downscaled CSS image because
+              # MouseEvent.clientX was quantized in screen pixels. Exercise the
+              # PUBLIC 1:1 toggle and verify actual rendered native dimensions.
+              assert js("""const zoom=document.getElementById('wre-pixel-native-zoom');
+                  const image=document.getElementById('wre-stereo-disparity');
+                  zoom.click();
+                  const box=image.getBoundingClientRect();
+                  return zoom.getAttribute('aria-pressed')==='true' &&
+                    Math.abs(box.width-image.naturalWidth)<0.01 &&
+                    Math.abs(box.height-image.naturalHeight)<0.01 &&
+                    image.closest('figure').scrollWidth >= image.naturalWidth;""")
               js(f"""const image = document.getElementById('wre-stereo-disparity');
                   const box = image.getBoundingClientRect();
                   image.dispatchEvent(new MouseEvent('click', {{
