@@ -928,11 +928,15 @@ jobs:
           dmin = float(dmin_bytes.decode("ascii").strip())
           assert math.isfinite(dmin) and 0 <= dmin < width / 2
 
-          # Per official 2006 Middlebury spec, half-size encoded disparity
-          # intensity / 2, plus the crop offset dmin; zero is UNKNOWN, not 0 px.
-          reference = groundtruth.astype(np.float32) / 2.0 + dmin
+          # Official Middlebury 2006 images are cropped to cancel dmin.
+          # The matcher sees x_left-x_right ON THOSE CROPPED IMAGES:
+          # ground-truth PNG intensity / 2, NOT intensity/2 + dmin.
+          # dmin is added only when recovering physical disparity f*B/Z.
+          # Matching at ~dmin pixels otherwise searches the WRONG pixels.
+          reference = groundtruth.astype(np.float32) / 2.0
           known = groundtruth > 0
-          min_disparity = max(0, math.floor(dmin) - 16)
+          min_disparity = 0
+          assert float(np.max(reference[known])) < 160.0
           matcher = cv2.StereoSGBM_create(
               minDisparity=min_disparity,
               numDisparities=160,
@@ -951,7 +955,7 @@ jobs:
           assert count > 1000, count
           delta = np.abs(predicted[evaluated] - reference[evaluated])
           # Compare an EXISTING second OpenCV solver, not a new matcher or a
-          # reference-fitted correction. Both share the published dmin prior.
+          # reference-fitted correction. Both match cropped image disparity.
           bm = cv2.StereoBM_create(numDisparities=160, blockSize=15)
           bm.setMinDisparity(min_disparity)
           bm_predicted = bm.compute(left_gray, right_gray).astype(np.float32) / 16.0
@@ -978,7 +982,7 @@ jobs:
           ]
           yy, xx = np.unravel_index(chosen, predicted.shape)
           d = predicted[yy, xx].astype(np.float64)
-          depth_mm = focal_px * baseline_mm / d
+          depth_mm = focal_px * baseline_mm / (d + dmin)
           points = np.column_stack((
               (xx - (width - 1) / 2.0) * depth_mm / focal_px,
               (yy - (height - 1) / 2.0) * depth_mm / focal_px,
@@ -1021,7 +1025,7 @@ jobs:
           ]
           cy, cx = np.unravel_index(consent, predicted.shape)
           cd = predicted[cy, cx].astype(np.float64)
-          cz = focal_px * baseline_mm / cd
+          cz = focal_px * baseline_mm / (cd + dmin)
           cxyz = np.column_stack((
               (cx - (width - 1) / 2.0) * cz / focal_px,
               (cy - (height - 1) / 2.0) * cz / focal_px,
@@ -1085,7 +1089,7 @@ jobs:
           ]
           lr_y, lr_x = np.unravel_index(lr_indices, predicted.shape)
           lr_disp = predicted[lr_y, lr_x].astype(np.float64)
-          lr_depth = focal_px * baseline_mm / lr_disp
+          lr_depth = focal_px * baseline_mm / (lr_disp + dmin)
           lr_xyz = np.column_stack((
               (lr_x - (width - 1) / 2.0) * lr_depth / focal_px,
               (lr_y - (height - 1) / 2.0) * lr_depth / focal_px,
@@ -1126,7 +1130,7 @@ jobs:
           ]
           hh4_y, hh4_x = np.unravel_index(hh4_ids, hh4_disp.shape)
           hh4_d = hh4_disp[hh4_y, hh4_x].astype(np.float64)
-          hh4_z = focal_px * baseline_mm / hh4_d
+          hh4_z = focal_px * baseline_mm / (hh4_d + dmin)
           hh4_xyz = np.column_stack((
               (hh4_x - (width - 1) / 2.0) * hh4_z / focal_px,
               (hh4_y - (height - 1) / 2.0) * hh4_z / focal_px,
@@ -1172,7 +1176,10 @@ jobs:
               "image_height_width": [height, width],
               "dmin_crop_disparity_px": dmin,
               "reference_zero_means_unknown": True,
-              "halfsize_reference_encoding": "disp1_png_value/2 + dmin",
+              "halfsize_reference_encoding": "disp1_png_value/2 is cropped disparity",
+              "groundtruth_matcher_domain": "cropped_image_disparity_px",
+              "physical_depth_disparity": "matcher_disparity_px + dmin_crop_disparity_px",
+              "dmin_only_used_for_physical_depth": True,
               "algorithm": "OpenCV StereoSGBM CPU independent pair",
               "matcher_min_disparity": min_disparity,
               "matcher_num_disparities": 160,
