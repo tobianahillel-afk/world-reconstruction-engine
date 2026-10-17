@@ -990,6 +990,99 @@ def _gsplat_output(
     return output, profile, ref
 
 
+
+def test_reference_runner_rejects_missing_photometry_before_any_cuda(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A verified COLMAP source without V2L17 evidence must not reach CUDA."""
+    request, source, staged, output, profile, ref, producer = _retained_gsplat_fixture(
+        tmp_path
+    )
+    python_executable = tmp_path / "external-python"
+    python_executable.write_bytes(b"stub")
+    previous = (output / profile.expected_ply_relative_path).read_bytes()
+    monkeypatch.setattr(
+        baseline_module.subprocess,
+        "run",
+        lambda *_a, **_kw: pytest.fail("missing V2L17 evidence reached external trainer"),
+    )
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="photometric assessment"):
+        run_gsplat_reference_training(
+            request=request,
+            source=source,
+            assessments=(),
+            staged=staged,
+            profile=profile,
+            features=cast(ColmapFeatureExtractionResult, object()),
+            expected_environment=cast(ColmapEnvironmentIdentity, object()),
+            source_root=tmp_path,
+            python_executable=python_executable,
+            output_root=output,
+            artifact_ref=ref,
+            producer=producer,
+            cuda_device_index=0,
+            timeout_seconds=30,
+        )
+    assert (output / profile.expected_ply_relative_path).read_bytes() == previous
+    assert not (output / "wre-reference-training.log").exists()
+
+
+def test_reference_runner_accepts_real_two_view_capture_evidence_before_native_gate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Real V2L17 identity and capture evidence pass; CUDA is never launched."""
+    request, source = _two_view_parts(tmp_path)
+    assessments = _matching_shared_track_photometry(source)
+    profile = GsplatStaticAppearanceTrainingProfile(max_steps=20)
+    producer = ArtifactProducerIdentity(
+        producer=ProducerRef(
+            implementation="gsplat.examples.simple_trainer",
+            version="1.5.3",
+            revision=GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION,
+        ),
+        configuration=ConfigurationIdentity(sha256=profile.configuration_sha256),
+        model=ModelIdentity(
+            name="gsplat",
+            version="1.5.3",
+            revision=GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION,
+        ),
+    )
+    python_executable = tmp_path / "external-python"
+    python_executable.write_bytes(b"stub")
+    output = tmp_path / "no-gpu-output"
+
+    def reached_native_gate(*_args: Any, **_kwargs: Any) -> None:
+        raise GsplatStaticAppearancePreflightError("native-validation-reached")
+
+    monkeypatch.setattr(
+        baseline_module, "verify_gsplat_static_appearance_native_geometry", reached_native_gate
+    )
+    monkeypatch.setattr(
+        baseline_module.subprocess,
+        "run",
+        lambda *_a, **_kw: pytest.fail("unverified CUDA trainer started"),
+    )
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="native-validation-reached"):
+        run_gsplat_reference_training(
+            request=request,
+            source=source,
+            assessments=assessments,
+            staged=cast(baseline_module.GsplatStaticAppearanceStagedDataset, object()),
+            profile=profile,
+            features=cast(ColmapFeatureExtractionResult, object()),
+            expected_environment=cast(ColmapEnvironmentIdentity, object()),
+            source_root=tmp_path,
+            python_executable=python_executable,
+            output_root=output,
+            artifact_ref=ArtifactRef(
+                ArtifactId("appearance:gsplat:photo-evidence"), APPEARANCE_MODEL_ARTIFACT_KIND
+            ),
+            producer=producer,
+            cuda_device_index=0,
+            timeout_seconds=30,
+        )
+    assert not output.exists()
+
 def test_external_gsplat_training_is_exposed_by_public_reconstruction_package() -> None:
     from wre import reconstruction
 
@@ -1002,6 +1095,12 @@ def test_one_call_gsplat_reconstruction_stages_real_files_and_returns_candidate(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Real CPU staging + file hashing + output assembly, substituted GPU trainer."""
+    # This test isolates trainer orchestration; V2L17 evidence has separate real tests.
+    monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_matching_capture_metadata",
+        lambda *_args: (),
+    )
     request, source, staged, output, profile, ref, producer = _retained_gsplat_fixture(tmp_path)
     shutil.rmtree(staged.dataset_root)
     shutil.rmtree(output)
@@ -1033,6 +1132,7 @@ def test_one_call_gsplat_reconstruction_stages_real_files_and_returns_candidate(
     result = reconstruct_gsplat_static_appearance(
         request=request,
         source=source,
+        assessments=(),
         dataset_root=staged.dataset_root,
         profile=profile,
         features=cast(ColmapFeatureExtractionResult, object()),
@@ -1067,6 +1167,7 @@ def test_one_call_gsplat_reconstruction_does_not_stage_false_producer(
         reconstruct_gsplat_static_appearance(
             request=request,
             source=source,
+            assessments=(),
             dataset_root=staged.dataset_root,
             profile=profile,
             features=cast(ColmapFeatureExtractionResult, object()),
@@ -1086,6 +1187,12 @@ def test_external_gsplat_runner_builds_complete_canonical_candidate_with_process
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Real staging/PLY/candidate assembly; substituted CUDA process only."""
+    # This test isolates trainer orchestration; V2L17 evidence has separate real tests.
+    monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_matching_capture_metadata",
+        lambda *_args: (),
+    )
     request, source, staged, output, profile, artifact_ref, producer = _retained_gsplat_fixture(
         tmp_path
     )
@@ -1119,6 +1226,7 @@ def test_external_gsplat_runner_builds_complete_canonical_candidate_with_process
     result = run_gsplat_reference_training(
         request=request,
         source=source,
+        assessments=(),
         staged=staged,
         profile=profile,
         features=cast(ColmapFeatureExtractionResult, object()),
@@ -1168,6 +1276,12 @@ def test_external_gsplat_runner_builds_complete_canonical_candidate_with_process
 def test_external_gsplat_runner_rejects_untrusted_lpips_cache_before_process(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, invalid: str
 ) -> None:
+    # This test isolates trainer orchestration; V2L17 evidence has separate real tests.
+    monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_matching_capture_metadata",
+        lambda *_args: (),
+    )
     request, source, staged, output, profile, artifact_ref, producer = _retained_gsplat_fixture(
         tmp_path
     )
@@ -1204,6 +1318,7 @@ def test_external_gsplat_runner_rejects_untrusted_lpips_cache_before_process(
         run_gsplat_reference_training(
             request=request,
             source=source,
+            assessments=(),
             staged=staged,
             profile=profile,
             features=cast(ColmapFeatureExtractionResult, object()),
@@ -1272,6 +1387,12 @@ def test_external_gsplat_runner_spawns_real_process_and_assembles_appearance(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """CPU-only OS-process smoke: child emulates trainer output, NOT CUDA."""
+    # This test isolates trainer orchestration; V2L17 evidence has separate real tests.
+    monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_matching_capture_metadata",
+        lambda *_args: (),
+    )
     request, source, staged, output, profile, artifact_ref, producer = _retained_gsplat_fixture(
         tmp_path
     )
@@ -1317,6 +1438,7 @@ def test_external_gsplat_runner_spawns_real_process_and_assembles_appearance(
     result = run_gsplat_reference_training(
         request=request,
         source=source,
+        assessments=(),
         staged=staged,
         profile=profile,
         features=cast(ColmapFeatureExtractionResult, object()),
@@ -1339,6 +1461,12 @@ def test_real_trainer_refuses_foreign_native_geometry_before_cuda_launch(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Geometry mismatch is a material blocker, not a synthetic GPU pass."""
+    # This test isolates trainer orchestration; V2L17 evidence has separate real tests.
+    monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_matching_capture_metadata",
+        lambda *_args: (),
+    )
     request, source, staged, output, profile, ref, producer = _retained_gsplat_fixture(tmp_path)
     interpreter = tmp_path / "external-python"
     interpreter.write_bytes(b"stub")
@@ -1365,6 +1493,7 @@ def test_real_trainer_refuses_foreign_native_geometry_before_cuda_launch(
         run_gsplat_reference_training(
             request=request,
             source=source,
+            assessments=(),
             staged=staged,
             profile=profile,
             features=cast(ColmapFeatureExtractionResult, object()),
@@ -1403,6 +1532,7 @@ def test_external_gsplat_runner_rejects_false_producer_before_gpu_start(
         run_gsplat_reference_training(
             request=request,
             source=source,
+            assessments=(),
             staged=staged,
             profile=profile,
             features=cast(ColmapFeatureExtractionResult, object()),
@@ -1423,6 +1553,12 @@ def test_external_gsplat_runner_rejects_false_producer_before_gpu_start(
 def test_external_gsplat_runner_rejects_failure_or_missing_output(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, return_code: int
 ) -> None:
+    # This test isolates trainer orchestration; V2L17 evidence has separate real tests.
+    monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_matching_capture_metadata",
+        lambda *_args: (),
+    )
     request, source, staged, output, profile, ref, producer = _retained_gsplat_fixture(tmp_path)
     (output / profile.expected_ply_relative_path).unlink()
     (output / "ply").rmdir()
@@ -1448,6 +1584,7 @@ def test_external_gsplat_runner_rejects_failure_or_missing_output(
         run_gsplat_reference_training(
             request=request,
             source=source,
+            assessments=(),
             staged=staged,
             profile=profile,
             features=cast(ColmapFeatureExtractionResult, object()),
