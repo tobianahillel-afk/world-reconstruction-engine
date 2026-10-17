@@ -687,6 +687,123 @@ jobs:
           )
           PY
 
+      - name: Execute EXACT pinned upstream gsplat Parser and Dataset on real undistorted COLMAP capture (CPU)
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv venv --python 3.10.21 "$RUNNER_TEMP/wre-gsplat-parser-venv"
+          parse_py="$RUNNER_TEMP/wre-gsplat-parser-venv/bin/python"
+          # Explicitly isolate legacy rmbrualla.SceneManager from WRE's real
+          # native PyCOLMAP 4.2.0 and avoid treating the two as API-compatible.
+          uv pip install --python "$parse_py" --index-url https://download.pytorch.org/whl/cpu \
+            'torch==2.4.0+cpu'
+          uv pip install --python "$parse_py" \
+            'numpy==1.26.4' 'scipy==1.15.3' \
+            'opencv-python-headless==4.10.0.84' 'imageio==2.37.0' \
+            'Pillow==11.3.0' 'tqdm==4.67.1' 'typing-extensions==4.15.0'
+          sources="$RUNNER_TEMP/wre-gsplat-parser-source"
+          mkdir -p "$sources"
+          git init -q "$sources/gsplat"
+          git -C "$sources/gsplat" remote add origin https://github.com/nerfstudio-project/gsplat.git
+          git -C "$sources/gsplat" fetch -q --depth=1 origin 937e29912570c372bed6747a5c9bf85fed877bae
+          git -C "$sources/gsplat" checkout -q --detach FETCH_HEAD
+          test "$(git -C "$sources/gsplat" rev-parse HEAD)" = 937e29912570c372bed6747a5c9bf85fed877bae
+          git init -q "$sources/legacy-scene"
+          git -C "$sources/legacy-scene" remote add origin https://github.com/rmbrualla/pycolmap.git
+          git -C "$sources/legacy-scene" fetch -q --depth=1 origin cc7ea4b7301720ac29287dbe450952511b32125e
+          git -C "$sources/legacy-scene" checkout -q --detach FETCH_HEAD
+          test "$(git -C "$sources/legacy-scene" rev-parse HEAD)" = cc7ea4b7301720ac29287dbe450952511b32125e
+          uv pip install --python "$parse_py" --no-deps "$sources/legacy-scene"
+          "$parse_py" - <<'PY'
+          import hashlib
+          import json
+          import math
+          import os
+          import sys
+          from pathlib import Path
+          import numpy as np
+          import torch
+          import pycolmap
+
+          src = Path(os.environ["RUNNER_TEMP"]) / "wre-gsplat-parser-source"
+          target = src / "gsplat" / "examples" / "datasets" / "colmap.py"
+          payload = target.read_bytes()
+          blob = hashlib.sha1(b"blob " + str(len(payload)).encode() + b"\0" + payload).hexdigest()
+          assert blob == "6c21f2c663b60d9dc38471a9963a3b5d092e5ed2", blob
+          assert torch.__version__ == "2.4.0+cpu"
+          assert np.__version__ == "1.26.4"
+          assert not torch.cuda.is_available()
+          from pycolmap import SceneManager
+          assert SceneManager is not None
+          assert Path(pycolmap.__file__).resolve().is_relative_to(Path(sys.prefix).resolve())
+          sys.path.insert(0, str(src / "gsplat" / "examples"))
+          from datasets.colmap import Dataset, Parser
+
+          root = Path(os.environ["RUNNER_TEMP"]) / "wre-real-photo-colmap-rgb"
+          dataset = root / "gsplat-capture"
+          manifest_path = dataset / "wre-capture-manifest.json"
+          receipt = json.loads(manifest_path.read_text())
+          for relative, expected in receipt["file_sha256"].items():
+              target_path = dataset / relative
+              assert target_path.is_file() and not target_path.is_symlink(), relative
+              assert hashlib.sha256(target_path.read_bytes()).hexdigest() == expected, relative
+
+          parser = Parser(str(dataset), factor=1, normalize=False, test_every=8)
+          assert len(parser.image_names) == receipt["undistorted_registered_views"] == 3
+          assert parser.points.shape == (receipt["undistorted_points3d"], 3)
+          assert parser.points_rgb.shape == (receipt["undistorted_points3d"], 3)
+          assert parser.camtoworlds.shape == (3, 4, 4)
+          assert np.isfinite(parser.camtoworlds).all()
+          assert np.isfinite(parser.points).all()
+          assert set(parser.image_names) == set(receipt["views"])
+          assert all(Path(p).is_file() for p in parser.image_paths)
+          assert all(
+              len(params) == 0 for params in parser.params_dict.values()
+          ), "upstream parser must see distortion-free PINHOLE cameras"
+          train, val = Dataset(parser, split="train"), Dataset(parser, split="val")
+          assert (len(train), len(val)) == (2, 1)
+          view_proofs = {}
+          for split, dataloader in (("train", train), ("val", val)):
+              for idx in range(len(dataloader)):
+                  view = dataloader[idx]
+                  assert view["K"].shape == (3, 3)
+                  assert view["camtoworld"].shape == (4, 4)
+                  assert view["image"].ndim == 3 and view["image"].shape[2] == 3
+                  assert view["image"].device.type == "cpu"
+                  assert torch.isfinite(view["K"]).all()
+                  assert torch.isfinite(view["camtoworld"]).all()
+                  assert torch.isfinite(view["image"]).all()
+                  view_proofs[f"{split}:{idx}"] = {
+                      "height": int(view["image"].shape[0]),
+                      "width": int(view["image"].shape[1]),
+                  }
+          receipt["gsplat_pinned_parser"] = {
+              "source_git_sha": "937e29912570c372bed6747a5c9bf85fed877bae",
+              "dataset_parser_git_blob_sha1": blob,
+              "legacy_pycolmap_git_sha": "cc7ea4b7301720ac29287dbe450952511b32125e",
+              "legacy_pycolmap_version": "0.0.1",
+              "torch_version": torch.__version__,
+              "numpy_version": np.__version__,
+              "photo_count": len(parser.image_names),
+              "native_point_count": int(len(parser.points)),
+              "train_views": len(train),
+              "validation_views": len(val),
+              "decoded_cpu_view_shapes": view_proofs,
+              "normalization_requested": False,
+              "actual_cuda_kernel_executed": False,
+              "actual_trainer_executed": False,
+              "radiance_training_verified": False,
+          }
+          manifest_path.write_text(json.dumps(receipt, sort_keys=True, indent=2) + "\n")
+          print(
+              "EXACT PINNED GSPLAT DATASET PARSER PASS:",
+              len(parser.image_names), "real images;",
+              len(parser.points), "native SfM points;",
+              len(train), "CPU training views and",
+              len(val), "CPU validation view"
+          )
+          PY
+
       - name: Publish reusable real-photo undistorted COLMAP capture for GPU handoff
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
