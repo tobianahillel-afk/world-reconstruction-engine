@@ -2057,6 +2057,9 @@ jobs:
                   <option value="left">Left photograph</option>
                   <option value="right">Right photograph</option>
                 </select>
+                <button id="wre-source-export" type="button" disabled
+                  aria-label="Download selected observed source photograph as PNG">Download selected source PNG</button>
+                <span id="wre-source-export-status" role="status">Original photograph loading.</span>
                 <div id="wre-photo-crop" class="wre-photo-crop" data-frame="pair">
                   <img id="wre-live-source-photos" src="./wre-real-stereo-cpu-photos.png"
                     alt="Two real stereo Aloe photographs, left and right, processed for this reconstruction">
@@ -2091,6 +2094,9 @@ jobs:
               const photoFrame = document.getElementById("wre-source-frame");
               const photoCrop = document.getElementById("wre-photo-crop");
               const photoFrameStatus = document.getElementById("wre-source-frame-status");
+              const sourceImage = document.getElementById("wre-live-source-photos");
+              const sourceExport = document.getElementById("wre-source-export");
+              const sourceExportStatus = document.getElementById("wre-source-export-status");
               const provenance = document.getElementById("wre-scene-provenance");
               const localInput = document.getElementById("wre-local-glb");
               const measureButton = document.getElementById("wre-measure-toggle");
@@ -3331,6 +3337,61 @@ jobs:
                   ? "Both rectified source photographs; NOT registered to the 3D camera."
                   : (frame === "left" ? "Left" : "Right") +
                     " original photo crop; NOT a registered 3D projection.";
+              });
+              // Export the actual decoded, pinned source PNG pixels. Left/right
+              // are halves of the already packaged stereo image, not a 3D render.
+              function sourceImageReady() {
+                return sourceImage.complete && sourceImage.naturalWidth >= 2 &&
+                  sourceImage.naturalWidth % 2 === 0 && sourceImage.naturalHeight > 0;
+              }
+              sourceImage.addEventListener("load", () => {
+                sourceExport.disabled = !sourceImageReady();
+                sourceExportStatus.textContent = sourceExport.disabled
+                  ? "Original photograph is invalid." : "Source photograph PNG ready.";
+              });
+              sourceImage.addEventListener("error", () => {
+                sourceExport.disabled = true;
+                sourceExportStatus.textContent = "Original photograph unavailable.";
+              });
+              if (sourceImageReady()) {
+                sourceExport.disabled = false;
+                sourceExportStatus.textContent = "Source photograph PNG ready.";
+              }
+              sourceExport.addEventListener("click", async () => {
+                if (sourceExport.disabled || photoPanel.hidden || !sourceImageReady()) return;
+                const frame = photoFrame.value;
+                if (!["pair", "left", "right"].includes(frame)) return;
+                const half = sourceImage.naturalWidth / 2;
+                const canvas = document.createElement("canvas");
+                canvas.width = frame === "pair" ? sourceImage.naturalWidth : half;
+                canvas.height = sourceImage.naturalHeight;
+                const ctx = canvas.getContext("2d");
+                if (!ctx) return;
+                const sourceX = frame === "right" ? half : 0;
+                ctx.drawImage(sourceImage, sourceX, 0, canvas.width, canvas.height,
+                  0, 0, canvas.width, canvas.height);
+                sourceExport.disabled = true;
+                try {
+                  const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
+                  if (!blob || blob.type !== "image/png" || blob.size < 1000 ||
+                      frame !== photoFrame.value || photoPanel.hidden) {
+                    throw new Error("Original photo export changed or failed.");
+                  }
+                  const url = URL.createObjectURL(blob);
+                  const link = document.createElement("a");
+                  link.href = url;
+                  link.download = "wre-observed-source-" + frame + ".png";
+                  document.body.appendChild(link);
+                  link.click();
+                  link.remove();
+                  setTimeout(() => URL.revokeObjectURL(url), 1000);
+                  sourceExportStatus.textContent =
+                    "Saved the actual " + frame + " source pixels; NOT a registered 3D view.";
+                } catch (error) {
+                  sourceExportStatus.textContent = "Source export failed: " + String(error);
+                } finally {
+                  sourceExport.disabled = !sourceImageReady();
+                }
               });
               photoToggle.addEventListener("click", () => {
                 if (compareChoice.value) return;
