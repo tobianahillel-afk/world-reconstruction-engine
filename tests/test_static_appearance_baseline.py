@@ -990,7 +990,6 @@ def _gsplat_output(
     return output, profile, ref
 
 
-
 def test_reference_runner_rejects_missing_photometry_before_any_cuda(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
