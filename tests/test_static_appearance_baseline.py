@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import ast
 import hashlib
+import json
 import os
 import struct
 import sys
@@ -111,6 +112,7 @@ from wre.reconstruction.static_appearance_baseline import (
     GsplatStaticAppearanceTrainingProfile,
     assemble_verified_gsplat_static_appearance_result,
     build_gsplat_reference_trainer_path_overrides,
+    export_verified_gsplat_rgb_centers_glb,
     export_verified_gsplat_rgb_centers_ply,
     inspect_gsplat_static_appearance_shared_track_pixels,
     materialize_verified_gsplat_ply,
@@ -1292,6 +1294,75 @@ def test_verified_gsplat_gaussian_centers_export_real_viewable_rgb_ply(
         export_verified_gsplat_rgb_centers_ply(
             artifact_ref=ref, output_root=root, profile=profile, preview_path=preview
         )
+
+
+def test_verified_gsplat_gaussian_centers_export_standalone_glb(
+    tmp_path: Path,
+) -> None:
+    first = [0.0] * 59
+    first[:6] = [1.0, 2.0, 3.0, 0.0, 0.0, 0.0]
+    first[-4] = 1.0
+    second = [0.0] * 59
+    second[:6] = [-1.0, 0.0, 2.0, 2.0, -2.0, 0.0]
+    second[-4] = 1.0
+    template = _gsplat_ply(vertices=2)
+    split = template.index(b"end_header\n") + len(b"end_header\n")
+    real_splats = template[:split] + struct.pack("<59f", *first) + struct.pack("<59f", *second)
+    root, profile, ref = _gsplat_output(tmp_path, real_splats)
+    viewer = tmp_path / "viewer"
+    viewer.mkdir()
+    glb = viewer / "gsplat-centers.glb"
+    file_hash = export_verified_gsplat_rgb_centers_glb(
+        artifact_ref=ref, output_root=root, profile=profile, preview_path=glb
+    )
+    raw = glb.read_bytes()
+    assert file_hash == _digest(raw)
+    magic, version, length = struct.unpack_from("<4sII", raw)
+    assert (magic, version, length) == (b"glTF", 2, len(raw))
+    json_length, json_type = struct.unpack_from("<I4s", raw, 12)
+    assert json_type == b"JSON" and json_length % 4 == 0
+    document = json.loads(raw[20 : 20 + json_length])
+    bin_length, bin_type = struct.unpack_from("<I4s", raw, 20 + json_length)
+    assert bin_type == b"BIN\x00"
+    assert bin_length == document["buffers"][0]["byteLength"] == 32
+    assert len(raw) == 28 + json_length + bin_length
+    assert document["asset"]["version"] == "2.0"
+    assert document["meshes"][0]["primitives"][0] == {
+        "attributes": {"POSITION": 0, "COLOR_0": 1},
+        "mode": 0,
+    }
+    assert document["bufferViews"][0]["byteStride"] == 16
+    assert document["accessors"][0]["count"] == 2
+    assert document["accessors"][0]["min"] == [-1.0, 0.0, 2.0]
+    assert document["accessors"][0]["max"] == [1.0, 2.0, 3.0]
+    assert document["accessors"][1]["normalized"] is True
+    assert document["accessors"][1]["byteOffset"] == 12
+    binary = raw[28 + json_length :]
+    assert binary == (
+        struct.pack("<3f4B", 1.0, 2.0, 3.0, 127, 127, 127, 0)
+        + struct.pack("<3f4B", -1.0, 0.0, 2.0, 255, 0, 127, 0)
+    )
+    assert (root / profile.expected_ply_relative_path).read_bytes() == real_splats
+    assert sorted(path.name for path in viewer.iterdir()) == ["gsplat-centers.glb"]
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="new .glb"):
+        export_verified_gsplat_rgb_centers_glb(
+            artifact_ref=ref, output_root=root, profile=profile, preview_path=glb
+        )
+
+
+def test_verified_gsplat_glb_export_rejects_invalid_source_without_output(
+    tmp_path: Path,
+) -> None:
+    root, profile, ref = _gsplat_output(tmp_path, _gsplat_ply(vertices=1) + b"extra")
+    viewer = tmp_path / "viewer"
+    viewer.mkdir()
+    glb = viewer / "points.glb"
+    with pytest.raises(GsplatStaticAppearancePreflightError):
+        export_verified_gsplat_rgb_centers_glb(
+            artifact_ref=ref, output_root=root, profile=profile, preview_path=glb
+        )
+    assert not glb.exists()
+    assert not list(viewer.iterdir())
 
 
 def test_verified_gsplat_gaussian_centers_preview_rejects_unverified_model(
