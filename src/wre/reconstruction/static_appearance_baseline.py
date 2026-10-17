@@ -2888,6 +2888,91 @@ def export_verified_colmap_observed_rgb_glb(
         )
 
 
+
+def export_verified_colmap_camera_rig_json(
+    canonical: CanonicalColmapSparseModel, *, path: Path
+) -> Sha256Digest:
+    """Export real SfM camera poses in the same nonmetric frame as its 3D points.
+
+    The existing canonical COLMAP geometry supplies the camera-to-world
+    relationship; this exports no synthetic poses or estimated GPS coordinates.
+    x_camera = R * x_local + t, so camera center in local coordinates is -R^T*t.
+    This is experimental scene metadata, not a production viewer contract.
+    """
+
+    if not isinstance(canonical, CanonicalColmapSparseModel):
+        raise TypeError("COLMAP rig must use an audited canonical sparse model")
+    if not isinstance(path, Path) or not path.is_absolute() or path.suffix != ".json":
+        raise GsplatStaticAppearancePreflightError(
+            "COLMAP camera rig requires a new absolute .json output path"
+        )
+    parent = _safe_root(path.parent, "COLMAP camera rig output parent")
+    destination = parent / path.name
+    if destination.exists() or destination.is_symlink():
+        raise GsplatStaticAppearancePreflightError(
+            "COLMAP camera rig may not replace an existing file"
+        )
+    cameras = tuple(
+        sorted(canonical.camera_solutions, key=lambda item: item.observation_id.value)
+    )
+    if not cameras or len({camera.observation_id.value for camera in cameras}) != len(cameras):
+        raise GsplatStaticAppearancePreflightError("COLMAP camera rig has duplicate or no views")
+    frame = canonical.geometry_solution.local_frame_id.value
+    entries = []
+    for camera in cameras:
+        if camera.local_frame_id.value != frame:
+            raise GsplatStaticAppearancePreflightError(
+                "COLMAP camera rig views must share the canonical local frame"
+            )
+        rotation = camera.rotation_matrix
+        translation = camera.translation_xyz
+        center = [
+            -sum(rotation[row][column] * translation[row] for row in range(3))
+            for column in range(3)
+        ]
+        if not all(math.isfinite(value) for value in center):
+            raise GsplatStaticAppearancePreflightError(
+                "COLMAP camera rig contains a nonfinite camera center"
+            )
+        entries.append(
+            {
+                "observation_id": camera.observation_id.value,
+                "projection_model": camera.projection_model.value,
+                "image_size": [camera.dimensions.width_px, camera.dimensions.height_px],
+                "intrinsics": list(camera.intrinsic_parameters),
+                "camera_from_local_rotation": [list(row) for row in rotation],
+                "camera_from_local_translation": list(translation),
+                "camera_center_local_xyz": center,
+            }
+        )
+    payload = (
+        json.dumps(
+            {
+                "schema": "wre.colmap.camera_rig.v1",
+                "source_model_sha256": canonical.source_model_identity_sha256.value,
+                "geometry_solution_id": canonical.geometry_solution.geometry_solution_id.value,
+                "local_frame_id": frame,
+                "metric_scale_known": False,
+                "pose_convention": "x_camera = R * x_local + t",
+                "cameras": entries,
+            },
+            sort_keys=True,
+            allow_nan=False,
+            separators=(",", ":"),
+        )
+        + "\n"
+    ).encode("utf-8")
+    try:
+        with destination.open("xb") as stream:
+            stream.write(payload)
+    except OSError as exc:
+        destination.unlink(missing_ok=True)
+        raise GsplatStaticAppearancePreflightError(
+            "COLMAP camera rig output could not be written"
+        ) from exc
+    return Sha256Digest(hashlib.sha256(payload).hexdigest())
+
+
 def inspect_verified_gsplat_rgb_centers_glb(*, path: Path) -> dict[str, object]:
     """Load and inspect WRE's own portable RGB-center GLB, without a GPU.
 
