@@ -1041,8 +1041,12 @@ jobs:
           import os
           import re
           import urllib.request
+          import sys
           from pathlib import Path
           import numpy as np
+          sys.path.insert(
+              0, str(Path(os.environ["RUNNER_TEMP"]) / "wre-gsplat-parser-source" / "gsplat" / "examples")
+          )
           from datasets.colmap import Parser
 
           root = Path(os.environ["RUNNER_TEMP"]) / "wre-real-photo-colmap-rgb"
