@@ -3466,6 +3466,60 @@ jobs:
                   view.getAttribute('src').startsWith('data:model/gltf-binary;base64,');
               """)
               assert first
+              # Raycast the ACTUAL Chrome-loaded photo mesh, not a mocked
+              # geometry API. Click two different hit points via the viewer
+              # measurement control, then verify the relative distance.
+              measure_hits = js("""
+                const scene=document.getElementById('wre-scene');
+                const box=scene.getBoundingClientRect();
+                const hits=[];
+                if (typeof scene.positionAndNormalFromPoint !== 'function') return null;
+                for (let yi=0;yi<=10;yi++) for (let xi=0;xi<=10;xi++) {
+                  const x=box.left+box.width*(0.15+0.7*xi/10);
+                  const y=box.top+box.height*(0.15+0.7*yi/10);
+                  const hit=scene.positionAndNormalFromPoint(x,y);
+                  if (hit && hit.position &&
+                      [hit.position.x,hit.position.y,hit.position.z].every(Number.isFinite)) {
+                    const pos=[hit.position.x,hit.position.y,hit.position.z];
+                    if (hits.length && Math.hypot(
+                      pos[0]-hits[0].pos[0],pos[1]-hits[0].pos[1],
+                      pos[2]-hits[0].pos[2])>0.001)
+                      return [hits[0],{x,y,pos}];
+                    if (!hits.length) hits.push({x,y,pos});
+                  }
+                }
+                return null;
+              """)
+              assert measure_hits is not None, "Chrome could not hit two distinct real mesh points"
+              measure_status = js(f"""
+                const scene=document.getElementById('wre-scene');
+                const toggle=document.getElementById('wre-measure-toggle');
+                toggle.click();
+                for (const p of {json.dumps(measure_hits)}) {{
+                  scene.dispatchEvent(new MouseEvent('click', {{
+                    bubbles:true, clientX:p.x, clientY:p.y
+                  }}));
+                }}
+                return {{
+                  status:document.getElementById('wre-measure-result').textContent,
+                  pressed:toggle.getAttribute('aria-pressed'),
+                  autoRotate:scene.hasAttribute('auto-rotate')
+                }};
+              """)
+              assert measure_status["pressed"] == "true" and not measure_status["autoRotate"]
+              assert "Relative 3D distance:" in measure_status["status"]
+              assert "model units (NOT meters" in measure_status["status"]
+              displayed_distance = float(
+                measure_status["status"].split("Relative 3D distance: ",1)[1]
+                  .split(" model units",1)[0]
+              )
+              assert displayed_distance > 0.0
+              js("""
+                const button=document.getElementById('wre-measure-toggle');
+                button.click();
+                return button.getAttribute('aria-pressed') === 'false' &&
+                  document.getElementById('wre-scene').hasAttribute('auto-rotate');
+              """)
               js("""
                 window.__wre3dLoads=0;
                 document.getElementById('wre-scene').addEventListener(
@@ -3549,6 +3603,7 @@ jobs:
                       "photometric_cloud_mode_loaded": True,
                       "sift_camera_mode_loaded": True,
                       "local_glb_file_loaded_in_chrome": True,
+                      "surface_distance_measured_in_chrome": True,
                       "surface_reload": True,
                       "webgl_context": True,
                       "input_glb_sha256": expected_hashes,
@@ -3659,6 +3714,8 @@ jobs:
               raise ValueError("The same-run browser did not load all four real 3D modes")
           if receipt.get("local_glb_file_loaded_in_chrome") is not True:
               raise ValueError("Actual Chrome did not open a user-selected GLB")
+          if receipt.get("surface_distance_measured_in_chrome") is not True:
+              raise ValueError("Actual Chrome did not measure two real mesh points")
           
           glbs = (
               "wre-real-stereo-cpu-textured.glb",
