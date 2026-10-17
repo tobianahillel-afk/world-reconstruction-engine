@@ -57,7 +57,7 @@ jobs:
           from pathlib import Path
           
           import pycolmap
-          from PIL import Image
+          from PIL import Image, ImageOps
           
           from wre.domain import (
               ArtifactProducerIdentity,
@@ -99,16 +99,25 @@ jobs:
           )
           from wre.reconstruction.static_appearance_candidate import StaticAppearanceCandidateRequest
           
-          ROOT = Path(os.environ["RUNNER_TEMP"]).resolve() / "wre-real-aloe-colmap-rgb"
+          ROOT = Path(os.environ["RUNNER_TEMP"]).resolve() / "wre-real-photo-colmap-rgb"
           IMAGES = ROOT / "images"
           IMAGES.mkdir(parents=True, exist_ok=False)
-          UPSTREAM = "9b6287ec500ef7b327ac74c4f6c9cd84a2cbc9cd"
+          UPSTREAM = "323989164b1ea003aade5bf49480630ffc64acde"
           PHOTOS = {
-              "aloeL.jpg": "4c192768e4ddd2ada20f91a5e0bd3648fbc78818",
-              "aloeR.jpg": "7ecdf48919be3ac7dd0cc6e594ab00398ac956b2",
+              "DJI_0042.JPG": "7b799d410074a779dddbe840ec0d249889d25d8e",
+              "DJI_0043.JPG": "82398bb391df8625cc99d2cb08a7f917ca34f9a6",
+              "DJI_0044.JPG": "3b8067e31ceee8d6610e9eb43a225dd46eb0caf6",
+              "DJI_0045.JPG": "c422351723436e3f15fb5fe739d85341eaddbee9",
+              "DJI_0046.JPG": "7bbda14acbeb4ea76cc74927bb8ae3d70e459c42",
+              "DJI_0047.JPG": "a4a0385521c135cab13148b18ddecb51ae546c95",
+              "DJI_0048.JPG": "d3d255c466ff6df0ee85f2c21f0bd652937e010a",
+              "DJI_0049.JPG": "acb27dc2c21646f0abc21ca3d09c3b182c8008a5",
           }
           RECEIPT = {
-              "source": "Middlebury Stereo 2006 Aloe, as redistributed in pinned OpenCV samples",
+              "source": "OpenMVG Palm Desert Micro eight real DJI Mini 2 drone photos",
+              "source_license": "CC BY-NC 4.0: Attribution-NonCommercial; experimental use only",
+              "source_credit": "Copyright 2021 Pierre MOULON; openMVG/Image_datasets",
+              "source_license_url": "https://creativecommons.org/licenses/by-nc/4.0/",
               "opencv_git_revision": UPSTREAM,
               "source_photographs": {},
               "sRGB_interpretation": "assumed for JPEG to RGB8 PNG preview only; no calibrated radiometry",
@@ -152,14 +161,14 @@ jobs:
           
           inputs = []
           for filename, expected_git_blob in sorted(PHOTOS.items()):
-              url = f"https://raw.githubusercontent.com/opencv/opencv/{UPSTREAM}/samples/data/{filename}"
+              url = f"https://raw.githubusercontent.com/openMVG/Image_datasets/{UPSTREAM}/Drone/Palm_Desert_Micro/{filename}"
               with urllib.request.urlopen(url, timeout=60) as response:
-                  original = response.read(1_000_001)
-              assert 0 < len(original) <= 1_000_000
+                  original = response.read(8_000_001)
+              assert 0 < len(original) <= 8_000_000
               assert git_blob(original) == expected_git_blob, "real photograph Git blob mismatch"
               with Image.open(io.BytesIO(original)) as opened:
                   assert opened.format == "JPEG" and opened.width >= 320
-                  image = opened.convert("RGB")
+                  image = ImageOps.exif_transpose(opened).convert("RGB")
               if image.width > 768:
                   size = (image.width // 2, image.height // 2)
                   image = image.resize(size, Image.Resampling.LANCZOS)
@@ -169,7 +178,7 @@ jobs:
               path.write_bytes(png)
               digest = hashlib.sha256(png).hexdigest()
               observation = ImageObservation(
-                  observation_id=ObservationId(f"obs:middlebury:{stem}"),
+                  observation_id=ObservationId(f"obs:openmvg:{stem}"),
                   asset=MediaAssetRef(
                       uri=path.as_uri(),
                       sha256=Sha256Digest(digest),
@@ -177,7 +186,7 @@ jobs:
                       mime_type="image/png",
                   ),
                   source=SourceRef(
-                      source_id=SourceId("middlebury:aloe"),
+                      source_id=SourceId("openmvg:palm-desert-micro"),
                       locator=filename,
                   ),
                   received_at=datetime(2026, 10, 17, tzinfo=UTC),
@@ -284,7 +293,7 @@ jobs:
           ]
           if not models:
               raise RuntimeError(
-                  "Real Aloe photos did not produce a verified two-view COLMAP sparse model; "
+                  "Real drone photos did not produce a verified all-view COLMAP sparse model; "
                   f"produced {reconstruction.model_count} model(s), not a 3D proof"
               )
           model = models[0]
@@ -329,7 +338,7 @@ jobs:
               native_model_artifact=model,
               native_model_ref=source_ref,
           )
-          preview = ROOT / "observed-aloe-colmap-rgb.ply"
+          preview = ROOT / "observed-real-colmap-rgb.ply"
           digest = export_verified_colmap_observed_rgb_ply(
               appearance_request,
               preflight_source,
@@ -344,7 +353,7 @@ jobs:
           assert separator and len(body) == model.num_points3d * struct.calcsize("<3f3B")
           assert f"element vertex {model.num_points3d}".encode() in header
           assert b"comment wre_metric_scale_known false" in header
-          assert len(canonical.camera_solutions) == 2
+          assert len(canonical.camera_solutions) == len(inputs)
           assert any(sum(item[3:]) > 0 for item in struct.iter_unpack("<3f3B", body))
           RECEIPT["reconstruction"] = {
               "registered_images": model.num_registered_images,
@@ -357,10 +366,10 @@ jobs:
               "source_photo_reconstruction_executed_on_cpu": True,
               "native_pycolmap_model_canonicalized": True,
           }
-          (ROOT / "real-aloe-colmap-rgb-receipt.json").write_text(
+          (ROOT / "real-photo-colmap-rgb-receipt.json").write_text(
               json.dumps(RECEIPT, indent=2, sort_keys=True) + "\n", encoding="utf-8"
           )
-          print("REAL ALOE CPU PHOTO->COLMAP->OBSERVED RGB PLY PASS")
+          print("REAL DRONE CPU PHOTO->COLMAP->OBSERVED RGB PLY PASS")
           print(json.dumps(RECEIPT["reconstruction"], sort_keys=True))
           
           PY
@@ -369,7 +378,7 @@ jobs:
         with:
           name: wre-real-aloe-colmap-observed-rgb
           path: |
-            ${{ runner.temp }}/wre-real-aloe-colmap-rgb/observed-aloe-colmap-rgb.ply
-            ${{ runner.temp }}/wre-real-aloe-colmap-rgb/real-aloe-colmap-rgb-receipt.json
+            ${{ runner.temp }}/wre-real-drone-colmap-rgb/observed-real-colmap-rgb.ply
+            ${{ runner.temp }}/wre-real-drone-colmap-rgb/real-photo-colmap-rgb-receipt.json
           if-no-files-found: error
           retention-days: 7
