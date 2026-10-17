@@ -1281,7 +1281,7 @@ jobs:
           encoded_ok, encoded = cv2.imencode(".png", left)
           assert encoded_ok
           photo_png = encoded.tobytes()
-          assert photo_png.startswith(b"\\x89PNG\\r\\n\\x1a\\n")
+          assert photo_png.startswith(b"\x89PNG\r\n\x1a\n")
           glb_bin, glb_views = bytearray(), []
           for data, target in (
               (gltf_xyz.tobytes(), 34962), (gltf_uv.tobytes(), 34962),
@@ -1289,7 +1289,7 @@ jobs:
           ):
               offset = len(glb_bin)
               glb_bin.extend(data)
-              glb_bin.extend(b"\\0" * (-len(glb_bin) % 4))
+              glb_bin.extend(b"\0" * (-len(glb_bin) % 4))
               view = {"buffer": 0, "byteOffset": offset, "byteLength": len(data)}
               if target is not None:
                   view["target"] = target
@@ -1331,7 +1331,7 @@ jobs:
           glb_bytes = (
               struct.pack("<4sII", b"glTF", 2, 12 + 8 + len(json_chunk) + 8 + len(glb_bin))
               + struct.pack("<I4s", len(json_chunk), b"JSON") + json_chunk
-              + struct.pack("<I4s", len(glb_bin), b"BIN\\0") + glb_bin
+              + struct.pack("<I4s", len(glb_bin), b"BIN\0") + glb_bin
           )
           glb_path = Path(os.environ["RUNNER_TEMP"]) / glb_name
           glb_path.write_bytes(glb_bytes)
@@ -1343,7 +1343,7 @@ jobs:
           readback = json.loads(saved_glb[20:20 + json_size])
           binary_start = 20 + json_size
           binary_size, binary_kind = struct.unpack_from("<I4s", saved_glb, binary_start)
-          assert binary_kind == b"BIN\\0"
+          assert binary_kind == b"BIN\0"
           assert binary_start + 8 + binary_size == len(saved_glb)
           assert readback["accessors"][0]["count"] == vertex_count
           assert readback["accessors"][2]["count"] == len(triangles) * 3
@@ -1481,6 +1481,13 @@ jobs:
               "dense_rgb_mesh_triangles": int(len(triangles)),
               "dense_rgb_mesh_neighbor_max_relative_depth_jump": 0.02,
               "dense_rgb_mesh_sha256": hashlib.sha256(mesh_path.read_bytes()).hexdigest(),
+              "dense_textured_glb_name": glb_path.name,
+              "dense_textured_glb_sha256": hashlib.sha256(saved_glb).hexdigest(),
+              "dense_textured_glb_vertices": vertex_count,
+              "dense_textured_glb_triangles": int(len(triangles)),
+              "dense_textured_glb_uses_observed_left_image": True,
+              "dense_textured_glb_uses_groundtruth_for_model": False,
+              "dense_textured_glb_calibrated_world_coordinates": False,
               "dense_rgb_mesh_uses_groundtruth_visibility_mask": False,
               "dense_rgb_mesh_calibrated_world_coordinates": False,
               "dense_depth_map_name": depth_output.name,
@@ -1542,13 +1549,14 @@ jobs:
             wre-middlebury-half-aloe-cpu-hh4-3d.ply \
             wre-middlebury-half-aloe-cpu-depth-mm.npy \
             wre-middlebury-half-aloe-cpu-rgb-mesh.ply \
+            wre-middlebury-half-aloe-cpu-textured-mesh.glb \
             wre-middlebury-half-aloe-stereo-diagnostics.png
           do
             test -s "$RUNNER_TEMP/$name"
             cp "$RUNNER_TEMP/$name" "$bundle/$name"
             test -s "$bundle/$name"
           done
-          test "$(find "$bundle" -maxdepth 1 -type f | wc -l)" -eq 8
+          test "$(find "$bundle" -maxdepth 1 -type f | wc -l)" -eq 9
 
       - name: Publish independently measured Middlebury stereo quality and RGB 3D
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
