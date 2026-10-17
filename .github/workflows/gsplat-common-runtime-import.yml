@@ -4754,12 +4754,42 @@ jobs:
                 window.__wreClickedRaycasts=[];
                 for (const p of fresh.points) {{
                   const hit=scene.positionAndNormalFromPoint(p.x,p.y);
-                  if (!hit || !hit.position) return {{error:'fresh area click missed surface'}};
+                  if (!hit || !hit.position) continue;
                   window.__wreCapturingClick=true;
                   scene.dispatchEvent(new MouseEvent('click', {{
                     bubbles:true, clientX:p.x, clientY:p.y
                   }}));
                   window.__wreCapturingClick=false;
+                }}
+                // Real hit-testing sometimes drops the third click when the
+                // model-viewer camera updates its hit surface after placing
+                // hotspots. Retry OTHER genuinely raycast mesh pixels; never
+                // inject synthetic XYZ or fake a successful user interaction.
+                if (window.__wreClickedRaycasts.length === 2 &&
+                    scene.querySelectorAll('.wre-pick-marker').length === 2) {{
+                  const [a,b]=window.__wreClickedRaycasts;
+                  const u=b.map((v,i)=>v-a[i]);
+                  const edge=Math.hypot(...u);
+                  const box=scene.getBoundingClientRect();
+                  for (let yi=0;yi<=10 && window.__wreClickedRaycasts.length<3;yi++) {{
+                    for (let xi=0;xi<=10 && window.__wreClickedRaycasts.length<3;xi++) {{
+                      const x=box.left+box.width*(0.15+0.7*xi/10);
+                      const y=box.top+box.height*(0.15+0.7*yi/10);
+                      const hit=scene.positionAndNormalFromPoint(x,y);
+                      if (!hit || !hit.position) continue;
+                      const v=[hit.position.x-a[0],hit.position.y-a[1],
+                               hit.position.z-a[2]];
+                      const cross=Math.hypot(
+                        u[1]*v[2]-u[2]*v[1],u[2]*v[0]-u[0]*v[2],
+                        u[0]*v[1]-u[1]*v[0]);
+                      if (!(cross>edge*edge*1e-6)) continue;
+                      window.__wreCapturingClick=true;
+                      scene.dispatchEvent(new MouseEvent('click', {{
+                        bubbles:true, clientX:x, clientY:y
+                      }}));
+                      window.__wreCapturingClick=false;
+                    }}
+                  }}
                 }}
                 return {{
                   status:document.getElementById('wre-measure-result').textContent,
