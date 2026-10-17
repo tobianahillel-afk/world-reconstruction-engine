@@ -3899,6 +3899,99 @@ jobs:
                   .textContent.includes('PNG view captured locally') &&
                   !document.getElementById('wre-view-export').disabled;
               """)
+              # Exercise REAL model-viewer camera export and restore from
+              # a JSON File input on the loaded photo-derived 3D GLB.
+              # This saves a VIEWPOINT, never inferred photo calibration.
+              assert until("""
+                return document.getElementById('wre-camera-export').disabled === false &&
+                  document.getElementById('wre-camera-import').disabled === false;
+              """)
+              js("""
+                const scene=document.getElementById('wre-scene');
+                scene.removeAttribute('auto-rotate');
+                scene.cameraOrbit='0.4rad 1.2rad 3.5m';
+                scene.cameraTarget='0m 0m 0m';
+                scene.fieldOfView='36deg';
+                scene.jumpCameraToGoal();
+                window.__wreCameraBookmark=null;
+                const originalCreateCameraURL=URL.createObjectURL.bind(URL);
+                URL.createObjectURL=blob => {
+                  if(blob.type === 'application/json'){
+                    blob.text().then(text => {
+                      try {
+                        const value=JSON.parse(text);
+                        if(value.schema === 'wre.relative_3d_camera_view.v1')
+                          window.__wreCameraBookmark=value;
+                      } catch(e) {window.__wreCameraBookmark={error:String(e)};}
+                    });
+                  }
+                  return originalCreateCameraURL(blob);
+                };
+                document.getElementById('wre-camera-export').click();
+              """)
+              saved_camera = until("return window.__wreCameraBookmark;")
+              assert saved_camera["schema"] == "wre.relative_3d_camera_view.v1"
+              assert saved_camera["metric_scale_known"] is False
+              assert saved_camera["model_identity"].startswith("Photo-textured stereo surface")
+              assert len(saved_camera["orbit_radians"]) == 2
+              assert len(saved_camera["target_model_units"]) == 3
+              assert saved_camera["orbit_radius_model_units"] > 0
+              assert 0 < saved_camera["field_of_view_degrees"] < 180
+              assert until("""
+                return document.getElementById('wre-camera-status')
+                  .textContent.includes('viewpoint exported locally');
+              """)
+              js("""
+                const scene=document.getElementById('wre-scene');
+                scene.cameraOrbit='0.7rad 0.8rad 7m';
+                scene.cameraTarget='1m 1m 1m';
+                scene.jumpCameraToGoal();
+              """)
+              js(f"""
+                const input=document.getElementById('wre-camera-import');
+                const restored=new File(
+                  [JSON.stringify({json.dumps(saved_camera)})],
+                  'wre-viewpoint.json',
+                  {{type:'application/json'}}
+                );
+                const transfer=new DataTransfer();
+                transfer.items.add(restored);
+                input.files=transfer.files;
+                input.dispatchEvent(new Event('change', {{bubbles:true}}));
+              """)
+              assert until("""
+                return document.getElementById('wre-camera-status')
+                  .textContent.includes('viewpoint restored');
+              """)
+              restored_camera = js("""
+                const scene=document.getElementById('wre-scene');
+                const orbit=scene.getCameraOrbit();
+                const target=scene.getCameraTarget();
+                return [orbit.theta,orbit.phi,orbit.radius,target.x,target.y,target.z,
+                        scene.getFieldOfView()];
+              """)
+              expected_camera = (
+                  saved_camera["orbit_radians"]
+                  + [saved_camera["orbit_radius_model_units"]]
+                  + saved_camera["target_model_units"]
+                  + [saved_camera["field_of_view_degrees"]]
+              )
+              assert all(abs(float(a)-float(b)) < 0.1 for a,b in zip(restored_camera, expected_camera))
+              # A bookmark from another model must not override the current camera.
+              bad_camera = dict(saved_camera, model_identity="different unverified 3D GLB")
+              js(f"""
+                const input=document.getElementById('wre-camera-import');
+                const file=new File([JSON.stringify({json.dumps(bad_camera)})],
+                  'foreign-viewpoint.json', {{type:'application/json'}});
+                const transfer=new DataTransfer();
+                transfer.items.add(file);
+                input.files=transfer.files;
+                input.dispatchEvent(new Event('change', {{bubbles:true}}));
+              """)
+              assert until("""
+                return document.getElementById('wre-camera-status')
+                  .textContent.includes('restore refused');
+              """)
               # Raycast the ACTUAL Chrome-loaded photo mesh, not a mocked
               # geometry API. Click two different hit points via the viewer
               # measurement control, then verify the relative distance.
@@ -4357,7 +4450,8 @@ jobs:
                       "surface_polyline_export_verified_in_chrome": True,
                       "surface_triangle_fan_area_export_verified_in_chrome": True,
                       "surface_chord_angle_export_verified_in_chrome": True,
-                      "current_view_png_export_verified_in_chrome": True,
+                      "relative_3d_camera_bookmark_roundtrip_verified_in_chrome": True,
+              "current_view_png_export_verified_in_chrome": True,
                       "current_view_png_dimensions": [view_png["width"], view_png["height"]],
                       "surface_reload": True,
                       "webgl_context": True,
