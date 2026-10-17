@@ -1859,6 +1859,22 @@ jobs:
           assert len(sift_doc["cameras"]) >= 1
           assert sift_doc["meshes"][0]["primitives"][0]["mode"] == 0
           sift_digest = hashlib.sha256(sift_scene).hexdigest()
+          # Reuse two existing real-photo 3D clouds, no new reconstruction.
+          cloud_assets = (
+              ("stereo", "wre-real-stereo-cpu-lr-consistent.glb"),
+              ("quality", "wre-real-stereo-cpu-photometric-consistent.glb"),
+          )
+          cloud_digests = {}
+          for label, name in cloud_assets:
+              content = (output / name).read_bytes()
+              assert 1024 < len(content) <= 40_000_000
+              assert struct.unpack_from("<4sII", content) == (b"glTF", 2, len(content))
+              chunk_bytes, chunk_type = struct.unpack_from("<I4s", content, 12)
+              assert chunk_type == b"JSON"
+              doc = json.loads(content[20:20 + chunk_bytes])
+              assert doc["asset"]["version"] == "2.0"
+              assert doc["meshes"][0]["primitives"][0]["mode"] == 0
+              cloud_digests[label] = hashlib.sha256(content).hexdigest()
           # Keep the observed source and reconstruction errors visible beside
           # the GLB. Every diagnostic is a previously measured CPU output,
           # never an inferred or generated photograph.
@@ -1938,9 +1954,13 @@ jobs:
               <label for="wre-scene-choice">3D evidence:</label>
               <select id="wre-scene-choice">
                 <option value="surface">CPU photo-textured stereo surface</option>
+                <option value="stereo">Left/right-consistent observed RGB points</option>
+                <option value="quality">Photometric-consistent observed RGB points</option>
                 <option value="sift">Measured SIFT 3D points and camera frustums</option>
               </select>
               <a href="./wre-real-stereo-cpu-textured.glb" download>Download surface GLB</a>
+              <a href="./wre-real-stereo-cpu-lr-consistent.glb" download>Download stereo points GLB</a>
+              <a href="./wre-real-stereo-cpu-photometric-consistent.glb" download>Download filtered points GLB</a>
               <a href="./wre-real-stereo-sift-estimated-cameras.glb" download>Download SIFT/cameras GLB</a>
               <a href="./wre-real-stereo-sift-colmap-dataset.zip" download>Download COLMAP dataset</a>
             </div>
@@ -1953,17 +1973,34 @@ jobs:
               const scene = document.getElementById("wre-scene");
               const chooser = document.getElementById("wre-scene-choice");
               const provenance = document.getElementById("wre-scene-provenance");
-              const surfaceSource = scene.getAttribute("src");
+              const modes = {
+                surface: {
+                  src: scene.getAttribute("src"),
+                  alt: "Approximate photo-textured stereo surface from two real photos",
+                  label: "Photo-textured stereo surface · SHA-256 WRE_GLB_SHA256"
+                },
+                stereo: {
+                  src: "./wre-real-stereo-cpu-lr-consistent.glb",
+                  alt: "Left/right-consistent observed RGB stereo 3D points",
+                  label: "Stereo-consistent RGB points (unknown metric scale) · SHA-256 WRE_STEREO_GLB_SHA256"
+                },
+                quality: {
+                  src: "./wre-real-stereo-cpu-photometric-consistent.glb",
+                  alt: "Photometrically consistent real-photo RGB 3D points",
+                  label: "Photometric-consistent RGB points (unknown metric scale) · SHA-256 WRE_QUALITY_GLB_SHA256"
+                },
+                sift: {
+                  src: "./wre-real-stereo-sift-estimated-cameras.glb",
+                  alt: "Measured SIFT RGB 3D points and two estimated camera frustums",
+                  label: "SIFT estimated points + cameras (unknown metric scale) · SHA-256 WRE_SIFT_GLB_SHA256"
+                }
+              };
               chooser.addEventListener("change", () => {
-                const sift = chooser.value === "sift";
-                scene.setAttribute("src", sift
-                  ? "./wre-real-stereo-sift-estimated-cameras.glb" : surfaceSource);
-                scene.setAttribute("alt", sift
-                  ? "Measured SIFT RGB 3D points and two estimated camera frustums"
-                  : "Approximate photo-textured stereo surface from two real photos");
-                provenance.textContent = sift
-                  ? "SIFT estimated points + cameras (unknown metric scale) · SHA-256 WRE_SIFT_GLB_SHA256"
-                  : "Photo-textured stereo surface · SHA-256 WRE_GLB_SHA256";
+                const mode = modes[chooser.value];
+                if (!mode) return;
+                scene.setAttribute("src", mode.src);
+                scene.setAttribute("alt", mode.alt);
+                provenance.textContent = mode.label;
               });
             </script>
             <div class="metrics">Observed right-view photometric MAE: WRE_STEREO_MAE/255
@@ -1982,7 +2019,7 @@ jobs:
                 <figcaption>Depth-based right view errors · SHA-256
                   WRE_STEREO_REPROJECTION_SHA</figcaption></figure>
             </section>
-            <footer>Both GLBs and the estimated COLMAP dataset can be downloaded
+            <footer>All four GLBs and the estimated COLMAP dataset can be downloaded
               unchanged for inspection in compatible 3D/COLMAP tools. All scene data,
               diagnostics and the hash-pinned Apache-2.0 model-viewer 4.1.0 script
               ship together.
@@ -1998,6 +2035,8 @@ jobs:
           page = (
               page.replace("WRE_GLB_BASE64", encoded)
               .replace("WRE_SIFT_GLB_SHA256", sift_digest)
+              .replace("WRE_STEREO_GLB_SHA256", cloud_digests["stereo"])
+              .replace("WRE_QUALITY_GLB_SHA256", cloud_digests["quality"])
               .replace("WRE_GLB_SHA256", digest)
           )
           page = (
@@ -2024,8 +2063,14 @@ jobs:
           assert 'src="./wre-real-stereo-sift-estimated-cameras.glb"' not in page
           assert "./wre-real-stereo-sift-estimated-cameras.glb" in page
           assert "./wre-real-stereo-sift-colmap-dataset.zip" in page
+          for label, filename in cloud_assets:
+              assert f'<option value="{label}">' in page
+              assert "./" + filename in page
+              assert cloud_digests[label] in page
           assert sift_digest in page
           assert "WRE_SIFT_GLB_SHA256" not in page
+          assert "WRE_STEREO_GLB_SHA256" not in page
+          assert "WRE_QUALITY_GLB_SHA256" not in page
           assert "cdnjs.cloudflare.com" not in page
           viewer = output / "wre-real-stereo-cpu-viewer.html"
           viewer.write_text(page, encoding="utf-8")
@@ -3223,6 +3268,8 @@ jobs:
           test -x "$driver"
           test -s wre-browser-preview/wre-real-stereo-cpu-viewer.html
           test -s wre-browser-preview/wre-real-stereo-cpu-textured.glb
+          test -s wre-browser-preview/wre-real-stereo-cpu-lr-consistent.glb
+          test -s wre-browser-preview/wre-real-stereo-cpu-photometric-consistent.glb
           test -s wre-browser-preview/wre-real-stereo-sift-estimated-cameras.glb
           test -s wre-browser-preview/wre-model-viewer-4.1.0.min.js
           mkdir -p wre-browser-proof
@@ -3316,20 +3363,38 @@ jobs:
                 window.__wre3dLoads=0;
                 document.getElementById('wre-scene').addEventListener(
                   'load', () => window.__wre3dLoads++);
-                const chooser=document.getElementById('wre-scene-choice');
-                chooser.value='sift';
-                chooser.dispatchEvent(new Event('change', {bubbles:true}));
               """)
-              second = until("""
-                const scene=document.getElementById('wre-scene');
-                return window.__wre3dLoads >= 1 && scene.loaded === true &&
-                  scene.model &&
-                  scene.getAttribute('src') ===
-                    './wre-real-stereo-sift-estimated-cameras.glb' &&
-                  document.getElementById('wre-scene-provenance').textContent
-                    .includes('unknown metric scale');
-              """)
-              assert second
+              modes = (
+                  ("stereo", "./wre-real-stereo-cpu-lr-consistent.glb",
+                   "Stereo-consistent RGB points"),
+                  ("quality", "./wre-real-stereo-cpu-photometric-consistent.glb",
+                   "Photometric-consistent RGB points"),
+                  ("sift", "./wre-real-stereo-sift-estimated-cameras.glb",
+                   "unknown metric scale"),
+              )
+              mode_screenshot_sha256 = {}
+              for sequence, (name, filename, evidence) in enumerate(modes, start=1):
+                  js(f"""
+                    const chooser=document.getElementById('wre-scene-choice');
+                    chooser.value={json.dumps(name)};
+                    chooser.dispatchEvent(new Event('change', {{bubbles:true}}));
+                  """)
+                  assert until(f"""
+                    const scene=document.getElementById('wre-scene');
+                    return window.__wre3dLoads >= {sequence} &&
+                      scene.loaded === true && scene.model &&
+                      scene.getAttribute('src') === {json.dumps(filename)} &&
+                      document.getElementById('wre-scene-provenance').textContent
+                        .includes({json.dumps(evidence)});
+                  """), f"Model-viewer could not load actual {name} 3D reconstruction"
+                  screenshot_data = base64.b64decode(
+                      call("GET", f"/session/{session}/screenshot"),
+                      validate=True,
+                  )
+                  assert screenshot_data.startswith(bytes.fromhex("89504e470d0a1a0a"))
+                  assert len(screenshot_data) > 10000
+                  (proof / f"real-stereo-3d-{name}.png").write_bytes(screenshot_data)
+                  mode_screenshot_sha256[name] = hashlib.sha256(screenshot_data).hexdigest()
               js("""
                 const chooser=document.getElementById('wre-scene-choice');
                 chooser.value='surface';
@@ -3337,7 +3402,7 @@ jobs:
               """)
               assert until("""
                 const scene=document.getElementById('wre-scene');
-                return window.__wre3dLoads >= 2 && scene.loaded === true &&
+                return window.__wre3dLoads >= 4 && scene.loaded === true &&
                   scene.model &&
                   scene.getAttribute('src').startsWith('data:model/gltf-binary;base64,');
               """)
@@ -3355,10 +3420,13 @@ jobs:
                       "real_browser": "Google Chrome (headless)",
                       "render_backend": "CPU SwiftShader; no CUDA training",
                       "surface_loaded": True,
+                      "stereo_cloud_mode_loaded": True,
+                      "photometric_cloud_mode_loaded": True,
                       "sift_camera_mode_loaded": True,
                       "surface_reload": True,
                       "webgl_context": True,
                       "input_glb_sha256": expected_hashes,
+                      "mode_screenshot_sha256": mode_screenshot_sha256,
                       "screenshot_sha256": hashlib.sha256(png).hexdigest(),
                       "metric_scale_known": False,
                       "real_gpu_training": False,
