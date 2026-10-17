@@ -853,6 +853,7 @@ jobs:
           import json
           import math
           import os
+          import struct
           import urllib.request
           import zipfile
           from pathlib import Path
@@ -924,6 +925,47 @@ jobs:
           count = int(np.count_nonzero(evaluated))
           assert count > 1000, count
           delta = np.abs(predicted[evaluated] - reference[evaluated])
+          # Reconstruct a bounded, VIEWABLE RGB PLY from estimated pixels,
+          # NOT from the reference disparity values. Middlebury publishes
+          # 3740px focal at FullSize and 160mm view1-to-view5 baseline;
+          # HalfSize focal is 1870px. Assume centered principal point
+          # (not provided), so exact XY calibration is not established.
+          focal_px = 3740.0 / 2.0
+          baseline_mm = 160.0
+          chosen = np.flatnonzero(evaluated)[::max(1, math.ceil(count / 60_000))]
+          yy, xx = np.unravel_index(chosen, predicted.shape)
+          d = predicted[yy, xx].astype(np.float64)
+          depth_mm = focal_px * baseline_mm / d
+          points = np.column_stack((
+              (xx - (width - 1) / 2.0) * depth_mm / focal_px,
+              (yy - (height - 1) / 2.0) * depth_mm / focal_px,
+              depth_mm,
+          )).astype(np.float32)
+          rgb = cv2.cvtColor(left, cv2.COLOR_BGR2RGB)[yy, xx]
+          assert 1000 < len(points) <= 60_000
+          assert np.isfinite(points).all() and np.all(points[:, 2] > 0)
+          ply_header = (
+              "ply\nformat binary_little_endian 1.0\n"
+              f"element vertex {len(points)}\n"
+              "property float x\nproperty float y\nproperty float z\n"
+              "property uchar red\nproperty uchar green\nproperty uchar blue\n"
+              "end_header\n"
+          ).encode("ascii")
+          ply_path = Path(os.environ["RUNNER_TEMP"]) / "wre-middlebury-half-aloe-cpu-3d.ply"
+          with ply_path.open("wb") as out:
+              out.write(ply_header)
+              for xyz, color in zip(points, rgb, strict=True):
+                  out.write(struct.pack(
+                      "<3f3B", float(xyz[0]), float(xyz[1]), float(xyz[2]),
+                      int(color[0]), int(color[1]), int(color[2]),
+                  ))
+          assert ply_path.stat().st_size == len(ply_header) + 15 * len(points)
+          with ply_path.open("rb") as inspect:
+              assert inspect.read(len(ply_header)) == ply_header
+              first = struct.unpack("<3f3B", inspect.read(15))
+              assert np.allclose(first[:3], points[0], atol=0, rtol=0)
+              assert tuple(first[3:]) == tuple(int(v) for v in rgb[0])
+
           report = {
               "benchmark": "Middlebury 2006 HalfSize Aloe view1/view5 disp1",
               "official_source": archive_url,
@@ -942,6 +984,12 @@ jobs:
               "algorithm": "OpenCV StereoSGBM CPU independent pair",
               "matcher_min_disparity": min_disparity,
               "matcher_num_disparities": 160,
+              "rgb_3d_ply_name": ply_path.name,
+              "rgb_3d_point_count": int(len(points)),
+              "rgb_3d_coordinate_units": "estimated millimeters under official f/b and centered-cx-cy",
+              "focal_px_halfsize": focal_px,
+              "stereo_baseline_mm_official": baseline_mm,
+              "principal_point_is_assumed_center": True,
               "groundtruth_known_pixels": int(np.count_nonzero(known)),
               "overlapping_valid_pixels": count,
               "coverage_of_groundtruth": count / int(np.count_nonzero(known)),
@@ -963,7 +1011,9 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: wre-middlebury-aloe-official-gt-cpu-quality
-          path: ${{ runner.temp }}/wre-middlebury-half-aloe-gt.json
+          path: |
+            ${{ runner.temp }}/wre-middlebury-half-aloe-gt.json
+            ${{ runner.temp }}/wre-middlebury-half-aloe-cpu-3d.ply
           if-no-files-found: error
           retention-days: 7
 
