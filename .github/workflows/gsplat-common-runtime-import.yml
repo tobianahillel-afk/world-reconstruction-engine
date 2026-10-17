@@ -7054,6 +7054,13 @@ jobs:
           <button type="button" id="wre-pixel-native-zoom" aria-pressed="false">
             Inspection précise : afficher la disparité à 100% (un pixel source par pixel écran)
           </button>
+          <button type="button" id="wre-save-stereo-point" disabled>
+            Conserver le point 3D relatif inspecté
+          </button>
+          <button type="button" id="wre-export-stereo-points" disabled>
+            Exporter les points observés (JSON)
+          </button>
+          <span id="wre-stereo-point-count" role="status" aria-live="polite">0 point enregistré</span>
           <figure id="wre-stereo-match" style="margin:12px 0;max-width:960px">
             <div style="position:relative">
               <img id="wre-stereo-match-photos" loading="eager"
@@ -7074,6 +7081,39 @@ jobs:
             const photos = document.getElementById('wre-stereo-match-photos');
             const overlay = document.getElementById('wre-stereo-match-overlay');
             const zoom = document.getElementById('wre-pixel-native-zoom');
+            const savePoint = document.getElementById('wre-save-stereo-point');
+            const exportPoints = document.getElementById('wre-export-stereo-points');
+            const pointCount = document.getElementById('wre-stereo-point-count');
+            const observations = [];
+            let selected = null;
+            savePoint.addEventListener('click', () => {
+              if (!selected || observations.length >= 64) return;
+              observations.push({...selected});
+              pointCount.textContent = observations.length + ' points relatifs conservés (max 64)';
+              exportPoints.disabled = false;
+            });
+            exportPoints.addEventListener('click', () => {
+              if (!observations.length) return;
+              const payload = {
+                schema: 'wre.observed_stereo_points.v1',
+                source_pfm: 'wre-real-stereo-cpu-disparity-f32.pfm',
+                source_pfm_sha256: '__WRE_VERIFIED_PFM_SHA256__',
+                metric_scale_known: false,
+                focal_assumption_pixels: picture.naturalWidth,
+                baseline_assumption_model_units: 1,
+                points: observations
+              };
+              const blob = new Blob([JSON.stringify(payload, null, 2) + '\n'],
+                {type:'application/json'});
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = 'wre-observed-stereo-points.json';
+              document.body.appendChild(link);
+              link.click();
+              link.remove();
+              setTimeout(() => URL.revokeObjectURL(url), 1000);
+            });
             zoom.addEventListener('click', () => {
               const enabled = zoom.getAttribute('aria-pressed') !== 'true';
               if (enabled && !picture.naturalWidth) return;
@@ -7124,6 +7164,9 @@ jobs:
             }
             picture.addEventListener('click', async (event) => {
               event.preventDefault();  // The image is also a download link.
+              selected = null;
+              savePoint.disabled = true;
+              delete status.dataset.error;
               try {
                 const map = await getMap();
                 const rect = picture.getBoundingClientRect();
@@ -7156,6 +7199,15 @@ jobs:
                 const pointY = (v - (map.height - 1) / 2) / disparity;
                 const rightX = u - disparity;
                 const inFrame = rightX >= 0 && rightX < map.width;
+                if (inFrame) {
+                  selected = {
+                    left_pixel: [u, v],
+                    right_pixel: [rightX, v],
+                    disparity_pixels: disparity,
+                    xyz_relative_model_units: [pointX, pointY, relativeDepth]
+                  };
+                  savePoint.disabled = false;
+                }
                 status.dataset.modelX = String(pointX);
                 status.dataset.modelY = String(pointY);
                 status.dataset.modelZ = String(relativeDepth);
@@ -7200,7 +7252,10 @@ jobs:
                   'Télécharger la disparité 16 bits sans perte</a> · '
                   'valeur PNG / 256 = disparité horizontale en pixels, '
                   '0 = invalide ; PAS profondeur métrique.</p>'
-                  + anchor),
+                  + anchor).replace(
+                      "__WRE_VERIFIED_PFM_SHA256__",
+                      provenance["dense_disparity_float32_pfm_sha256"],
+                  ),
               encoding="utf-8",
           )
           (bundle / "README-OPEN-OFFLINE-3D.txt").write_text(
