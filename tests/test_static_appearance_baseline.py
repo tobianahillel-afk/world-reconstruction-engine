@@ -1306,7 +1306,7 @@ def test_verified_gsplat_rgb_centers_glb_has_real_gltf_vertex_bytes(tmp_path: Pa
     second[:6] = [-1.0, 0.0, 2.0, 2.0, -2.0, 0.0]
     second[-4] = 1.0
     template = _gsplat_ply(vertices=2)
-    head = template.index(b"end_header\\n") + len(b"end_header\\n")
+    head = template.index(b"end_header\n") + len(b"end_header\n")
     original = template[:head] + struct.pack("<59f", *first) + struct.pack("<59f", *second)
     root, profile, ref = _gsplat_output(tmp_path, original)
     preview_dir = tmp_path / "viewer"
@@ -1334,13 +1334,14 @@ def test_verified_gsplat_rgb_centers_glb_has_real_gltf_vertex_bytes(tmp_path: Pa
     assert scene["extras"]["shown_centers"] == 2
     assert scene["extras"]["source_gaussians"] == 2
     bin_size, bin_type = struct.unpack_from("<I4s", glb, 20 + json_size)
-    assert (bin_size, bin_type) == (32, b"BIN\\x00")
+    assert (bin_size, bin_type) == (32, b"BIN\x00")
     vertices = glb[28 + json_size :]
+    assert len(vertices) == 2 * 16  # 12 xyz + 3 RGB + one actual NUL pad per vertex
     assert vertices == (
         struct.pack("<3f3B", 1.0, 2.0, 3.0, 127, 127, 127)
-        + b"\\x00"
+        + b"\x00"
         + struct.pack("<3f3B", -1.0, 0.0, 2.0, 255, 0, 127)
-        + b"\\x00"
+        + b"\x00"
     )
     assert (root / profile.expected_ply_relative_path).read_bytes() == original
     with pytest.raises(GsplatStaticAppearancePreflightError, match="new distinct"):
