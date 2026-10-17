@@ -1033,6 +1033,9 @@ def test_one_call_gsplat_reconstruction_stages_real_files_and_returns_candidate(
         "verify_gsplat_static_appearance_native_geometry",
         lambda *_args, **_kwargs: None,
     )
+    preview_parent = tmp_path / "interactive-preview"
+    preview_parent.mkdir()
+    preview_file = preview_parent / "gaussian-centers.glb"
     result = reconstruct_gsplat_static_appearance(
         request=request,
         source=source,
@@ -1047,6 +1050,7 @@ def test_one_call_gsplat_reconstruction_stages_real_files_and_returns_candidate(
         producer=producer,
         cuda_device_index=0,
         timeout_seconds=30,
+        preview_path=preview_file,
     )
     assert len(subprocess_calls) == 1
     assert result.request is request
@@ -1056,6 +1060,13 @@ def test_one_call_gsplat_reconstruction_stages_real_files_and_returns_candidate(
     assert result.materialization.entries[0].sha256 == _digest(_gsplat_ply(vertices=2))
     assert (staged.dataset_root / "sparse" / "0" / "cameras.bin").is_file()
     assert (output / "wre-reference-training.log").is_file()
+    preview_bytes = preview_file.read_bytes()
+    assert struct.unpack_from("<4sII", preview_bytes) == (b"glTF", 2, len(preview_bytes))
+    json_length = struct.unpack_from("<I", preview_bytes, 12)[0]
+    viewer_scene = json.loads(preview_bytes[20 : 20 + json_length])
+    assert viewer_scene["accessors"][0]["count"] == 2
+    assert viewer_scene["extras"]["wre_visualization"] == "Gaussian centers only, not Gaussian splatting"
+    assert result.materialization.entries[0].sha256 == _digest(_gsplat_ply(vertices=2))
 
 
 def test_one_call_gsplat_reconstruction_does_not_stage_false_producer(
