@@ -262,6 +262,19 @@ jobs:
               ),
               module=pycolmap,
           )
+          # Preserve exact L3.3 membership; diagnose missing L3.4 pairs rather
+          # than suppressing them or fabricating geometric inliers.
+          unmatched = [
+              (pair.image_name1, pair.image_name2)
+              for pair in matches.pairs if pair.num_matches == 0
+          ]
+          print(
+              "REAL EIGHT-VIEW L3.3 EVIDENCE:",
+              len(matches.pairs), "recorded pairs;",
+              len(unmatched), "zero-raw-match pairs;",
+              unmatched,
+              flush=True,
+          )
           verification_config = ColmapGeometricVerificationConfig()
           verified = verify_colmap_geometry(
               ColmapGeometricVerificationRequest(
