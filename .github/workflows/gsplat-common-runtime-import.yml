@@ -3619,13 +3619,61 @@ jobs:
           (bundle / "README-OPEN-OFFLINE-3D.txt").write_text(
               "WRE — 3D depuis deux photographies réelles (CPU)\n"
               "1. Décompressez entièrement cette archive dans un dossier local.\n"
-              "2. Dans ce dossier : python3 -m http.server 8765 --bind 127.0.0.1\n"
-              "3. Ouvrez http://127.0.0.1:8765/wre-real-3d-comparison.html\n"
-              "4. Utilisez le lien vers le visualiseur interactif 3D à quatre modes.\n"
+              "2. Linux/macOS : python3 open-wre-3d.py ; Windows : py -3 open-wre-3d.py\n"
+              "3. Le navigateur ouvre automatiquement la galerie locale (127.0.0.1).\n"
+              "4. Sélectionnez le visualiseur interactif 3D et ses quatre modes.\n"
               "Tout est local après extraction, sans API payante ni accès Internet.\n"
               "Limites : deux photos statiques ; échelle métrique inconnue ; aucun entraînement GPU/4D.\n",
               encoding="utf-8",
           )
+          from textwrap import dedent
+          launcher = dedent("""\
+          #!/usr/bin/env python3
+          """Open WRE's photo-derived 3D bundle using only Python's standard library."""
+          from functools import partial
+          from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
+          from pathlib import Path
+          from threading import Thread
+          from urllib.request import urlopen
+          import sys
+          import webbrowser
+          
+          
+          def main() -> None:
+              root = Path(__file__).resolve().parent
+              for name in ("wre-real-3d-comparison.html", "wre-real-stereo-cpu-viewer.html"):
+                  if not (root / name).is_file():
+                      raise SystemExit(f"Missing extracted 3D viewer file: {name}")
+              handler = partial(SimpleHTTPRequestHandler, directory=str(root))
+              with ThreadingHTTPServer(("127.0.0.1", 0), handler) as server:
+                  address = f"http://127.0.0.1:{server.server_port}/wre-real-3d-comparison.html"
+                  if sys.argv[1:] == ["--check"]:
+                      worker = Thread(target=server.serve_forever, daemon=True)
+                      worker.start()
+                      try:
+                          with urlopen(address, timeout=8) as response:
+                              assert response.status == 200
+                              assert b"wre-real-stereo-cpu-viewer.html" in response.read()
+                          print("PASS: offline 3D gallery served on loopback from extracted files")
+                      finally:
+                          server.shutdown()
+                          worker.join()
+                      return
+                  if len(sys.argv) != 1:
+                      raise SystemExit("Usage: python open-wre-3d.py [--check]")
+                  print(f"Opening WRE offline 3D gallery: {address}")
+                  print("Press Ctrl+C here when finished.")
+                  webbrowser.open(address)
+                  try:
+                      server.serve_forever()
+                  except KeyboardInterrupt:
+                      pass
+          
+          
+          if __name__ == "__main__":
+              main()
+          """)
+          (bundle / "open-wre-3d.py").write_text(launcher, encoding="utf-8")
           manifest = {
               "source": "same GitHub Actions run, actual Chrome + real-photo CPU previews",
               "source_glb_sha256": source_hashes,
@@ -3644,6 +3692,7 @@ jobs:
           print(f"One offline 3D exploration bundle: {len(list(bundle.iterdir()))} entries, "
                 "four GLBs, four real Chrome PNGs, interactive viewer, report, receipts")
           PY
+          python3 wre-unified-offline-3d/open-wre-3d.py --check
 
       - name: Publish unified interactive 3D exploration archive
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
