@@ -2,9 +2,11 @@ from __future__ import annotations
 
 import ast
 import hashlib
+import json
 import os
 import shutil
 import struct
+import subprocess
 import sys
 import zlib
 from dataclasses import FrozenInstanceError, replace
@@ -112,6 +114,8 @@ from wre.reconstruction.static_appearance_baseline import (
     GsplatStaticAppearanceTrainingProfile,
     assemble_verified_gsplat_static_appearance_result,
     build_gsplat_reference_trainer_path_overrides,
+    export_verified_gsplat_rgb_centers_glb,
+    export_verified_gsplat_rgb_centers_ply,
     inspect_gsplat_static_appearance_shared_track_pixels,
     materialize_verified_gsplat_ply,
     preflight_gsplat_static_appearance_inputs,
@@ -849,6 +853,7 @@ def test_preflight_has_no_trainer_execution_or_optional_framework_import() -> No
             imported.add(node.module.split(".")[0])
     assert imported <= {
         "__future__",
+        "argparse",
         "ast",
         "dataclasses",
         "hashlib",
@@ -1127,6 +1132,9 @@ def test_one_call_gsplat_reconstruction_stages_real_files_and_returns_candidate(
         "verify_gsplat_static_appearance_native_geometry",
         lambda *_args, **_kwargs: None,
     )
+    preview_parent = tmp_path / "interactive-preview"
+    preview_parent.mkdir()
+    preview_file = preview_parent / "gaussian-centers.glb"
     result = reconstruct_gsplat_static_appearance(
         request=request,
         source=source,
@@ -1142,6 +1150,7 @@ def test_one_call_gsplat_reconstruction_stages_real_files_and_returns_candidate(
         producer=producer,
         cuda_device_index=0,
         timeout_seconds=30,
+        preview_path=preview_file,
     )
     assert len(subprocess_calls) == 1
     assert result.request is request
@@ -1151,6 +1160,15 @@ def test_one_call_gsplat_reconstruction_stages_real_files_and_returns_candidate(
     assert result.materialization.entries[0].sha256 == _digest(_gsplat_ply(vertices=2))
     assert (staged.dataset_root / "sparse" / "0" / "cameras.bin").is_file()
     assert (output / "wre-reference-training.log").is_file()
+    preview_bytes = preview_file.read_bytes()
+    assert struct.unpack_from("<4sII", preview_bytes) == (b"glTF", 2, len(preview_bytes))
+    json_length = struct.unpack_from("<I", preview_bytes, 12)[0]
+    viewer_scene = json.loads(preview_bytes[20 : 20 + json_length])
+    assert viewer_scene["accessors"][0]["count"] == 2
+    assert viewer_scene["extras"]["wre_visualization"] == (
+        "Gaussian centers only, not Gaussian splatting"
+    )
+    assert result.materialization.entries[0].sha256 == _digest(_gsplat_ply(vertices=2))
 
 
 def test_one_call_gsplat_reconstruction_does_not_stage_false_producer(
@@ -1596,6 +1614,394 @@ def test_external_gsplat_runner_rejects_failure_or_missing_output(
             timeout_seconds=30,
         )
     assert (output / "wre-reference-training.log").exists()
+
+
+def test_exported_gsplat_glb_can_be_reopened_and_inspected_offline(tmp_path: Path) -> None:
+    """A real GLB created by the CPU exporter is independently readable by WRE."""
+    original = _gsplat_ply(vertices=4)
+    output_root, profile, ref = _gsplat_output(tmp_path, original)
+    viewer = tmp_path / "viewer"
+    viewer.mkdir()
+    target = viewer / "centers.glb"
+    digest = export_verified_gsplat_rgb_centers_glb(
+        artifact_ref=ref,
+        output_root=output_root,
+        profile=profile,
+        preview_path=target,
+        max_points=3,
+    )
+    summary = baseline_module.inspect_verified_gsplat_rgb_centers_glb(path=target)
+    assert summary["sha256"] == digest.value
+    assert summary["shown_centers"] == 3
+    assert summary["source_gaussians"] == 4
+    assert summary["kind"] == "wre_gsplat_rgb_centers_only"
+    assert summary["gpu_training_verified"] is False
+    assert summary["metric_scale_known"] is False
+    command = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "wre.reconstruction.static_appearance_baseline",
+            "--inspect-glb",
+            str(target),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=25,
+        check=False,
+    )
+    assert command.returncode == 0, command.stderr
+    assert json.loads(command.stdout) == summary
+
+
+def test_gsplat_glb_inspector_rejects_corrupted_real_vertex_bytes(tmp_path: Path) -> None:
+    output_root, profile, ref = _gsplat_output(tmp_path, _gsplat_ply(vertices=2))
+    viewer = tmp_path / "viewer"
+    viewer.mkdir()
+    target = viewer / "centers.glb"
+    export_verified_gsplat_rgb_centers_glb(
+        artifact_ref=ref, output_root=output_root, profile=profile, preview_path=target
+    )
+    data = bytearray(target.read_bytes())
+    document_size = struct.unpack_from("<I", data, 12)[0]
+    data[28 + document_size : 32 + document_size] = struct.pack("<f", float("nan"))
+    target.write_bytes(data)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="non-finite position"):
+        baseline_module.inspect_verified_gsplat_rgb_centers_glb(path=target)
+
+
+def test_verified_gsplat_gaussian_centers_export_real_viewable_rgb_ply(
+    tmp_path: Path,
+) -> None:
+    # The color conversion matches pinned gsplat/exporter.py sh2rgb,
+    # but this is not a rendered/occlusion-aware Gaussian image.
+    first = [0.0] * 59
+    first[:6] = [1.0, 2.0, 3.0, 0.0, 0.0, 0.0]
+    first[-4] = 1.0  # nonzero quaternion
+    second = [0.0] * 59
+    second[:6] = [-1.0, 0.0, 2.0, 2.0, -2.0, 0.0]
+    second[-4] = 1.0
+    template = _gsplat_ply(vertices=2)
+    header_end = template.index(b"end_header\n") + len(b"end_header\n")
+    real_splats = template[:header_end] + struct.pack("<59f", *first) + struct.pack("<59f", *second)
+    root, profile, ref = _gsplat_output(tmp_path, real_splats)
+    preview_parent = tmp_path / "viewer"
+    preview_parent.mkdir()
+    preview = preview_parent / "gaussian-centers-rgb.ply"
+    preview_sha = export_verified_gsplat_rgb_centers_ply(
+        artifact_ref=ref,
+        output_root=root,
+        profile=profile,
+        preview_path=preview,
+    )
+
+    encoded = preview.read_bytes()
+    assert preview_sha == _digest(encoded)
+    assert b"property uchar red\n" in encoded
+    split = encoded.index(b"end_header\n") + len(b"end_header\n")
+    assert encoded[:split].startswith(b"ply\nformat binary_little_endian 1.0\n")
+    assert encoded[split:] == (
+        struct.pack("<3f3B", 1.0, 2.0, 3.0, 127, 127, 127)
+        + struct.pack("<3f3B", -1.0, 0.0, 2.0, 255, 0, 127)
+    )
+    # This secondary point preview must not change the model's original bytes.
+    assert (root / profile.expected_ply_relative_path).read_bytes() == real_splats
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="new distinct"):
+        export_verified_gsplat_rgb_centers_ply(
+            artifact_ref=ref, output_root=root, profile=profile, preview_path=preview
+        )
+
+
+def test_verified_gsplat_rgb_centers_glb_has_real_gltf_vertex_bytes(tmp_path: Path) -> None:
+    """The generated GLB is a standards-shaped colorized 3D point cloud."""
+    first = [0.0] * 59
+    first[:6] = [1.0, 2.0, 3.0, 0.0, 0.0, 0.0]
+    first[-4] = 1.0
+    second = [0.0] * 59
+    second[:6] = [-1.0, 0.0, 2.0, 2.0, -2.0, 0.0]
+    second[-4] = 1.0
+    template = _gsplat_ply(vertices=2)
+    head = template.index(b"end_header\n") + len(b"end_header\n")
+    original = template[:head] + struct.pack("<59f", *first) + struct.pack("<59f", *second)
+    root, profile, ref = _gsplat_output(tmp_path, original)
+    preview_dir = tmp_path / "viewer"
+    preview_dir.mkdir()
+    output = preview_dir / "centers.glb"
+
+    digest = export_verified_gsplat_rgb_centers_glb(
+        artifact_ref=ref, output_root=root, profile=profile, preview_path=output
+    )
+    glb = output.read_bytes()
+    assert digest == _digest(glb)
+    assert struct.unpack_from("<4sII", glb) == (b"glTF", 2, len(glb))
+    json_size, json_type = struct.unpack_from("<I4s", glb, 12)
+    assert json_type == b"JSON"
+    scene = json.loads(glb[20 : 20 + json_size].decode("utf-8"))
+    assert scene["meshes"][0]["primitives"][0]["mode"] == 0  # glTF POINTS
+    assert scene["extensionsUsed"] == ["KHR_materials_unlit"]
+    assert scene["buffers"][0]["byteLength"] == 32
+    assert scene["bufferViews"][0]["byteStride"] == 16
+    assert [v["count"] for v in scene["accessors"]] == [2, 2]
+    assert scene["accessors"][0]["min"] == [-1.0, 0.0, 2.0]
+    assert scene["accessors"][0]["max"] == [1.0, 2.0, 3.0]
+    assert scene["accessors"][1]["normalized"] is True
+    assert scene["extras"]["metric_scale_known"] is False
+    assert scene["extras"]["shown_centers"] == 2
+    assert scene["extras"]["source_gaussians"] == 2
+    bin_size, bin_type = struct.unpack_from("<I4s", glb, 20 + json_size)
+    assert (bin_size, bin_type) == (32, b"BIN\x00")
+    vertices = glb[28 + json_size :]
+    assert len(vertices) == 2 * 16  # 12 xyz + 3 RGB + one actual NUL pad per vertex
+    assert vertices == (
+        struct.pack("<3f3B", 1.0, 2.0, 3.0, 127, 127, 127)
+        + b"\x00"
+        + struct.pack("<3f3B", -1.0, 0.0, 2.0, 255, 0, 127)
+        + b"\x00"
+    )
+    assert (root / profile.expected_ply_relative_path).read_bytes() == original
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="new distinct"):
+        export_verified_gsplat_rgb_centers_glb(
+            artifact_ref=ref, output_root=root, profile=profile, preview_path=output
+        )
+
+
+@pytest.mark.parametrize(
+    ("max_points", "expected_count"),
+    ((1, 1), (2, 2), (3, 3)),
+)
+def test_gsplat_glb_preview_has_bounded_deterministic_sampling(
+    tmp_path: Path, max_points: int, expected_count: int
+) -> None:
+    source = _gsplat_ply(vertices=3)
+    root, profile, ref = _gsplat_output(tmp_path, source)
+    folder = tmp_path / "viewer"
+    folder.mkdir()
+    target = folder / "reduced.glb"
+    digest = export_verified_gsplat_rgb_centers_glb(
+        artifact_ref=ref,
+        output_root=root,
+        profile=profile,
+        preview_path=target,
+        max_points=max_points,
+    )
+    output = target.read_bytes()
+    assert digest == _digest(output)
+    json_size, _ = struct.unpack_from("<I4s", output, 12)
+    scene = json.loads(output[20 : 20 + json_size])
+    assert scene["accessors"][0]["count"] == expected_count
+    assert scene["buffers"][0]["byteLength"] == expected_count * 16
+    assert scene["extras"]["source_gaussians"] == 3
+    assert scene["extras"]["shown_centers"] == expected_count
+    assert scene["extras"]["sampling"] == "even-endpoints"
+    assert scene["extras"]["requested_max_points"] == max_points
+    assert len(output) == 28 + json_size + expected_count * 16
+    assert (root / profile.expected_ply_relative_path).read_bytes() == source
+
+
+def test_gsplat_glb_preview_fills_budget_and_keeps_real_endpoint_positions(
+    tmp_path: Path,
+) -> None:
+    # Old ceil(N / budget) sampling would keep only 6 of these 11 points.
+    source = bytearray(_gsplat_ply(vertices=11))
+    payload_offset = source.index(b"end_header\n") + len(b"end_header\n")
+    for index in range(11):
+        struct.pack_into("<f", source, payload_offset + index * 59 * 4, float(index))
+    root, profile, ref = _gsplat_output(tmp_path, bytes(source))
+    viewer = tmp_path / "viewer"
+    viewer.mkdir()
+    dest = viewer / "near-budget.glb"
+    digest = export_verified_gsplat_rgb_centers_glb(
+        artifact_ref=ref,
+        output_root=root,
+        profile=profile,
+        preview_path=dest,
+        max_points=10,
+    )
+    actual = dest.read_bytes()
+    assert digest == _digest(actual)
+    json_size, _ = struct.unpack_from("<I4s", actual, 12)
+    scene = json.loads(actual[20 : 20 + json_size])
+    assert scene["accessors"][0]["count"] == 10
+    assert scene["extras"]["shown_centers"] == 10
+    assert scene["extras"]["source_gaussians"] == 11
+    assert scene["extras"]["sampling"] == "even-endpoints"
+    assert scene["extras"]["requested_max_points"] == 10
+    vertices = actual[28 + json_size :]
+    assert len(vertices) == 10 * 16
+    positions = [struct.unpack_from("<f", vertices, 16 * index)[0] for index in range(10)]
+    assert positions == [0.0, 1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 10.0]
+    assert (root / profile.expected_ply_relative_path).read_bytes() == bytes(source)
+
+
+@pytest.mark.parametrize("invalid", (True, 0, 2_000_001))
+def test_gsplat_glb_preview_rejects_invalid_point_budgets(
+    tmp_path: Path, invalid: int | bool
+) -> None:
+    root, profile, ref = _gsplat_output(tmp_path, _gsplat_ply())
+    folder = tmp_path / "viewer"
+    folder.mkdir()
+    target = folder / "invalid.glb"
+    with pytest.raises(ValueError, match="max_points"):
+        export_verified_gsplat_rgb_centers_glb(
+            artifact_ref=ref,
+            output_root=root,
+            profile=profile,
+            preview_path=target,
+            max_points=invalid,
+        )
+    assert not target.exists()
+
+
+def test_gsplat_glb_cli_respects_requested_preview_density(tmp_path: Path) -> None:
+    import subprocess
+
+    root, profile, _ = _gsplat_output(tmp_path, _gsplat_ply(vertices=3))
+    folder = tmp_path / "viewer"
+    folder.mkdir()
+    preview = folder / "small.glb"
+    run = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "wre.reconstruction.static_appearance_baseline",
+            "--output-root",
+            str(root),
+            "--max-steps",
+            str(profile.max_steps),
+            "--preview",
+            str(preview),
+            "--max-points",
+            "1",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
+    assert run.returncode == 0, run.stderr
+    glb = preview.read_bytes()
+    json_size, _ = struct.unpack_from("<I4s", glb, 12)
+    scene = json.loads(glb[20 : 20 + json_size])
+    assert scene["accessors"][0]["count"] == 1
+    assert scene["extras"]["sampling"] == "even-endpoints"
+    assert scene["extras"]["requested_max_points"] == 1
+    assert run.stdout.strip() == f"{_digest(glb).value}  {preview}"
+
+
+def test_gsplat_rgb_glb_cli_executes_real_cpu_export(tmp_path: Path) -> None:
+    """Run the production -m CLI, not a simulated subprocess or a CUDA training job."""
+    import subprocess
+
+    root, profile, _ = _gsplat_output(tmp_path, _gsplat_ply())
+    viewer_dir = tmp_path / "viewer"
+    viewer_dir.mkdir()
+    dest = viewer_dir / "real-3d-point-preview.glb"
+    command = [
+        sys.executable,
+        "-m",
+        "wre.reconstruction.static_appearance_baseline",
+        "--output-root",
+        str(root),
+        "--max-steps",
+        str(profile.max_steps),
+        "--preview",
+        str(dest),
+    ]
+    completed = subprocess.run(command, capture_output=True, text=True, check=False, timeout=30)
+    assert completed.returncode == 0, completed.stderr
+    data = dest.read_bytes()
+    assert data[:4] == b"glTF"
+    assert completed.stdout.strip() == f"{_digest(data).value}  {dest}"
+    assert not (viewer_dir / "centers-rgb.ply").exists()
+
+
+def test_gsplat_rgb_preview_cli_runs_real_cpu_python_process(tmp_path: Path) -> None:
+    """The CLI genuinely reads a binary PLY and writes a viewable point cloud."""
+
+    import subprocess
+
+    first = [0.0] * 59
+    first[:6] = [1.0, 2.0, 3.0, 0.0, 0.0, 0.0]
+    first[-4] = 1.0
+    original = _gsplat_ply()
+    header_end = original.index(b"end_header\n") + len(b"end_header\n")
+    source_data = original[:header_end] + struct.pack("<59f", *first)
+    root, _profile, _ref = _gsplat_output(tmp_path, source_data)
+    viewer = tmp_path / "viewer"
+    viewer.mkdir()
+    preview = viewer / "scene-rgb.ply"
+    command = [
+        sys.executable,
+        "-m",
+        "wre.reconstruction.static_appearance_baseline",
+        "--output-root",
+        str(root),
+        "--max-steps",
+        "20",
+        "--preview",
+        str(preview),
+    ]
+    run = subprocess.run(command, capture_output=True, text=True, check=False, timeout=30)
+    assert run.returncode == 0, run.stderr
+    result = preview.read_bytes()
+    assert run.stdout.strip() == f"{_digest(result).value}  {preview}"
+    header = result.index(b"end_header\n") + len(b"end_header\n")
+    assert result[:header].startswith(b"ply\nformat binary_little_endian 1.0\n")
+    assert b"element vertex 1\n" in result[:header]
+    assert result[header:] == struct.pack("<3f3B", 1.0, 2.0, 3.0, 127, 127, 127)
+    assert (root / "ply" / "point_cloud_19.ply").read_bytes() == source_data
+
+    # A second invocation cannot overwrite a user's existing visualization.
+    repeated = subprocess.run(command, capture_output=True, text=True, check=False, timeout=30)
+    assert repeated.returncode == 2
+    assert "new distinct" in repeated.stderr
+    assert preview.read_bytes() == result
+
+
+def test_gsplat_rgb_preview_cli_rejects_wrong_training_step(tmp_path: Path) -> None:
+    import subprocess
+
+    root, _profile, _ref = _gsplat_output(tmp_path, _gsplat_ply())
+    viewer = tmp_path / "viewer"
+    viewer.mkdir()
+    preview = viewer / "preview.ply"
+    run = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "wre.reconstruction.static_appearance_baseline",
+            "--output-root",
+            str(root),
+            "--max-steps",
+            "30",
+            "--preview",
+            str(preview),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
+    assert run.returncode == 2
+    assert not preview.exists()
+
+
+def test_verified_gsplat_gaussian_centers_preview_rejects_unverified_model(
+    tmp_path: Path,
+) -> None:
+    corrupted = _gsplat_ply(vertices=1) + b"unexpected"
+    root, profile, ref = _gsplat_output(tmp_path, corrupted)
+    viewer = tmp_path / "viewer"
+    viewer.mkdir()
+    preview = viewer / "points.ply"
+    with pytest.raises(GsplatStaticAppearancePreflightError):
+        export_verified_gsplat_rgb_centers_ply(
+            artifact_ref=ref,
+            output_root=root,
+            profile=profile,
+            preview_path=preview,
+        )
+    assert not preview.exists()
 
 
 def test_gsplat_ply_materialization_hashes_real_output_and_retains_path(tmp_path: Path) -> None:

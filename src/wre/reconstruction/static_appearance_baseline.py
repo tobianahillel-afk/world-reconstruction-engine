@@ -26,7 +26,7 @@ from wre.domain.artifact_materialization import (
     ArtifactMaterializationEntry,
     ArtifactMaterializationMetadata,
 )
-from wre.domain.artifacts import ArtifactRef
+from wre.domain.artifacts import ArtifactId, ArtifactRef
 from wre.domain.color_conventions import (
     ColorConversionStatus,
     DecodedPixelColorEncoding,
@@ -1864,6 +1864,7 @@ def run_gsplat_reference_training(
     timeout_seconds: int,
     lpips_alexnet_weights: Path | None = None,
     lpips_alexnet_sha256: str | None = None,
+    preview_path: Path | None = None,
 ) -> StaticAppearanceCandidateResult:
     """Run the exact reference trainer on an EXPLICIT external CUDA environment.
 
@@ -2009,7 +2010,7 @@ def run_gsplat_reference_training(
         raise GsplatStaticAppearancePreflightError(
             "gsplat reference training failed; inspect the private training log"
         )
-    return assemble_verified_gsplat_static_appearance_result(
+    result = assemble_verified_gsplat_static_appearance_result(
         request=request,
         source=source,
         staged=staged,
@@ -2018,6 +2019,21 @@ def run_gsplat_reference_training(
         profile=profile,
         producer=producer,
     )
+    if preview_path is not None:
+        if not isinstance(preview_path, Path):
+            raise TypeError("gsplat optional preview_path must be a pathlib.Path")
+        exporter = (
+            export_verified_gsplat_rgb_centers_glb
+            if preview_path.suffix.lower() == ".glb"
+            else export_verified_gsplat_rgb_centers_ply
+        )
+        exporter(
+            artifact_ref=artifact_ref,
+            output_root=output_root,
+            profile=profile,
+            preview_path=preview_path,
+        )
+    return result
 
 
 def reconstruct_gsplat_static_appearance(
@@ -2038,6 +2054,7 @@ def reconstruct_gsplat_static_appearance(
     timeout_seconds: int,
     lpips_alexnet_weights: Path | None = None,
     lpips_alexnet_sha256: str | None = None,
+    preview_path: Path | None = None,
 ) -> StaticAppearanceCandidateResult:
     """Stage real COLMAP/PNG files, execute the selected trainer, retain its 3D PLY.
 
@@ -2071,6 +2088,7 @@ def reconstruct_gsplat_static_appearance(
         timeout_seconds=timeout_seconds,
         lpips_alexnet_weights=lpips_alexnet_weights,
         lpips_alexnet_sha256=lpips_alexnet_sha256,
+        preview_path=preview_path,
     )
 
 
@@ -2328,6 +2346,403 @@ def materialize_verified_gsplat_ply(
     )
 
 
+def export_verified_gsplat_rgb_centers_ply(
+    *,
+    artifact_ref: ArtifactRef,
+    output_root: Path,
+    profile: GsplatStaticAppearanceTrainingProfile,
+    preview_path: Path,
+) -> Sha256Digest:
+    """Export viewable RGB Gaussian *centers*, not radiance or a rendered scene.
+
+    Reuse the full source PLY audit, stream xyz and degree-zero SH color from
+    the pinned gsplat exporter into a standard XYZ/RGB PLY. No Torch/CUDA or
+    custom Gaussian renderer is required. The original splat remains intact.
+    The return value hashes this distinct visualization aid, not the model.
+    """
+
+    if not isinstance(preview_path, Path) or not preview_path.is_absolute():
+        raise TypeError("gsplat RGB preview_path must be an absolute pathlib.Path")
+    verified = materialize_verified_gsplat_ply(
+        artifact_ref=artifact_ref, output_root=output_root, profile=profile
+    )
+    root = _safe_root(output_root, "gsplat output_root")
+    source_path = root / profile.expected_ply_relative_path
+    parent = _safe_root(preview_path.parent, "gsplat RGB preview parent")
+    destination = parent / preview_path.name
+    if destination.suffix != ".ply" or destination.exists() or destination == source_path:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat RGB preview must use a new distinct .ply file"
+        )
+
+    source_hash = hashlib.sha256()
+    output_hash = hashlib.sha256()
+    source_stride = 59 * 4  # fixed audited degree-3 SH exporter layout
+    created = False
+    try:
+        with source_path.open("rb") as source, destination.open("xb") as output:
+            created = True
+            header = bytearray()
+            while not header.endswith(b"end_header\n"):
+                line = source.readline(_MAX_GSPLAT_PLY_HEADER_BYTES + 1 - len(header))
+                if not line or len(header) + len(line) > _MAX_GSPLAT_PLY_HEADER_BYTES:
+                    raise GsplatStaticAppearancePreflightError(
+                        "gsplat source PLY header changed during RGB export"
+                    )
+                header.extend(line)
+            source_hash.update(header)
+            try:
+                count = int(header.splitlines()[2].split()[2])
+            except (IndexError, ValueError) as exc:
+                raise GsplatStaticAppearancePreflightError(
+                    "gsplat source PLY vertex header changed during RGB export"
+                ) from exc
+            preview_header = (
+                "ply\n"
+                "format binary_little_endian 1.0\n"
+                f"element vertex {count}\n"
+                "property float x\n"
+                "property float y\n"
+                "property float z\n"
+                "property uchar red\n"
+                "property uchar green\n"
+                "property uchar blue\n"
+                "end_header\n"
+            ).encode("ascii")
+            output.write(preview_header)
+            output_hash.update(preview_header)
+
+            remaining = count
+            while remaining:
+                batch_count = min(remaining, 1024)
+                block = source.read(batch_count * source_stride)
+                if len(block) != batch_count * source_stride:
+                    raise GsplatStaticAppearancePreflightError(
+                        "gsplat source PLY changed during RGB export"
+                    )
+                source_hash.update(block)
+                rgb_block = bytearray()
+                for record in struct.iter_unpack("<59f", block):
+                    # Exactly gsplat/exporter.py sh2rgb(sh0) = sh0 * C0 + 0.5.
+                    colors = tuple(
+                        max(0, min(255, int((dc * 0.28209479177387814 + 0.5) * 255)))
+                        for dc in record[3:6]
+                    )
+                    rgb_block.extend(struct.pack("<3f3B", *record[:3], *colors))
+                output.write(rgb_block)
+                output_hash.update(rgb_block)
+                remaining -= batch_count
+            if source.read(1):
+                raise GsplatStaticAppearancePreflightError(
+                    "gsplat source PLY gained unexpected bytes during RGB export"
+                )
+            if Sha256Digest(source_hash.hexdigest()) != verified.entries[0].sha256:
+                raise GsplatStaticAppearancePreflightError(
+                    "gsplat source PLY identity changed during RGB export"
+                )
+    except Exception:
+        if created:
+            destination.unlink(missing_ok=True)
+        raise
+
+    return Sha256Digest(output_hash.hexdigest())
+
+
+def export_verified_gsplat_rgb_centers_glb(
+    *,
+    artifact_ref: ArtifactRef,
+    output_root: Path,
+    profile: GsplatStaticAppearanceTrainingProfile,
+    preview_path: Path,
+    max_points: int = 2_000_000,
+) -> Sha256Digest:
+    """Create a portable glTF POINTS view of audited Gaussian RGB centers.
+
+    Reuse the pinned Gaussian-to-RGB PLY converter; GLB uses interleaved
+    POSITION float32 and normalized COLOR_0 uint8 with an unlit material.
+    Deterministically sample very large clouds for interactive inspection.
+    This is NOT Gaussian radiance rendering, physical geometry, or metric 3D.
+    """
+
+    if not isinstance(preview_path, Path) or not preview_path.is_absolute():
+        raise TypeError("gsplat GLB preview requires an absolute pathlib.Path")
+    parent = _safe_root(preview_path.parent, "gsplat GLB preview parent")
+    destination = parent / preview_path.name
+    if destination.suffix.lower() != ".glb" or destination.exists():
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat GLB preview must use a new distinct .glb file"
+        )
+
+    if type(max_points) is not int or not 1 <= max_points <= 2_000_000:
+        raise ValueError("gsplat GLB max_points must be an integer from 1 to 2000000")
+    # At most 32 MB of interleaved vertex attributes, smaller on request.
+    with tempfile.TemporaryDirectory(prefix="wre-gsplat-rgb-", dir=parent) as staging:
+        rgb = Path(staging) / "centers-rgb.ply"
+        export_verified_gsplat_rgb_centers_ply(
+            artifact_ref=artifact_ref,
+            output_root=output_root,
+            profile=profile,
+            preview_path=rgb,
+        )
+        with rgb.open("rb") as source:
+            header = bytearray()
+            while not header.endswith(b"end_header\n"):
+                line = source.readline(_MAX_GSPLAT_PLY_HEADER_BYTES + 1 - len(header))
+                if not line or len(header) + len(line) > _MAX_GSPLAT_PLY_HEADER_BYTES:
+                    raise GsplatStaticAppearancePreflightError(
+                        "gsplat RGB centers preview has an invalid PLY header"
+                    )
+                header.extend(line)
+            try:
+                count = int(header.splitlines()[2].split()[2])
+            except (IndexError, ValueError) as exc:
+                raise GsplatStaticAppearancePreflightError(
+                    "gsplat RGB centers preview lacks a vertex count"
+                ) from exc
+            sampled = min(count, max_points)
+
+            # Fill the requested point budget rather than dropping almost
+            # half the cloud when count exceeds the limit by only one point.
+            # The integer mapping is deterministic and retains both endpoints.
+            def target_index(sample_number: int) -> int:
+                if sample_number >= sampled:
+                    return count
+                return sample_number * (count - 1) // (sampled - 1) if sampled > 1 else 0
+
+            low = [math.inf, math.inf, math.inf]
+            high = [-math.inf, -math.inf, -math.inf]
+            picked = 0
+            next_index = target_index(picked)
+            for index in range(count):
+                record = source.read(15)
+                if len(record) != 15:
+                    raise GsplatStaticAppearancePreflightError(
+                        "gsplat RGB centers preview was truncated"
+                    )
+                if index == next_index:
+                    coords = struct.unpack_from("<3f", record)
+                    for axis in range(3):
+                        low[axis] = min(low[axis], coords[axis])
+                        high[axis] = max(high[axis], coords[axis])
+                    picked += 1
+                    next_index = target_index(picked)
+            if source.read(1):
+                raise GsplatStaticAppearancePreflightError(
+                    "gsplat RGB centers preview has trailing data"
+                )
+            if not sampled:
+                raise GsplatStaticAppearancePreflightError(
+                    "gsplat RGB centers preview must contain points"
+                )
+
+        vertex_bytes = sampled * 16
+        gltf = {
+            "asset": {
+                "version": "2.0",
+                "generator": "WRE gsplat RGB Gaussian centers — not radiance",
+            },
+            "extensionsUsed": ["KHR_materials_unlit"],
+            "scene": 0,
+            "scenes": [{"nodes": [0]}],
+            "nodes": [{"mesh": 0}],
+            "meshes": [
+                {
+                    "primitives": [
+                        {
+                            "attributes": {"POSITION": 0, "COLOR_0": 1},
+                            "material": 0,
+                            "mode": 0,
+                        }
+                    ]
+                }
+            ],
+            "materials": [{"extensions": {"KHR_materials_unlit": {}}}],
+            "buffers": [{"byteLength": vertex_bytes}],
+            "bufferViews": [
+                {
+                    "buffer": 0,
+                    "byteOffset": 0,
+                    "byteLength": vertex_bytes,
+                    "byteStride": 16,
+                    "target": 34962,
+                }
+            ],
+            "accessors": [
+                {
+                    "bufferView": 0,
+                    "componentType": 5126,
+                    "count": sampled,
+                    "type": "VEC3",
+                    "min": low,
+                    "max": high,
+                },
+                {
+                    "bufferView": 0,
+                    "byteOffset": 12,
+                    "componentType": 5121,
+                    "normalized": True,
+                    "count": sampled,
+                    "type": "VEC3",
+                },
+            ],
+            "extras": {
+                "wre_visualization": "Gaussian centers only, not Gaussian splatting",
+                "metric_scale_known": False,
+                "source_gaussians": count,
+                "shown_centers": sampled,
+                "sampling": "even-endpoints",
+                "requested_max_points": max_points,
+            },
+        }
+        document = json.dumps(gltf, sort_keys=True, separators=(",", ":"), allow_nan=False).encode(
+            "utf-8"
+        )
+        document += b" " * (-len(document) % 4)
+        total_length = 12 + 8 + len(document) + 8 + vertex_bytes
+        digest = hashlib.sha256()
+        created = False
+        try:
+            with rgb.open("rb") as source, destination.open("xb") as output:
+                created = True
+                source.seek(len(header))
+                for chunk in (
+                    struct.pack("<4sII", b"glTF", 2, total_length),
+                    struct.pack("<I4s", len(document), b"JSON"),
+                    document,
+                    struct.pack("<I4s", vertex_bytes, b"BIN\x00"),
+                ):
+                    output.write(chunk)
+                    digest.update(chunk)
+                picked = 0
+                next_index = target_index(picked)
+                for index in range(count):
+                    record = source.read(15)
+                    if len(record) != 15:
+                        raise GsplatStaticAppearancePreflightError(
+                            "gsplat RGB centers changed during GLB export"
+                        )
+                    if index == next_index:
+                        vertex = record + b"\x00"
+                        output.write(vertex)
+                        digest.update(vertex)
+                        picked += 1
+                        next_index = target_index(picked)
+                if source.read(1):
+                    raise GsplatStaticAppearancePreflightError(
+                        "gsplat RGB centers gained data during GLB export"
+                    )
+        except Exception:
+            if created:
+                destination.unlink(missing_ok=True)
+            raise
+    return Sha256Digest(digest.hexdigest())
+
+
+def inspect_verified_gsplat_rgb_centers_glb(*, path: Path) -> dict[str, object]:
+    """Load and inspect WRE's own portable RGB-center GLB, without a GPU.
+
+    This validates the narrow WRE-produced POINTS layout, not arbitrary glTF,
+    Gaussian radiance, metric scale, or the existence of the training source.
+    """
+
+    if not isinstance(path, Path) or path.suffix.lower() != ".glb" or path.is_symlink():
+        raise GsplatStaticAppearancePreflightError(
+            "WRE RGB-center inspector requires a regular .glb file"
+        )
+    if not path.is_file() or not 28 <= path.stat().st_size <= 40_000_000:
+        raise GsplatStaticAppearancePreflightError(
+            "WRE RGB-center GLB is missing or outside the supported byte budget"
+        )
+    payload = path.read_bytes()
+    if len(payload) < 28 or len(payload) > 40_000_000:
+        raise GsplatStaticAppearancePreflightError("WRE RGB-center GLB changed during read")
+    magic, version, total = struct.unpack_from("<4sII", payload)
+    if (magic, version, total) != (b"glTF", 2, len(payload)):
+        raise GsplatStaticAppearancePreflightError("WRE RGB-center GLB header is invalid")
+    json_size, json_type = struct.unpack_from("<I4s", payload, 12)
+    if json_type != b"JSON" or json_size < 2 or json_size > 1_000_000 or json_size % 4:
+        raise GsplatStaticAppearancePreflightError("WRE RGB-center JSON chunk is invalid")
+    bin_start = 20 + json_size
+    if bin_start + 8 > len(payload):
+        raise GsplatStaticAppearancePreflightError("WRE RGB-center GLB is truncated")
+    bin_size, bin_type = struct.unpack_from("<I4s", payload, bin_start)
+    if bin_type != b"BIN\x00" or bin_size != len(payload) - bin_start - 8:
+        raise GsplatStaticAppearancePreflightError("WRE RGB-center binary chunk is invalid")
+    try:
+        scene = json.loads(payload[20:bin_start].decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise GsplatStaticAppearancePreflightError(
+            "WRE RGB-center GLB contains invalid JSON"
+        ) from exc
+    extras: dict[str, Any] = {}
+    count = 0
+    bounds_low: list[float] = []
+    bounds_high: list[float] = []
+    try:
+        extras = scene["extras"]
+        count = scene["accessors"][0]["count"]
+        color_accessor = scene["accessors"][1]
+        bounds_low = scene["accessors"][0]["min"]
+        bounds_high = scene["accessors"][0]["max"]
+        preview_view = scene["bufferViews"][0]
+        primitive = scene["meshes"][0]["primitives"][0]
+        expected = (
+            isinstance(count, int)
+            and not isinstance(count, bool)
+            and 1 <= count <= 2_000_000
+            and scene["asset"]["version"] == "2.0"
+            and extras["wre_visualization"] == "Gaussian centers only, not Gaussian splatting"
+            and extras["shown_centers"] == count
+            and isinstance(extras["source_gaussians"], int)
+            and extras["source_gaussians"] >= count
+            and primitive["mode"] == 0
+            and primitive["attributes"] == {"POSITION": 0, "COLOR_0": 1}
+            and scene["accessors"][0]["type"] == "VEC3"
+            and scene["accessors"][0]["componentType"] == 5126
+            and color_accessor["type"] == "VEC3"
+            and color_accessor["componentType"] == 5121
+            and color_accessor["normalized"] is True
+            and color_accessor["byteOffset"] == 12
+            and preview_view["byteStride"] == 16
+            and preview_view["byteLength"] == count * 16
+            and scene["buffers"][0]["byteLength"] == count * 16
+            and bin_size == count * 16
+            and len(bounds_low) == len(bounds_high) == 3
+        )
+    except (KeyError, IndexError, TypeError, AttributeError):
+        expected = False
+    if not expected:
+        raise GsplatStaticAppearancePreflightError(
+            "GLB is not the supported WRE RGB Gaussian-center layout"
+        )
+    data_start = bin_start + 8
+    low = [math.inf, math.inf, math.inf]
+    high = [-math.inf, -math.inf, -math.inf]
+    for index in range(count):
+        x, y, z = struct.unpack_from("<3f", payload, data_start + 16 * index)
+        for axis, coordinate in enumerate((x, y, z)):
+            if not math.isfinite(coordinate):
+                raise GsplatStaticAppearancePreflightError(
+                    "WRE RGB-center GLB contains a non-finite position"
+                )
+            low[axis] = min(low[axis], coordinate)
+            high[axis] = max(high[axis], coordinate)
+    if low != bounds_low or high != bounds_high:
+        raise GsplatStaticAppearancePreflightError(
+            "WRE RGB-center GLB bounds disagree with the actual point positions"
+        )
+    return {
+        "kind": "wre_gsplat_rgb_centers_only",
+        "sha256": hashlib.sha256(payload).hexdigest(),
+        "source_gaussians": extras["source_gaussians"],
+        "shown_centers": count,
+        "bounds_min": low,
+        "bounds_max": high,
+        "metric_scale_known": False,
+        "gpu_training_verified": False,
+    }
+
+
 def assemble_verified_gsplat_static_appearance_result(
     *,
     request: StaticAppearanceCandidateRequest,
@@ -2387,6 +2802,83 @@ def assemble_verified_gsplat_static_appearance_result(
     return build_static_appearance_candidate_result(request, candidate, materialization)
 
 
+def _gsplat_rgb_preview_cli(argv: list[str] | None = None) -> int:
+    """Provide a CPU-only export command for an already-produced Gaussian PLY.
+
+    This never launches a training job or claims a canonical provenance identity.
+    The source is inspected by the same checked PLY reader as the public API.
+    """
+
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        description="Export verified gsplat Gaussian centers as a RGB point cloud (.ply or .glb)"
+    )
+    parser.add_argument(
+        "--output-root", type=Path, help="Existing gsplat trainer results directory"
+    )
+    parser.add_argument(
+        "--max-steps", type=int, help="Original trainer max_steps / PLY step number"
+    )
+    parser.add_argument("--preview", type=Path, help="New output RGB .ply or .glb file")
+    parser.add_argument(
+        "--max-points",
+        type=int,
+        default=None,
+        help="Maximum visible Gaussian centers in a .glb preview (default: 2000000)",
+    )
+    parser.add_argument(
+        "--inspect-glb",
+        type=Path,
+        help="Read an existing WRE RGB-center GLB and print its validated point summary",
+    )
+    args = parser.parse_args(argv)
+    if args.inspect_glb is not None:
+        if any(
+            value is not None
+            for value in (args.output_root, args.max_steps, args.preview, args.max_points)
+        ):
+            parser.error("--inspect-glb cannot be combined with export arguments")
+        try:
+            summary = inspect_verified_gsplat_rgb_centers_glb(path=args.inspect_glb.absolute())
+        except (GsplatStaticAppearancePreflightError, OSError) as exc:
+            parser.error(str(exc))
+        print(json.dumps(summary, sort_keys=True))
+        return 0
+    if args.output_root is None or args.max_steps is None or args.preview is None:
+        parser.error("export requires --output-root, --max-steps, and --preview")
+    try:
+        profile = GsplatStaticAppearanceTrainingProfile(max_steps=args.max_steps)
+        preview = args.preview.absolute()
+        source_ref = ArtifactRef(
+            ArtifactId("appearance:gsplat:preview-source"),
+            APPEARANCE_MODEL_ARTIFACT_KIND,
+        )
+        if preview.suffix.lower() == ".glb":
+            digest = export_verified_gsplat_rgb_centers_glb(
+                artifact_ref=source_ref,
+                output_root=args.output_root.absolute(),
+                profile=profile,
+                preview_path=preview,
+                max_points=args.max_points if args.max_points is not None else 2_000_000,
+            )
+        else:
+            if args.max_points is not None:
+                raise GsplatStaticAppearancePreflightError(
+                    "gsplat --max-points applies only to .glb preview exports"
+                )
+            digest = export_verified_gsplat_rgb_centers_ply(
+                artifact_ref=source_ref,
+                output_root=args.output_root.absolute(),
+                profile=profile,
+                preview_path=preview,
+            )
+    except (GsplatStaticAppearancePreflightError, ValueError, TypeError, OSError) as exc:
+        parser.error(str(exc))
+    print(f"{digest.value}  {preview}")
+    return 0
+
+
 __all__ = [
     "GSPLAT_REFERENCE_PYCOLMAP_REVISION",
     "GSPLAT_STATIC_APPEARANCE_REPRESENTATION",
@@ -2402,7 +2894,10 @@ __all__ = [
     "GsplatStaticAppearanceTrainingProfile",
     "GsplatStaticAppearanceVerifiedImage",
     "assemble_verified_gsplat_static_appearance_result",
+    "export_verified_gsplat_rgb_centers_glb",
+    "export_verified_gsplat_rgb_centers_ply",
     "inspect_gsplat_static_appearance_shared_track_pixels",
+    "inspect_verified_gsplat_rgb_centers_glb",
     "materialize_verified_gsplat_ply",
     "preflight_gsplat_static_appearance_inputs",
     "reconstruct_gsplat_static_appearance",
@@ -2416,3 +2911,7 @@ __all__ = [
     "verify_gsplat_static_appearance_source_photometry",
     "verify_gsplat_static_appearance_staged_dataset",
 ]
+
+
+if __name__ == "__main__":
+    raise SystemExit(_gsplat_rgb_preview_cli())
