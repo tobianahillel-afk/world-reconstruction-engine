@@ -583,6 +583,118 @@ jobs:
               browser("DELETE",f"/session/{session}")
           PY
 
+      - name: Preserve native COLMAP reconstruction and perform real CPU undistortion for gsplat handoff
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv/bin/python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import shutil
+          from pathlib import Path
+          from PIL import Image
+          import pycolmap
+
+          root = Path(os.environ["RUNNER_TEMP"]) / "wre-real-photo-colmap-rgb"
+          receipt = json.loads((root / "real-photo-colmap-rgb-receipt.json").read_text())
+          model_path = root / "native-sparse" / "0"
+          source_images = root / "canonical-images"
+          assert model_path.is_dir() and source_images.is_dir()
+          raw_model = pycolmap.Reconstruction(str(model_path))
+          expected_views = receipt["reconstruction"]["registered_images"]
+          expected_points = receipt["reconstruction"]["sparse_points"]
+          assert raw_model.num_reg_images() == expected_views == 3
+          assert raw_model.num_points3D() == expected_points > 0
+
+          undistorted = root / "colmap-undistorted-native"
+          pycolmap.undistort_images(
+              output_path=str(undistorted),
+              input_path=str(model_path),
+              image_path=str(source_images),
+              output_type="COLMAP",
+              num_threads=1,
+          )
+          staged = root / "gsplat-capture"
+          (staged / "sparse").mkdir(parents=True)
+          shutil.copytree(undistorted / "sparse", staged / "sparse" / "0")
+          shutil.copytree(undistorted / "images", staged / "images")
+          loaded = pycolmap.Reconstruction(str(staged / "sparse" / "0"))
+          assert loaded.num_reg_images() == expected_views
+          assert loaded.num_points3D() == expected_points
+          views = {}
+          for image_id in sorted(int(i) for i in loaded.reg_image_ids()):
+              registered = loaded.image(image_id)
+              camera = loaded.camera(registered.camera_id)
+              name = registered.name
+              assert Path(name).name == name
+              path = staged / "images" / name
+              assert path.is_file(), f"undistorted photograph absent: {name}"
+              with Image.open(path) as image:
+                  assert image.width == camera.width
+                  assert image.height == camera.height
+                  image.load()
+              camera_model = (
+                  camera.model.name if hasattr(camera.model, "name")
+                  else str(camera.model)
+              )
+              assert camera_model in ("PINHOLE", "SIMPLE_PINHOLE"), (
+                  name, camera_model
+              )
+              views[name] = {
+                  "camera_id": int(registered.camera_id),
+                  "camera_model": camera_model,
+                  "rgb_asset_sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                  "width": int(camera.width),
+                  "height": int(camera.height),
+              }
+          assert len(views) == expected_views
+          files = sorted(
+              p for p in staged.rglob("*")
+              if p.is_file() and p.name != "wre-capture-manifest.json"
+          )
+          assert len(files) >= 6
+          file_hashes = {
+              p.relative_to(staged).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+              for p in files
+          }
+          manifest = {
+              "schema": "wre.experimental.colmap_undistorted_capture.v1",
+              "original_native_sparse_sha256": receipt["reconstruction"]["source_sparse_identity_sha256"],
+              "native_registered_views": expected_views,
+              "native_points3d": expected_points,
+              "undistorted_registered_views": loaded.num_reg_images(),
+              "undistorted_points3d": loaded.num_points3D(),
+              "undistortion": "actual pycolmap 4.2.0 undistort_images CPU",
+              "camera_models_after_undistortion": sorted({v["camera_model"] for v in views.values()}),
+              "views": views,
+              "file_sha256": file_hashes,
+              "license": receipt["source_license"],
+              "credit": receipt["source_credit"],
+              "dataset_commit": receipt["source_dataset_git_revision"],
+              "metric_scale_known": False,
+              "color_radiometry_calibrated": False,
+              "gpu_training_executed": False,
+              "gsplat_training_validated": False,
+          }
+          output = staged / "wre-capture-manifest.json"
+          output.write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n")
+          assert json.loads(output.read_text())["undistorted_points3d"] == expected_points
+          print(
+              "REAL CPU COLMAP UNDISTORTED DATASET:",
+              len(views), "photos,", loaded.num_points3D(),
+              "points; source identity in exact manifest"
+          )
+          PY
+
+      - name: Publish reusable real-photo undistorted COLMAP capture for GPU handoff
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wre-real-photo-undistorted-colmap-capture
+          path: \${{ runner.temp }}/wre-real-photo-colmap-rgb/gsplat-capture/
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Publish actual reconstructed RGB PLY, inspectable GLB and verified receipt
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
