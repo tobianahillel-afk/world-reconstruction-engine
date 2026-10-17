@@ -1713,6 +1713,58 @@ def test_real_colmap_rgb_glb_preserves_sparse_native_count_after_uncolorable_exc
     )
 
 
+def test_verified_colmap_camera_rig_exports_real_relative_poses(
+    tmp_path: Path,
+) -> None:
+    request, source = _two_view_parts(tmp_path)
+    canonical = _native_canonical(request, source)
+    destination = tmp_path / "camera-rig.json"
+    digest = baseline_module.export_verified_colmap_camera_rig_json(
+        canonical, path=destination
+    )
+    content = destination.read_bytes()
+    assert digest == _digest(content)
+    scene = json.loads(content)
+    assert scene["schema"] == "wre.colmap.camera_rig.v1"
+    assert scene["metric_scale_known"] is False
+    assert scene["source_model_sha256"] == canonical.source_model_identity_sha256.value
+    assert scene["geometry_solution_id"] == canonical.geometry_solution.geometry_solution_id.value
+    assert scene["pose_convention"] == "x_camera = R * x_local + t"
+    cameras = scene["cameras"]
+    assert [item["observation_id"] for item in cameras] == ["obs:frame", "obs:second"]
+    assert cameras[0]["camera_center_local_xyz"] == [0.0, 0.0, 0.0]
+    assert cameras[1]["camera_center_local_xyz"] == [-1.0, 0.0, 0.0]
+    assert cameras[1]["camera_from_local_translation"] == [1.0, 0.0, 0.0]
+    assert cameras[1]["intrinsics"] == [2.0, 2.0, 1.0, 0.5]
+    assert cameras[1]["image_size"] == [2, 1]
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="may not replace"):
+        baseline_module.export_verified_colmap_camera_rig_json(canonical, path=destination)
+
+
+def test_verified_colmap_camera_rig_rejects_foreign_frame_and_duplicate_view(
+    tmp_path: Path,
+) -> None:
+    request, source = _two_view_parts(tmp_path)
+    canonical = _native_canonical(request, source)
+    foreign = replace(
+        canonical.camera_solutions[1], local_frame_id=LocalFrameId("frame:foreign")
+    )
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="same.*frame"):
+        baseline_module.export_verified_colmap_camera_rig_json(
+            replace(canonical, camera_solutions=(canonical.camera_solutions[0], foreign)),
+            path=tmp_path / "foreign.json",
+        )
+    duplicate = replace(
+        canonical.camera_solutions[1],
+        observation_id=canonical.camera_solutions[0].observation_id,
+    )
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="duplicate"):
+        baseline_module.export_verified_colmap_camera_rig_json(
+            replace(canonical, camera_solutions=(canonical.camera_solutions[0], duplicate)),
+            path=tmp_path / "duplicate.json",
+        )
+
+
 def test_real_colmap_sparse_observations_export_viewable_rgb_glb(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
