@@ -7374,7 +7374,7 @@ jobs:
               pfm_url = "http://127.0.0.1:8877/wre-real-stereo-cpu-disparity-f32.pfm"
               with urlopen(pfm_url, timeout=10) as response:
                   actual_pfm = response.read(5_000_001)
-              header = f"Pf\\n{width} {height}\\n-1.0\\n".encode("ascii")
+              header = f"Pf\n{width} {height}\n-1.0\n".encode("ascii")
               assert actual_pfm.startswith(header)
               assert len(actual_pfm) == len(header) + width * height * 4
               assert sha256(actual_pfm).hexdigest() == numeric_metrics[
