@@ -1294,6 +1294,77 @@ def test_verified_gsplat_gaussian_centers_export_real_viewable_rgb_ply(
         )
 
 
+def test_gsplat_rgb_preview_cli_runs_real_cpu_python_process(tmp_path: Path) -> None:
+    """The CLI genuinely reads a binary PLY and writes a viewable point cloud."""
+
+    import subprocess
+
+    first = [0.0] * 59
+    first[:6] = [1.0, 2.0, 3.0, 0.0, 0.0, 0.0]
+    first[-4] = 1.0
+    original = _gsplat_ply()
+    header_end = original.index(b"end_header\n") + len(b"end_header\n")
+    source_data = original[:header_end] + struct.pack("<59f", *first)
+    root, _profile, _ref = _gsplat_output(tmp_path, source_data)
+    viewer = tmp_path / "viewer"
+    viewer.mkdir()
+    preview = viewer / "scene-rgb.ply"
+    command = [
+        sys.executable,
+        "-m",
+        "wre.reconstruction.static_appearance_baseline",
+        "--output-root",
+        str(root),
+        "--max-steps",
+        "20",
+        "--preview",
+        str(preview),
+    ]
+    run = subprocess.run(command, capture_output=True, text=True, check=False, timeout=30)
+    assert run.returncode == 0, run.stderr
+    result = preview.read_bytes()
+    assert run.stdout.strip() == f"{_digest(result).value}  {preview}"
+    header = result.index(b"end_header\n") + len(b"end_header\n")
+    assert result[:header].startswith(b"ply\nformat binary_little_endian 1.0\n")
+    assert b"element vertex 1\n" in result[:header]
+    assert result[header:] == struct.pack("<3f3B", 1.0, 2.0, 3.0, 127, 127, 127)
+    assert (root / "ply" / "point_cloud_19.ply").read_bytes() == source_data
+
+    # A second invocation cannot overwrite a user's existing visualization.
+    repeated = subprocess.run(command, capture_output=True, text=True, check=False, timeout=30)
+    assert repeated.returncode == 2
+    assert "new distinct" in repeated.stderr
+    assert preview.read_bytes() == result
+
+
+def test_gsplat_rgb_preview_cli_rejects_wrong_training_step(tmp_path: Path) -> None:
+    import subprocess
+
+    root, _profile, _ref = _gsplat_output(tmp_path, _gsplat_ply())
+    viewer = tmp_path / "viewer"
+    viewer.mkdir()
+    preview = viewer / "preview.ply"
+    run = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "wre.reconstruction.static_appearance_baseline",
+            "--output-root",
+            str(root),
+            "--max-steps",
+            "30",
+            "--preview",
+            str(preview),
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=30,
+    )
+    assert run.returncode == 2
+    assert not preview.exists()
+
+
 def test_verified_gsplat_gaussian_centers_preview_rejects_unverified_model(
     tmp_path: Path,
 ) -> None:
