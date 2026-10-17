@@ -3037,6 +3037,11 @@ jobs:
                   completedMeasurement = null;
                   exportButton.disabled = true;
                 }
+                if (tracing && measured.length &&
+                    Math.hypot(...point.map((v,i) => v-measured[measured.length-1][i])) < 1e-9) {
+                  measureResult.textContent = "Choose a different 3D point to extend the polyline.";
+                  return;
+                }
                 measured.push(point);
                 placePickMarker(point, measured.length);
                 if (measured.length === 1) {
@@ -5547,50 +5552,82 @@ jobs:
                 return button.getAttribute('aria-pressed') === 'true' &&
                   !scene.hasAttribute('auto-rotate');
               """)
-              path_status = js("""
+              # Fresh real model-viewer raycasts for EACH browser interaction.
+              # A prior same-task 3-click sequence accepted two identical XYZ
+              # after the camera moved: never inject synthetic scene points.
+              assert js("""
                 const scene=document.getElementById('wre-scene');
-                const pathButton=document.getElementById('wre-path-toggle');
-                const box=scene.getBoundingClientRect(), hits=[];
-                for (let yi=0; yi<=10; yi++) for (let xi=0; xi<=10; xi++) {
-                  const x=box.left+box.width*(0.15+0.7*xi/10);
-                  const y=box.top+box.height*(0.15+0.7*yi/10);
-                  const hit=scene.positionAndNormalFromPoint(x,y);
-                  if (hit && hit.position) {
-                    const pos=[hit.position.x,hit.position.y,hit.position.z];
-                    if (pos.every(Number.isFinite)) hits.push({x,y,pos});
-                  }
-                }
-                if (hits.length < 2) return {error:'not enough actual mesh raycasts'};
-                const a=hits[0];
-                let b=null, bestDistance=0;
-                for (const hit of hits.slice(1)) {
-                  const distance=Math.hypot(...hit.pos.map((v,i)=>v-a.pos[i]));
-                  if (distance>bestDistance) {b=hit; bestDistance=distance;}
-                }
-                if (!b || bestDistance <= 0.001) return {error:'mesh hits coincide'};
+                scene.jumpCameraToGoal();
                 window.__wreClickedRaycasts=[];
-                for (const p of [a,b,a]) {
-                  const hit=scene.positionAndNormalFromPoint(p.x,p.y);
-                  if (!hit || !hit.position) return {error:'current path raycast failed'};
-                  window.__wreCapturingClick=true;
-                  scene.dispatchEvent(new MouseEvent('click', {
-                    bubbles:true, clientX:p.x, clientY:p.y
-                  }));
-                  window.__wreCapturingClick=false;
-                }
-                return {
-                  status:document.getElementById('wre-measure-result').textContent,
-                  pressed:pathButton.getAttribute('aria-pressed'),
-                  enabled:!document.getElementById('wre-measure-export').disabled,
-                  stoppedAutoRotate:!scene.hasAttribute('auto-rotate'),
-                  clicked:window.__wreClickedRaycasts.slice(),
-                  markers:[...scene.querySelectorAll('.wre-pick-marker')].map(m => ({
-                    slot:m.getAttribute('slot'),
-                    position:m.dataset.position,
-                    label:m.textContent
-                  }))
-                };
+                return scene.loaded && !scene.hasAttribute('auto-rotate');
               """)
+              path_status = None
+              for attempt in range(12):
+                  if attempt:
+                      assert js("""
+                        const button=document.getElementById('wre-path-toggle');
+                        button.click();
+                        button.click();
+                        window.__wreClickedRaycasts=[];
+                        return button.getAttribute('aria-pressed') === 'true';
+                      """)
+                  for click_index in range(3):
+                      # The next candidate is chosen from the current rendered
+                      # mesh, not from pixel locations saved before the previous
+                      # click or a changing camera.
+                      time.sleep(0.15)
+                      path_status = js("""
+                        const scene=document.getElementById('wre-scene');
+                        const box=scene.getBoundingClientRect();
+                        const previous=window.__wreClickedRaycasts.slice();
+                        const last=previous.length ? previous[previous.length-1] : null;
+                        let choice=null, best=-1;
+                        for(let yi=0; yi<=10; yi++) for(let xi=0; xi<=10; xi++) {
+                          const x=box.left+box.width*(0.15+0.7*xi/10);
+                          const y=box.top+box.height*(0.15+0.7*yi/10);
+                          const hit=scene.positionAndNormalFromPoint(x,y);
+                          if(!hit || !hit.position) continue;
+                          const pos=[hit.position.x,hit.position.y,hit.position.z];
+                          if(!pos.every(Number.isFinite)) continue;
+                          const distance=last ? Math.hypot(...pos.map((v,i)=>v-last[i])) : 1;
+                          if(distance>best) {choice={x,y,pos};best=distance;}
+                        }
+                        if(!choice || best<=0.001) return {error:'no distinct current raycast'};
+                        window.__wreCapturingClick=true;
+                        try {
+                          scene.dispatchEvent(new MouseEvent('click', {
+                            bubbles:true, clientX:choice.x, clientY:choice.y
+                          }));
+                        } finally {window.__wreCapturingClick=false;}
+                        const pathButton=document.getElementById('wre-path-toggle');
+                        return {
+                          status:document.getElementById('wre-measure-result').textContent,
+                          pressed:pathButton.getAttribute('aria-pressed'),
+                          enabled:!document.getElementById('wre-measure-export').disabled,
+                          stoppedAutoRotate:!scene.hasAttribute('auto-rotate'),
+                          clicked:window.__wreClickedRaycasts.slice(),
+                          markers:[...scene.querySelectorAll('.wre-pick-marker')].map(m=>({
+                            slot:m.getAttribute('slot'),
+                            position:m.dataset.position,
+                            label:m.textContent
+                          }))
+                        };
+                      """)
+                      if (
+                          not path_status or path_status.get("error")
+                          or len(path_status["markers"]) != click_index + 1
+                          or len(path_status["clicked"]) != click_index + 1
+                          or (
+                              click_index > 0 and math.dist(
+                                  path_status["clicked"][-2],
+                                  path_status["clicked"][-1]
+                              ) <= 0.001
+                          )
+                      ):
+                          break
+                  else:
+                      break
+              assert path_status and not path_status.get("error"), path_status
               assert path_status.get("clicked") and len(path_status["clicked"]) == 3, path_status
               assert len(path_status["markers"]) == 3, path_status
               for index, marker in enumerate(path_status["markers"], start=1):
