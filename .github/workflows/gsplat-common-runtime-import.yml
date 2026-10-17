@@ -1971,6 +1971,8 @@ jobs:
                 aria-label="Open a local GLB model (max 250 MB)">
               <button id="wre-measure-toggle" type="button" aria-pressed="false">Measure surface distance</button>
               <button id="wre-path-toggle" type="button" aria-pressed="false">Trace 3D path</button>
+              <button id="wre-area-toggle" type="button" aria-pressed="false">Estimate 3D polygon area</button>
+              <button id="wre-angle-toggle" type="button" aria-pressed="false">Measure 3D chord angle</button>
               <button id="wre-measure-export" type="button" disabled
                 aria-label="Download relative surface measurement as JSON">Download measurement JSON</button>
             </div>
@@ -1988,10 +1990,14 @@ jobs:
               const localInput = document.getElementById("wre-local-glb");
               const measureButton = document.getElementById("wre-measure-toggle");
               const pathButton = document.getElementById("wre-path-toggle");
+              const areaButton = document.getElementById("wre-area-toggle");
+              const angleButton = document.getElementById("wre-angle-toggle");
               const exportButton = document.getElementById("wre-measure-export");
               const measureResult = document.getElementById("wre-measure-result");
               let measuring = false;
               let tracing = false;
+              let areaMode = false;
+              let angleMode = false;
               let measured = [];
               let completedMeasurement = null;
               function clearPickMarkers() {
@@ -2013,15 +2019,25 @@ jobs:
                 measured = [];
                 completedMeasurement = null;
                 exportButton.disabled = true;
-                measureResult.textContent = tracing
+                measureResult.textContent = angleMode
+                  ? "Click three mesh points to measure the chord angle at the middle point (not surface curvature)."
+                  : tracing
                   ? "Click two or more mesh points to trace a 3D polyline (NOT geodesic or meters)."
+                  : areaMode
+                    ? "Click at least three mesh points: triangle-fan estimate, NOT true surface area or m²."
                   : measuring
                     ? "Click two points on the visible mesh. Model units only (NOT meters)."
                     : "Surface measurement off. Model units only (NOT meters).";
               }
               measureButton.addEventListener("click", () => {
-                measuring = !measuring || tracing;
+                measuring = !measuring || tracing || areaMode || angleMode;
                 tracing = false;
+                areaMode = false;
+                angleMode = false;
+                angleButton.setAttribute("aria-pressed", "false");
+                angleButton.textContent = "Measure 3D chord angle";
+                areaButton.setAttribute("aria-pressed", "false");
+                areaButton.textContent = "Estimate 3D polygon area";
                 pathButton.setAttribute("aria-pressed", "false");
                 pathButton.textContent = "Trace 3D path";
                 measureButton.setAttribute("aria-pressed", String(measuring));
@@ -2033,11 +2049,51 @@ jobs:
               pathButton.addEventListener("click", () => {
                 tracing = !tracing;
                 measuring = tracing;
+                areaMode = false;
+                angleMode = false;
+                angleButton.setAttribute("aria-pressed", "false");
+                angleButton.textContent = "Measure 3D chord angle";
+                areaButton.setAttribute("aria-pressed", "false");
+                areaButton.textContent = "Estimate 3D polygon area";
                 measureButton.setAttribute("aria-pressed", "false");
                 measureButton.textContent = "Measure surface distance";
                 pathButton.setAttribute("aria-pressed", String(tracing));
                 pathButton.textContent = tracing ? "Stop tracing" : "Trace 3D path";
                 if (tracing) scene.removeAttribute("auto-rotate");
+                else scene.setAttribute("auto-rotate", "");
+                resetMeasurement();
+              });
+              areaButton.addEventListener("click", () => {
+                areaMode = !areaMode;
+                measuring = areaMode;
+                tracing = false;
+                angleMode = false;
+                angleButton.setAttribute("aria-pressed", "false");
+                angleButton.textContent = "Measure 3D chord angle";
+                measureButton.setAttribute("aria-pressed", "false");
+                measureButton.textContent = "Measure surface distance";
+                pathButton.setAttribute("aria-pressed", "false");
+                pathButton.textContent = "Trace 3D path";
+                areaButton.setAttribute("aria-pressed", String(areaMode));
+                areaButton.textContent = areaMode ? "Stop estimating area" : "Estimate 3D polygon area";
+                if (areaMode) scene.removeAttribute("auto-rotate");
+                else scene.setAttribute("auto-rotate", "");
+                resetMeasurement();
+              });
+              angleButton.addEventListener("click", () => {
+                angleMode = !angleMode;
+                measuring = angleMode;
+                tracing = false;
+                areaMode = false;
+                measureButton.setAttribute("aria-pressed", "false");
+                measureButton.textContent = "Measure surface distance";
+                pathButton.setAttribute("aria-pressed", "false");
+                pathButton.textContent = "Trace 3D path";
+                areaButton.setAttribute("aria-pressed", "false");
+                areaButton.textContent = "Estimate 3D polygon area";
+                angleButton.setAttribute("aria-pressed", String(angleMode));
+                angleButton.textContent = angleMode ? "Stop measuring angle" : "Measure 3D chord angle";
+                if (angleMode) scene.removeAttribute("auto-rotate");
                 else scene.setAttribute("auto-rotate", "");
                 resetMeasurement();
               });
@@ -2050,7 +2106,7 @@ jobs:
                 }
                 const point = [hit.position.x, hit.position.y, hit.position.z];
                 if (!point.every(Number.isFinite)) return;
-                if (!tracing && measured.length === 2) {
+                if (!tracing && !areaMode && (angleMode ? measured.length === 3 : measured.length === 2)) {
                   clearPickMarkers();
                   measured = [];
                   completedMeasurement = null;
@@ -2060,6 +2116,85 @@ jobs:
                 placePickMarker(point, measured.length);
                 if (measured.length === 1) {
                   measureResult.textContent = "First surface point selected; click another point.";
+                  return;
+                }
+                if (angleMode) {
+                  if (measured.length < 3) {
+                    measureResult.textContent = "Pick three points; the second is the angle vertex.";
+                    return;
+                  }
+                  const a = measured[0], v = measured[1], b = measured[2];
+                  const u = a.map((x, i) => x - v[i]);
+                  const w = b.map((x, i) => x - v[i]);
+                  const normU = Math.hypot(...u), normW = Math.hypot(...w);
+                  if (!(normU > 0 && normW > 0)) {
+                    measureResult.textContent = "Cannot measure angle: points coincide; choose three distinct points.";
+                    completedMeasurement = null;
+                    exportButton.disabled = true;
+                    return;
+                  }
+                  const cosine = Math.max(-1, Math.min(1,
+                    u.reduce((total, x, i) => total + x * w[i], 0) / (normU * normW)
+                  ));
+                  const degrees = Math.acos(cosine) * 180 / Math.PI;
+                  if (!Number.isFinite(degrees)) {
+                    resetMeasurement();
+                    return;
+                  }
+                  measureResult.textContent = "3D chord angle: " + degrees.toFixed(4) +
+                    " degrees (middle vertex, NOT mesh curvature or a calibrated surface normal).";
+                  completedMeasurement = {
+                    schema: "wre.relative_3d_chord_angle.v1",
+                    model_source: chooser.value || "user-supplied-local-glb",
+                    model_provenance: provenance.textContent.trim(),
+                    metric_scale_known: false,
+                    units: "degrees",
+                    points_xyz: measured.map(p => p.slice()),
+                    vertex_index: 1,
+                    angle_degrees: degrees,
+                    surface_curvature: false
+                  };
+                  exportButton.disabled = false;
+                  return;
+                }
+                if (areaMode) {
+                  if (measured.length < 3) {
+                    measureResult.textContent = "Second point selected; click a third mesh point.";
+                    return;
+                  }
+                  // A triangle fan of straight chords, NOT curved surface area.
+                  const pivot = measured[0], triangleAreas = [];
+                  for (let i = 2; i < measured.length; i++) {
+                    const p = measured[i - 1], q = measured[i];
+                    const ax = p[0] - pivot[0], ay = p[1] - pivot[1],
+                          az = p[2] - pivot[2];
+                    const bx = q[0] - pivot[0], by = q[1] - pivot[1],
+                          bz = q[2] - pivot[2];
+                    triangleAreas.push(0.5 * Math.hypot(
+                      ay * bz - az * by, az * bx - ax * bz, ax * by - ay * bx
+                    ));
+                  }
+                  const total = triangleAreas.reduce((a, b) => a + b, 0);
+                  if (!Number.isFinite(total) || !triangleAreas.every(Number.isFinite)) {
+                    resetMeasurement();
+                    return;
+                  }
+                  measureResult.textContent = "3D triangle-fan area: " + total.toFixed(5) +
+                    " model units squared (" + triangleAreas.length +
+                    " planar triangles; NOT physical surface area or m²).";
+                  completedMeasurement = {
+                    schema: "wre.relative_3d_triangle_fan_area.v1",
+                    model_source: chooser.value || "user-supplied-local-glb",
+                    model_provenance: provenance.textContent.trim(),
+                    metric_scale_known: false,
+                    units: "model_units_squared",
+                    points_xyz: measured.map(p => p.slice()),
+                    triangle_areas_model_units_squared: triangleAreas,
+                    total_area_model_units_squared: total,
+                    triangulation: "fan_from_first_point",
+                    physical_surface_area: false
+                  };
+                  exportButton.disabled = false;
                   return;
                 }
                 if (tracing) {
@@ -2124,9 +2259,13 @@ jobs:
                 const link = document.createElement("a");
                 link.href = url;
                 link.download = completedMeasurement.schema ===
-                  "wre.relative_3d_surface_polyline.v1"
-                  ? "wre-relative-surface-polyline.json"
-                  : "wre-relative-surface-measurement.json";
+                  "wre.relative_3d_chord_angle.v1"
+                  ? "wre-relative-chord-angle.json"
+                  : completedMeasurement.schema === "wre.relative_3d_triangle_fan_area.v1"
+                    ? "wre-relative-triangle-fan-area.json"
+                  : completedMeasurement.schema === "wre.relative_3d_surface_polyline.v1"
+                    ? "wre-relative-surface-polyline.json"
+                    : "wre-relative-surface-measurement.json";
                 document.body.appendChild(link);
                 link.click();
                 link.remove();
@@ -2214,9 +2353,11 @@ jobs:
               You can also select a local GLB file using the file input; it stays
               in your browser, is not uploaded, and its provenance is unverified.
               Measure distance by clicking two points, or trace a multi-point 3D
-              polyline on the visible mesh. Path segments are straight 3D chords,
-              NOT shortest paths along the mesh, and values are arbitrary model
-              units that must NOT be interpreted as meters.
+              polyline on the visible mesh. A third mode estimates polygon area
+              by triangulating selected 3D points with a straight triangle fan.
+              Chords are NOT surface geodesics, and triangle fans are NOT true
+              curved physical surface areas. Units are arbitrary (or squared),
+              never meters or square meters.
               Use only models you trust. No GPU training or held-out quality metric
               is implied.</footer>
           </main>
@@ -2256,6 +2397,8 @@ jobs:
           assert 'id="wre-path-toggle"' in page
           assert 'hotspot-wre-pick-' in page
           assert 'wre.relative_3d_surface_polyline.v1' in page
+          assert 'id="wre-angle-toggle"' in page
+          assert 'wre.relative_3d_chord_angle.v1' in page
           assert 'id="wre-measure-export"' in page
           assert 'distance_model_units' in page
           assert 'positionAndNormalFromPoint' in page
@@ -3770,6 +3913,190 @@ jobs:
                   document.querySelectorAll('.wre-pick-marker').length === 0;
               """)
 
+              # Real Chrome/WebGL raycasts and Blob export of relative 3D
+              # triangle-fan area on the actual photograph-derived mesh.
+              assert js("""
+                const scene=document.getElementById('wre-scene');
+                const button=document.getElementById('wre-area-toggle');
+                button.click();
+                return button.getAttribute('aria-pressed') === 'true' &&
+                  !scene.hasAttribute('auto-rotate');
+              """), "Chrome could not activate the polygon area mode"
+              # View orientation can still interpolate after auto-rotation is
+              # stopped. Sample real surface rays only after camera settles;
+              # compare *relative* area to scene scale, not absolute units.
+              area_scan = """
+                const scene=document.getElementById('wre-scene');
+                const box=scene.getBoundingClientRect(), hits=[];
+                for (let yi=0;yi<=10;yi++) for (let xi=0;xi<=10;xi++) {
+                  const x=box.left+box.width*(0.15+0.7*xi/10);
+                  const y=box.top+box.height*(0.15+0.7*yi/10);
+                  const hit=scene.positionAndNormalFromPoint(x,y);
+                  if (hit && hit.position) {
+                    const pos=[hit.position.x,hit.position.y,hit.position.z];
+                    if (pos.every(Number.isFinite)) hits.push({x,y,pos});
+                  }
+                }
+                if (hits.length < 3) return {points:null,count:hits.length,loaded:scene.loaded};
+                const a=hits[0];
+                let b=null, maxD=0;
+                for (const hit of hits.slice(1)) {
+                  const d=Math.hypot(...hit.pos.map((n,i)=>n-a.pos[i]));
+                  if (d>maxD) { maxD=d; b=hit; }
+                }
+                if (!b || !(maxD>0)) return {points:null,count:hits.length,maxD};
+                let c=null, maxArea=0;
+                for (const hit of hits) {
+                  const u=b.pos.map((n,i)=>n-a.pos[i]);
+                  const v=hit.pos.map((n,i)=>n-a.pos[i]);
+                  const area=0.5*Math.hypot(
+                    u[1]*v[2]-u[2]*v[1],
+                    u[2]*v[0]-u[0]*v[2],
+                    u[0]*v[1]-u[1]*v[0]
+                  );
+                  if (area>maxArea) { maxArea=area; c=hit; }
+                }
+                const valid=c && maxArea>maxD*maxD*1e-6;
+                return {points:valid?[a,b,c]:null,count:hits.length,maxD,maxArea};
+              """
+              area_probe = js(area_scan)
+              for _ in range(15):
+                  if area_probe.get("points"):
+                      break
+                  time.sleep(0.4)
+                  area_probe = js(area_scan)
+              assert area_probe.get("points"), area_probe
+              area_hits = area_probe["points"]
+              area_status = js(f"""
+                const scene=document.getElementById('wre-scene');
+                const button=document.getElementById('wre-area-toggle');
+                window.__wreClickedRaycasts=[];
+                for (const p of {json.dumps(area_hits)}) {{
+                  const hit=scene.positionAndNormalFromPoint(p.x,p.y);
+                  if (!hit || !hit.position) return {{error:'area click missed surface'}};
+                  window.__wreCapturingClick=true;
+                  scene.dispatchEvent(new MouseEvent('click', {{
+                    bubbles:true, clientX:p.x, clientY:p.y
+                  }}));
+                  window.__wreCapturingClick=false;
+                }}
+                return {{
+                  status:document.getElementById('wre-measure-result').textContent,
+                  pressed:button.getAttribute('aria-pressed'),
+                  enabled:!document.getElementById('wre-measure-export').disabled,
+                  stoppedAutoRotate:!scene.hasAttribute('auto-rotate'),
+                  clicked:window.__wreClickedRaycasts.slice(),
+                  markerCount:scene.querySelectorAll('.wre-pick-marker').length
+                }};
+              """)
+              assert area_status.get("clicked") and len(area_status["clicked"]) == 3, area_status
+              assert area_status["markerCount"] == 3
+              assert area_status["pressed"] == "true"
+              assert area_status["enabled"] and area_status["stoppedAutoRotate"]
+              assert "3D triangle-fan area:" in area_status["status"]
+              assert "NOT physical surface area or m²" in area_status["status"]
+              js("""
+                window.__wreExportedMeasurement = null;
+                document.getElementById('wre-measure-export').click();
+              """)
+              area_json = json.loads(until("return window.__wreExportedMeasurement;"))
+              assert area_json["schema"] == "wre.relative_3d_triangle_fan_area.v1"
+              assert area_json["model_source"] == "surface"
+              assert area_json["metric_scale_known"] is False
+              assert area_json["units"] == "model_units_squared"
+              assert area_json["triangulation"] == "fan_from_first_point"
+              assert area_json["physical_surface_area"] is False
+              assert area_json["points_xyz"] == area_status["clicked"]
+              a,b,c = area_status["clicked"]
+              u=[b[i]-a[i] for i in range(3)]
+              v=[c[i]-a[i] for i in range(3)]
+              cross=(
+                  u[1]*v[2]-u[2]*v[1],
+                  u[2]*v[0]-u[0]*v[2],
+                  u[0]*v[1]-u[1]*v[0],
+              )
+              expected_area=0.5*math.sqrt(sum(x*x for x in cross))
+              assert expected_area > 0.0
+              assert len(area_json["triangle_areas_model_units_squared"]) == 1
+              assert abs(area_json["triangle_areas_model_units_squared"][0]-expected_area) < 1e-6
+              assert abs(area_json["total_area_model_units_squared"]-expected_area) < 1e-6
+              assert js("""
+                document.getElementById('wre-area-toggle').click();
+                return document.getElementById('wre-measure-export').disabled &&
+                  document.getElementById('wre-scene').hasAttribute('auto-rotate') &&
+                  document.querySelectorAll('.wre-pick-marker').length === 0;
+              """)
+
+              # The fourth interactive mode measures the 3D chord angle at
+              # the MIDDLE of three actual raycast surface points. This angle
+              # is scale independent but NOT mesh curvature or a normal angle.
+              assert js("""
+                const scene=document.getElementById('wre-scene');
+                const button=document.getElementById('wre-angle-toggle');
+                button.click();
+                return button.getAttribute('aria-pressed') === 'true' &&
+                  !scene.hasAttribute('auto-rotate') &&
+                  document.getElementById('wre-measure-export').disabled;
+              """), "Chrome could not activate the 3D chord-angle mode"
+              angle_probe = js(area_scan)
+              for _ in range(15):
+                  if angle_probe.get("points"):
+                      break
+                  time.sleep(0.4)
+                  angle_probe = js(area_scan)
+              assert angle_probe.get("points"), angle_probe
+              angle_status = js(f"""
+                const scene=document.getElementById('wre-scene');
+                window.__wreClickedRaycasts=[];
+                for (const p of {json.dumps(angle_probe["points"])}) {{
+                  const hit=scene.positionAndNormalFromPoint(p.x,p.y);
+                  if (!hit || !hit.position) return {{error:'angle click missed mesh'}};
+                  window.__wreCapturingClick=true;
+                  scene.dispatchEvent(new MouseEvent('click', {{
+                    bubbles:true, clientX:p.x, clientY:p.y
+                  }}));
+                  window.__wreCapturingClick=false;
+                }}
+                return {{
+                  status:document.getElementById('wre-measure-result').textContent,
+                  enabled:!document.getElementById('wre-measure-export').disabled,
+                  clicked:window.__wreClickedRaycasts.slice(),
+                  markers:scene.querySelectorAll('.wre-pick-marker').length
+                }};
+              """)
+              assert len(angle_status.get("clicked", [])) == 3, angle_status
+              assert angle_status["enabled"] and angle_status["markers"] == 3
+              assert "3D chord angle:" in angle_status["status"]
+              assert "NOT mesh curvature" in angle_status["status"]
+              js("""
+                window.__wreExportedMeasurement = null;
+                document.getElementById('wre-measure-export').click();
+              """)
+              angle_json = json.loads(until("return window.__wreExportedMeasurement;"))
+              assert angle_json["schema"] == "wre.relative_3d_chord_angle.v1"
+              assert angle_json["model_source"] == "surface"
+              assert angle_json["metric_scale_known"] is False
+              assert angle_json["units"] == "degrees"
+              assert angle_json["vertex_index"] == 1
+              assert angle_json["surface_curvature"] is False
+              assert angle_json["points_xyz"] == angle_status["clicked"]
+              a,vertex,b = angle_status["clicked"]
+              u = [a[k]-vertex[k] for k in range(3)]
+              v = [b[k]-vertex[k] for k in range(3)]
+              norms = math.sqrt(sum(x*x for x in u) * sum(x*x for x in v))
+              assert norms > 1e-6
+              angle_expected = math.degrees(math.acos(max(-1.0, min(
+                  1.0, sum(u[k]*v[k] for k in range(3))/norms
+              ))))
+              assert 0 < angle_expected < 180
+              assert abs(angle_json["angle_degrees"] - angle_expected) < 1e-5
+              assert js("""
+                document.getElementById('wre-angle-toggle').click();
+                return document.getElementById('wre-measure-export').disabled &&
+                  document.getElementById('wre-scene').hasAttribute('auto-rotate') &&
+                  document.querySelectorAll('.wre-pick-marker').length === 0;
+              """)
+
               js("""
                 window.__wre3dLoads=0;
                 document.getElementById('wre-scene').addEventListener(
@@ -3856,6 +4183,8 @@ jobs:
                       "surface_distance_measured_in_chrome": True,
                       "surface_measurement_export_verified_in_chrome": True,
                       "surface_polyline_export_verified_in_chrome": True,
+                      "surface_triangle_fan_area_export_verified_in_chrome": True,
+                      "surface_chord_angle_export_verified_in_chrome": True,
                       "surface_reload": True,
                       "webgl_context": True,
                       "input_glb_sha256": expected_hashes,
@@ -3972,6 +4301,10 @@ jobs:
               raise ValueError("Actual Chrome did not export a nonmetric 3D surface measurement")
           if receipt.get("surface_polyline_export_verified_in_chrome") is not True:
               raise ValueError("Actual Chrome did not export a measured multi-point 3D path")
+          if receipt.get("surface_triangle_fan_area_export_verified_in_chrome") is not True:
+              raise ValueError("Actual Chrome did not export a relative 3D polygon triangle-fan area")
+          if receipt.get("surface_chord_angle_export_verified_in_chrome") is not True:
+              raise ValueError("Actual Chrome did not export a real-raycast 3D chord angle")
           
           glbs = (
               "wre-real-stereo-cpu-textured.glb",
