@@ -2023,6 +2023,9 @@ jobs:
               <span id="wre-camera-status" role="status">Camera bookmark available after load.</span>
               <button id="wre-tour-record" type="button" disabled>Record 3D viewpoint</button>
               <button id="wre-tour-play" type="button" disabled>Play camera tour</button>
+              <label for="wre-tour-step">Preview saved viewpoint:</label>
+              <input id="wre-tour-step" type="range" min="1" max="1" step="1" value="1"
+                aria-label="Preview a recorded static 3D camera viewpoint" disabled>
               <button id="wre-tour-clear" type="button">Clear camera tour</button>
               <button id="wre-tour-export" type="button" disabled>Download camera tour JSON</button>
               <label for="wre-tour-import">Restore camera tour:</label>
@@ -2067,6 +2070,7 @@ jobs:
               const cameraStatus = document.getElementById("wre-camera-status");
               const tourRecord = document.getElementById("wre-tour-record");
               const tourPlay = document.getElementById("wre-tour-play");
+              const tourStep = document.getElementById("wre-tour-step");
               const tourClear = document.getElementById("wre-tour-clear");
               const tourExport = document.getElementById("wre-tour-export");
               const tourImport = document.getElementById("wre-tour-import");
@@ -2087,6 +2091,12 @@ jobs:
               let cameraTourSource = null;
               let tourEpoch = 0;
               let tourPlaying = false;
+              function syncTourStep(selected = cameraTour.length) {
+                const count = Math.max(1, cameraTour.length);
+                tourStep.max = String(count);
+                tourStep.value = String(Math.min(Math.max(1, selected), count));
+                tourStep.disabled = tourPlaying || !scene.loaded || cameraTour.length === 0;
+              }
               function resetCameraTour() {
                 ++tourEpoch;
                 cameraTour = [];
@@ -2095,6 +2105,7 @@ jobs:
                 tourPlay.disabled = true;
                 tourExport.disabled = true;
                 tourRecord.disabled = !scene.loaded;
+                syncTourStep();
                 tourStatus.textContent = "No saved camera tour.";
               }
               tourRecord.addEventListener("click", () => {
@@ -2115,8 +2126,23 @@ jobs:
                 tourPlay.disabled = cameraTour.length < 2;
                 tourExport.disabled = cameraTour.length < 2;
                 tourRecord.disabled = cameraTour.length >= 8;
+                syncTourStep(cameraTour.length);
                 tourStatus.textContent = cameraTour.length +
                   " viewpoint(s) saved for this model; camera-only, nonmetric.";
+              });
+              tourStep.addEventListener("input", () => {
+                if (!scene.loaded || tourPlaying ||
+                    cameraTourSource !== scene.getAttribute("src")) return;
+                const index = Number(tourStep.value) - 1;
+                if (!Number.isInteger(index) || index < 0 || index >= cameraTour.length) return;
+                const frame = cameraTour[index];
+                scene.removeAttribute("auto-rotate");
+                scene.cameraOrbit = frame[0] + "rad " + frame[1] + "rad " + frame[2] + "m";
+                scene.cameraTarget = frame.slice(3, 6).map(value => value + "m").join(" ");
+                scene.fieldOfView = frame[6] + "deg";
+                scene.jumpCameraToGoal();
+                tourStatus.textContent = "Previewing saved viewpoint " + (index + 1) +
+                  "/" + cameraTour.length + " (static 3D, NOT 4D reconstruction).";
               });
               tourPlay.addEventListener("click", async () => {
                 if (!scene.loaded || tourPlaying || cameraTour.length < 2 ||
@@ -2124,6 +2150,7 @@ jobs:
                 const epoch = ++tourEpoch;
                 const frames = cameraTour.map(frame => frame.slice());
                 tourPlaying = true;
+                syncTourStep(1);
                 tourPlay.disabled = true;
                 tourRecord.disabled = true;
                 scene.removeAttribute("auto-rotate");
@@ -2135,6 +2162,7 @@ jobs:
                     scene.cameraTarget = frame.slice(3, 6).map(value => value + "m").join(" ");
                     scene.fieldOfView = frame[6] + "deg";
                     scene.jumpCameraToGoal();
+                    tourStep.value = String(index + 1);
                     tourStatus.textContent = "Playing camera viewpoint " + (index + 1) +
                       "/" + frames.length + ".";
                     await new Promise(resolve => setTimeout(resolve, 650));
@@ -2149,6 +2177,7 @@ jobs:
                     tourPlay.disabled = cameraTour.length < 2 || !scene.loaded;
                     tourExport.disabled = cameraTour.length < 2 || !scene.loaded;
                     tourRecord.disabled = cameraTour.length >= 8 || !scene.loaded;
+                    syncTourStep(frames.length);
                   }
                 }
               });
@@ -2205,6 +2234,7 @@ jobs:
                   tourRecord.disabled = cameraTour.length >= 8;
                   tourPlay.disabled = false;
                   tourExport.disabled = false;
+                  syncTourStep(cameraTour.length);
                   tourStatus.textContent = cameraTour.length +
                     " tour viewpoints restored; viewer-only, NOT 4D reconstruction.";
                 } catch (error) {
@@ -2219,6 +2249,7 @@ jobs:
                 cameraStatus.textContent = "Export or restore this model's relative 3D viewpoint.";
                 tourRecord.disabled = false;
                 tourImport.disabled = false;
+                syncTourStep();
                 viewExportButton.disabled = false;
                 viewExportStatus.textContent = "Capture the current rendered view; nonmetric PNG.";
               });
