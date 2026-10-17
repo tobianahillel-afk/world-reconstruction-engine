@@ -908,7 +908,7 @@ jobs:
               "9c055b7dd4084ae58d388159649045552d146d0cc507bc4e8d900f75e233cec3"
           )
           assert hashlib.sha256(right_bytes).hexdigest() == (
-              "203d6e855ed055043f8361838ba8211700ec29b5775145990c5101dbbe26"
+              "203d6e855ed055043f8361838ba8211700ec29b5775145990c5101dbbe26b2de"
           )
           assert hashlib.sha256(gt_bytes).hexdigest() == (
               "fde8cfcf3d6d66a032f0096ffc112fda03f15b0d4bc43a5c4a8f1c5d29cd82c3"
