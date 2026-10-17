@@ -753,7 +753,7 @@ jobs:
           assert len(parser.image_names) == receipt["undistorted_registered_views"] == 4
           assert parser.points.shape == (receipt["undistorted_points3d"], 3)
           assert parser.points_rgb.shape == (receipt["undistorted_points3d"], 3)
-          assert parser.camtoworlds.shape == (3, 4, 4)
+          assert parser.camtoworlds.shape == (4, 4, 4)
           assert np.isfinite(parser.camtoworlds).all()
           assert np.isfinite(parser.points).all()
           assert set(parser.image_names) == set(receipt["views"])
