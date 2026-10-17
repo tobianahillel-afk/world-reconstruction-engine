@@ -7197,7 +7197,8 @@ jobs:
               "2. Linux/macOS : python3 open-wre-3d.py ; Windows : py -3 open-wre-3d.py\n"
               "3. Le navigateur ouvre automatiquement la galerie locale (127.0.0.1).\n"
               "4. Sélectionnez le visualiseur interactif 3D et ses quatre modes.\n"
-              "5. Cliquez sur l'aperçu de disparité pour lire le pixel float32 réel.\n"
+              "5. Cliquez sur la disparité pour voir les deux observations des photos\n"
+              "   et les coordonnées 3D relatives (PAS une mesure en mètres).\n"
               "   Vous pouvez télécharger PFM ou PNG 16 bits : valeur PNG/256 = disparité ;\n"
               "   0 = pixel invalide. Ne PAS interpréter comme une profondeur en mètres.\n"
               "Tout est local après extraction, sans API payante ni accès Internet.\n"
@@ -7452,7 +7453,8 @@ jobs:
                   px, py = index % width, height - 1 - index // width
                   if (1 <= px < width - 1 and 1 <= py < height - 1 and
                       all(2.0 < actual_disparity(px + dx, py + dy) < 128.0
-                          for dx in (-1, 0, 1) for dy in (-1, 0, 1))):
+                          for dx in (-1, 0, 1) for dy in (-1, 0, 1)) and
+                      9 < px - value < width - 9 and 9 < py < height - 9):
                       measured = (px, py)
                       break
               assert measured is not None, "No observed contiguous valid stereo pixels"
@@ -7489,6 +7491,43 @@ jobs:
               assert "PAS des mètres" in js(
                   "return document.getElementById('wre-pixel-inspector').textContent"
               )
+              # Inspect the ACTUAL rectified source photographs from the same
+              # extracted ZIP, not a synthetic photo or a copied DOM label.
+              correspondences = js("""return (() => {
+                  const status=document.getElementById('wre-pixel-inspector');
+                  const photos=document.getElementById('wre-stereo-match-photos');
+                  const overlay=document.getElementById('wre-stereo-match-overlay');
+                  const context=overlay.getContext('2d');
+                  const x=Number(status.dataset.x), y=Number(status.dataset.y);
+                  const xr=Number(status.dataset.rightX);
+                  function ring(x) {
+                    return Array.from(context.getImageData(Math.round(x)+6,y,1,1).data);
+                  }
+                  return {
+                    loaded:photos.complete && photos.naturalWidth===overlay.width &&
+                      photos.naturalHeight===overlay.height,
+                    width:photos.naturalWidth,height:photos.naturalHeight,
+                    rightX:xr,rightY:Number(status.dataset.rightY),
+                    modelX:Number(status.dataset.modelX),modelY:Number(status.dataset.modelY),
+                    modelZ:Number(status.dataset.modelZ),
+                    left:ring(x),right:ring(overlay.width/2+xr)
+                  };
+              })()""")
+              assert correspondences["loaded"], correspondences
+              assert correspondences["width"] == 2*width
+              assert correspondences["height"] == height
+              assert abs(correspondences["rightX"]-(selected_x-expected_disparity)) < 1e-4
+              assert correspondences["rightY"] == selected_y
+              assert abs(correspondences["modelX"] -
+                         (selected_x-(width-1)/2)/expected_disparity) < 1e-4
+              assert abs(correspondences["modelY"] -
+                         (selected_y-(height-1)/2)/expected_disparity) < 1e-4
+              assert abs(correspondences["modelZ"] - width/expected_disparity) < 1e-4
+              assert correspondences["left"][0] > 150 and correspondences["left"][1] < 90
+              assert correspondences["left"][3] > 0
+              assert correspondences["right"][1] > 140 and correspondences["right"][0] < 100
+              assert correspondences["right"][3] > 0
+              print("PASS: actual Chrome marked two observed stereo pixels and relative 3D XYZ")
               assert js("""return !!document.querySelector(
                   'a[href="./wre-real-stereo-cpu-disparity-f32.pfm"][download]'
               )""")
