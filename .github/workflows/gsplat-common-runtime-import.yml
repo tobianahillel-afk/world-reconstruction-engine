@@ -1325,10 +1325,12 @@ jobs:
           import math
           import struct
           import os
+          import zipfile
           from pathlib import Path
 
           import cv2
           import numpy as np
+          from scipy.spatial.transform import Rotation
 
           root = Path(os.environ["RUNNER_TEMP"])
           metadata = json.loads((root / "wre-real-stereo-cpu-metrics.json").read_text())
@@ -1454,6 +1456,89 @@ jobs:
           ):
               assert np.array_equal(np.asarray(reloaded[name]), expected)
           assert reloaded["source_ply_sha256"] == hashlib.sha256(ply.read_bytes()).hexdigest()
+          # The input-only SIFT pose and measured 2D↔3D tracks now form an
+          # actual registered COLMAP dataset, not an external pose supplied
+          # by a fixture. Reuse the binary layout already exercised above.
+          sift_root = root / "wre-real-stereo-sift-colmap"
+          sift_images = sift_root / "images"
+          sift_sparse = sift_root / "sparse" / "0"
+          sift_images.mkdir(parents=True)
+          sift_sparse.mkdir(parents=True)
+          sift_names = ("aloe-sift-left.png", "aloe-sift-right.png")
+          for photograph, name in zip((left, right), sift_names, strict=True):
+              assert cv2.imwrite(str(sift_images / name), photograph)
+          (sift_sparse / "cameras.bin").write_bytes(
+              struct.pack("<Q", 1) + struct.pack(
+                  "<IiQQ4d", 1, 1, w, h, focal, focal,
+                  float(K[0, 2]), float(K[1, 2]),
+              )
+          )
+          q_xyzw = Rotation.from_matrix(R).as_quat()
+          q_wxyz = tuple(float(q_xyzw[k]) for k in (3, 0, 1, 2))
+          recovered_poses = (
+              ((1.0, 0.0, 0.0, 0.0), (0.0, 0.0, 0.0)),
+              (q_wxyz, tuple(float(v) for v in t.ravel())),
+          )
+          observed_images = bytearray(struct.pack("<Q", 2))
+          for image_id, (name, pixels, (quaternion, translation)) in enumerate(
+              zip(sift_names, (p0, p1), recovered_poses, strict=True), 1
+          ):
+              observed_images.extend(struct.pack(
+                  "<I4d3dI", image_id, *quaternion, *translation, 1
+              ))
+              observed_images.extend(name.encode("ascii") + b"\x00")
+              observed_images.extend(struct.pack("<Q", len(xyz)))
+              for index, (x, y) in enumerate(pixels, 1):
+                  observed_images.extend(struct.pack(
+                      "<ddq", float(x), float(y), index
+                  ))
+          (sift_sparse / "images.bin").write_bytes(observed_images)
+          reconstructed_points = bytearray(struct.pack("<Q", len(xyz)))
+          for index, (point, color, predicted0, predicted1, measured0, measured1) in enumerate(
+              zip(xyz, rgb, uv0, uv1, p0, p1, strict=True)
+          ):
+              residual = float(np.sqrt(
+                  (np.sum((predicted0 - measured0) ** 2)
+                   + np.sum((predicted1 - measured1) ** 2)) / 2
+              ))
+              assert np.isfinite(residual) and residual < 20.0
+              reconstructed_points.extend(struct.pack(
+                  "<Q3d3BdQ", index + 1, *[float(v) for v in point],
+                  *[int(v) for v in color], residual, 2,
+              ))
+              for image_id in (1, 2):
+                  reconstructed_points.extend(struct.pack("<II", image_id, index))
+          (sift_sparse / "points3D.bin").write_bytes(reconstructed_points)
+          siftdataset_zip = root / "wre-real-stereo-sift-colmap-dataset.zip"
+          with zipfile.ZipFile(siftdataset_zip, "w", zipfile.ZIP_DEFLATED) as archive:
+              for pathname in sorted(sift_root.rglob("*")):
+                  if pathname.is_file():
+                      archive.write(pathname, pathname.relative_to(sift_root))
+          with zipfile.ZipFile(siftdataset_zip) as archive:
+              assert sorted(archive.namelist()) == sorted([
+                  "images/" + name for name in sift_names
+              ] + [
+                  "sparse/0/cameras.bin", "sparse/0/images.bin",
+                  "sparse/0/points3D.bin",
+              ])
+          handoff = {
+              "real_photographs": True,
+              "image_only_estimated_camera_poses": True,
+              "registered_camera_count": 2,
+              "registered_3d_tracks": len(xyz),
+              "tracks_sha256": hashlib.sha256(track_path.read_bytes()).hexdigest(),
+              "estimated_pose_sha256": tracks["estimated_pose_sha256"],
+              "colmap_zip_sha256": hashlib.sha256(siftdataset_zip.read_bytes()).hexdigest(),
+              "approximate_intrinsics": True,
+              "metric_scale_known": False,
+              "upstream_colmap_parser_execution": "verified in later native step",
+              "gpu_training_executed": False,
+          }
+          (root / "wre-real-stereo-sift-colmap-handoff.json").write_text(
+              json.dumps(handoff, sort_keys=True, indent=2, allow_nan=False) + "\n",
+              encoding="utf-8",
+          )
+          assert len(xyz) >= 20 and siftdataset_zip.stat().st_size > 1000
           # Reuse the project glTF 2.0 exporter layout (binary views + JSON chunk).
           # These are REAL SIFT-triangulated photo RGB points, not a synthetic mesh.
           axis = np.diag([1.0, -1.0, -1.0])
