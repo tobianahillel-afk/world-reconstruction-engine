@@ -1975,6 +1975,9 @@ jobs:
               <button id="wre-angle-toggle" type="button" aria-pressed="false">Measure 3D chord angle</button>
               <button id="wre-measure-export" type="button" disabled
                 aria-label="Download relative surface measurement as JSON">Download measurement JSON</button>
+              <button id="wre-view-export" type="button" disabled
+                aria-label="Save current 3D view as PNG">Save current 3D view PNG</button>
+              <span id="wre-view-export-status" role="status">3D view loading.</span>
             </div>
             <model-viewer id="wre-scene" camera-controls auto-rotate interaction-prompt="auto"
               alt="Approximate CPU stereo 3D reconstruction from two real photos"
@@ -1993,7 +1996,44 @@ jobs:
               const areaButton = document.getElementById("wre-area-toggle");
               const angleButton = document.getElementById("wre-angle-toggle");
               const exportButton = document.getElementById("wre-measure-export");
+              const viewExportButton = document.getElementById("wre-view-export");
+              const viewExportStatus = document.getElementById("wre-view-export-status");
               const measureResult = document.getElementById("wre-measure-result");
+              scene.addEventListener("load", () => {
+                viewExportButton.disabled = false;
+                viewExportStatus.textContent = "Capture the current rendered view; nonmetric PNG.";
+              });
+              scene.addEventListener("error", () => {
+                viewExportButton.disabled = true;
+                viewExportStatus.textContent = "3D view could not be loaded.";
+              });
+              viewExportButton.addEventListener("click", async () => {
+                if (!scene.loaded || viewExportButton.disabled) return;
+                const capturedSrc = scene.getAttribute("src");
+                viewExportButton.disabled = true;
+                try {
+                  // Upstream model-viewer 4.1.0 screenshot API: the WebGL-rendered
+                  // view, not a regenerated estimate or an invented camera.
+                  const blob = await scene.toBlob({mimeType: "image/png"});
+                  if (blob.type !== "image/png" || blob.size < 1000 ||
+                      capturedSrc !== scene.getAttribute("src")) {
+                    throw new Error("View changed or screenshot is invalid.");
+                  }
+                  const url = URL.createObjectURL(blob);
+                  const link = document.createElement("a");
+                  link.href = url;
+                  link.download = "wre-current-3d-view.png";
+                  document.body.appendChild(link);
+                  link.click();
+                  link.remove();
+                  setTimeout(() => URL.revokeObjectURL(url), 1000);
+                  viewExportStatus.textContent = "PNG view captured locally; no metric accuracy claim.";
+                } catch (error) {
+                  viewExportStatus.textContent = "PNG capture failed: " + String(error);
+                } finally {
+                  viewExportButton.disabled = !scene.loaded;
+                }
+              });
               let measuring = false;
               let tracing = false;
               let areaMode = false;
@@ -2286,6 +2326,8 @@ jobs:
                 }
                 releaseLocalUrl();
                 resetMeasurement();
+                viewExportButton.disabled = true;
+                viewExportStatus.textContent = "Loading selected GLB.";
                 localUrl = URL.createObjectURL(file);
                 scene.setAttribute("src", localUrl);
                 scene.setAttribute("alt", "User-selected local GLB model");
@@ -2320,6 +2362,8 @@ jobs:
                 if (!mode) return;
                 releaseLocalUrl();
                 resetMeasurement();
+                viewExportButton.disabled = true;
+                viewExportStatus.textContent = "Loading selected 3D mode.";
                 localInput.value = "";
                 scene.setAttribute("src", mode.src);
                 scene.setAttribute("alt", mode.alt);
