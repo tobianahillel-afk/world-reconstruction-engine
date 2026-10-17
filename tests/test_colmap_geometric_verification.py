@@ -543,9 +543,7 @@ def test_native_geometry_can_omit_only_zero_match_pairs(
     fake.Database = SimpleNamespace(open=native_database_open)
     request = _request(tmp_path, matching)
     if omitted_raw_count != 0:
-        with pytest.raises(
-            ColmapGeometricVerificationError, match="geometry evidence membership"
-        ):
+        with pytest.raises(ColmapGeometricVerificationError, match="geometry evidence membership"):
             verify_colmap_geometry(request, module=fake)
         assert not request.database_path.exists()
     else:
