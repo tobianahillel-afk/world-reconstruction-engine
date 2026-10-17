@@ -3244,15 +3244,38 @@ jobs:
 
   browser-real-3d-smoke:
     name: Real Chrome 3D viewer modes (CPU SwiftShader)
-    # The CPU preview is uploaded BEFORE native compilation. Always try to
-    # inspect it, even if the later CUDA compilation in the parent job fails.
-    if: ${{ always() }}
-    needs: combined-native-import
+    # The CPU preview is uploaded before the long native CUDA compilation.
+    # Poll that same-run artifact rather than waiting for the parent job to
+    # finish; otherwise the functional Chrome proof is needlessly delayed.
     runs-on: ubuntu-24.04
-    timeout-minutes: 12
+    timeout-minutes: 15
     permissions:
       contents: read
+      actions: read
     steps:
+      - name: Wait for exact-run CPU 3D artifact (independent of CUDA build)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.run_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Only THIS workflow run may satisfy the dependency; never accept a
+          # similarly named artifact from another commit or previous job.
+          for attempt in $(seq 1 60); do
+            ready="$(gh api \
+              "/repos/$RUN_REPO/actions/runs/$RUN_ID/artifacts?name=wre-real-stereo-cpu-early-preview" \
+              --jq '[.artifacts[] | select(.name == "wre-real-stereo-cpu-early-preview" and .expired == false)] | length')"
+            if [[ "$ready" == "1" ]]; then
+              echo "Verified the same-run real-photo 3D artifact at attempt $attempt"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::CPU real-photo preview was not published within 10 minutes"
+          exit 1
+
       - name: Download exact-run real-photo CPU 3D artifacts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
