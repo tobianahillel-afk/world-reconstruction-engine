@@ -804,6 +804,241 @@ jobs:
           )
           PY
 
+      - name: Measure real 3D-to-2D COLMAP reprojection error on source photographs (CPU)
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv/bin/python - <<'PY'
+          import hashlib
+          import json
+          import math
+          import os
+          from pathlib import Path
+          import numpy as np
+          import pycolmap
+
+          root = Path(os.environ["RUNNER_TEMP"]) / "wre-real-photo-colmap-rgb"
+          dataset = root / "gsplat-capture"
+          manifest_path = dataset / "wre-capture-manifest.json"
+          manifest = json.loads(manifest_path.read_text())
+          for relative, digest in manifest["file_sha256"].items():
+              item = dataset / relative
+              assert item.is_file() and not item.is_symlink()
+              assert hashlib.sha256(item.read_bytes()).hexdigest() == digest
+          model = pycolmap.Reconstruction(str(dataset / "sparse" / "0"))
+          assert model.num_reg_images() == manifest["undistorted_registered_views"] == 3
+          assert model.num_points3D() == manifest["undistorted_points3d"] == 856
+
+          def summarize(errors):
+              arr = np.asarray(errors, dtype=np.float64)
+              assert len(arr) and np.isfinite(arr).all()
+              return {
+                  "observations": int(len(arr)),
+                  "rms_pixels": float(np.sqrt(np.mean(arr * arr))),
+                  "median_pixels": float(np.median(arr)),
+                  "p95_pixels": float(np.percentile(arr, 95)),
+                  "max_pixels": float(np.max(arr)),
+              }
+
+          all_errors, point_ids, cameras = [], set(), {}
+          for image_id in sorted(int(i) for i in model.reg_image_ids()):
+              image = model.image(image_id)
+              assert image.name in manifest["views"]
+              errors = []
+              for feature in image.points2D:
+                  if not feature.has_point3D():
+                      continue
+                  point_id = int(feature.point3D_id)
+                  xyz = np.asarray(model.point3D(point_id).xyz, dtype=np.float64)
+                  observed = np.asarray(feature.xy, dtype=np.float64)
+                  projected = image.project_point(xyz)
+                  assert projected is not None, (image.name, point_id)
+                  projected = np.asarray(projected, dtype=np.float64)
+                  assert observed.shape == projected.shape == (2,)
+                  assert np.isfinite(observed).all() and np.isfinite(projected).all()
+                  error = math.hypot(*(projected - observed))
+                  assert math.isfinite(error)
+                  errors.append(error)
+                  all_errors.append(error)
+                  point_ids.add(point_id)
+              assert len(errors) >= 50, (image.name, len(errors))
+              cameras[image.name] = summarize(errors)
+          assert len(cameras) == 3
+          assert len(all_errors) >= 300 and len(point_ids) >= 100
+          report = {
+              "schema": "wre.experimental.real_photo_reprojection_v1",
+              "metric_type": "in_sample_colmap_bundle_adjustment_residual",
+              "units": "undistorted_image_pixels",
+              "camera_count": len(cameras),
+              "unique_source_3d_points_observed": len(point_ids),
+              "source_native_sparse_points": manifest["native_points3d"],
+              "overall": summarize(all_errors),
+              "per_undistorted_camera": cameras,
+              "held_out_accuracy_measured": False,
+              "metric_scale_known": False,
+              "gpu_training_steps": 0,
+              "license": manifest["license"],
+              "credit": manifest["credit"],
+          }
+          report_file = dataset / "inspection" / "real-colmap-reprojection-quality.json"
+          report_file.parent.mkdir(exist_ok=True)
+          payload = (json.dumps(report, indent=2, sort_keys=True, allow_nan=False) + "\n").encode()
+          report_file.write_bytes(payload)
+          digest = hashlib.sha256(payload).hexdigest()
+          manifest["file_sha256"][report_file.relative_to(dataset).as_posix()] = digest
+          manifest["reprojection_quality"] = {
+              "report_path": report_file.relative_to(dataset).as_posix(),
+              "report_sha256": digest,
+              "in_sample_rms_pixels": report["overall"]["rms_pixels"],
+              "in_sample_p95_pixels": report["overall"]["p95_pixels"],
+              "tracked_observations": len(all_errors),
+          }
+          manifest_path.write_text(json.dumps(manifest, sort_keys=True, indent=2) + "\n")
+          assert json.loads(report_file.read_text())["overall"]["observations"] == len(all_errors)
+          print(
+              "REAL CPU COLMAP REPROJECTION QUALITY:",
+              len(all_errors), "observations,", len(point_ids), "unique 3D points,",
+              "RMS", round(report["overall"]["rms_pixels"], 4), "px,",
+              "P95", round(report["overall"]["p95_pixels"], 4), "px;",
+              "in-sample ONLY, held-out and GPU UNVERIFIED",
+          )
+          PY
+
+      - name: Export native-photo RGB Gaussian seeds using exact upstream gsplat exporter on CPU
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/wre-gsplat-parser-venv/bin/python" - <<'PY'
+          import hashlib
+          import importlib.util
+          import json
+          import os
+          import struct
+          from collections import Counter
+          from pathlib import Path
+          import numpy as np
+          import torch
+          from scipy.spatial import cKDTree
+          import sys
+          sys.path.insert(
+              0,
+              str(Path(os.environ["RUNNER_TEMP"]) / "wre-gsplat-parser-source" / "gsplat" / "examples"),
+          )
+          from datasets.colmap import Parser
+
+          root = Path(os.environ["RUNNER_TEMP"]) / "wre-real-photo-colmap-rgb"
+          receipt = json.loads((root / "real-photo-colmap-rgb-receipt.json").read_text())
+          dataset = root / "gsplat-capture"
+          manifest = json.loads((dataset / "wre-capture-manifest.json").read_text())
+          for relative, expected in manifest["file_sha256"].items():
+              item = dataset / relative
+              assert item.is_file() and not item.is_symlink()
+              assert hashlib.sha256(item.read_bytes()).hexdigest() == expected
+          observed = root / "observed-real-colmap-rgb.ply"
+          raw = observed.read_bytes()
+          assert hashlib.sha256(raw).hexdigest() == receipt["reconstruction"]["ply_sha256"]
+          header, marker, body = raw.partition(b"end_header\n")
+          native_count = receipt["reconstruction"]["sparse_points"]
+          count = receipt["reconstruction"]["exported_rgb_points"]
+          assert marker and count == 854 and native_count == 856
+          assert b"comment wre_color_source original_srgb8_feature_observation" in header
+          assert f"comment wre_native_source_points {native_count}".encode() in header
+          assert f"element vertex {count}".encode() in header
+          assert len(body) == count * struct.calcsize("<3f3B")
+          pts = np.empty((count, 3), dtype=np.float32)
+          rgb = np.empty((count, 3), dtype=np.uint8)
+          for i, rec in enumerate(struct.iter_unpack("<3f3B", body)):
+              pts[i], rgb[i] = rec[:3], rec[3:]
+          assert np.isfinite(pts).all() and np.any(rgb > 0)
+          parsed = Parser(str(dataset), factor=1, normalize=False, test_every=8)
+          assert parsed.points.shape == (native_count, 3)
+          native_positions = Counter(tuple(v) for v in parsed.points.astype(np.float32))
+          observed_positions = Counter(tuple(v) for v in pts)
+          assert all(native_positions[k] >= n for k, n in observed_positions.items())
+
+          path = Path(os.environ["RUNNER_TEMP"]) / "wre-gsplat-parser-source" / "gsplat" / "gsplat" / "exporter.py"
+          source = path.read_bytes()
+          blob = hashlib.sha1(b"blob " + str(len(source)).encode() + b"\0" + source).hexdigest()
+          assert blob == "b395283ac171bbb5db3198d110d7b1c6d97fb0fc"
+          spec = importlib.util.spec_from_file_location("gsplat_1_5_3_exact_exporter", path)
+          assert spec and spec.loader
+          exporter = importlib.util.module_from_spec(spec)
+          spec.loader.exec_module(exporter)
+
+          # Use gsplat v1.5.3's SfM initialization formulas, but preserve WRE
+          # original source RGB instead of potentially uncolored COLMAP points.
+          distances, _ = cKDTree(pts).query(pts, k=4)
+          sq_avg = np.mean(distances[:, 1:] ** 2, axis=1)
+          assert np.isfinite(sq_avg).all() and np.all(sq_avg > 0)
+          means = torch.from_numpy(pts.copy())
+          scales = torch.log(torch.from_numpy(np.sqrt(sq_avg).astype(np.float32))).unsqueeze(1).repeat(1, 3)
+          colors = torch.from_numpy(rgb.astype(np.float32) / 255.0)
+          sh0 = ((colors - 0.5) / 0.28209479177387814).unsqueeze(1)
+          shN = torch.zeros((count, 15, 3), dtype=torch.float32)
+          quats = torch.zeros((count, 4), dtype=torch.float32)
+          quats[:, 0] = 1
+          opacities = torch.logit(torch.full((count,), 0.1))
+          assert all(torch.isfinite(v).all().item() for v in (means, scales, sh0, shN, quats, opacities))
+          assert not torch.cuda.is_available()
+          params = dict(means=means, scales=scales, quats=quats, opacities=opacities, sh0=sh0, shN=shN)
+          ply_data = exporter.export_splats(**params, format="ply")
+          splat_data = exporter.export_splats(**params, format="splat")
+          assert len(splat_data) == count * 32
+          exported_header, marker, payload = ply_data.partition(b"end_header\n")
+          assert marker and f"element vertex {count}".encode() in exported_header
+          assert len(payload) == count * 236
+          assert all(payload[i * 236 : i * 236 + 12] == body[i * 15 : i * 15 + 12] for i in range(count))
+          assert Counter(struct.unpack_from("<3f", splat_data, i * 32) for i in range(count)) == observed_positions
+          assert all(splat_data[i * 32 + 27] > 0 for i in range(count))
+          target = root / "real-photo-initial-gaussians"
+          target.mkdir()
+          (target / "observed-GAUSSIANS-UNTRAINED.ply").write_bytes(ply_data)
+          (target / "observed-GAUSSIANS-UNTRAINED.splat").write_bytes(splat_data)
+          quality_ref = manifest["reprojection_quality"]
+          assert quality_ref["report_sha256"] == manifest["file_sha256"][quality_ref["report_path"]]
+          assert quality_ref["tracked_observations"] >= 300
+          result = {
+              "kind": "wre.experimental.real_photo_untrained_gaussian_seed",
+              "source_gsplat_commit": "937e29912570c372bed6747a5c9bf85fed877bae",
+              "source_gsplat_exporter_blob_sha1": blob,
+              "source_observed_rgb_ply_sha256": receipt["reconstruction"]["ply_sha256"],
+              "source_native_colmap_geometry_sha256": receipt["reconstruction"]["source_sparse_identity_sha256"],
+              "source_native_colmap_point_count": native_count,
+              "source_in_sample_reprojection_report_sha256": quality_ref["report_sha256"],
+              "source_in_sample_reprojection_rms_pixels": quality_ref["in_sample_rms_pixels"],
+              "source_in_sample_reprojection_p95_pixels": quality_ref["in_sample_p95_pixels"],
+              "source_in_sample_tracked_observations": quality_ref["tracked_observations"],
+              "held_out_quality_verified": False,
+              "gaussians_original_rgb_observed": count,
+              "uncolorable_native_points_excluded": native_count-count,
+              "sizing": "mean squared distance to three nearest neighbors, same gsplat v1.5.3 formula",
+              "orientation": "identity untrained",
+              "opacity_initial": 0.1,
+              "sh_degree": 3,
+              "sh0": "original RGB8 / 255 -> (rgb-0.5) / 0.28209479177387814",
+              "upstream_exporter_ply_sha256": hashlib.sha256(ply_data).hexdigest(),
+              "upstream_exporter_splat_sha256": hashlib.sha256(splat_data).hexdigest(),
+              "ply_bytes": len(ply_data),
+              "splat_bytes": len(splat_data),
+              "training_steps": 0,
+              "gpu_kernel_executed": False,
+              "metric_scale_known": False,
+              "color_radiometry_calibrated": False,
+              "dataset_license": manifest["license"],
+              "dataset_credit": manifest["credit"],
+          }
+          (target / "untrained-gaussian-provenance.json").write_text(json.dumps(result, indent=2, sort_keys=True)+"\n")
+          print("REAL OBSERVED GAUSSIAN INITIALIZATION PASS:", count, "points; PLY", len(ply_data), "bytes; splat", len(splat_data), "bytes; GPU training 0")
+          PY
+
+      - name: Publish actual upstream Gaussian seed PLY and splat (NOT TRAINED)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wre-real-photo-GAUSSIANS-UNTRAINED
+          path: ${{ runner.temp }}/wre-real-photo-colmap-rgb/real-photo-initial-gaussians/
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Publish reusable real-photo undistorted COLMAP capture for GPU handoff
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
