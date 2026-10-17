@@ -1310,9 +1310,7 @@ def test_verified_gsplat_gaussian_splat_export_retains_shape_orientation_and_opa
     second[-8:] = [5.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0]
     template = _gsplat_ply(vertices=2)
     split = template.index(b"end_header\n") + len(b"end_header\n")
-    gaussian_ply = template[:split] + struct.pack("<59f", *first) + struct.pack(
-        "<59f", *second
-    )
+    gaussian_ply = template[:split] + struct.pack("<59f", *first) + struct.pack("<59f", *second)
     root, profile, ref = _gsplat_output(tmp_path, gaussian_ply)
     viewer = tmp_path / "viewer"
     viewer.mkdir()
