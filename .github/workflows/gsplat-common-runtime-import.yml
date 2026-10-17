@@ -6653,6 +6653,89 @@ jobs:
           PY
           python3 wre-unified-offline-3d/open-wre-3d.py --check
 
+      # Test the EXACT extracted package, not the earlier staging directory.
+      # The same Chrome/ChromeDriver already used above are reused here.
+      - name: Open the final offline 3D archive in actual Chrome WebGL
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$CHROMEWEBDRIVER/chromedriver"
+          python3 -m http.server 8877 --bind 127.0.0.1 --directory wre-unified-offline-3d > /tmp/wre-bundled-3d-http.log 2>&1 &
+          http_pid="$!"
+          "$CHROMEWEBDRIVER/chromedriver" --port=9516 --allowed-ips=127.0.0.1 > /tmp/wre-bundled-3d-driver.log 2>&1 &
+          driver_pid="$!"
+          trap 'kill "$http_pid" "$driver_pid" 2>/dev/null || true' EXIT
+          python3 - <<'PY'
+          import json
+          import time
+          from urllib.error import URLError
+          from urllib.request import Request, urlopen
+
+          def browser(method, route, body=None):
+              data = None if body is None else json.dumps(body).encode("utf-8")
+              request = Request(
+                  "http://127.0.0.1:9516" + route, data=data, method=method,
+                  headers={"Content-Type": "application/json"},
+              )
+              with urlopen(request, timeout=45) as response:
+                  return json.loads(response.read())["value"]
+
+          def wait_for(predicate, timeout=90):
+              deadline = time.monotonic() + timeout
+              while time.monotonic() < deadline:
+                  if predicate():
+                      return
+                  time.sleep(0.25)
+              raise RuntimeError("The packaged offline 3D viewer did not load in Chrome")
+
+          def js(script):
+              return browser("POST", f"/session/{session}/execute/sync", {
+                  "script": script, "args": [],
+              })
+
+          wait_for(lambda: browser("GET", "/status")["ready"], timeout=20)
+          capabilities = {
+              "browserName": "chrome",
+              "goog:chromeOptions": {"args": [
+                  "--headless=new", "--no-sandbox", "--disable-dev-shm-usage",
+                  "--enable-unsafe-swiftshader", "--use-gl=angle",
+                  "--use-angle=swiftshader", "--window-size=1280,900",
+                  "--disable-background-networking",
+                  "--host-resolver-rules=MAP * 0.0.0.0, EXCLUDE localhost",
+              ]},
+          }
+          session = browser("POST", "/session", {
+              "capabilities": {"alwaysMatch": capabilities},
+          })["sessionId"]
+          try:
+              browser("POST", f"/session/{session}/url", {
+                  "url": "http://127.0.0.1:8877/wre-real-3d-comparison.html",
+              })
+              wait_for(lambda: js(
+                  "return document.querySelector('a[href=\"./wre-real-stereo-cpu-viewer.html\"]') !== null"
+              ))
+              browser("POST", f"/session/{session}/url", {
+                  "url": "http://127.0.0.1:8877/wre-real-stereo-cpu-viewer.html",
+              })
+              loaded = """return (() => {
+                  const scene = document.getElementById("wre-scene");
+                  return Boolean(scene && scene.loaded && scene.model &&
+                      document.getElementById("wre-camera-export").disabled === false);
+              })()"""
+              wait_for(lambda: js(loaded))
+              js("""const choice = document.getElementById("wre-scene-choice");
+                  choice.value = "sift";
+                  choice.dispatchEvent(new Event("change", {bubbles: true}));""")
+              wait_for(lambda: js(loaded) and js(
+                  "return document.getElementById('wre-scene-choice').value === 'sift'"
+                  " && document.getElementById('wre-scene').getAttribute('src').includes('sift')"
+              ))
+              assert js("return !!document.createElement('canvas').getContext('webgl2')")
+              print("PASS: final packaged offline 3D gallery and SIFT GLB rendered in real Chrome WebGL")
+          finally:
+              browser("DELETE", f"/session/{session}")
+          PY
+
       - name: Publish unified interactive 3D exploration archive
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
