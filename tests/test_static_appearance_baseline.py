@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import hashlib
 import os
+import shutil
 import struct
 import sys
 import zlib
@@ -114,6 +115,7 @@ from wre.reconstruction.static_appearance_baseline import (
     inspect_gsplat_static_appearance_shared_track_pixels,
     materialize_verified_gsplat_ply,
     preflight_gsplat_static_appearance_inputs,
+    reconstruct_gsplat_static_appearance,
     run_gsplat_reference_training,
     stage_verified_gsplat_static_appearance_dataset,
     verify_gsplat_reference_pycolmap_sources,
@@ -994,6 +996,85 @@ def test_external_gsplat_training_is_exposed_by_public_reconstruction_package() 
     assert reconstruction.run_gsplat_reference_training is run_gsplat_reference_training
     assert "run_gsplat_reference_training" in reconstruction.__all__
     assert "run_gsplat_reference_training" in baseline_module.__all__
+
+
+def test_one_call_gsplat_reconstruction_stages_real_files_and_returns_candidate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Real CPU staging + file hashing + output assembly, substituted GPU trainer."""
+    request, source, staged, output, profile, ref, producer = _retained_gsplat_fixture(
+        tmp_path
+    )
+    shutil.rmtree(staged.dataset_root)
+    shutil.rmtree(output)
+    interpreter = tmp_path / "external-python"
+    interpreter.write_bytes(b"stub external interpreter")
+    reference = tmp_path / "pinned-reference"
+    (reference / "examples").mkdir(parents=True)
+    monkeypatch.setattr(
+        baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
+    )
+    subprocess_calls: list[dict[str, Any]] = []
+
+    def fake_trainer(_command: list[str], **kwargs: Any) -> SimpleNamespace:
+        subprocess_calls.append(kwargs)
+        input_root = Path(baseline_module.json.loads(kwargs["input"])["data_dir"])
+        assert input_root == staged.dataset_root
+        for item in staged.entries:
+            assert (input_root / item.relative_path).is_file()
+        (output / "ply").mkdir()
+        (output / profile.expected_ply_relative_path).write_bytes(_gsplat_ply(vertices=2))
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(baseline_module.subprocess, "run", fake_trainer)
+    result = reconstruct_gsplat_static_appearance(
+        request=request,
+        source=source,
+        dataset_root=staged.dataset_root,
+        profile=profile,
+        source_root=reference,
+        python_executable=interpreter,
+        output_root=output,
+        artifact_ref=ref,
+        producer=producer,
+        cuda_device_index=0,
+        timeout_seconds=30,
+    )
+    assert len(subprocess_calls) == 1
+    assert result.request is request
+    assert result.candidate.source_geometry is request.source_geometry
+    assert result.candidate.artifact_ref == ref
+    assert result.candidate.producer == producer
+    assert result.materialization.entries[0].sha256 == _digest(_gsplat_ply(vertices=2))
+    assert (staged.dataset_root / "sparse" / "0" / "cameras.bin").is_file()
+    assert (output / "wre-reference-training.log").is_file()
+
+
+def test_one_call_gsplat_reconstruction_does_not_stage_false_producer(
+    tmp_path: Path,
+) -> None:
+    request, source, staged, _output, profile, ref, producer = _retained_gsplat_fixture(
+        tmp_path
+    )
+    shutil.rmtree(staged.dataset_root)
+    invalid_producer = replace(
+        producer, configuration=ConfigurationIdentity(sha256=_digest(b"invalid"))
+    )
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="configuration differs"):
+        reconstruct_gsplat_static_appearance(
+            request=request,
+            source=source,
+            dataset_root=staged.dataset_root,
+            profile=profile,
+            source_root=tmp_path,
+            python_executable=tmp_path / "no-interpreter",
+            output_root=tmp_path / "no-output",
+            artifact_ref=ref,
+            producer=invalid_producer,
+            cuda_device_index=0,
+            timeout_seconds=30,
+        )
+    assert not staged.dataset_root.exists()
 
 
 def test_external_gsplat_runner_builds_complete_canonical_candidate_with_process_stub(
