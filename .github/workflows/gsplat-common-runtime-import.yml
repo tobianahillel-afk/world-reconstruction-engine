@@ -1930,7 +1930,18 @@ jobs:
               .wre-views model-viewer { flex:1; min-width:0; }
               .wre-views.dual model-viewer { width:50%; }
               .wre-views [hidden] { display:none !important; }
-              @media(max-width:700px) { .wre-views.dual { flex-direction:column; } }
+              .wre-photo-pane { flex:0 0 38%; min-width:0; overflow:auto;
+                padding:8px; background:#182537; box-sizing:border-box; }
+              .wre-photo-crop { width:100%; overflow:hidden; }
+              .wre-photo-crop img { width:100%; height:auto; display:block; max-width:none; }
+              .wre-photo-crop[data-frame="left"] img,
+              .wre-photo-crop[data-frame="right"] img { width:200%; }
+              .wre-photo-crop[data-frame="right"] img { transform:translateX(-50%); }
+              .wre-photo-pane p { font-size:12px; line-height:1.35; }
+              @media(max-width:700px) {
+                .wre-views.dual,.wre-views.with-source { flex-direction:column; }
+                .wre-photo-pane { flex:none; max-height:30vh; }
+              }
               .wre-pick-marker { background:#ffdf68; color:#172232; border:2px solid #172232;
                 border-radius:50%; width:29px; height:29px; font:bold 14px sans-serif;
                 text-align:center; pointer-events:none; }
@@ -1966,6 +1977,8 @@ jobs:
                 <option value="quality">Photometric-consistent observed RGB points</option>
                 <option value="sift">Measured SIFT 3D points and camera frustums</option>
               </select>
+              <button id="wre-photo-toggle" type="button" aria-pressed="false"
+                aria-controls="wre-source-panel">Show source photos beside 3D</button>
               <label for="wre-compare-choice">Second 3D view:</label>
               <select id="wre-compare-choice" aria-label="Select a second 3D model to compare">
                 <option value="">Comparison off</option>
@@ -2036,6 +2049,24 @@ jobs:
               <span id="wre-tour-status" role="status">No saved camera tour.</span>
             </div>
             <div id="wre-views" class="wre-views">
+              <aside id="wre-source-panel" class="wre-photo-pane" hidden
+                aria-label="Observed 2D photographs used as 3D reconstruction inputs">
+                <label for="wre-source-frame">Inspect observed photograph:</label>
+                <select id="wre-source-frame" aria-label="Choose original left, right or paired photos">
+                  <option value="pair">Both originals</option>
+                  <option value="left">Left photograph</option>
+                  <option value="right">Right photograph</option>
+                </select>
+                <div id="wre-photo-crop" class="wre-photo-crop" data-frame="pair">
+                  <img id="wre-live-source-photos" src="./wre-real-stereo-cpu-photos.png"
+                    alt="Two real stereo Aloe photographs, left and right, processed for this reconstruction">
+                </div>
+                <p id="wre-source-frame-status" role="status">
+                  Both rectified source photographs; no 2D-to-3D camera registration.</p>
+                <p>Original 2D observations (rectified/resized) alongside the live,
+                  approximate 3D model. Camera views are not registered to photo pixels.
+                  Unknown metric scale; NOT reconstructed 4D motion.</p>
+              </aside>
               <model-viewer id="wre-scene" camera-controls auto-rotate interaction-prompt="auto"
                 alt="Approximate CPU stereo 3D reconstruction from two real photos"
                 src="data:model/gltf-binary;base64,WRE_GLB_BASE64"></model-viewer>
@@ -2055,6 +2086,11 @@ jobs:
               const compareLink = document.getElementById("wre-compare-link");
               const compareStatus = document.getElementById("wre-compare-status");
               const viewPair = document.getElementById("wre-views");
+              const photoToggle = document.getElementById("wre-photo-toggle");
+              const photoPanel = document.getElementById("wre-source-panel");
+              const photoFrame = document.getElementById("wre-source-frame");
+              const photoCrop = document.getElementById("wre-photo-crop");
+              const photoFrameStatus = document.getElementById("wre-source-frame-status");
               const provenance = document.getElementById("wre-scene-provenance");
               const localInput = document.getElementById("wre-local-glb");
               const measureButton = document.getElementById("wre-measure-toggle");
@@ -3285,10 +3321,32 @@ jobs:
                   ? "Left rotation linked to right; model origins and scale are NOT registered."
                   : "Orbit link off; 3D models remain independent.";
               });
+              // The two observed photographs remain 2D evidence, not a
+              // registered camera rendering of the reconstructed GLB.
+              photoFrame.addEventListener("change", () => {
+                const frame = photoFrame.value;
+                if (!["pair", "left", "right"].includes(frame)) return;
+                photoCrop.dataset.frame = frame;
+                photoFrameStatus.textContent = frame === "pair"
+                  ? "Both rectified source photographs; NOT registered to the 3D camera."
+                  : (frame === "left" ? "Left" : "Right") +
+                    " original photo crop; NOT a registered 3D projection.";
+              });
+              photoToggle.addEventListener("click", () => {
+                if (compareChoice.value) return;
+                const show = photoPanel.hidden;
+                photoPanel.hidden = !show;
+                viewPair.classList.toggle("with-source", show);
+                photoToggle.setAttribute("aria-pressed", String(show));
+                photoToggle.textContent = show
+                  ? "Hide source photos" : "Show source photos beside 3D";
+              });
               // Compare two independently rendered real GLB assets. Copying a
               // camera does NOT register different geometries or prove scale.
               compareChoice.addEventListener("change", () => {
                 const other = modes[compareChoice.value];
+                if (other && !photoPanel.hidden) photoToggle.click();
+                photoToggle.disabled = Boolean(other);
                 compareSync.disabled = true;
                 resetLinkedOrbit();
                 if (!other) {
@@ -4751,6 +4809,80 @@ jobs:
                   view.getAttribute('src').startsWith('data:model/gltf-binary;base64,');
               """)
               assert first
+              # Show actual 2D inputs NEXT TO the actively rendered real 3D
+              # GLB. This is not a reprojected camera match or static image mock.
+              js("""
+                document.getElementById('wre-photo-toggle').click();
+              """)
+              assert until("""
+                const pane=document.getElementById('wre-source-panel');
+                const img=document.getElementById('wre-live-source-photos');
+                const model=document.getElementById('wre-scene');
+                return !pane.hidden && img.complete && img.naturalWidth >= 640 &&
+                  img.naturalHeight >= 160 &&
+                  img.currentSrc.endsWith('/wre-real-stereo-cpu-photos.png') &&
+                  img.getBoundingClientRect().width >= 200 &&
+                  model.loaded && model.model &&
+                  model.getBoundingClientRect().width >= 260 &&
+                  document.getElementById('wre-photo-toggle')
+                    .getAttribute('aria-pressed') === 'true' &&
+                  !!document.createElement('canvas').getContext('webgl2');
+              """), "Actual observed 2D photos and rendered GLB not simultaneously visible"
+              # Exercise each source-photo half with real pixels and a LIVE GLB.
+              # This crop is evidence inspection, not calibrated 2D/3D registration.
+              frames = js("""
+                const choice=document.getElementById('wre-source-frame');
+                const crop=document.getElementById('wre-photo-crop');
+                const img=document.getElementById('wre-live-source-photos');
+                const model=document.getElementById('wre-scene');
+                function inspect(frame) {
+                  choice.value=frame;
+                  choice.dispatchEvent(new Event('change', {bubbles:true}));
+                  const a=img.getBoundingClientRect(), b=crop.getBoundingClientRect();
+                  return {frame:crop.dataset.frame, ratio:a.width/b.width,
+                    leftOffset:a.left-b.left, rightOffset:a.right-b.right,
+                    loaded:model.loaded && Boolean(model.model)};
+                }
+                const left=inspect('left'), right=inspect('right'), pair=inspect('pair');
+                const canvas=document.createElement('canvas');
+                canvas.width=12; canvas.height=12;
+                const context=canvas.getContext('2d', {willReadFrequently:true});
+                const half=img.naturalWidth/2, height=img.naturalHeight;
+                function sample(x) {
+                  context.clearRect(0,0,12,12);
+                  context.drawImage(img,x,0,half,height,0,0,12,12);
+                  return Array.from(context.getImageData(0,0,12,12).data);
+                }
+                return {left,right,pair,
+                  distinct:JSON.stringify(sample(0)) !== JSON.stringify(sample(half)),
+                  imageWidth:img.naturalWidth};
+              """)
+              assert frames["imageWidth"] >= 640
+              assert frames["distinct"], "Original left and right photo pixels must differ"
+              assert all(frames[v]["loaded"] for v in ("left", "right", "pair"))
+              assert frames["left"]["frame"] == "left"
+              assert frames["right"]["frame"] == "right"
+              assert frames["pair"]["frame"] == "pair"
+              assert 1.95 < frames["left"]["ratio"] < 2.05
+              assert 1.95 < frames["right"]["ratio"] < 2.05
+              assert 0.95 < frames["pair"]["ratio"] < 1.05
+              assert abs(frames["left"]["leftOffset"]) < 3
+              assert abs(frames["right"]["rightOffset"]) < 3
+              live_2d_3d_png = base64.b64decode(
+                  call("GET", f"/session/{session}/screenshot"), validate=True
+              )
+              assert live_2d_3d_png.startswith(bytes.fromhex("89504e470d0a1a0a"))
+              assert len(live_2d_3d_png) > 10000
+              (proof / "real-stereo-2d-and-3d.png").write_bytes(live_2d_3d_png)
+              live_2d_3d_sha256 = hashlib.sha256(live_2d_3d_png).hexdigest()
+              js("document.getElementById('wre-photo-toggle').click();")
+              assert js("""
+                const pane=document.getElementById('wre-source-panel');
+                const model=document.getElementById('wre-scene');
+                return pane.hidden && model.loaded && model.model &&
+                  document.getElementById('wre-photo-toggle')
+                    .getAttribute('aria-pressed') === 'false';
+              """), "Returning from photo comparison lost the active 3D model"
               # Both models are actual photo-derived 3D GLBs rendered in the
               # same real Chrome/WebGL session, not static screenshots.
               js("""
@@ -6320,6 +6452,9 @@ jobs:
                       "sift_camera_mode_loaded": True,
                       "two_real_3d_models_compared_side_by_side": True,
                       "dual_3d_linked_orbit_verified_in_chrome": True,
+                      "source_photos_and_live_3d_verified_in_chrome": True,
+                      "individual_left_right_photos_verified_in_chrome": True,
+                      "source_photos_live_3d_screenshot_sha256": live_2d_3d_sha256,
                       "side_by_side_screenshot_sha256": side_by_side_sha256,
                       "local_glb_file_loaded_in_chrome": True,
                       "surface_distance_measured_in_chrome": True,
@@ -6383,6 +6518,8 @@ jobs:
                report["mode_screenshot_sha256"]["sift"]),
               ("dual", "Comparaison simultanée de deux vrais modèles 3D",
                "real-stereo-3d-side-by-side.png", report["side_by_side_screenshot_sha256"]),
+              ("source-2d-3d", "Photographies observées face au modèle 3D interactif",
+               "real-stereo-2d-and-3d.png", report["source_photos_live_3d_screenshot_sha256"]),
               ("storyboard", "Deux vues WebGL du même modèle 3D statique",
                "real-stereo-3d-camera-storyboard.png",
                report["camera_tour_storyboard_png_sha256"]),
@@ -6459,6 +6596,10 @@ jobs:
               raise ValueError("Actual Chrome did not open a user-selected GLB")
           if receipt.get("two_real_3d_models_compared_side_by_side") is not True:
               raise ValueError("Actual Chrome did not compare two real 3D GLBs side by side")
+          if receipt.get("source_photos_and_live_3d_verified_in_chrome") is not True:
+              raise ValueError("Actual Chrome did not show source photos beside a live GLB")
+          if receipt.get("individual_left_right_photos_verified_in_chrome") is not True:
+              raise ValueError("Actual Chrome did not verify both individual source-photo views")
           if receipt.get("dual_3d_linked_orbit_verified_in_chrome") is not True:
               raise ValueError("Actual Chrome did not verify independent linked 3D orbit angles")
           if receipt.get("surface_distance_measured_in_chrome") is not True:
@@ -6535,6 +6676,7 @@ jobs:
           png_hashes = {
               "real-stereo-3d-browser.png": receipt["screenshot_sha256"],
               "real-stereo-3d-side-by-side.png": receipt["side_by_side_screenshot_sha256"],
+              "real-stereo-2d-and-3d.png": receipt["source_photos_live_3d_screenshot_sha256"],
               "real-stereo-3d-camera-storyboard.png": receipt["camera_tour_storyboard_png_sha256"],
               **{
                   f"real-stereo-3d-{mode}.png": digest
@@ -6544,12 +6686,13 @@ jobs:
           if set(png_hashes) != {
               "real-stereo-3d-browser.png",
               "real-stereo-3d-side-by-side.png",
+              "real-stereo-2d-and-3d.png",
               "real-stereo-3d-camera-storyboard.png",
               "real-stereo-3d-stereo.png",
               "real-stereo-3d-quality.png",
               "real-stereo-3d-sift.png",
           }:
-              raise ValueError("Six Chrome screenshot identities required")
+              raise ValueError("Seven Chrome screenshot identities required")
           for name, digest in png_hashes.items():
               data = (proof / name).read_bytes()
               if not data.startswith(bytes.fromhex("89504e470d0a1a0a")):
@@ -6690,7 +6833,7 @@ jobs:
           assert all(hashlib.sha256((bundle / name).read_bytes()).hexdigest() == digest
                      for name, digest in {**source_hashes, **png_hashes, input_name: input_sha256}.items())
           print(f"One offline 3D exploration bundle: {len(list(bundle.iterdir()))} entries, "
-                "four GLBs, six real Chrome PNGs, interactive viewer, report, receipts")
+                "four GLBs, seven real Chrome PNGs, interactive viewer, report, receipts")
           PY
           python3 wre-unified-offline-3d/open-wre-3d.py --check
 
@@ -6775,6 +6918,31 @@ jobs:
                   return Boolean(scene && scene.loaded && scene.model &&
                       document.getElementById("wre-camera-export").disabled === false);
               })()"""
+              wait_for(lambda: js(loaded))
+              # Reopen the EXTRACTED archive and repeat the actual source-vs-3D
+              # interaction; browser evidence must not rely on a staging page.
+              js("""document.getElementById('wre-photo-toggle').click();""")
+              wait_for(lambda: js("""return (() => {
+                  const pane=document.getElementById('wre-source-panel');
+                  const img=document.getElementById('wre-live-source-photos');
+                  const scene=document.getElementById('wre-scene');
+                  return !pane.hidden && img.complete && img.naturalWidth >= 640 &&
+                      img.naturalHeight >= 160 &&
+                      img.getBoundingClientRect().width >= 200 &&
+                      scene.loaded && scene.model &&
+                      scene.getBoundingClientRect().width >= 260;
+              })()"""))
+              # Verify the extracted ZIP preserves the interactive photo crops.
+              assert js("""const choice=document.getElementById('wre-source-frame');
+                  const crop=document.getElementById('wre-photo-crop');
+                  const img=document.getElementById('wre-live-source-photos');
+                  choice.value='right';
+                  choice.dispatchEvent(new Event('change', {bubbles:true}));
+                  const a=img.getBoundingClientRect(), b=crop.getBoundingClientRect();
+                  return crop.dataset.frame === 'right' && a.width/b.width > 1.95 &&
+                      Math.abs(a.right-b.right)<3 &&
+                      document.getElementById('wre-scene').loaded;""")
+              js("""document.getElementById('wre-photo-toggle').click();""")
               wait_for(lambda: js(loaded))
               js("""const choice = document.getElementById("wre-scene-choice");
                   choice.value = "sift";
