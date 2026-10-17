@@ -4466,6 +4466,28 @@ jobs:
               """)
               assert restored_distance["markers"] == measure_status["clicked"]
               assert "NOT meters" in restored_distance["result"]
+              # Real mesh-raycast points -> portable distance -> manual
+              # user reference scale. This is NOT a calibrated 3D dataset.
+              assert js("""
+                const known=document.getElementById('wre-reference-metres');
+                known.value='-4';
+                document.getElementById('wre-reference-apply').click();
+                return document.getElementById('wre-reference-status')
+                  .textContent.includes('Reference refused');
+              """), "Negative user-provided reference distance was accepted"
+              calibrated_distance = js("""
+                document.getElementById('wre-reference-metres').value='2.5';
+                document.getElementById('wre-reference-apply').click();
+                return document.getElementById('wre-reference-status').textContent;
+              """)
+              assert "User-scaled straight-line distance: 2.50000 m" in calibrated_distance
+              assert "NOT certified accuracy" in calibrated_distance
+              assert js("""
+                window.__wreExportedMeasurement=null;
+                document.getElementById('wre-measure-export').click();
+                return true;
+              """)
+              assert json.loads(until("return window.__wreExportedMeasurement;")) == exported_measurement
               # Invalid foreign-model provenance or altered distance must not
               # replace the current saved annotation or its two markers.
               for invalid in (
@@ -4800,6 +4822,21 @@ jobs:
               assert restored_area["markers"] == area_status["clicked"], restored_area
               assert restored_area["autoRotate"] is False
               assert "NOT physical surface area" in restored_area["result"]
+              # The same manually supplied metre/scene-unit factor applies
+              # quadratically to triangle-fan area, not to surface geodesics.
+              calibrated_area = js("""
+                document.getElementById('wre-reference-estimate').click();
+                return document.getElementById('wre-reference-status').textContent;
+              """)
+              assert "User-scaled planar triangle-fan area:" in calibrated_area
+              assert "NOT certified accuracy" in calibrated_area
+              expected_user_area = (
+                  area_json["total_area_model_units_squared"] *
+                  (2.5 / exported_measurement["distance_model_units"]) ** 2
+              )
+              value_user_area = float(calibrated_area.split("area: ", 1)[1].split(" m²", 1)[0])
+              assert abs(value_user_area - expected_user_area) < 0.00002
+              calibration_verified_in_chrome = True
               for invalid in (
                   dict(area_json, model_provenance="different 3D GLB"),
                   dict(area_json, total_area_model_units_squared=
@@ -5063,6 +5100,7 @@ jobs:
                       "surface_polyline_restore_verified_in_chrome": True,
                       "surface_triangle_fan_area_export_verified_in_chrome": True,
                       "surface_triangle_fan_area_restore_verified_in_chrome": True,
+                      "user_reference_scale_verified_in_chrome": calibration_verified_in_chrome,
                       "surface_chord_angle_export_verified_in_chrome": True,
                       "surface_chord_angle_restore_verified_in_chrome": True,
                       "relative_3d_camera_bookmark_roundtrip_verified_in_chrome": True,
@@ -5192,6 +5230,8 @@ jobs:
               raise ValueError("Actual Chrome did not export a relative 3D polygon triangle-fan area")
           if receipt.get("surface_triangle_fan_area_restore_verified_in_chrome") is not True:
               raise ValueError("Actual Chrome did not restore the saved 3D polygon area")
+          if receipt.get("user_reference_scale_verified_in_chrome") is not True:
+              raise ValueError("Actual Chrome did not exercise user-supplied 3D scale")
           if receipt.get("surface_chord_angle_export_verified_in_chrome") is not True:
               raise ValueError("Actual Chrome did not export a real-raycast 3D chord angle")
           if receipt.get("surface_chord_angle_restore_verified_in_chrome") is not True:
