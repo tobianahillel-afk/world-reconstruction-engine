@@ -7369,6 +7369,50 @@ jobs:
               ]
               assert numeric_metrics["dense_disparity_uint16_units_per_pixel"] == 256
               print("PASS: actual archived 16-bit disparity PNG served over localhost")
+              # Exercise the USER-FACING interaction in REAL Chrome against
+              # the same SHA256-checked float32 data in the EXTRACTED archive.
+              pfm_url = "http://127.0.0.1:8877/wre-real-stereo-cpu-disparity-f32.pfm"
+              with urlopen(pfm_url, timeout=10) as response:
+                  actual_pfm = response.read(5_000_001)
+              header = f"Pf\\n{width} {height}\\n-1.0\\n".encode("ascii")
+              assert actual_pfm.startswith(header)
+              assert len(actual_pfm) == len(header) + width * height * 4
+              assert sha256(actual_pfm).hexdigest() == numeric_metrics[
+                  "dense_disparity_float32_pfm_sha256"
+              ]
+              # PFM scanlines are bottom-up. Select a truly observed pixel
+              # rather than guessing that the image centre is valid.
+              from struct import iter_unpack
+              measured = None
+              for index, (value,) in enumerate(iter_unpack("<f", actual_pfm[len(header):])):
+                  if 2.0 < value < 128.0:
+                      measured = (index % width, height - 1 - index // width, value)
+                      break
+              assert measured is not None, "No observed numeric stereo pixel"
+              px, py, expected_disparity = measured
+              js(f"""const image = document.getElementById('wre-stereo-disparity');
+                  const box = image.getBoundingClientRect();
+                  image.dispatchEvent(new MouseEvent('click', {{
+                      bubbles:true,cancelable:true,
+                      clientX:box.left + ({px} + 0.5) * box.width / image.naturalWidth,
+                      clientY:box.top + ({py} + 0.5) * box.height / image.naturalHeight
+                  }})); return true;""")
+              wait_for(lambda: js(
+                  "return document.getElementById('wre-pixel-inspector').dataset.x === '"
+                  + str(px) + "' && document.getElementById('wre-pixel-inspector').dataset.y === '"
+                  + str(py) + "'"
+              ))
+              observed = float(js(
+                  "return document.getElementById('wre-pixel-inspector').dataset.disparity"
+              ))
+              assert abs(observed - expected_disparity) < 0.0001
+              assert "PAS des mètres" in js(
+                  "return document.getElementById('wre-pixel-inspector').textContent"
+              )
+              assert js("""return !!document.querySelector(
+                  'a[href="./wre-real-stereo-cpu-disparity-f32.pfm"][download]'
+              )""")
+              print("PASS: actual Chrome inspected pixel float32 from the same real-photo PFM")
               browser("POST", f"/session/{session}/url", {
                   "url": "http://127.0.0.1:8877/wre-real-stereo-cpu-viewer.html",
               })
