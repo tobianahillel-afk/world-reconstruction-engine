@@ -934,14 +934,23 @@ jobs:
               speckleWindowSize=50,
               speckleRange=2,
           )
-          predicted = matcher.compute(
-              cv2.cvtColor(left, cv2.COLOR_BGR2GRAY),
-              cv2.cvtColor(right, cv2.COLOR_BGR2GRAY),
-          ).astype(np.float32) / 16.0
+          left_gray = cv2.cvtColor(left, cv2.COLOR_BGR2GRAY)
+          right_gray = cv2.cvtColor(right, cv2.COLOR_BGR2GRAY)
+          predicted = matcher.compute(left_gray, right_gray).astype(np.float32) / 16.0
           evaluated = known & np.isfinite(predicted) & (predicted >= min_disparity)
           count = int(np.count_nonzero(evaluated))
           assert count > 1000, count
           delta = np.abs(predicted[evaluated] - reference[evaluated])
+          # Compare an EXISTING second OpenCV solver, not a new matcher or a
+          # reference-fitted correction. Both share the published dmin prior.
+          bm = cv2.StereoBM_create(numDisparities=160, blockSize=15)
+          bm.setMinDisparity(min_disparity)
+          bm_predicted = bm.compute(left_gray, right_gray).astype(np.float32) / 16.0
+          bm_evaluated = known & np.isfinite(bm_predicted) & (bm_predicted >= min_disparity)
+          bm_count = int(np.count_nonzero(bm_evaluated))
+          bm_delta = np.abs(bm_predicted[bm_evaluated] - reference[bm_evaluated])
+          # Do not choose either solver by fitting to the test reference.
+          # Report both independently; the default geometry stays SGBM.
           # Reconstruct a bounded, VIEWABLE RGB PLY from estimated pixels,
           # NOT from the reference disparity values. Middlebury publishes
           # 3740px focal at FullSize and 160mm view1-to-view5 baseline;
@@ -1021,6 +1030,19 @@ jobs:
               "overlapping_valid_pixels": count,
               "coverage_of_groundtruth": count / int(np.count_nonzero(known)),
               "disparity_mae_px": float(np.mean(delta)),
+              "stereo_bm_model": "OpenCV StereoBM independent CPU comparison",
+              "stereo_bm_valid_overlap_pixels": bm_count,
+              "stereo_bm_valid_reference_coverage": (
+                  bm_count / int(np.count_nonzero(known))
+              ),
+              "stereo_bm_mae_px": float(np.mean(bm_delta)) if bm_count else None,
+              "stereo_bm_rmse_px": (
+                  float(np.sqrt(np.mean(bm_delta * bm_delta))) if bm_count else None
+              ),
+              "stereo_bm_bad_gt_2px_fraction": (
+                  float(np.mean(bm_delta > 2.0)) if bm_count else None
+              ),
+              "groundtruth_used_for_solver_selection": False,
               "disparity_rmse_px": float(np.sqrt(np.mean(delta * delta))),
               "bad_gt_1px_fraction": float(np.mean(delta > 1.0)),
               "bad_gt_2px_fraction": float(np.mean(delta > 2.0)),
