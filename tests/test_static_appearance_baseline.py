@@ -1081,6 +1081,7 @@ def test_reference_runner_accepts_real_two_view_capture_evidence_before_native_g
         )
     assert not output.exists()
 
+
 def test_external_gsplat_training_is_exposed_by_public_reconstruction_package() -> None:
     from wre import reconstruction
 
