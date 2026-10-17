@@ -1002,9 +1002,7 @@ def test_one_call_gsplat_reconstruction_stages_real_files_and_returns_candidate(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Real CPU staging + file hashing + output assembly, substituted GPU trainer."""
-    request, source, staged, output, profile, ref, producer = _retained_gsplat_fixture(
-        tmp_path
-    )
+    request, source, staged, output, profile, ref, producer = _retained_gsplat_fixture(tmp_path)
     shutil.rmtree(staged.dataset_root)
     shutil.rmtree(output)
     interpreter = tmp_path / "external-python"
@@ -1053,9 +1051,7 @@ def test_one_call_gsplat_reconstruction_stages_real_files_and_returns_candidate(
 def test_one_call_gsplat_reconstruction_does_not_stage_false_producer(
     tmp_path: Path,
 ) -> None:
-    request, source, staged, _output, profile, ref, producer = _retained_gsplat_fixture(
-        tmp_path
-    )
+    request, source, staged, _output, profile, ref, producer = _retained_gsplat_fixture(tmp_path)
     shutil.rmtree(staged.dataset_root)
     invalid_producer = replace(
         producer, configuration=ConfigurationIdentity(sha256=_digest(b"invalid"))
