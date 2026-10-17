@@ -7103,7 +7103,7 @@ jobs:
                 baseline_assumption_model_units: 1,
                 points: observations
               };
-              const blob = new Blob([JSON.stringify(payload, null, 2) + '\n'],
+              const blob = new Blob([JSON.stringify(payload, null, 2) + String.fromCharCode(10)],
                 {type:'application/json'});
               const url = URL.createObjectURL(blob);
               const link = document.createElement('a');
