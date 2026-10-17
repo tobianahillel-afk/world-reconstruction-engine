@@ -95,6 +95,7 @@ jobs:
           from wre.reconstruction.static_appearance_baseline import (
               GSPLAT_STATIC_APPEARANCE_REPRESENTATION,
               GsplatStaticAppearancePreflightSource,
+              export_verified_colmap_camera_rig_json,
               export_verified_colmap_observed_rgb_glb,
               export_verified_colmap_observed_rgb_ply,
               inspect_verified_gsplat_rgb_centers_glb,
@@ -300,6 +301,27 @@ jobs:
               module=pycolmap,
           )
           source_ref = colmap_native_sparse_model_artifact_ref(model)
+          # Preserve the actual reconstructed three-view camera rig alongside
+          # the point cloud so a future viewer can reopen original viewpoints.
+          # Poses and points share the same arbitrary, nonmetric COLMAP frame.
+          camera_rig_path = ROOT / "observed-real-colmap-cameras.json"
+          camera_rig_digest = export_verified_colmap_camera_rig_json(
+              canonical, path=camera_rig_path
+          )
+          camera_rig_bytes = camera_rig_path.read_bytes()
+          assert hashlib.sha256(camera_rig_bytes).hexdigest() == camera_rig_digest.value
+          camera_rig = json.loads(camera_rig_bytes)
+          assert camera_rig["source_model_sha256"] == canonical.source_model_identity_sha256.value
+          assert camera_rig["metric_scale_known"] is False
+          assert len(camera_rig["cameras"]) == len(inputs)
+          assert len({item["observation_id"] for item in camera_rig["cameras"]}) == len(inputs)
+          RECEIPT["camera_rig"] = {
+              "format": camera_rig["schema"],
+              "cameras": len(camera_rig["cameras"]),
+              "sha256": camera_rig_digest.value,
+              "bytes": len(camera_rig_bytes),
+              "metric_scale_known": False,
+          }
           geometry_candidate = GeometrySolutionCandidate(
               geometry_solution=canonical.geometry_solution,
               camera_solutions=canonical.camera_solutions,
@@ -411,6 +433,7 @@ jobs:
           path: |
             ${{ runner.temp }}/wre-real-photo-colmap-rgb/observed-real-colmap-rgb.ply
             ${{ runner.temp }}/wre-real-photo-colmap-rgb/observed-real-colmap-rgb.glb
+            ${{ runner.temp }}/wre-real-photo-colmap-rgb/observed-real-colmap-cameras.json
             ${{ runner.temp }}/wre-real-photo-colmap-rgb/real-photo-colmap-rgb-receipt.json
           if-no-files-found: error
           retention-days: 7
