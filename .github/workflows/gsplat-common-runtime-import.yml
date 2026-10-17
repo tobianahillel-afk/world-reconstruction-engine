@@ -4481,6 +4481,51 @@ jobs:
                   document.getElementById('wre-compare-status').textContent
                     .includes('not registered');
               """), "Real 3D comparison camera-copy action did not complete"
+              # Exercise linked dual-model orientation against TWO REAL loaded
+              # model-viewer WebGL scenes, without any registration claim.
+              js("""
+                const left=document.getElementById('wre-scene');
+                const right=document.getElementById('wre-compare-scene');
+                window.__wreRightBefore = {
+                  radius: right.getCameraOrbit().radius,
+                  target: right.getCameraTarget()
+                };
+                document.getElementById('wre-compare-link').click();
+                left.cameraOrbit='1.2rad 1.1rad '+left.getCameraOrbit().radius+'m';
+                left.jumpCameraToGoal();
+                left.dispatchEvent(new Event('camera-change'));
+              """)
+              assert until("""
+                const left=document.getElementById('wre-scene');
+                const right=document.getElementById('wre-compare-scene');
+                const a=left.getCameraOrbit();
+                const b=right.getCameraOrbit();
+                const t=right.getCameraTarget();
+                const old=window.__wreRightBefore;
+                return left.loaded && right.loaded &&
+                  document.getElementById('wre-compare-link').getAttribute('aria-pressed')==='true' &&
+                  Math.abs(a.theta-b.theta)<0.01 &&
+                  Math.abs(a.phi-b.phi)<0.01 &&
+                  Math.abs(b.radius-old.radius)<0.01 &&
+                  Math.hypot(t.x-old.target.x,t.y-old.target.y,t.z-old.target.z)<0.01 &&
+                  document.getElementById('wre-compare-status').textContent
+                    .includes('NOT registered');
+              """), "Orbit linking did not preserve independent camera position"
+              js("""
+                const left=document.getElementById('wre-scene');
+                const right=document.getElementById('wre-compare-scene');
+                window.__wreUnlinkedTheta=right.getCameraOrbit().theta;
+                document.getElementById('wre-compare-link').click();
+                left.cameraOrbit='1.6rad 1.1rad '+left.getCameraOrbit().radius+'m';
+                left.jumpCameraToGoal();
+                left.dispatchEvent(new Event('camera-change'));
+              """)
+              assert js("""
+                return document.getElementById('wre-compare-link')
+                    .getAttribute('aria-pressed')==='false' &&
+                  Math.abs(document.getElementById('wre-compare-scene').getCameraOrbit().theta -
+                    window.__wreUnlinkedTheta)<0.01;
+              """), "Disabling orbit link did not restore independent 3D control"
               comparison_png = base64.b64decode(
                   call("GET", f"/session/{session}/screenshot"), validate=True
               )
@@ -5606,6 +5651,7 @@ jobs:
                       "photometric_cloud_mode_loaded": True,
                       "sift_camera_mode_loaded": True,
                       "two_real_3d_models_compared_side_by_side": True,
+                      "dual_3d_linked_orbit_verified_in_chrome": True,
                       "side_by_side_screenshot_sha256": side_by_side_sha256,
                       "local_glb_file_loaded_in_chrome": True,
                       "surface_distance_measured_in_chrome": True,
@@ -5736,6 +5782,8 @@ jobs:
               raise ValueError("Actual Chrome did not open a user-selected GLB")
           if receipt.get("two_real_3d_models_compared_side_by_side") is not True:
               raise ValueError("Actual Chrome did not compare two real 3D GLBs side by side")
+          if receipt.get("dual_3d_linked_orbit_verified_in_chrome") is not True:
+              raise ValueError("Actual Chrome did not verify independent linked 3D orbit angles")
           if receipt.get("surface_distance_measured_in_chrome") is not True:
               raise ValueError("Actual Chrome did not measure two real mesh points")
           if receipt.get("surface_measurement_export_verified_in_chrome") is not True:
