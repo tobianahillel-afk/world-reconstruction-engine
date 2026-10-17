@@ -2486,7 +2486,7 @@ def export_verified_gsplat_rgb_centers_glb(
                         packed = bytearray()
                         for record in struct.iter_unpack("<3f3B", block):
                             packed.extend(struct.pack("<3f4B", *record, 0))
-                        emit(packed)
+                        emit(bytes(packed))
                         remaining -= block_count
         return Sha256Digest(digest.hexdigest())
     except Exception:
