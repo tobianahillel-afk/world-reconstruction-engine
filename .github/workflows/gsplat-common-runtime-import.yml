@@ -2397,6 +2397,8 @@ jobs:
           assert 'id="wre-path-toggle"' in page
           assert 'hotspot-wre-pick-' in page
           assert 'wre.relative_3d_surface_polyline.v1' in page
+          assert 'id="wre-angle-toggle"' in page
+          assert 'wre.relative_3d_chord_angle.v1' in page
           assert 'id="wre-measure-export"' in page
           assert 'distance_model_units' in page
           assert 'positionAndNormalFromPoint' in page
@@ -4025,6 +4027,76 @@ jobs:
                   document.querySelectorAll('.wre-pick-marker').length === 0;
               """)
 
+              # The fourth interactive mode measures the 3D chord angle at
+              # the MIDDLE of three actual raycast surface points. This angle
+              # is scale independent but NOT mesh curvature or a normal angle.
+              assert js("""
+                const scene=document.getElementById('wre-scene');
+                const button=document.getElementById('wre-angle-toggle');
+                button.click();
+                return button.getAttribute('aria-pressed') === 'true' &&
+                  !scene.hasAttribute('auto-rotate') &&
+                  document.getElementById('wre-measure-export').disabled;
+              """), "Chrome could not activate the 3D chord-angle mode"
+              angle_probe = js(area_scan)
+              for _ in range(15):
+                  if angle_probe.get("points"):
+                      break
+                  time.sleep(0.4)
+                  angle_probe = js(area_scan)
+              assert angle_probe.get("points"), angle_probe
+              angle_status = js(f"""
+                const scene=document.getElementById('wre-scene');
+                window.__wreClickedRaycasts=[];
+                for (const p of {json.dumps(angle_probe["points"])}) {{
+                  const hit=scene.positionAndNormalFromPoint(p.x,p.y);
+                  if (!hit || !hit.position) return {{error:'angle click missed mesh'}};
+                  window.__wreCapturingClick=true;
+                  scene.dispatchEvent(new MouseEvent('click', {{
+                    bubbles:true, clientX:p.x, clientY:p.y
+                  }}));
+                  window.__wreCapturingClick=false;
+                }}
+                return {{
+                  status:document.getElementById('wre-measure-result').textContent,
+                  enabled:!document.getElementById('wre-measure-export').disabled,
+                  clicked:window.__wreClickedRaycasts.slice(),
+                  markers:scene.querySelectorAll('.wre-pick-marker').length
+                }};
+              """)
+              assert len(angle_status.get("clicked", [])) == 3, angle_status
+              assert angle_status["enabled"] and angle_status["markers"] == 3
+              assert "3D chord angle:" in angle_status["status"]
+              assert "NOT mesh curvature" in angle_status["status"]
+              js("""
+                window.__wreExportedMeasurement = null;
+                document.getElementById('wre-measure-export').click();
+              """)
+              angle_json = json.loads(until("return window.__wreExportedMeasurement;"))
+              assert angle_json["schema"] == "wre.relative_3d_chord_angle.v1"
+              assert angle_json["model_source"] == "surface"
+              assert angle_json["metric_scale_known"] is False
+              assert angle_json["units"] == "degrees"
+              assert angle_json["vertex_index"] == 1
+              assert angle_json["surface_curvature"] is False
+              assert angle_json["points_xyz"] == angle_status["clicked"]
+              a,vertex,b = angle_status["clicked"]
+              u = [a[k]-vertex[k] for k in range(3)]
+              v = [b[k]-vertex[k] for k in range(3)]
+              norms = math.sqrt(sum(x*x for x in u) * sum(x*x for x in v))
+              assert norms > 1e-6
+              angle_expected = math.degrees(math.acos(max(-1.0, min(
+                  1.0, sum(u[k]*v[k] for k in range(3))/norms
+              ))))
+              assert 0 < angle_expected < 180
+              assert abs(angle_json["angle_degrees"] - angle_expected) < 1e-5
+              assert js("""
+                document.getElementById('wre-angle-toggle').click();
+                return document.getElementById('wre-measure-export').disabled &&
+                  document.getElementById('wre-scene').hasAttribute('auto-rotate') &&
+                  document.querySelectorAll('.wre-pick-marker').length === 0;
+              """)
+
               js("""
                 window.__wre3dLoads=0;
                 document.getElementById('wre-scene').addEventListener(
@@ -4112,6 +4184,7 @@ jobs:
                       "surface_measurement_export_verified_in_chrome": True,
                       "surface_polyline_export_verified_in_chrome": True,
                       "surface_triangle_fan_area_export_verified_in_chrome": True,
+                      "surface_chord_angle_export_verified_in_chrome": True,
                       "surface_reload": True,
                       "webgl_context": True,
                       "input_glb_sha256": expected_hashes,
@@ -4230,6 +4303,8 @@ jobs:
               raise ValueError("Actual Chrome did not export a measured multi-point 3D path")
           if receipt.get("surface_triangle_fan_area_export_verified_in_chrome") is not True:
               raise ValueError("Actual Chrome did not export a relative 3D polygon triangle-fan area")
+          if receipt.get("surface_chord_angle_export_verified_in_chrome") is not True:
+              raise ValueError("Actual Chrome did not export a real-raycast 3D chord angle")
           
           glbs = (
               "wre-real-stereo-cpu-textured.glb",
