@@ -2028,6 +2028,8 @@ jobs:
                 aria-label="Preview a recorded static 3D camera viewpoint" disabled>
               <button id="wre-tour-clear" type="button">Clear camera tour</button>
               <button id="wre-tour-export" type="button" disabled>Download camera tour JSON</button>
+              <button id="wre-tour-storyboard" type="button" disabled
+                aria-label="Save actual 3D camera viewpoints as one PNG image">Save 3D tour storyboard PNG</button>
               <label for="wre-tour-import">Restore camera tour:</label>
               <input id="wre-tour-import" type="file" accept=".json,application/json"
                 aria-label="Restore a recorded 3D camera tour for the current model" disabled>
@@ -2073,6 +2075,7 @@ jobs:
               const tourStep = document.getElementById("wre-tour-step");
               const tourClear = document.getElementById("wre-tour-clear");
               const tourExport = document.getElementById("wre-tour-export");
+              const tourStoryboard = document.getElementById("wre-tour-storyboard");
               const tourImport = document.getElementById("wre-tour-import");
               const tourStatus = document.getElementById("wre-tour-status");
               const referenceMetres = document.getElementById("wre-reference-metres");
@@ -2104,6 +2107,7 @@ jobs:
                 tourPlaying = false;
                 tourPlay.disabled = true;
                 tourExport.disabled = true;
+                tourStoryboard.disabled = true;
                 tourRecord.disabled = !scene.loaded;
                 syncTourStep();
                 tourStatus.textContent = "No saved camera tour.";
@@ -2125,6 +2129,7 @@ jobs:
                 cameraTour.push(frame);
                 tourPlay.disabled = cameraTour.length < 2;
                 tourExport.disabled = cameraTour.length < 2;
+                tourStoryboard.disabled = cameraTour.length < 2;
                 tourRecord.disabled = cameraTour.length >= 8;
                 syncTourStep(cameraTour.length);
                 tourStatus.textContent = cameraTour.length +
@@ -2152,6 +2157,7 @@ jobs:
                 tourPlaying = true;
                 syncTourStep(1);
                 tourPlay.disabled = true;
+                tourStoryboard.disabled = true;
                 tourRecord.disabled = true;
                 scene.removeAttribute("auto-rotate");
                 try {
@@ -2196,7 +2202,95 @@ jobs:
                     tourPlaying = false;
                     tourPlay.disabled = cameraTour.length < 2 || !scene.loaded;
                     tourExport.disabled = cameraTour.length < 2 || !scene.loaded;
+                    tourStoryboard.disabled = cameraTour.length < 2 || !scene.loaded;
                     tourRecord.disabled = cameraTour.length >= 8 || !scene.loaded;
+                    syncTourStep(frames.length);
+                  }
+                }
+              });
+              // Render every saved static-3D camera pose through the ACTUAL
+              // model-viewer WebGL screenshot API. This is a storyboard of
+              // viewer motion, not recovered object motion or 4D geometry.
+              tourStoryboard.addEventListener("click", async () => {
+                if (!scene.loaded || tourPlaying || cameraTour.length < 2 ||
+                    cameraTourSource !== scene.getAttribute("src")) return;
+                const epoch = ++tourEpoch;
+                const source = cameraTourSource;
+                const frames = cameraTour.map(frame => frame.slice());
+                const originalOrbit = scene.getCameraOrbit();
+                const originalTarget = scene.getCameraTarget();
+                const originalView = [originalOrbit.theta, originalOrbit.phi,
+                  originalOrbit.radius, originalTarget.x, originalTarget.y,
+                  originalTarget.z, scene.getFieldOfView()];
+                const canvas = document.createElement("canvas");
+                canvas.width = 640;
+                canvas.height = Math.ceil(frames.length / 2) * 240;
+                const context = canvas.getContext("2d");
+                if (!context) return;
+                const apply = frame => {
+                  scene.cameraOrbit = frame[0] + "rad " + frame[1] + "rad " + frame[2] + "m";
+                  scene.cameraTarget = frame.slice(3,6).map(v => v + "m").join(" ");
+                  scene.fieldOfView = frame[6] + "deg";
+                  scene.jumpCameraToGoal();
+                };
+                tourPlaying = true;
+                tourPlay.disabled = true;
+                tourRecord.disabled = true;
+                tourExport.disabled = true;
+                tourStoryboard.disabled = true;
+                syncTourStep(1);
+                scene.removeAttribute("auto-rotate");
+                try {
+                  context.fillStyle = "#111318";
+                  context.fillRect(0, 0, canvas.width, canvas.height);
+                  for (const [index, frame] of frames.entries()) {
+                    if (epoch !== tourEpoch || !scene.loaded ||
+                        source !== scene.getAttribute("src")) return;
+                    apply(frame);
+                    // Give the real WebGL renderer a chance to paint each pose.
+                    await new Promise(resolve => requestAnimationFrame(() =>
+                      requestAnimationFrame(resolve)));
+                    const blob = await scene.toBlob({mimeType: "image/png"});
+                    if (!blob || blob.type !== "image/png" || blob.size < 1000)
+                      throw new Error("No rendered image for viewpoint " + (index + 1));
+                    const bitmap = await createImageBitmap(blob);
+                    const x = (index % 2) * 320;
+                    const y = Math.floor(index / 2) * 240;
+                    const factor = Math.min(320 / bitmap.width, 210 / bitmap.height);
+                    const width = bitmap.width * factor;
+                    const height = bitmap.height * factor;
+                    context.drawImage(bitmap, x + (320 - width) / 2, y, width, height);
+                    bitmap.close();
+                    context.fillStyle = "#ffffff";
+                    context.font = "14px sans-serif";
+                    context.fillText("Static 3D view " + (index + 1), x + 12, y + 228);
+                  }
+                  if (epoch !== tourEpoch || !scene.loaded ||
+                      source !== scene.getAttribute("src")) return;
+                  const image = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
+                  if (!image || image.type !== "image/png" || image.size < 1000)
+                    throw new Error("Cannot encode the 3D camera storyboard PNG.");
+                  const url = URL.createObjectURL(image);
+                  const link = document.createElement("a");
+                  link.href = url;
+                  link.download = "wre-static-3d-camera-storyboard.png";
+                  document.body.appendChild(link);
+                  link.click();
+                  link.remove();
+                  setTimeout(() => URL.revokeObjectURL(url), 1000);
+                  tourStatus.textContent = "Saved " + frames.length +
+                    " real-rendered 3D viewpoints as PNG; static scene, NOT 4D.";
+                } catch (error) {
+                  if (epoch === tourEpoch)
+                    tourStatus.textContent = "3D storyboard export failed: " + String(error);
+                } finally {
+                  if (epoch === tourEpoch) {
+                    apply(originalView);
+                    tourPlaying = false;
+                    tourRecord.disabled = cameraTour.length >= 8 || !scene.loaded;
+                    tourPlay.disabled = cameraTour.length < 2 || !scene.loaded;
+                    tourExport.disabled = cameraTour.length < 2 || !scene.loaded;
+                    tourStoryboard.disabled = cameraTour.length < 2 || !scene.loaded;
                     syncTourStep(frames.length);
                   }
                 }
@@ -2254,6 +2348,7 @@ jobs:
                   tourRecord.disabled = cameraTour.length >= 8;
                   tourPlay.disabled = false;
                   tourExport.disabled = false;
+                  tourStoryboard.disabled = false;
                   syncTourStep(cameraTour.length);
                   tourStatus.textContent = cameraTour.length +
                     " tour viewpoints restored; viewer-only, NOT 4D reconstruction.";
