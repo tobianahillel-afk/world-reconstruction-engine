@@ -1852,6 +1852,8 @@ def run_gsplat_reference_training(
     source: GsplatStaticAppearancePreflightSource,
     staged: GsplatStaticAppearanceStagedDataset,
     profile: GsplatStaticAppearanceTrainingProfile,
+    features: ColmapFeatureExtractionResult,
+    expected_environment: ColmapEnvironmentIdentity,
     source_root: Path,
     python_executable: Path,
     output_root: Path,
@@ -1881,6 +1883,14 @@ def run_gsplat_reference_training(
         raise GsplatStaticAppearancePreflightError(
             "gsplat external Python executable does not exist"
         )
+    # gsplat trains on the exact native COLMAP poses/points, not on an
+    # independently refined WRE frame. Reject mismatches before CUDA launch.
+    verify_gsplat_static_appearance_native_geometry(
+        request,
+        source,
+        features=features,
+        expected_environment=expected_environment,
+    )
     verify_gsplat_static_appearance_staged_dataset(request, source, staged)
     source_directory = _safe_root(source_root, "gsplat pinned reference checkout")
     verify_gsplat_reference_trainer_config_fields(source_directory, profile)
@@ -1969,6 +1979,8 @@ def reconstruct_gsplat_static_appearance(
     source: GsplatStaticAppearancePreflightSource,
     dataset_root: Path,
     profile: GsplatStaticAppearanceTrainingProfile,
+    features: ColmapFeatureExtractionResult,
+    expected_environment: ColmapEnvironmentIdentity,
     source_root: Path,
     python_executable: Path,
     output_root: Path,
@@ -1997,6 +2009,8 @@ def reconstruct_gsplat_static_appearance(
         source=source,
         staged=staged,
         profile=profile,
+        features=features,
+        expected_environment=expected_environment,
         source_root=source_root,
         python_executable=python_executable,
         output_root=output_root,
