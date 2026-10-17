@@ -1963,6 +1963,51 @@ def run_gsplat_reference_training(
     )
 
 
+
+def reconstruct_gsplat_static_appearance(
+    *,
+    request: StaticAppearanceCandidateRequest,
+    source: GsplatStaticAppearancePreflightSource,
+    dataset_root: Path,
+    profile: GsplatStaticAppearanceTrainingProfile,
+    source_root: Path,
+    python_executable: Path,
+    output_root: Path,
+    artifact_ref: ArtifactRef,
+    producer: ArtifactProducerIdentity,
+    cuda_device_index: int,
+    timeout_seconds: int,
+) -> StaticAppearanceCandidateResult:
+    """Stage real COLMAP/PNG files, execute the selected trainer, retain its 3D PLY.
+
+    The only GPU operation is in the caller-supplied external environment. The
+    WRE process stages/verifies exact file bytes and returns a canonical result;
+    a CPU-only test may emulate the trainer but is not evidence of GPU training.
+    """
+
+    _verify_gsplat_reference_producer(profile, producer)
+    if not isinstance(dataset_root, Path) or not dataset_root.is_absolute():
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat complete reconstruction requires an absolute private dataset path"
+        )
+    staged = stage_verified_gsplat_static_appearance_dataset(
+        request, source, dataset_root=dataset_root
+    )
+    return run_gsplat_reference_training(
+        request=request,
+        source=source,
+        staged=staged,
+        profile=profile,
+        source_root=source_root,
+        python_executable=python_executable,
+        output_root=output_root,
+        artifact_ref=artifact_ref,
+        producer=producer,
+        cuda_device_index=cuda_device_index,
+        timeout_seconds=timeout_seconds,
+    )
+
+
 def verify_gsplat_reference_trainer_config_fields(
     source_root: Path,
     profile: GsplatStaticAppearanceTrainingProfile,
