@@ -1097,8 +1097,9 @@ def test_external_gsplat_training_is_exposed_by_public_reconstruction_package() 
     assert "run_gsplat_reference_training" in baseline_module.__all__
 
 
+@pytest.mark.parametrize("preview_format", ("glb", "splat"))
 def test_one_call_gsplat_reconstruction_stages_real_files_and_returns_candidate(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, preview_format: str
 ) -> None:
     """Real CPU staging + file hashing + output assembly, substituted GPU trainer."""
     # This test isolates trainer orchestration; V2L17 evidence has separate real tests.
@@ -1137,7 +1138,7 @@ def test_one_call_gsplat_reconstruction_stages_real_files_and_returns_candidate(
     )
     preview_parent = tmp_path / "interactive-preview"
     preview_parent.mkdir()
-    preview_file = preview_parent / "gaussian-centers.glb"
+    preview_file = preview_parent / f"gaussian-centers.{preview_format}"
     result = reconstruct_gsplat_static_appearance(
         request=request,
         source=source,
@@ -1164,13 +1165,19 @@ def test_one_call_gsplat_reconstruction_stages_real_files_and_returns_candidate(
     assert (staged.dataset_root / "sparse" / "0" / "cameras.bin").is_file()
     assert (output / "wre-reference-training.log").is_file()
     preview_bytes = preview_file.read_bytes()
-    assert struct.unpack_from("<4sII", preview_bytes) == (b"glTF", 2, len(preview_bytes))
-    json_length = struct.unpack_from("<I", preview_bytes, 12)[0]
-    viewer_scene = json.loads(preview_bytes[20 : 20 + json_length])
-    assert viewer_scene["accessors"][0]["count"] == 2
-    assert viewer_scene["extras"]["wre_visualization"] == (
-        "Gaussian centers only, not Gaussian splatting"
-    )
+    if preview_format == "glb":
+        assert struct.unpack_from("<4sII", preview_bytes) == (b"glTF", 2, len(preview_bytes))
+        json_length = struct.unpack_from("<I", preview_bytes, 12)[0]
+        viewer_scene = json.loads(preview_bytes[20 : 20 + json_length])
+        assert viewer_scene["accessors"][0]["count"] == 2
+        assert viewer_scene["extras"]["wre_visualization"] == (
+            "Gaussian centers only, not Gaussian splatting"
+        )
+    else:
+        assert len(preview_bytes) == 2 * 32
+        anisotropic = list(struct.iter_unpack("<6f8B", preview_bytes))
+        assert len(anisotropic) == 2
+        assert all(scale > 0.0 for record in anisotropic for scale in record[3:6])
     assert result.materialization.entries[0].sha256 == _digest(_gsplat_ply(vertices=2))
 
 
