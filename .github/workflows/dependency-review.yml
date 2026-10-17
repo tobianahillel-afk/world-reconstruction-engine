@@ -6,6 +6,8 @@ on:
     paths:
       - "pyproject.toml"
       - "uv.lock"
+      # Source-of-truth external Python/CUDA wheel and model dependency pins.
+      - "registry/dependencies.yaml"
       - ".github/workflows/**"
       - ".github/actions/**"
       - ".github/dependabot.yml"
@@ -45,11 +47,31 @@ jobs:
 
           case "${status}" in
             200)
+              # HTTP 200 alone is not proof of an available usable SBOM.
+              # A malformed/empty graph must fail before dependency-review.
+              python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          result = json.loads(Path("/tmp/wre-sbom.json").read_text(encoding="utf-8"))
+          sbom = result.get("sbom")
+          if not isinstance(sbom, dict):
+              raise SystemExit("Dependency Graph returned HTTP 200 without an SPDX SBOM")
+          version = sbom.get("spdxVersion")
+          packages = sbom.get("packages")
+          if not isinstance(version, str) or not version.startswith("SPDX-"):
+              raise SystemExit("Dependency Graph returned an invalid SPDX version")
+          if not isinstance(packages, list) or not packages:
+              raise SystemExit("Dependency Graph SBOM package inventory is empty or malformed")
+          if any(not isinstance(package, dict) or not package.get("name") for package in packages):
+              raise SystemExit("Dependency Graph SBOM has malformed package entries")
+          print(f"Dependency Graph accessible: {len(packages)} SPDX packages present.")
+          PY
               echo "enabled=true" >> "${GITHUB_OUTPUT}"
               ;;
             403|404)
-              echo "enabled=false" >> "${GITHUB_OUTPUT}"
-              echo "::warning::Dependency Graph is not enabled or not available (HTTP ${status}); strict Dependency Review is configured but cannot run until the repository setting is enabled."
+              echo "::error::Dependency Graph unavailable (HTTP ${status}). Dependency Review did NOT execute. Enable the repository Dependency Graph and required token permissions; fail closed instead of reporting a false green."
+              exit 1
               ;;
             *)
               echo "Unexpected Dependency Graph API response: HTTP ${status}" >&2
