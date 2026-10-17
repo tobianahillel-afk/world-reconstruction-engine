@@ -2665,6 +2665,27 @@ def _write_verified_xyz_rgb_points_glb(
                 "gsplat RGB centers preview lacks a vertex count"
             ) from exc
         sampled = min(count, max_points)
+        native_source_count = count
+        if observed_colmap:
+            source_lines = [
+                line
+                for line in header.splitlines()
+                if line.startswith(b"comment wre_native_source_points ")
+            ]
+            if len(source_lines) != 1:
+                raise GsplatStaticAppearancePreflightError(
+                    "COLMAP observed PLY lacks its native sparse source point count"
+                )
+            try:
+                native_source_count = int(source_lines[0].split()[2])
+            except (ValueError, IndexError) as exc:
+                raise GsplatStaticAppearancePreflightError(
+                    "COLMAP observed PLY source point count is malformed"
+                ) from exc
+            if not count <= native_source_count <= 2_000_000:
+                raise GsplatStaticAppearancePreflightError(
+                    "COLMAP observed PLY source point count disagrees with exported RGB"
+                )
 
         # Fill the requested point budget rather than dropping almost
         # half the cloud when count exceeds the limit by only one point.
@@ -2764,7 +2785,7 @@ def _write_verified_xyz_rgb_points_glb(
         gltf["extras"] = {
             "wre_visualization": "COLMAP observed sparse RGB points, not Gaussian training",
             "metric_scale_known": False,
-            "source_colmap_points": count,
+            "source_colmap_points": native_source_count,
             "shown_points": sampled,
             "sampling": "even-endpoints",
             "requested_max_points": max_points,
