@@ -2381,21 +2381,37 @@ def export_verified_gsplat_rgb_centers_glb(
                 raise GsplatStaticAppearancePreflightError(
                     "gsplat RGB centers preview lacks a vertex count"
                 ) from exc
-            stride = max(1, (count + max_points - 1) // max_points)
-            sampled = (count + stride - 1) // stride
+            sampled = min(count, max_points)
+
+            # Fill the requested point budget rather than dropping almost
+            # half the cloud when count exceeds the limit by only one point.
+            # The integer mapping is deterministic and retains both endpoints.
+            def target_index(sample_number: int) -> int:
+                if sample_number >= sampled:
+                    return count
+                return (
+                    sample_number * (count - 1) // (sampled - 1)
+                    if sampled > 1
+                    else 0
+                )
+
             low = [math.inf, math.inf, math.inf]
             high = [-math.inf, -math.inf, -math.inf]
+            picked = 0
+            next_index = target_index(picked)
             for index in range(count):
                 record = source.read(15)
                 if len(record) != 15:
                     raise GsplatStaticAppearancePreflightError(
                         "gsplat RGB centers preview was truncated"
                     )
-                if index % stride == 0:
+                if index == next_index:
                     coords = struct.unpack_from("<3f", record)
                     for axis in range(3):
                         low[axis] = min(low[axis], coords[axis])
                         high[axis] = max(high[axis], coords[axis])
+                    picked += 1
+                    next_index = target_index(picked)
             if source.read(1):
                 raise GsplatStaticAppearancePreflightError(
                     "gsplat RGB centers preview has trailing data"
@@ -2454,7 +2470,8 @@ def export_verified_gsplat_rgb_centers_glb(
                 "metric_scale_known": False,
                 "source_gaussians": count,
                 "shown_centers": sampled,
-                "sample_stride": stride,
+                "sampling": "even-endpoints",
+                "requested_max_points": max_points,
             },
         }
         document = json.dumps(
@@ -2476,16 +2493,20 @@ def export_verified_gsplat_rgb_centers_glb(
                 ):
                     output.write(chunk)
                     digest.update(chunk)
+                picked = 0
+                next_index = target_index(picked)
                 for index in range(count):
                     record = source.read(15)
                     if len(record) != 15:
                         raise GsplatStaticAppearancePreflightError(
                             "gsplat RGB centers changed during GLB export"
                         )
-                    if index % stride == 0:
+                    if index == next_index:
                         vertex = record + b"\x00"
                         output.write(vertex)
                         digest.update(vertex)
+                        picked += 1
+                        next_index = target_index(picked)
                 if source.read(1):
                     raise GsplatStaticAppearancePreflightError(
                         "gsplat RGB centers gained data during GLB export"
