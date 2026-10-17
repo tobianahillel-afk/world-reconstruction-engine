@@ -2638,6 +2638,107 @@ def export_verified_gsplat_rgb_centers_glb(
     return Sha256Digest(digest.hexdigest())
 
 
+
+def inspect_verified_gsplat_rgb_centers_glb(*, path: Path) -> dict[str, object]:
+    """Load and inspect WRE's own portable RGB-center GLB, without a GPU.
+
+    This validates the narrow WRE-produced POINTS layout, not arbitrary glTF,
+    Gaussian radiance, metric scale, or the existence of the training source.
+    """
+
+    if not isinstance(path, Path) or path.suffix.lower() != ".glb" or path.is_symlink():
+        raise GsplatStaticAppearancePreflightError(
+            "WRE RGB-center inspector requires a regular .glb file"
+        )
+    if not path.is_file() or not 28 <= path.stat().st_size <= 40_000_000:
+        raise GsplatStaticAppearancePreflightError(
+            "WRE RGB-center GLB is missing or outside the supported byte budget"
+        )
+    payload = path.read_bytes()
+    if len(payload) < 28 or len(payload) > 40_000_000:
+        raise GsplatStaticAppearancePreflightError("WRE RGB-center GLB changed during read")
+    magic, version, total = struct.unpack_from("<4sII", payload)
+    if (magic, version, total) != (b"glTF", 2, len(payload)):
+        raise GsplatStaticAppearancePreflightError("WRE RGB-center GLB header is invalid")
+    json_size, json_type = struct.unpack_from("<I4s", payload, 12)
+    if json_type != b"JSON" or json_size < 2 or json_size > 1_000_000 or json_size % 4:
+        raise GsplatStaticAppearancePreflightError("WRE RGB-center JSON chunk is invalid")
+    bin_start = 20 + json_size
+    if bin_start + 8 > len(payload):
+        raise GsplatStaticAppearancePreflightError("WRE RGB-center GLB is truncated")
+    bin_size, bin_type = struct.unpack_from("<I4s", payload, bin_start)
+    if bin_type != b"BIN\\x00" or bin_size != len(payload) - bin_start - 8:
+        raise GsplatStaticAppearancePreflightError("WRE RGB-center binary chunk is invalid")
+    try:
+        scene = json.loads(payload[20:bin_start].decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise GsplatStaticAppearancePreflightError(
+            "WRE RGB-center GLB contains invalid JSON"
+        ) from exc
+    try:
+        extras = scene["extras"]
+        count = scene["accessors"][0]["count"]
+        color_accessor = scene["accessors"][1]
+        bounds_low = scene["accessors"][0]["min"]
+        bounds_high = scene["accessors"][0]["max"]
+        preview_view = scene["bufferViews"][0]
+        primitive = scene["meshes"][0]["primitives"][0]
+        expected = (
+            isinstance(count, int)
+            and not isinstance(count, bool)
+            and 1 <= count <= 2_000_000
+            and scene["asset"]["version"] == "2.0"
+            and extras["wre_visualization"] == "Gaussian centers only, not Gaussian splatting"
+            and extras["shown_centers"] == count
+            and isinstance(extras["source_gaussians"], int)
+            and extras["source_gaussians"] >= count
+            and primitive["mode"] == 0
+            and primitive["attributes"] == {"POSITION": 0, "COLOR_0": 1}
+            and scene["accessors"][0]["type"] == "VEC3"
+            and scene["accessors"][0]["componentType"] == 5126
+            and color_accessor["type"] == "VEC3"
+            and color_accessor["componentType"] == 5121
+            and color_accessor["normalized"] is True
+            and color_accessor["byteOffset"] == 12
+            and preview_view["byteStride"] == 16
+            and preview_view["byteLength"] == count * 16
+            and scene["buffers"][0]["byteLength"] == count * 16
+            and bin_size == count * 16
+            and len(bounds_low) == len(bounds_high) == 3
+        )
+    except (KeyError, IndexError, TypeError, AttributeError):
+        expected = False
+    if not expected:
+        raise GsplatStaticAppearancePreflightError(
+            "GLB is not the supported WRE RGB Gaussian-center layout"
+        )
+    data_start = bin_start + 8
+    low = [math.inf, math.inf, math.inf]
+    high = [-math.inf, -math.inf, -math.inf]
+    for index in range(count):
+        x, y, z = struct.unpack_from("<3f", payload, data_start + 16 * index)
+        for axis, coordinate in enumerate((x, y, z)):
+            if not math.isfinite(coordinate):
+                raise GsplatStaticAppearancePreflightError(
+                    "WRE RGB-center GLB contains a non-finite position"
+                )
+            low[axis] = min(low[axis], coordinate)
+            high[axis] = max(high[axis], coordinate)
+    if low != bounds_low or high != bounds_high:
+        raise GsplatStaticAppearancePreflightError(
+            "WRE RGB-center GLB bounds disagree with the actual point positions"
+        )
+    return {
+        "kind": "wre_gsplat_rgb_centers_only",
+        "sha256": hashlib.sha256(payload).hexdigest(),
+        "source_gaussians": extras["source_gaussians"],
+        "shown_centers": count,
+        "bounds_min": low,
+        "bounds_max": high,
+        "metric_scale_known": False,
+        "gpu_training_verified": False,
+    }
+
 def assemble_verified_gsplat_static_appearance_result(
     *,
     request: StaticAppearanceCandidateRequest,
@@ -2710,13 +2811,13 @@ def _gsplat_rgb_preview_cli(argv: list[str] | None = None) -> int:
         description="Export verified gsplat Gaussian centers as a RGB point cloud (.ply or .glb)"
     )
     parser.add_argument(
-        "--output-root", required=True, type=Path, help="Existing gsplat trainer results directory"
+        "--output-root", type=Path, help="Existing gsplat trainer results directory"
     )
     parser.add_argument(
-        "--max-steps", type=int, required=True, help="Original trainer max_steps / PLY step number"
+        "--max-steps", type=int, help="Original trainer max_steps / PLY step number"
     )
     parser.add_argument(
-        "--preview", type=Path, required=True, help="New output RGB .ply or .glb file"
+        "--preview", type=Path, help="New output RGB .ply or .glb file"
     )
     parser.add_argument(
         "--max-points",
@@ -2724,7 +2825,23 @@ def _gsplat_rgb_preview_cli(argv: list[str] | None = None) -> int:
         default=None,
         help="Maximum visible Gaussian centers in a .glb preview (default: 2000000)",
     )
+    parser.add_argument(
+        "--inspect-glb", type=Path, help="Read an existing WRE RGB-center GLB and print its validated point summary"
+    )
     args = parser.parse_args(argv)
+    if args.inspect_glb is not None:
+        if any(value is not None for value in (
+            args.output_root, args.max_steps, args.preview, args.max_points
+        )):
+            parser.error("--inspect-glb cannot be combined with export arguments")
+        try:
+            summary = inspect_verified_gsplat_rgb_centers_glb(path=args.inspect_glb.absolute())
+        except (GsplatStaticAppearancePreflightError, OSError) as exc:
+            parser.error(str(exc))
+        print(json.dumps(summary, sort_keys=True))
+        return 0
+    if args.output_root is None or args.max_steps is None or args.preview is None:
+        parser.error("export requires --output-root, --max-steps, and --preview")
     try:
         profile = GsplatStaticAppearanceTrainingProfile(max_steps=args.max_steps)
         preview = args.preview.absolute()
@@ -2775,6 +2892,7 @@ __all__ = [
     "export_verified_gsplat_rgb_centers_glb",
     "export_verified_gsplat_rgb_centers_ply",
     "inspect_gsplat_static_appearance_shared_track_pixels",
+    "inspect_verified_gsplat_rgb_centers_glb",
     "materialize_verified_gsplat_ply",
     "preflight_gsplat_static_appearance_inputs",
     "reconstruct_gsplat_static_appearance",

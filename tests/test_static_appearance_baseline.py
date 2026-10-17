@@ -1617,6 +1617,56 @@ def test_external_gsplat_runner_rejects_failure_or_missing_output(
     assert (output / "wre-reference-training.log").exists()
 
 
+
+def test_exported_gsplat_glb_can_be_reopened_and_inspected_offline(tmp_path: Path) -> None:
+    """A real GLB created by the CPU exporter is independently readable by WRE."""
+    original = _gsplat_ply(vertices=4)
+    output_root, profile, ref = _gsplat_output(tmp_path, original)
+    viewer = tmp_path / "viewer"
+    viewer.mkdir()
+    target = viewer / "centers.glb"
+    digest = export_verified_gsplat_rgb_centers_glb(
+        artifact_ref=ref,
+        output_root=output_root,
+        profile=profile,
+        preview_path=target,
+        max_points=3,
+    )
+    summary = baseline_module.inspect_verified_gsplat_rgb_centers_glb(path=target)
+    assert summary["sha256"] == digest.value
+    assert summary["shown_centers"] == 3
+    assert summary["source_gaussians"] == 4
+    assert summary["kind"] == "wre_gsplat_rgb_centers_only"
+    assert summary["gpu_training_verified"] is False
+    assert summary["metric_scale_known"] is False
+    command = subprocess.run(
+        [sys.executable, "-m", "wre.reconstruction.static_appearance_baseline",
+         "--inspect-glb", str(target)],
+        capture_output=True,
+        text=True,
+        timeout=25,
+        check=False,
+    )
+    assert command.returncode == 0, command.stderr
+    assert json.loads(command.stdout) == summary
+
+
+def test_gsplat_glb_inspector_rejects_corrupted_real_vertex_bytes(tmp_path: Path) -> None:
+    output_root, profile, ref = _gsplat_output(tmp_path, _gsplat_ply(vertices=2))
+    viewer = tmp_path / "viewer"
+    viewer.mkdir()
+    target = viewer / "centers.glb"
+    export_verified_gsplat_rgb_centers_glb(
+        artifact_ref=ref, output_root=output_root, profile=profile, preview_path=target
+    )
+    data = bytearray(target.read_bytes())
+    document_size = struct.unpack_from("<I", data, 12)[0]
+    data[28 + document_size : 32 + document_size] = struct.pack("<f", float("nan"))
+    target.write_bytes(data)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="non-finite position"):
+        baseline_module.inspect_verified_gsplat_rgb_centers_glb(path=target)
+
+
 def test_verified_gsplat_gaussian_centers_export_real_viewable_rgb_ply(
     tmp_path: Path,
 ) -> None:
