@@ -3771,6 +3771,43 @@ jobs:
                   view.getAttribute('src').startsWith('data:model/gltf-binary;base64,');
               """)
               assert first
+              # A REAL model-viewer screenshot of the loaded real-photo mesh.
+              # Exercise the same user-facing button/API (not a ChromeDriver
+              # viewport screenshot), check actual PNG bytes and dimensions.
+              assert until("""
+                const button=document.getElementById('wre-view-export');
+                return !button.disabled &&
+                  typeof document.getElementById('wre-scene').toBlob === 'function';
+              """)
+              js("""
+                window.__wreExportedViewPng = null;
+                const originalCreateViewURL=URL.createObjectURL.bind(URL);
+                URL.createObjectURL=blob => {
+                  if (blob.type === 'image/png') {
+                    blob.arrayBuffer().then(data => {
+                      const bytes=new Uint8Array(data);
+                      const view=new DataView(data);
+                      window.__wreExportedViewPng = {
+                        signature:Array.from(bytes.slice(0,8)),
+                        size:bytes.length,
+                        width:view.getUint32(16),
+                        height:view.getUint32(20)
+                      };
+                    }).catch(e => window.__wreExportedViewPng = {error:String(e)});
+                  }
+                  return originalCreateViewURL(blob);
+                };
+                document.getElementById('wre-view-export').click();
+              """)
+              view_png = until("return window.__wreExportedViewPng;")
+              assert view_png.get("signature") == [137,80,78,71,13,10,26,10], view_png
+              assert view_png["size"] > 1000 and view_png["width"] >= 64, view_png
+              assert view_png["height"] >= 64, view_png
+              assert until("""
+                return document.getElementById('wre-view-export-status')
+                  .textContent.includes('PNG view captured locally') &&
+                  !document.getElementById('wre-view-export').disabled;
+              """)
               # Raycast the ACTUAL Chrome-loaded photo mesh, not a mocked
               # geometry API. Click two different hit points via the viewer
               # measurement control, then verify the relative distance.
@@ -4229,6 +4266,8 @@ jobs:
                       "surface_polyline_export_verified_in_chrome": True,
                       "surface_triangle_fan_area_export_verified_in_chrome": True,
                       "surface_chord_angle_export_verified_in_chrome": True,
+                      "current_view_png_export_verified_in_chrome": True,
+                      "current_view_png_dimensions": [view_png["width"], view_png["height"]],
                       "surface_reload": True,
                       "webgl_context": True,
                       "input_glb_sha256": expected_hashes,
@@ -4349,6 +4388,13 @@ jobs:
               raise ValueError("Actual Chrome did not export a relative 3D polygon triangle-fan area")
           if receipt.get("surface_chord_angle_export_verified_in_chrome") is not True:
               raise ValueError("Actual Chrome did not export a real-raycast 3D chord angle")
+          if receipt.get("current_view_png_export_verified_in_chrome") is not True:
+              raise ValueError("Actual Chrome did not export its current real-photo 3D view as PNG")
+          dimensions = receipt.get("current_view_png_dimensions")
+          if not isinstance(dimensions, list) or len(dimensions) != 2 or any(
+              not isinstance(value, int) or value < 64 for value in dimensions
+          ):
+              raise ValueError("Actual Chrome PNG view dimensions are invalid")
           
           glbs = (
               "wre-real-stereo-cpu-textured.glb",
