@@ -1967,6 +1967,7 @@ jobs:
               <input id="wre-local-glb" type="file" accept=".glb,model/gltf-binary"
                 aria-label="Open a local GLB model (max 250 MB)">
               <button id="wre-measure-toggle" type="button" aria-pressed="false">Measure surface distance</button>
+              <button id="wre-path-toggle" type="button" aria-pressed="false">Trace 3D path</button>
               <button id="wre-measure-export" type="button" disabled
                 aria-label="Download relative surface measurement as JSON">Download measurement JSON</button>
             </div>
@@ -1983,24 +1984,42 @@ jobs:
               const provenance = document.getElementById("wre-scene-provenance");
               const localInput = document.getElementById("wre-local-glb");
               const measureButton = document.getElementById("wre-measure-toggle");
+              const pathButton = document.getElementById("wre-path-toggle");
               const exportButton = document.getElementById("wre-measure-export");
               const measureResult = document.getElementById("wre-measure-result");
               let measuring = false;
+              let tracing = false;
               let measured = [];
               let completedMeasurement = null;
               function resetMeasurement() {
                 measured = [];
                 completedMeasurement = null;
                 exportButton.disabled = true;
-                measureResult.textContent = measuring
-                  ? "Click two points on the visible mesh. Model units only (NOT meters)."
-                  : "Surface measurement off. Model units only (NOT meters).";
+                measureResult.textContent = tracing
+                  ? "Click two or more mesh points to trace a 3D polyline (NOT geodesic or meters)."
+                  : measuring
+                    ? "Click two points on the visible mesh. Model units only (NOT meters)."
+                    : "Surface measurement off. Model units only (NOT meters).";
               }
               measureButton.addEventListener("click", () => {
-                measuring = !measuring;
+                measuring = !measuring || tracing;
+                tracing = false;
+                pathButton.setAttribute("aria-pressed", "false");
+                pathButton.textContent = "Trace 3D path";
                 measureButton.setAttribute("aria-pressed", String(measuring));
                 measureButton.textContent = measuring ? "Stop measuring" : "Measure surface distance";
                 if (measuring) scene.removeAttribute("auto-rotate");
+                else scene.setAttribute("auto-rotate", "");
+                resetMeasurement();
+              });
+              pathButton.addEventListener("click", () => {
+                tracing = !tracing;
+                measuring = tracing;
+                measureButton.setAttribute("aria-pressed", "false");
+                measureButton.textContent = "Measure surface distance";
+                pathButton.setAttribute("aria-pressed", String(tracing));
+                pathButton.textContent = tracing ? "Stop tracing" : "Trace 3D path";
+                if (tracing) scene.removeAttribute("auto-rotate");
                 else scene.setAttribute("auto-rotate", "");
                 resetMeasurement();
               });
@@ -2013,14 +2032,44 @@ jobs:
                 }
                 const point = [hit.position.x, hit.position.y, hit.position.z];
                 if (!point.every(Number.isFinite)) return;
-                if (measured.length === 2) {
+                if (!tracing && measured.length === 2) {
                   measured = [];
                   completedMeasurement = null;
                   exportButton.disabled = true;
                 }
                 measured.push(point);
                 if (measured.length === 1) {
-                  measureResult.textContent = "First surface point selected; click a second point.";
+                  measureResult.textContent = "First surface point selected; click another point.";
+                  return;
+                }
+                if (tracing) {
+                  const segments = [];
+                  for (let i = 1; i < measured.length; i++) {
+                    const a = measured[i - 1], b = measured[i];
+                    segments.push(Math.hypot(
+                      a[0] - b[0], a[1] - b[1], a[2] - b[2]
+                    ));
+                  }
+                  const total = segments.reduce((a, b) => a + b, 0);
+                  if (!Number.isFinite(total) || !segments.every(Number.isFinite)) {
+                    resetMeasurement();
+                    return;
+                  }
+                  measureResult.textContent = "3D polyline length: " + total.toFixed(5) +
+                    " model units (" + segments.length +
+                    " straight segments; NOT geodesic or meters).";
+                  completedMeasurement = {
+                    schema: "wre.relative_3d_surface_polyline.v1",
+                    model_source: chooser.value || "user-supplied-local-glb",
+                    model_provenance: provenance.textContent.trim(),
+                    metric_scale_known: false,
+                    units: "model_units",
+                    points_xyz: measured.map(p => p.slice()),
+                    segment_lengths_model_units: segments,
+                    total_length_model_units: total,
+                    surface_geodesic: false
+                  };
+                  exportButton.disabled = false;
                   return;
                 }
                 const relativeDistance = Math.hypot(
@@ -2054,7 +2103,10 @@ jobs:
                 const url = URL.createObjectURL(blob);
                 const link = document.createElement("a");
                 link.href = url;
-                link.download = "wre-relative-surface-measurement.json";
+                link.download = completedMeasurement.schema ===
+                  "wre.relative_3d_surface_polyline.v1"
+                  ? "wre-relative-surface-polyline.json"
+                  : "wre-relative-surface-measurement.json";
                 document.body.appendChild(link);
                 link.click();
                 link.remove();
@@ -2141,8 +2193,10 @@ jobs:
               <code>http://127.0.0.1:8765/wre-real-stereo-cpu-viewer.html</code>.
               You can also select a local GLB file using the file input; it stays
               in your browser, is not uploaded, and its provenance is unverified.
-              Measure distance by clicking two points on a visible mesh. The reported
-              values are in arbitrary model units and must NOT be interpreted as meters.
+              Measure distance by clicking two points, or trace a multi-point 3D
+              polyline on the visible mesh. Path segments are straight 3D chords,
+              NOT shortest paths along the mesh, and values are arbitrary model
+              units that must NOT be interpreted as meters.
               Use only models you trust. No GPU training or held-out quality metric
               is implied.</footer>
           </main>
@@ -2179,6 +2233,8 @@ jobs:
           assert 'id="wre-scene-choice"' in page
           assert 'id="wre-local-glb"' in page
           assert 'id="wre-measure-toggle"' in page
+          assert 'id="wre-path-toggle"' in page
+          assert 'wre.relative_3d_surface_polyline.v1' in page
           assert 'id="wre-measure-export"' in page
           assert 'distance_model_units' in page
           assert 'positionAndNormalFromPoint' in page
