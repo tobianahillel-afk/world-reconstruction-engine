@@ -7051,10 +7051,25 @@ jobs:
           Cliquez sur l'aperçu de disparité pour afficher une valeur observée
           (pixels), et une profondeur relative (unités de modèle, PAS mètres).
           </p>
+          <figure id="wre-stereo-match" style="margin:12px 0;max-width:960px">
+            <div style="position:relative">
+              <img id="wre-stereo-match-photos" loading="eager"
+                src="./wre-real-stereo-cpu-photos.png"
+                style="display:block;width:100%;height:auto"
+                alt="Photographies observées à gauche et à droite, juxtaposées">
+              <canvas id="wre-stereo-match-overlay" aria-hidden="true"
+                style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none"></canvas>
+            </div>
+            <figcaption>Rouge : observation gauche ; vert : correspondance
+              stéréo calculée à droite. Coordonnées 3D relatives uniquement,
+              PAS une précision métrique ni une correspondance garantie.</figcaption>
+          </figure>
           <script>
           (() => {
             const picture = document.getElementById('wre-stereo-disparity');
             const status = document.getElementById('wre-pixel-inspector');
+            const photos = document.getElementById('wre-stereo-match-photos');
+            const overlay = document.getElementById('wre-stereo-match-overlay');
             picture.style.cursor = 'crosshair';
             picture.title = 'Cliquez pour inspecter la disparité réelle à ce pixel';
             let loading = null;
@@ -7111,17 +7126,51 @@ jobs:
                 status.dataset.x = String(u);
                 status.dataset.y = String(v);
                 status.dataset.disparity = String(disparity);
+                delete status.dataset.rightX;
+                delete status.dataset.rightY;
+                delete status.dataset.modelX;
+                delete status.dataset.modelY;
+                delete status.dataset.modelZ;
+                overlay.getContext('2d').clearRect(0, 0, overlay.width, overlay.height);
                 if (!Number.isFinite(disparity) || disparity <= 0) {
                   status.textContent = 'Pixel (' + u + ',' + v +
                     ') : aucune disparité stéréo valide observée.';
                   return;
                 }
-                // WRE's existing uncalibrated preview uses f=width, baseline=1.
+                // The existing CPU preview uses focal=width and baseline=1
+                // in ARBITRARY model units, never a physical camera calibration.
                 const relativeDepth = map.width / disparity;
+                const pointX = (u - (map.width - 1) / 2) / disparity;
+                const pointY = (v - (map.height - 1) / 2) / disparity;
+                const rightX = u - disparity;
+                const inFrame = rightX >= 0 && rightX < map.width;
+                status.dataset.modelX = String(pointX);
+                status.dataset.modelY = String(pointY);
+                status.dataset.modelZ = String(relativeDepth);
+                if (inFrame && photos.complete &&
+                    photos.naturalWidth === map.width * 2 &&
+                    photos.naturalHeight === map.height) {
+                  overlay.width = photos.naturalWidth;
+                  overlay.height = photos.naturalHeight;
+                  const ctx = overlay.getContext('2d');
+                  for (const [x, color] of [[u, '#ff2020'], [map.width + rightX, '#20ef20']]) {
+                    ctx.beginPath();
+                    ctx.arc(x + 0.5, v + 0.5, 6, 0, Math.PI * 2);
+                    ctx.lineWidth = 3;
+                    ctx.strokeStyle = color;
+                    ctx.stroke();
+                  }
+                  status.dataset.rightX = String(rightX);
+                  status.dataset.rightY = String(v);
+                }
                 status.textContent = 'Pixel (' + u + ',' + v + ') : disparité ' +
                   disparity.toFixed(3) + ' px ; profondeur relative ' +
-                  relativeDepth.toFixed(3) +
-                  ' unités de modèle (PAS des mètres, ni une précision certifiée).';
+                  relativeDepth.toFixed(3) + ' unités de modèle ; 3D ≈ (' +
+                  pointX.toFixed(3) + ', ' + pointY.toFixed(3) + ', ' +
+                  relativeDepth.toFixed(3) + ') ; ' +
+                  (inFrame ? 'correspondance droite x=' + rightX.toFixed(3) +
+                    ', y=' + v + ' px' : 'correspondance droite hors image') +
+                  ' (PAS des mètres, ni une précision certifiée).';
               } catch (error) {
                 status.dataset.error = String(error.message);
                 status.textContent = 'Inspection indisponible : ' + String(error.message);
