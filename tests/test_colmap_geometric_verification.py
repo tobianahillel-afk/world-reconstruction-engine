@@ -478,7 +478,7 @@ def test_missing_geometry_result_is_rejected_and_partial_output_removed(tmp_path
 
 @pytest.mark.parametrize("omitted_raw_count", (0, 7))
 def test_native_geometry_can_omit_only_zero_match_pairs(
-    tmp_path: Path, omitted_raw_count: int
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, omitted_raw_count: int
 ) -> None:
     matching = _matching_result(tmp_path)
     connection = sqlite3.connect(matching.database_path)
@@ -530,11 +530,14 @@ def test_native_geometry_can_omit_only_zero_match_pairs(
 
         def omit_unverified_pair() -> tuple[list[int], list[int]]:
             ids, counts = original_read()
-            kept = [(pair_id, count) for pair_id, count in zip(ids, counts, strict=True)
-                    if pair_id != 1_000_003]
+            kept = [
+                (pair_id, count)
+                for pair_id, count in zip(ids, counts, strict=True)
+                if pair_id != 1_000_003
+            ]
             return [pair_id for pair_id, _ in kept], [count for _, count in kept]
 
-        database.read_num_matches = omit_unverified_pair  # type: ignore[method-assign]
+        monkeypatch.setattr(database, "read_num_matches", omit_unverified_pair)
         return database
 
     fake.Database = SimpleNamespace(open=native_database_open)
@@ -549,7 +552,9 @@ def test_native_geometry_can_omit_only_zero_match_pairs(
         result = verify_colmap_geometry(request, module=fake)
         assert len(result.geometries) == 1
         assert result.geometries[0].raw_match_count == 25
-        assert result.provenance.source_observation_ids == matching.provenance.source_observation_ids
+        assert (
+            result.provenance.source_observation_ids == matching.provenance.source_observation_ids
+        )
         assert result.source_matching_database_sha256 == matching.database_sha256
         assert hash_file_content(result.database_path).sha256 == result.database_sha256
     assert matching.database_path.read_bytes() == parent_before
