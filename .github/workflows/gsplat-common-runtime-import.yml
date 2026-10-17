@@ -3841,12 +3841,18 @@ jobs:
 
               # Real Chrome/WebGL raycasts and Blob export of relative 3D
               # triangle-fan area on the actual photograph-derived mesh.
-              area_hits = js("""
+              assert js("""
                 const scene=document.getElementById('wre-scene');
                 const button=document.getElementById('wre-area-toggle');
                 button.click();
-                if (button.getAttribute('aria-pressed') !== 'true' ||
-                    scene.hasAttribute('auto-rotate')) return null;
+                return button.getAttribute('aria-pressed') === 'true' &&
+                  !scene.hasAttribute('auto-rotate');
+              """), "Chrome could not activate the polygon area mode"
+              # View orientation can still interpolate after auto-rotation is
+              # stopped. Sample real surface rays only after camera settles;
+              # compare *relative* area to scene scale, not absolute units.
+              area_scan = """
+                const scene=document.getElementById('wre-scene');
                 const box=scene.getBoundingClientRect(), hits=[];
                 for (let yi=0;yi<=10;yi++) for (let xi=0;xi<=10;xi++) {
                   const x=box.left+box.width*(0.15+0.7*xi/10);
@@ -3857,14 +3863,14 @@ jobs:
                     if (pos.every(Number.isFinite)) hits.push({x,y,pos});
                   }
                 }
-                if (hits.length < 3) return null;
+                if (hits.length < 3) return {points:null,count:hits.length,loaded:scene.loaded};
                 const a=hits[0];
                 let b=null, maxD=0;
                 for (const hit of hits.slice(1)) {
                   const d=Math.hypot(...hit.pos.map((n,i)=>n-a.pos[i]));
                   if (d>maxD) { maxD=d; b=hit; }
                 }
-                if (!b || maxD<0.001) return null;
+                if (!b || !(maxD>0)) return {points:null,count:hits.length,maxD};
                 let c=null, maxArea=0;
                 for (const hit of hits) {
                   const u=b.pos.map((n,i)=>n-a.pos[i]);
@@ -3876,9 +3882,17 @@ jobs:
                   );
                   if (area>maxArea) { maxArea=area; c=hit; }
                 }
-                return c && maxArea>1e-7 ? [a,b,c] : null;
-              """)
-              assert area_hits is not None, "Chrome could not find three non-collinear real mesh points"
+                const valid=c && maxArea>maxD*maxD*1e-6;
+                return {points:valid?[a,b,c]:null,count:hits.length,maxD,maxArea};
+              """
+              area_probe = js(area_scan)
+              for _ in range(15):
+                  if area_probe.get("points"):
+                      break
+                  time.sleep(0.4)
+                  area_probe = js(area_scan)
+              assert area_probe.get("points"), area_probe
+              area_hits = area_probe["points"]
               area_status = js(f"""
                 const scene=document.getElementById('wre-scene');
                 const button=document.getElementById('wre-area-toggle');
@@ -3928,7 +3942,7 @@ jobs:
                   u[0]*v[1]-u[1]*v[0],
               )
               expected_area=0.5*math.sqrt(sum(x*x for x in cross))
-              assert expected_area > 1e-7
+              assert expected_area > 0.0
               assert len(area_json["triangle_areas_model_units_squared"]) == 1
               assert abs(area_json["triangle_areas_model_units_squared"][0]-expected_area) < 1e-6
               assert abs(area_json["total_area_model_units_squared"]-expected_area) < 1e-6
