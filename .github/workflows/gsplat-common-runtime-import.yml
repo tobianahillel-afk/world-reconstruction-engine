@@ -2231,6 +2231,62 @@ jobs:
                     measureImportStatus.textContent = "Saved 3D path restored on this model.";
                     return;
                   }
+                  if (saved.schema === "wre.relative_3d_chord_angle.v1") {
+                    const points = saved.points_xyz;
+                    if (saved.metric_scale_known !== false || saved.units !== "degrees" ||
+                        saved.surface_curvature !== false || saved.vertex_index !== 1 ||
+                        saved.model_source !== (chooser.value || "user-supplied-local-glb") ||
+                        saved.model_provenance !== beforeModel ||
+                        !Array.isArray(points) || points.length !== 3 ||
+                        !points.every(p => Array.isArray(p) && p.length === 3 &&
+                          p.every(v => typeof v === "number" && Number.isFinite(v))) ||
+                        typeof saved.angle_degrees !== "number" ||
+                        !Number.isFinite(saved.angle_degrees) ||
+                        saved.angle_degrees < 0 || saved.angle_degrees > 180 ||
+                        !scene.loaded || scene.getAttribute("src") !== beforeSource ||
+                        provenance.textContent.trim() !== beforeModel) {
+                      throw new Error("Saved angle is invalid or belongs to another 3D model.");
+                    }
+                    const first = points[0], vertex = points[1], last = points[2];
+                    const u = first.map((x, i) => x - vertex[i]);
+                    const v = last.map((x, i) => x - vertex[i]);
+                    const nu = Math.hypot(...u), nv = Math.hypot(...v);
+                    if (!(nu > 0 && nv > 0) || !Number.isFinite(nu * nv)) {
+                      throw new Error("Saved angle has coincident or invalid 3D endpoints.");
+                    }
+                    const cosine = Math.max(-1, Math.min(1,
+                      u.reduce((sum, x, i) => sum + x * v[i], 0) / (nu * nv)
+                    ));
+                    const degrees = Math.acos(cosine) * 180 / Math.PI;
+                    if (!Number.isFinite(degrees) ||
+                        Math.abs(degrees - saved.angle_degrees) >
+                          1e-6 * Math.max(1, degrees)) {
+                      throw new Error("Saved chord angle does not match its 3D points.");
+                    }
+                    measuring = false; tracing = false; areaMode = false; angleMode = false;
+                    for (const button of [measureButton, pathButton, areaButton, angleButton]) {
+                      button.setAttribute("aria-pressed", "false");
+                    }
+                    measureButton.textContent = "Measure surface distance";
+                    pathButton.textContent = "Trace 3D path";
+                    areaButton.textContent = "Estimate 3D polygon area";
+                    angleButton.textContent = "Measure 3D chord angle";
+                    resetMeasurement();
+                    measured = points.map(p => p.slice());
+                    measured.forEach((point, index) => placePickMarker(point, index + 1));
+                    completedMeasurement = {
+                      schema: saved.schema, model_source: saved.model_source,
+                      model_provenance: saved.model_provenance, metric_scale_known: false,
+                      units: "degrees", points_xyz: measured.map(p => p.slice()),
+                      vertex_index: 1, angle_degrees: degrees, surface_curvature: false
+                    };
+                    exportButton.disabled = false;
+                    scene.removeAttribute("auto-rotate");
+                    measureResult.textContent = "Restored 3D chord angle: " +
+                      degrees.toFixed(4) + " degrees (NOT mesh curvature).";
+                    measureImportStatus.textContent = "Saved 3D chord angle restored on this model.";
+                    return;
+                  }
                   const a = saved.point_a_xyz, b = saved.point_b_xyz;
                   if (saved.schema !== "wre.relative_3d_surface_measurement.v1" ||
                       saved.metric_scale_known !== false || saved.units !== "model_units" ||
