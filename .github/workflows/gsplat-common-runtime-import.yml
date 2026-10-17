@@ -5457,32 +5457,49 @@ jobs:
                   !scene.hasAttribute('auto-rotate') &&
                   document.getElementById('wre-measure-export').disabled;
               """), "Chrome could not activate the 3D chord-angle mode"
-              angle_probe = js(area_scan)
-              for _ in range(15):
-                  if angle_probe.get("points"):
-                      break
-                  time.sleep(0.4)
-                  angle_probe = js(area_scan)
-              assert angle_probe.get("points"), angle_probe
-              angle_status = js(f"""
+              # Select and click the SAME live scene in one Chrome execution.
+              # The separate WebDriver scan went stale after camera transitions
+              # (real Chrome/WebGL failure in run 39026780583).
+              angle_interaction = f"""
                 const scene=document.getElementById('wre-scene');
+                const button=document.getElementById('wre-angle-toggle');
+                scene.jumpCameraToGoal();
+                const fresh=(() => {{ {area_scan} }})();
+                if (!fresh.points) return {{error:'angle mesh sample unavailable',
+                                           count:fresh.count}};
                 window.__wreClickedRaycasts=[];
-                for (const p of {json.dumps(angle_probe["points"])}) {{
+                for (const p of fresh.points) {{
                   const hit=scene.positionAndNormalFromPoint(p.x,p.y);
-                  if (!hit || !hit.position) return {{error:'angle click missed mesh'}};
+                  if (!hit || !hit.position) break;
                   window.__wreCapturingClick=true;
-                  scene.dispatchEvent(new MouseEvent('click', {{
-                    bubbles:true, clientX:p.x, clientY:p.y
-                  }}));
-                  window.__wreCapturingClick=false;
+                  try {{
+                    scene.dispatchEvent(new MouseEvent('click', {{
+                      bubbles:true, clientX:p.x, clientY:p.y
+                    }}));
+                  }} finally {{
+                    window.__wreCapturingClick=false;
+                  }}
                 }}
-                return {{
+                const result={{
                   status:document.getElementById('wre-measure-result').textContent,
                   enabled:!document.getElementById('wre-measure-export').disabled,
                   clicked:window.__wreClickedRaycasts.slice(),
                   markers:scene.querySelectorAll('.wre-pick-marker').length
                 }};
-              """)
+                if (result.clicked.length !== 3 || result.markers !== 3) {{
+                  button.click();
+                  button.click();
+                  return {{error:'angle click not completed',count:result.clicked.length}};
+                }}
+                return result;
+              """
+              angle_status = None
+              for _ in range(15):
+                  angle_status = js(angle_interaction)
+                  if (len(angle_status.get("clicked", [])) == 3 and
+                      angle_status.get("markers") == 3):
+                      break
+                  time.sleep(0.4)
               assert len(angle_status.get("clicked", [])) == 3, angle_status
               assert angle_status["enabled"] and angle_status["markers"] == 3
               assert "3D chord angle:" in angle_status["status"]
