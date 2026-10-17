@@ -1963,7 +1963,6 @@ def run_gsplat_reference_training(
     )
 
 
-
 def reconstruct_gsplat_static_appearance(
     *,
     request: StaticAppearanceCandidateRequest,
