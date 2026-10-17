@@ -1173,6 +1173,14 @@ jobs:
           assert len(four_parsed.image_names) == 4
           assert four_parsed.points.shape == reconstructed.shape
           assert np.allclose(four_parsed.points, reconstructed, rtol=0, atol=1e-5)
+          assert list(four_parsed.image_names) == [
+              "estimated-01.png", "estimated-02.png",
+              "estimated-03.png", "estimated-04.png",
+          ]
+          assert set(four_parsed.point_indices["estimated-04.png"]) == set(
+              fourth_indices.tolist()
+          ), "Upstream COLMAP parser lost fourth-image 3D track references"
+          assert len(four_parsed.point_indices["estimated-04.png"]) == len(fourth_indices)
           four_train = Dataset(four_parsed, split="train")
           four_test = Dataset(four_parsed, split="test")
           assert len(four_train) == 3 and len(four_test) == 1
