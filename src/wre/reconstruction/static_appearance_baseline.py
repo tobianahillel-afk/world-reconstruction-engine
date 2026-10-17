@@ -2337,6 +2337,7 @@ def export_verified_gsplat_rgb_centers_glb(
     output_root: Path,
     profile: GsplatStaticAppearanceTrainingProfile,
     preview_path: Path,
+    max_points: int = 2_000_000,
 ) -> Sha256Digest:
     """Create a portable glTF POINTS view of audited Gaussian RGB centers.
 
@@ -2355,7 +2356,9 @@ def export_verified_gsplat_rgb_centers_glb(
             "gsplat GLB preview must use a new distinct .glb file"
         )
 
-    max_points = 2_000_000  # at most 32 MB of interleaved vertex attributes
+    if type(max_points) is not int or not 1 <= max_points <= 2_000_000:
+        raise ValueError("gsplat GLB max_points must be an integer from 1 to 2000000")
+    # At most 32 MB of interleaved vertex attributes, smaller on request.
     with tempfile.TemporaryDirectory(prefix="wre-gsplat-rgb-", dir=parent) as staging:
         rgb = Path(staging) / "centers-rgb.ply"
         export_verified_gsplat_rgb_centers_ply(
@@ -2577,6 +2580,12 @@ def _gsplat_rgb_preview_cli(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--preview", type=Path, required=True, help="New output RGB .ply or .glb file"
     )
+    parser.add_argument(
+        "--max-points",
+        type=int,
+        default=None,
+        help="Maximum visible Gaussian centers in a .glb preview (default: 2000000)",
+    )
     args = parser.parse_args(argv)
     try:
         profile = GsplatStaticAppearanceTrainingProfile(max_steps=args.max_steps)
@@ -2586,6 +2595,11 @@ def _gsplat_rgb_preview_cli(argv: list[str] | None = None) -> int:
             if preview.suffix.lower() == ".glb"
             else export_verified_gsplat_rgb_centers_ply
         )
+        if args.max_points is not None and preview.suffix.lower() != ".glb":
+            raise GsplatStaticAppearancePreflightError(
+                "gsplat --max-points applies only to .glb preview exports"
+            )
+        options = {"max_points": args.max_points} if args.max_points is not None else {}
         digest = exporter(
             artifact_ref=ArtifactRef(
                 ArtifactId("appearance:gsplat:preview-source"),
@@ -2594,6 +2608,7 @@ def _gsplat_rgb_preview_cli(argv: list[str] | None = None) -> int:
             output_root=args.output_root.absolute(),
             profile=profile,
             preview_path=preview,
+            **options,
         )
     except (GsplatStaticAppearancePreflightError, ValueError, TypeError, OSError) as exc:
         parser.error(str(exc))
