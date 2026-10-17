@@ -4698,6 +4698,78 @@ jobs:
               ))))
               assert 0 < angle_expected < 180
               assert abs(angle_json["angle_degrees"] - angle_expected) < 1e-5
+
+              # Roundtrip the REAL 3D chord-angle JSON from Chrome raycasts
+              # through the same public file-import control as distance/path.
+              assert js("""
+                document.getElementById('wre-angle-toggle').click();
+                return document.querySelectorAll('.wre-pick-marker').length === 0 &&
+                  document.getElementById('wre-measure-export').disabled;
+              """)
+              js(f"""
+                const input=document.getElementById('wre-measure-import');
+                const file=new File([JSON.stringify({json.dumps(angle_json)})],
+                  'real-photo-3d-chord-angle.json', {{type:'application/json'}});
+                const data=new DataTransfer();
+                data.items.add(file);
+                input.files=data.files;
+                input.dispatchEvent(new Event('change', {{bubbles:true}}));
+              """)
+              restored_angle = until("""
+                const scene=document.getElementById('wre-scene');
+                const status=document.getElementById('wre-measure-import-status').textContent;
+                const result=document.getElementById('wre-measure-result').textContent;
+                const markers=[...scene.querySelectorAll('.wre-pick-marker')].map(m =>
+                  m.dataset.position.split(' ').map(Number));
+                return status.includes('Saved 3D chord angle restored') &&
+                  result.includes('Restored 3D chord angle:') &&
+                  markers.length === 3 &&
+                  !document.getElementById('wre-measure-export').disabled
+                  ? {status,result,markers,autoRotate:scene.hasAttribute('auto-rotate')} : null;
+              """)
+              assert restored_angle["markers"] == angle_status["clicked"], restored_angle
+              assert restored_angle["autoRotate"] is False
+              assert "NOT mesh curvature" in restored_angle["result"]
+              for invalid in (
+                  dict(angle_json, model_provenance="other 3D GLB"),
+                  dict(angle_json, angle_degrees=angle_json["angle_degrees"] + 5.0),
+                  dict(angle_json, vertex_index=2),
+              ):
+                  js(f"""
+                    const status=document.getElementById('wre-measure-import-status');
+                    status.textContent='Ready to validate another angle input';
+                    const input=document.getElementById('wre-measure-import');
+                    const file=new File([JSON.stringify({json.dumps(invalid)})],
+                      'invalid-chord-angle.json', {{type:'application/json'}});
+                    const data=new DataTransfer();
+                    data.items.add(file);
+                    input.files=data.files;
+                    input.dispatchEvent(new Event('change', {{bubbles:true}}));
+                  """)
+                  assert until("""
+                    return document.getElementById('wre-measure-import-status')
+                      .textContent.includes('restore refused');
+                  """)
+                  assert js("""
+                    return [...document.getElementById('wre-scene')
+                      .querySelectorAll('.wre-pick-marker')].map(
+                        m => m.dataset.position.split(' ').map(Number));
+                  """) == angle_status["clicked"]
+              js("""
+                window.__wreExportedMeasurement=null;
+                document.getElementById('wre-measure-export').click();
+              """)
+              assert json.loads(until("return window.__wreExportedMeasurement;")) == angle_json
+              assert js("""
+                const button=document.getElementById('wre-angle-toggle');
+                button.click();
+                button.click();
+                return button.getAttribute('aria-pressed') === 'false' &&
+                  document.getElementById('wre-measure-export').disabled &&
+                  document.getElementById('wre-scene').hasAttribute('auto-rotate') &&
+                  document.querySelectorAll('.wre-pick-marker').length === 0;
+              """)
+
               assert js("""
                 document.getElementById('wre-angle-toggle').click();
                 return document.getElementById('wre-measure-export').disabled &&
@@ -4795,6 +4867,7 @@ jobs:
                       "surface_polyline_restore_verified_in_chrome": True,
                       "surface_triangle_fan_area_export_verified_in_chrome": True,
                       "surface_chord_angle_export_verified_in_chrome": True,
+                      "surface_chord_angle_restore_verified_in_chrome": True,
                       "relative_3d_camera_bookmark_roundtrip_verified_in_chrome": True,
               "current_view_png_export_verified_in_chrome": True,
                       "current_view_png_dimensions": [view_png["width"], view_png["height"]],
@@ -4922,6 +4995,8 @@ jobs:
               raise ValueError("Actual Chrome did not export a relative 3D polygon triangle-fan area")
           if receipt.get("surface_chord_angle_export_verified_in_chrome") is not True:
               raise ValueError("Actual Chrome did not export a real-raycast 3D chord angle")
+          if receipt.get("surface_chord_angle_restore_verified_in_chrome") is not True:
+              raise ValueError("Actual Chrome did not roundtrip a saved 3D chord angle")
           if receipt.get("relative_3d_camera_bookmark_roundtrip_verified_in_chrome") is not True:
               raise ValueError("Actual Chrome did not roundtrip a relative 3D camera bookmark")
           if receipt.get("current_view_png_export_verified_in_chrome") is not True:
