@@ -927,6 +927,43 @@ dependencies:
     reference_nerfview_undeclared_splines_source_tree_sha1: 88c4bf44a5af6a19760a448541a99738f2eb2e16
     reference_nerfview_undeclared_splines_license_blob_sha1: fc5018e18bfbd3127a63dfbc360fc075c0213df3
     reference_nerfview_undeclared_splines_license: MIT
+    reference_nerfview_eager_import_python: '3.10.21'
+    reference_nerfview_eager_import_torch: 2.4.0+cu124
+    reference_nerfview_eager_import_source_revision: 4538024fe0d15fd1a0e4d760f3695fc44ca72787
+    reference_nerfview_eager_import_source_tree_sha1: e333400e39605978a3d1f9cf6d73ddf577a8c8e3
+    reference_nerfview_eager_import_splines_version: 0.3.3
+    # Historical narrow nerfview-only gate. Preserve this 53-wheel evidence:
+    # it is NOT the combined current 58-wheel trainer-helper/COLMAP gate.
+    reference_nerfview_eager_import_exact_wheels: 53
+    # This earlier narrow proof is not the later 58-wheel combined proof.
+    # Exact GitHub run/immutable PR HEAD and original archived artifact:
+    reference_nerfview_eager_import_source_commit: 38787c4b083c6a9a9a5c6738f790c942f8d79fc1
+    reference_nerfview_eager_import_run_id: 38894645381
+    reference_nerfview_eager_import_artifact_id: 12042874218
+    reference_nerfview_eager_import_artifact_digest_sha256: 3887a3ddce1b2c58978baf59ff7f13b7a160adc1b2f552285592cf5d23beed83
+    reference_nerfview_eager_import_verified: true
+    reference_nerfview_eager_import_gpu_execution: false
+    reference_nerfview_eager_import_full_trainer_execution: false
+    # Historical immutable 58-wheel combined CPU import proof from PR #224.
+    # The CPU-only optional workflow was removed from the candidate merge diff:
+    # this retained run is NOT a permanent CI gate, supported-GPU qualification,
+    # full-trainer import, L2 approval, or permission to redistribute sources.
+    reference_combined_eager_import_source_commit: 07d3eeebdd0bdebf96a81a4853e9322f7debf88f
+    reference_combined_eager_import_python: '3.10.21'
+    reference_combined_eager_import_exact_wheels: 58
+    reference_combined_eager_import_run_id: 38899832367
+    reference_combined_eager_import_artifact_id: 12044988754
+    reference_combined_eager_import_artifact_digest_sha256: fdb0438d0cb607da377914dec046e1b26cc0caa7676a33aafd79a091ad7dc680
+    reference_combined_eager_import_qualifies: nerfview_trainer_helpers_colmap_legacy_reader_cpu_eager_import_only
+    # Earlier consolidated workflow SHA (not this candidate registry-only HEAD):
+    reference_combined_eager_import_l2_reviewed_commit: 07d3eeebdd0bdebf96a81a4853e9322f7debf88f
+    reference_combined_eager_import_l2_verdict: changes_required
+    # Subsequent registry-only snapshot was also reviewed, but security scanning
+    # and custom-registry inventory coverage remain unresolved repository gates.
+    reference_import_evidence_scope_l2_reviewed_commit: 5d5e06cbaccd91ee7b4a2c273c102df007db6423
+    reference_import_evidence_scope_l2_verdict: changes_required
+    reference_combined_eager_import_full_trainer_execution: false
+    reference_combined_eager_import_gpu_execution: false
     reference_fused_bilagrid_source_revision: 90f9788e57d3545e3a033c1038bb9986549632fe
     reference_fused_bilagrid_source_tree_sha1: ee863004a76eb54b44c7761eb6178069bc794752
     reference_fused_bilagrid_license_git_blob_sha1: 139a05b81af1c7dd1bc15adbc8f5834ac88ac8c9
@@ -3188,7 +3225,14 @@ dependencies:
       Two successful source-identical builds produced different binary SHA-256
       values, so byte-identical binary reproducibility remains UNVERIFIED.
       PR #222 now also proves the full gsplat CUDA rasterizer native build/import
-      under the reviewed external profile without GPU execution. The next separate
+      under the reviewed external profile without GPU execution. PR #224
+      independently imports nerfview 0.1.2 from its exact source revision/tree,
+      including its undeclared eager splines 0.3.3 dependency and public viewer
+      types, under CPython 3.10.21 and a 53-wheel SHA-256-locked subset of the
+      reviewed 76-wheel resolver closure. All imports and pip check passed on
+      a CPU-hosted GitHub runner; the machine-readable exact-input evidence was
+      retained. No full trainer/ABI co-import, CUDA kernel, GPU training or
+      redistribution approval follows from this focused import. The next separate
       non-GPU gate is complete offline simple_trainer import/ABI compatibility across
       the exact gsplat rasterizer, fused-ssim, nerfview and SceneManager closures;
       actual GPU kernel/training execution remains deferred to supported hardware.
