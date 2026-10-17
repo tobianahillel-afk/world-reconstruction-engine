@@ -3,6 +3,7 @@ from __future__ import annotations
 import ast
 import hashlib
 import json
+import math
 import os
 import struct
 import sys
@@ -114,6 +115,7 @@ from wre.reconstruction.static_appearance_baseline import (
     build_gsplat_reference_trainer_path_overrides,
     export_verified_gsplat_rgb_centers_glb,
     export_verified_gsplat_rgb_centers_ply,
+    export_verified_gsplat_splat,
     inspect_gsplat_static_appearance_shared_track_pixels,
     materialize_verified_gsplat_ply,
     preflight_gsplat_static_appearance_inputs,
@@ -1294,6 +1296,80 @@ def test_verified_gsplat_gaussian_centers_export_real_viewable_rgb_ply(
         export_verified_gsplat_rgb_centers_ply(
             artifact_ref=ref, output_root=root, profile=profile, preview_path=preview
         )
+
+
+def test_verified_gsplat_gaussian_splat_export_retains_shape_orientation_and_opacity(
+    tmp_path: Path,
+) -> None:
+    """Actual 32-byte records decoded independently, not just an export stub."""
+    first = [0.0] * 59
+    first[:6] = [1.0, 2.0, 3.0, 0.0, 0.0, 0.0]
+    first[-8:] = [0.0, 0.0, math.log(2), math.log(0.5), 1.0, 0.0, 0.0, 0.0]
+    second = [0.0] * 59
+    second[:6] = [-1.0, 0.0, 2.0, 2.0, -2.0, 0.0]
+    second[-8:] = [5.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0]
+    template = _gsplat_ply(vertices=2)
+    split = template.index(b"end_header\n") + len(b"end_header\n")
+    gaussian_ply = template[:split] + struct.pack("<59f", *first) + struct.pack("<59f", *second)
+    root, profile, ref = _gsplat_output(tmp_path, gaussian_ply)
+    viewer = tmp_path / "viewer"
+    viewer.mkdir()
+    target = viewer / "gaussians.splat"
+    digest = export_verified_gsplat_splat(
+        artifact_ref=ref, output_root=root, profile=profile, splat_path=target
+    )
+    data = target.read_bytes()
+    assert len(data) == 2 * 32
+    assert digest == _digest(data)
+    assert (root / profile.expected_ply_relative_path).read_bytes() == gaussian_ply
+    records = list(struct.iter_unpack("<6f8B", data))
+    assert len(records) == 2
+    assert records[0][:3] == (1.0, 2.0, 3.0)
+    assert records[0][3:6] == pytest.approx((1.0, 2.0, 0.5), rel=1e-6)
+    assert records[0][6:] == (127, 127, 127, 127, 255, 128, 128, 128)
+    assert records[1][:3] == (-1.0, 0.0, 2.0)
+    assert records[1][3:6] == (1.0, 1.0, 1.0)
+    assert records[1][6:] == (255, 0, 127, 253, 128, 255, 128, 128)
+    from wre import reconstruction
+
+    assert reconstruction.export_verified_gsplat_splat is export_verified_gsplat_splat
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="renderer export requires"):
+        export_verified_gsplat_splat(
+            artifact_ref=ref, output_root=root, profile=profile, splat_path=target
+        )
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected_message"),
+    (
+        ("invalid_ply", "unexpected bytes"),
+        ("zero_rotation", "quaternion"),
+        ("huge_log_scale", "scale"),
+    ),
+)
+def test_verified_gaussian_splat_export_refuses_bad_inputs_without_partial_file(
+    tmp_path: Path, mutation: str, expected_message: str
+) -> None:
+    record = [0.0] * 59
+    record[-4] = 1.0
+    if mutation == "zero_rotation":
+        record[-4:] = [0.0, 0.0, 0.0, 0.0]
+    if mutation == "huge_log_scale":
+        record[-7] = 1000.0
+    template = _gsplat_ply(vertices=1)
+    split = template.index(b"end_header\n") + len(b"end_header\n")
+    payload = template[:split] + struct.pack("<59f", *record)
+    if mutation == "invalid_ply":
+        payload += b"unexpected"
+    root, profile, ref = _gsplat_output(tmp_path, payload)
+    viewer = tmp_path / "viewer"
+    viewer.mkdir()
+    target = viewer / "gaussians.splat"
+    with pytest.raises(GsplatStaticAppearancePreflightError, match=expected_message):
+        export_verified_gsplat_splat(
+            artifact_ref=ref, output_root=root, profile=profile, splat_path=target
+        )
+    assert not target.exists()
 
 
 def test_verified_gsplat_gaussian_centers_export_standalone_glb(
