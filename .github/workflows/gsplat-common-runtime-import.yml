@@ -2023,6 +2023,9 @@ jobs:
               <span id="wre-camera-status" role="status">Camera bookmark available after load.</span>
               <button id="wre-tour-record" type="button" disabled>Record 3D viewpoint</button>
               <button id="wre-tour-play" type="button" disabled>Play camera tour</button>
+              <label for="wre-tour-step">Preview saved viewpoint:</label>
+              <input id="wre-tour-step" type="range" min="1" max="1" step="1" value="1"
+                aria-label="Preview a recorded static 3D camera viewpoint" disabled>
               <button id="wre-tour-clear" type="button">Clear camera tour</button>
               <button id="wre-tour-export" type="button" disabled>Download camera tour JSON</button>
               <label for="wre-tour-import">Restore camera tour:</label>
@@ -2067,6 +2070,7 @@ jobs:
               const cameraStatus = document.getElementById("wre-camera-status");
               const tourRecord = document.getElementById("wre-tour-record");
               const tourPlay = document.getElementById("wre-tour-play");
+              const tourStep = document.getElementById("wre-tour-step");
               const tourClear = document.getElementById("wre-tour-clear");
               const tourExport = document.getElementById("wre-tour-export");
               const tourImport = document.getElementById("wre-tour-import");
@@ -2087,6 +2091,12 @@ jobs:
               let cameraTourSource = null;
               let tourEpoch = 0;
               let tourPlaying = false;
+              function syncTourStep(selected = cameraTour.length) {
+                const count = Math.max(1, cameraTour.length);
+                tourStep.max = String(count);
+                tourStep.value = String(Math.min(Math.max(1, selected), count));
+                tourStep.disabled = tourPlaying || !scene.loaded || cameraTour.length === 0;
+              }
               function resetCameraTour() {
                 ++tourEpoch;
                 cameraTour = [];
@@ -2095,6 +2105,7 @@ jobs:
                 tourPlay.disabled = true;
                 tourExport.disabled = true;
                 tourRecord.disabled = !scene.loaded;
+                syncTourStep();
                 tourStatus.textContent = "No saved camera tour.";
               }
               tourRecord.addEventListener("click", () => {
@@ -2115,8 +2126,23 @@ jobs:
                 tourPlay.disabled = cameraTour.length < 2;
                 tourExport.disabled = cameraTour.length < 2;
                 tourRecord.disabled = cameraTour.length >= 8;
+                syncTourStep(cameraTour.length);
                 tourStatus.textContent = cameraTour.length +
                   " viewpoint(s) saved for this model; camera-only, nonmetric.";
+              });
+              tourStep.addEventListener("input", () => {
+                if (!scene.loaded || tourPlaying ||
+                    cameraTourSource !== scene.getAttribute("src")) return;
+                const index = Number(tourStep.value) - 1;
+                if (!Number.isInteger(index) || index < 0 || index >= cameraTour.length) return;
+                const frame = cameraTour[index];
+                scene.removeAttribute("auto-rotate");
+                scene.cameraOrbit = frame[0] + "rad " + frame[1] + "rad " + frame[2] + "m";
+                scene.cameraTarget = frame.slice(3, 6).map(value => value + "m").join(" ");
+                scene.fieldOfView = frame[6] + "deg";
+                scene.jumpCameraToGoal();
+                tourStatus.textContent = "Previewing saved viewpoint " + (index + 1) +
+                  "/" + cameraTour.length + " (static 3D, NOT 4D reconstruction).";
               });
               tourPlay.addEventListener("click", async () => {
                 if (!scene.loaded || tourPlaying || cameraTour.length < 2 ||
@@ -2124,20 +2150,42 @@ jobs:
                 const epoch = ++tourEpoch;
                 const frames = cameraTour.map(frame => frame.slice());
                 tourPlaying = true;
+                syncTourStep(1);
                 tourPlay.disabled = true;
                 tourRecord.disabled = true;
                 scene.removeAttribute("auto-rotate");
                 try {
-                  for (const [index, frame] of frames.entries()) {
-                    if (epoch !== tourEpoch || !scene.loaded ||
-                        cameraTourSource !== scene.getAttribute("src")) return;
+                  // Smooth the viewing camera, never the reconstructed scene.
+                  const applyCamera = frame => {
                     scene.cameraOrbit = frame[0] + "rad " + frame[1] + "rad " + frame[2] + "m";
                     scene.cameraTarget = frame.slice(3, 6).map(value => value + "m").join(" ");
                     scene.fieldOfView = frame[6] + "deg";
                     scene.jumpCameraToGoal();
+                  };
+                  for (const [index, frame] of frames.entries()) {
+                    if (epoch !== tourEpoch || !scene.loaded ||
+                        cameraTourSource !== scene.getAttribute("src")) return;
+                    if (index === 0) {
+                      applyCamera(frame);
+                      await new Promise(resolve => setTimeout(resolve, 180));
+                    } else {
+                      const previous = frames[index - 1];
+                      for (let step = 1; step <= 16; step++) {
+                        if (epoch !== tourEpoch || !scene.loaded ||
+                            cameraTourSource !== scene.getAttribute("src")) return;
+                        const t = step / 16;
+                        const eased = t * t * (3 - 2 * t);
+                        const between = frame.map((value, coordinate) =>
+                          previous[coordinate] + (value - previous[coordinate]) * eased);
+                        applyCamera(between);
+                        tourStatus.textContent = "Interpolating camera viewpoint " +
+                          index + "/" + frames.length + " (static 3D, NOT 4D).";
+                        await new Promise(resolve => setTimeout(resolve, 40));
+                      }
+                    }
+                    tourStep.value = String(index + 1);
                     tourStatus.textContent = "Playing camera viewpoint " + (index + 1) +
                       "/" + frames.length + ".";
-                    await new Promise(resolve => setTimeout(resolve, 650));
                   }
                   if (epoch === tourEpoch) {
                     tourStatus.textContent = "Tour complete: " + frames.length +
@@ -2149,6 +2197,7 @@ jobs:
                     tourPlay.disabled = cameraTour.length < 2 || !scene.loaded;
                     tourExport.disabled = cameraTour.length < 2 || !scene.loaded;
                     tourRecord.disabled = cameraTour.length >= 8 || !scene.loaded;
+                    syncTourStep(frames.length);
                   }
                 }
               });
@@ -2205,6 +2254,7 @@ jobs:
                   tourRecord.disabled = cameraTour.length >= 8;
                   tourPlay.disabled = false;
                   tourExport.disabled = false;
+                  syncTourStep(cameraTour.length);
                   tourStatus.textContent = cameraTour.length +
                     " tour viewpoints restored; viewer-only, NOT 4D reconstruction.";
                 } catch (error) {
@@ -2219,6 +2269,7 @@ jobs:
                 cameraStatus.textContent = "Export or restore this model's relative 3D viewpoint.";
                 tourRecord.disabled = false;
                 tourImport.disabled = false;
+                syncTourStep();
                 viewExportButton.disabled = false;
                 viewExportStatus.textContent = "Capture the current rendered view; nonmetric PNG.";
               });
@@ -4872,6 +4923,31 @@ jobs:
                     .includes('2 viewpoint(s) saved') &&
                   !document.getElementById('wre-tour-play').disabled;
               """)
+              # Actually move the real WebGL camera with both saved frames
+              # via the user-facing keyframe selector, without mocked camera APIs.
+              for selected, bookmark in ((1, "__wreRecordedFirst"), (2, "__wreRecordedSecond")):
+                  # model-viewer commits jumpCameraToGoal on a later render frame.
+                  # Dispatch the actual UI input once, then independently poll
+                  # the REAL camera properties instead of reading them in the
+                  # same JavaScript task as the input event.
+                  assert js(f"""
+                    const step=document.getElementById('wre-tour-step');
+                    step.value='{selected}';
+                    step.dispatchEvent(new Event('input', {{bubbles:true}}));
+                    return !step.disabled && step.max==='2' &&
+                      document.getElementById('wre-tour-status').textContent
+                        .includes('Previewing saved viewpoint {selected}/2');
+                  """), f"Chrome ignored real 3D keyframe selector {selected}"
+                  scrubbed = until(f"""
+                    const scene=document.getElementById('wre-scene');
+                    const orbit=scene.getCameraOrbit(), target=scene.getCameraTarget();
+                    const values=[orbit.theta,orbit.phi,orbit.radius,
+                      target.x,target.y,target.z,scene.getFieldOfView()];
+                    const expected=window.{bookmark};
+                    return expected && values.every((v,i)=>Math.abs(v-expected[i])<0.1)
+                      ? values : null;
+                  """, limit=10)
+                  assert len(scrubbed) == 7, f"Chrome did not reach keyframe {selected}"
               assert js("""
                 const scene=document.getElementById('wre-scene');
                 scene.cameraOrbit='1.5rad 0.6rad 9m';
@@ -4881,6 +4957,23 @@ jobs:
                 document.getElementById('wre-tour-play').click();
                 return document.getElementById('wre-tour-play').disabled;
               """)
+              # Observe an actual intermediate WebGL camera pose while tour plays:
+              # old hard-cut playback cannot satisfy this mid-path assertion.
+              tweened_tour = until("""
+                const scene=document.getElementById('wre-scene');
+                const status=document.getElementById('wre-tour-status').textContent;
+                const first=window.__wreRecordedFirst, second=window.__wreRecordedSecond;
+                if (!first || !second || !status.includes('Interpolating camera viewpoint'))
+                  return null;
+                const orbit=scene.getCameraOrbit(), target=scene.getCameraTarget();
+                const actual=[orbit.theta,orbit.phi,orbit.radius,target.x,target.y,target.z,
+                  scene.getFieldOfView()];
+                const lo=Math.min(first[0],second[0])+0.04;
+                const hi=Math.max(first[0],second[0])-0.04;
+                return actual[0]>lo && actual[0]<hi &&
+                  actual.every(Number.isFinite) ? actual : null;
+              """, limit=10)
+              assert len(tweened_tour) == 7, "Chrome did not render intermediate 3D camera motion"
               played_tour = until("""
                 const scene=document.getElementById('wre-scene');
                 const status=document.getElementById('wre-tour-status').textContent;
@@ -4982,15 +5075,13 @@ jobs:
               assert js("""
                 document.getElementById('wre-tour-clear').click();
                 const scene=document.getElementById('wre-scene');
-                const previous=window.__wreCameraBookmark;
-                // The tour ends at an arbitrary viewing angle. Restore the
-                // earlier real model-viewer camera before subsequent mesh picks.
-                scene.cameraOrbit=previous.orbit_radians[0]+'rad '+
-                  previous.orbit_radians[1]+'rad '+
-                  previous.orbit_radius_model_units+'m';
-                scene.cameraTarget=previous.target_model_units.map(x=>x+'m').join(' ');
-                scene.fieldOfView=previous.field_of_view_degrees+'deg';
+                // Tour keyframes can look away from a sparse photo-derived
+                // mesh. For the next REAL surface measurement, use the
+                // loaded model's own bounds, never assume origin (0,0,0).
                 scene.removeAttribute('auto-rotate');
+                scene.cameraTarget='auto auto auto';
+                scene.cameraOrbit='auto auto auto';
+                scene.fieldOfView='auto';
                 scene.jumpCameraToGoal();
                 return document.getElementById('wre-tour-play').disabled &&
                   document.getElementById('wre-tour-status')
@@ -5013,72 +5104,88 @@ jobs:
                 const box=scene.getBoundingClientRect();
                 const hits=[];
                 if (typeof scene.positionAndNormalFromPoint !== 'function') return null;
+                // Choose points inside the real mesh, not the first hit at a
+                // silhouette. After camera-tour playback the first marginal
+                // hit can vanish between the precheck and the click handler.
                 for (let yi=0;yi<=10;yi++) for (let xi=0;xi<=10;xi++) {
                   const x=box.left+box.width*(0.15+0.7*xi/10);
                   const y=box.top+box.height*(0.15+0.7*yi/10);
                   const hit=scene.positionAndNormalFromPoint(x,y);
-                  if (hit && hit.position &&
-                      [hit.position.x,hit.position.y,hit.position.z].every(Number.isFinite)) {
-                    const pos=[hit.position.x,hit.position.y,hit.position.z];
-                    if (hits.length && Math.hypot(
-                      pos[0]-hits[0].pos[0],pos[1]-hits[0].pos[1],
-                      pos[2]-hits[0].pos[2])>0.001)
-                      return [hits[0],{x,y,pos}];
-                    if (!hits.length) hits.push({x,y,pos});
-                  }
+                  if (!hit || !hit.position) continue;
+                  const pos=[hit.position.x,hit.position.y,hit.position.z];
+                  if (!pos.every(Number.isFinite)) continue;
+                  // A thin but valid photo-derived surface may not cover
+                  // four neighboring pixels. Keep actual finite raycasts;
+                  // the click handler independently confirms their XYZ.
+                  hits.push({x,y,pos});
                 }
-                return null;
+                if (hits.length<2) return null;
+                const middle=hits[Math.floor(hits.length/2)];
+                // Once one marker exists, the second point must differ from
+                // the actual recorded XYZ, not a stale pre-click sample.
+                const anchor=window.__wreClickedRaycasts?.[0] || middle.pos;
+                const options=hits.map(p => ({
+                  p,
+                  separation:Math.hypot(...p.pos.map((v,i)=>v-anchor[i]))
+                })).filter(item=>item.separation>0.001)
+                  .sort((a,b)=>a.separation-b.separation);
+                if (!options.length) return null;
+                return [middle,options[Math.floor(options.length/2)].p];
               """
               assert js(measure_scan) is not None, "Chrome could not hit two distinct real mesh points"
-              measure_status = js(f"""
+              # A real model-viewer render frame may settle BETWEEN the first
+              # successful surface pick and the next one after a camera tour.
+              # Keep the browser raycast genuine; never inject XYZ. Observe
+              # each click in a separate WebDriver task and re-scan the model.
+              assert js("""
                 const scene=document.getElementById('wre-scene');
-                const toggle=document.getElementById('wre-measure-toggle');
-                // Observe the genuine raycast inside the actual click handler.
-                // Pre-click samples can differ during camera interpolation and
-                // are not the geometry saved by the user-facing export.
-                const originalRaycast=scene.positionAndNormalFromPoint.bind(scene);
+                const original=scene.positionAndNormalFromPoint.bind(scene);
                 window.__wreClickedRaycasts=[];
                 window.__wreCapturingClick=false;
-                scene.positionAndNormalFromPoint=(x,y) => {{
-                  const hit=originalRaycast(x,y);
-                  if (window.__wreCapturingClick && hit && hit.position) {{
+                scene.positionAndNormalFromPoint=(x,y) => {
+                  const hit=original(x,y);
+                  if (window.__wreCapturingClick && hit && hit.position) {
                     window.__wreClickedRaycasts.push([
                       hit.position.x,hit.position.y,hit.position.z
                     ]);
-                  }}
+                  }
                   return hit;
-                }};
-                // Scan and click in the SAME WebDriver script. Camera
-                // interpolation after bookmark restore made separately
-                // sampled pixels stale, even after stopping auto-rotate.
-                // A real model-viewer camera can settle after the first
-                // surface click. Rescan the current mesh before later clicks.
-                // Never inject fabricated XYZ: use actual viewer raycasts.
-                for (let attempt=0;attempt<8;attempt++) {{
-                  if (scene.querySelectorAll('.wre-pick-marker').length===2) break;
-                  scene.jumpCameraToGoal();
-                  const fresh=(() => {{ {measure_scan} }})();
-                  if (!fresh) return {{error:'current mesh has no distinct surface points'}};
-                  const hasFirst=scene.querySelectorAll('.wre-pick-marker').length>0;
-                  const p=fresh[hasFirst?1:0];
-                  const hit=originalRaycast(p.x,p.y);
-                  if (!hit || !hit.position) continue;
-                  window.__wreCapturingClick=true;
-                  try {{
-                    scene.dispatchEvent(new MouseEvent('click', {{
-                      bubbles:true, clientX:p.x, clientY:p.y
-                    }}));
-                  }} finally {{
-                    window.__wreCapturingClick=false;
-                  }}
-                }}
-                return {{
-                  status:document.getElementById('wre-measure-result').textContent,
-                  pressed:toggle.getAttribute('aria-pressed'),
-                  autoRotate:scene.hasAttribute('auto-rotate'),
-                  clicked:window.__wreClickedRaycasts.slice()
-                }};
+                };
+                return true;
               """)
+              measure_status = {}
+              for _ in range(20):
+                  measure_status = js(f"""
+                    const scene=document.getElementById('wre-scene');
+                    scene.jumpCameraToGoal();
+                    const current=scene.querySelectorAll('.wre-pick-marker').length;
+                    const candidate=(() => {{ {measure_scan} }})();
+                    if (candidate && current < 2) {{
+                      const p=candidate[current === 0 ? 0 : 1];
+                      const hit=scene.positionAndNormalFromPoint(p.x,p.y);
+                      if (hit && hit.position) {{
+                        window.__wreCapturingClick=true;
+                        try {{
+                          scene.dispatchEvent(new MouseEvent('click', {{
+                            bubbles:true, clientX:p.x, clientY:p.y
+                          }}));
+                        }} finally {{
+                          window.__wreCapturingClick=false;
+                        }}
+                      }}
+                    }}
+                    return {{
+                      status:document.getElementById('wre-measure-result').textContent,
+                      pressed:document.getElementById('wre-measure-toggle')
+                        .getAttribute('aria-pressed'),
+                      autoRotate:scene.hasAttribute('auto-rotate'),
+                      markers:scene.querySelectorAll('.wre-pick-marker').length,
+                      clicked:window.__wreClickedRaycasts.slice()
+                    }};
+                  """)
+                  if len(measure_status.get("clicked", [])) == 2 and measure_status["markers"] == 2:
+                      break
+                  time.sleep(0.15)
               assert measure_status.get("clicked") and len(measure_status["clicked"]) == 2, measure_status
               assert math.dist(*measure_status["clicked"]) > 0.001, measure_status
               assert measure_status["pressed"] == "true" and not measure_status["autoRotate"]
@@ -6023,6 +6130,8 @@ jobs:
                       "relative_3d_camera_bookmark_roundtrip_verified_in_chrome": True,
                       "user_camera_tour_verified_in_chrome": True,
                       "portable_camera_tour_json_roundtrip_verified_in_chrome": True,
+                      "camera_tour_keyframe_scrubbing_verified_in_chrome": True,
+                      "smooth_camera_tour_interpolation_verified_in_chrome": True,
               "current_view_png_export_verified_in_chrome": True,
                       "current_view_png_dimensions": [view_png["width"], view_png["height"]],
                       "surface_reload": True,
@@ -6169,6 +6278,10 @@ jobs:
               raise ValueError("Actual Chrome did not replay a user camera tour")
           if receipt.get("portable_camera_tour_json_roundtrip_verified_in_chrome") is not True:
               raise ValueError("Actual Chrome did not export and restore a real camera tour")
+          if receipt.get("camera_tour_keyframe_scrubbing_verified_in_chrome") is not True:
+              raise ValueError("Actual Chrome did not scrub two real 3D camera keyframes")
+          if receipt.get("smooth_camera_tour_interpolation_verified_in_chrome") is not True:
+              raise ValueError("Actual Chrome did not render smooth 3D camera interpolation")
           if receipt.get("current_view_png_export_verified_in_chrome") is not True:
               raise ValueError("Actual Chrome did not export its current real-photo 3D view as PNG")
           dimensions = receipt.get("current_view_png_dimensions")
