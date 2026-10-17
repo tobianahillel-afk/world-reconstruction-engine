@@ -5,6 +5,7 @@ on:
     paths:
       - ".github/workflows/gsplat-real-photo-colmap-rgb.yml"
       - "src/wre/reconstruction/static_appearance_baseline.py"
+      - "src/wre/reconstruction/colmap_verification.py"
       - "src/wre/reconstruction/__init__.py"
   workflow_dispatch:
 
