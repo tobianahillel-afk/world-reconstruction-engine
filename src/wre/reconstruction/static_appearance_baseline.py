@@ -2346,6 +2346,166 @@ def materialize_verified_gsplat_ply(
     )
 
 
+
+def export_verified_colmap_observed_rgb_ply(
+    request: StaticAppearanceCandidateRequest,
+    source: GsplatStaticAppearancePreflightSource,
+    *,
+    features: ColmapFeatureExtractionResult,
+    expected_environment: ColmapEnvironmentIdentity,
+    module: object,
+    preview_path: Path,
+) -> Sha256Digest:
+    """Export observed, *untrained* COLMAP sparse XYZ with true source PNG colors.
+
+    Uses the native audited camera/point model, registered 2D feature tracks
+    and exactly verified sRGB source pixels. The color of each reconstructed
+    point is the first registered view by name, NOT calibrated radiance.
+    No Gaussian fitting, synthetic points, world alignment or GPU is involved.
+    """
+
+    canonical = verify_gsplat_static_appearance_native_geometry(
+        request,
+        source,
+        features=features,
+        expected_environment=expected_environment,
+        module=module,
+    )
+    point_count = len(canonical.point_map.positions_xyz)
+    if not 1 <= point_count <= 2_000_000:
+        raise GsplatStaticAppearancePreflightError(
+            "COLMAP RGB preview supports 1 to 2000000 source sparse points"
+        )
+    if (
+        not isinstance(preview_path, Path)
+        or not preview_path.is_absolute()
+        or preview_path.suffix.lower() != ".ply"
+    ):
+        raise GsplatStaticAppearancePreflightError(
+            "COLMAP observed preview requires a new absolute .ply file"
+        )
+    parent = _safe_root(preview_path.parent, "COLMAP observed preview parent")
+    destination = parent / preview_path.name
+    if destination.exists() or destination.is_symlink():
+        raise GsplatStaticAppearancePreflightError(
+            "COLMAP observed preview must not replace an existing file"
+        )
+
+    root = _safe_root(source.image_root, "COLMAP source image root")
+    pixels_by_name: dict[str, tuple[int, int, bytes]] = {}
+    for item in source.images:
+        path = root / item.image_name
+        if path.is_symlink() or item.source_path.is_symlink():
+            raise GsplatStaticAppearancePreflightError("COLMAP source PNG is a symlink")
+        if path.resolve(strict=True) != item.source_path.resolve(strict=True):
+            raise GsplatStaticAppearancePreflightError("COLMAP source PNG identity changed")
+        payload = path.read_bytes()
+        if (
+            len(payload) != item.observation.asset.byte_length
+            or hashlib.sha256(payload).hexdigest() != item.observation.asset.sha256.value
+        ):
+            raise GsplatStaticAppearancePreflightError("COLMAP source PNG SHA-256 changed")
+        pixels_by_name[item.image_name] = _decode_audited_gsplat_png_rgb8(payload)
+
+    native_path = _verified_native_model_path(
+        source.native_model_root, source.native_model_artifact
+    )
+    native = cast(Any, module).Reconstruction(native_path)
+    if not bool(native.is_valid()):
+        raise GsplatStaticAppearancePreflightError("COLMAP observed sparse model is invalid")
+    registered = tuple(sorted(int(i) for i in native.reg_image_ids()))
+    native_images = {i: native.image(i) for i in registered}
+    if (
+        len(registered) != len(pixels_by_name)
+        or {image.name for image in native_images.values()} != set(pixels_by_name)
+    ):
+        raise GsplatStaticAppearancePreflightError(
+            "COLMAP observed registered images do not match original PNGs"
+        )
+    point_ids = tuple(sorted(int(i) for i in native.point3D_ids()))
+    if len(point_ids) != point_count:
+        raise GsplatStaticAppearancePreflightError("COLMAP observed point count changed")
+
+    header = (
+        "ply\\nformat binary_little_endian 1.0\\n"
+        f"comment wre_colmap_source_sha256 {canonical.source_model_identity_sha256.value}\\n"
+        "comment wre_metric_scale_known false\\n"
+        "comment wre_color_source original_srgb8_feature_observation\\n"
+        f"element vertex {point_count}\\n"
+        "property float x\\nproperty float y\\nproperty float z\\n"
+        "property uchar red\\nproperty uchar green\\nproperty uchar blue\\nend_header\\n"
+    ).encode("ascii")
+    digest = hashlib.sha256()
+    created = False
+    try:
+        with destination.open("xb") as output:
+            created = True
+            output.write(header)
+            digest.update(header)
+            for position, point_id in enumerate(point_ids):
+                point = native.point3D(point_id)
+                xyz = tuple(float(v) for v in point.xyz)
+                if len(xyz) != 3 or any(not math.isfinite(v) for v in xyz):
+                    raise GsplatStaticAppearancePreflightError(
+                        "COLMAP sparse point has invalid XYZ"
+                    )
+                if xyz != canonical.point_map.positions_xyz[position]:
+                    raise GsplatStaticAppearancePreflightError(
+                        "COLMAP sparse point differs from canonical WRE geometry"
+                    )
+                sampled: list[tuple[str, int, int, int]] = []
+                for track in point.track.elements:
+                    image_id = int(track.image_id)
+                    if image_id not in native_images:
+                        raise GsplatStaticAppearancePreflightError(
+                            "COLMAP sparse point references an unknown image"
+                        )
+                    image = native_images[image_id]
+                    keypoint_id = int(track.point2D_idx)
+                    if not 0 <= keypoint_id < int(image.num_points2D()):
+                        raise GsplatStaticAppearancePreflightError(
+                            "COLMAP sparse point has invalid image feature index"
+                        )
+                    feature = image.point2D(keypoint_id)
+                    if int(feature.point3D_id) != point_id:
+                        raise GsplatStaticAppearancePreflightError(
+                            "COLMAP sparse point track is not reciprocal"
+                        )
+                    width, height, pixels = pixels_by_name[image.name]
+                    u, v = (float(value) for value in feature.xy)
+                    if not math.isfinite(u) or not math.isfinite(v):
+                        raise GsplatStaticAppearancePreflightError(
+                            "COLMAP point observation has invalid pixel coordinates"
+                        )
+                    x, y = math.floor(u), math.floor(v)
+                    if not (0 <= x < width and 0 <= y < height):
+                        raise GsplatStaticAppearancePreflightError(
+                            "COLMAP point observation is outside the original PNG"
+                        )
+                    offset = (y * width + x) * 3
+                    sampled.append(
+                        (image.name, pixels[offset], pixels[offset + 1], pixels[offset + 2])
+                    )
+                if len(sampled) < 2 or len({item[0] for item in sampled}) != len(sampled):
+                    raise GsplatStaticAppearancePreflightError(
+                        "COLMAP point lacks distinct reciprocal multiview observations"
+                    )
+                _, red, green, blue = min(sampled)
+                try:
+                    record = struct.pack("<3f3B", *xyz, red, green, blue)
+                except OverflowError as exc:
+                    raise GsplatStaticAppearancePreflightError(
+                        "COLMAP point XYZ cannot be represented by PLY float32"
+                    ) from exc
+                output.write(record)
+                digest.update(record)
+    except Exception:
+        if created:
+            destination.unlink(missing_ok=True)
+        raise
+    return Sha256Digest(digest.hexdigest())
+
+
 def export_verified_gsplat_rgb_centers_ply(
     *,
     artifact_ref: ArtifactRef,
@@ -2894,6 +3054,7 @@ __all__ = [
     "GsplatStaticAppearanceTrainingProfile",
     "GsplatStaticAppearanceVerifiedImage",
     "assemble_verified_gsplat_static_appearance_result",
+    "export_verified_colmap_observed_rgb_ply",
     "export_verified_gsplat_rgb_centers_glb",
     "export_verified_gsplat_rgb_centers_ply",
     "inspect_gsplat_static_appearance_shared_track_pixels",
