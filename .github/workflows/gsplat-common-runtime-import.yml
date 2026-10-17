@@ -3600,25 +3600,35 @@ jobs:
               measure_status = js(f"""
                 const scene=document.getElementById('wre-scene');
                 const toggle=document.getElementById('wre-measure-toggle');
-                const clicked=[];
+                // Observe the genuine raycast inside the actual click handler.
+                // Pre-click samples can differ during camera interpolation and
+                // are not the geometry saved by the user-facing export.
+                const originalRaycast=scene.positionAndNormalFromPoint.bind(scene);
+                window.__wreClickedRaycasts=[];
+                window.__wreCapturingClick=false;
+                scene.positionAndNormalFromPoint=(x,y) => {{
+                  const hit=originalRaycast(x,y);
+                  if (window.__wreCapturingClick && hit && hit.position) {{
+                    window.__wreClickedRaycasts.push([
+                      hit.position.x,hit.position.y,hit.position.z
+                    ]);
+                  }}
+                  return hit;
+                }};
                 for (const p of {json.dumps(measure_hits)}) {{
-                  // Capture the REAL raycast immediately before each real
-                  // click event, rather than comparing against an earlier
-                  // sample taken while the camera was still settling.
-                  const hit=scene.positionAndNormalFromPoint(p.x,p.y);
+                  const hit=originalRaycast(p.x,p.y);
                   if (!hit || !hit.position) return {{error:'click missed surface'}};
-                  const pos=[hit.position.x,hit.position.y,hit.position.z];
-                  if (!pos.every(Number.isFinite)) return {{error:'nonfinite click hit'}};
-                  clicked.push(pos);
+                  window.__wreCapturingClick=true;
                   scene.dispatchEvent(new MouseEvent('click', {{
                     bubbles:true, clientX:p.x, clientY:p.y
                   }}));
+                  window.__wreCapturingClick=false;
                 }}
                 return {{
                   status:document.getElementById('wre-measure-result').textContent,
                   pressed:toggle.getAttribute('aria-pressed'),
                   autoRotate:scene.hasAttribute('auto-rotate'),
-                  clicked
+                  clicked:window.__wreClickedRaycasts.slice()
                 }};
               """)
               assert measure_status.get("clicked") and len(measure_status["clicked"]) == 2, measure_status
@@ -3670,23 +3680,22 @@ jobs:
                 const scene=document.getElementById('wre-scene');
                 const pathButton=document.getElementById('wre-path-toggle');
                 pathButton.click();
-                const clicked=[];
+                window.__wreClickedRaycasts=[];
                 for (const p of {json.dumps([measure_hits[0],measure_hits[1],measure_hits[0]])}) {{
                   const hit=scene.positionAndNormalFromPoint(p.x,p.y);
                   if (!hit || !hit.position) return {{error:'path click missed surface'}};
-                  const pos=[hit.position.x,hit.position.y,hit.position.z];
-                  if (!pos.every(Number.isFinite)) return {{error:'nonfinite path hit'}};
-                  clicked.push(pos);
+                  window.__wreCapturingClick=true;
                   scene.dispatchEvent(new MouseEvent('click', {{
                     bubbles:true, clientX:p.x, clientY:p.y
                   }}));
+                  window.__wreCapturingClick=false;
                 }}
                 return {{
                   status:document.getElementById('wre-measure-result').textContent,
                   pressed:pathButton.getAttribute('aria-pressed'),
                   enabled:!document.getElementById('wre-measure-export').disabled,
                   stoppedAutoRotate:!scene.hasAttribute('auto-rotate'),
-                  clicked
+                  clicked:window.__wreClickedRaycasts.slice()
                 }};
               """)
               assert path_status.get("clicked") and len(path_status["clicked"]) == 3, path_status
