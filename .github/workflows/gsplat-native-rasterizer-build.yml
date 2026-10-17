@@ -221,6 +221,110 @@ jobs:
           print(f"Built and imported exact gsplat v1.5.3 rasterizer: {path.name}. No CUDA kernel was executed.")
           PY
 
+      - name: Install the full reviewed trainer Python wheel set in this same environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run --no-project --with "pyyaml==6.0.2" python - <<'PY'
+          from pathlib import Path
+          import os
+          import re
+          from urllib.parse import urlsplit
+          import yaml
+
+          lock = yaml.safe_load(Path("registry/dependencies.yaml").read_text())[
+              "dependencies"
+          ]["gsplat_static_appearance"]["runtime_python_lock"]
+          assert lock["target"]["python"] == "3.10.21"
+          assert len(lock["packages"]) == 76
+          locked_names = [str(p["name"]).lower().replace("_", "-") for p in lock["packages"]]
+          assert len(locked_names) == len(set(locked_names))
+          required = {"torch", "torchvision", "torchmetrics", "viser", "tyro", "numpy"}
+          assert required <= set(locked_names)
+          urls = []
+          for item in lock["packages"]:
+              parsed = urlsplit(item["url"])
+              assert parsed.scheme == "https" and not parsed.fragment
+              assert re.fullmatch(r"[0-9a-f]{64}", item["sha256"])
+              urls.append(f'{item["name"]} @ {item["url"]}#sha256={item["sha256"]}')
+          destination = Path(os.environ["RUNNER_TEMP"]) / "trainer-locked-urls.txt"
+          destination.write_text("\\n".join(urls) + "\\n")
+          print(f"Prepared {len(urls)} reviewed SHA256-locked trainer wheels")
+          PY
+          "$NATIVE_PYTHON" -m pip install --no-index --no-deps --require-hashes \\
+            -r "$RUNNER_TEMP/trainer-locked-urls.txt"
+          "$NATIVE_PYTHON" -m pip check
+
+      - name: Build fused-ssim and install nerfview at exact reviewed revisions
+        shell: bash
+        run: |
+          set -euo pipefail
+          source_root="$RUNNER_TEMP/gsplat-trainer-dependencies"
+          mkdir -p "$source_root"
+          git init -q "$source_root/fused-ssim"
+          git -C "$source_root/fused-ssim" remote add origin https://github.com/rahul-goel/fused-ssim.git
+          git -C "$source_root/fused-ssim" fetch -q --depth=1 origin 328dc9836f513d00c4b5bc38fe30478b4435cbb5
+          git -C "$source_root/fused-ssim" checkout -q --detach FETCH_HEAD
+          test "$(git -C "$source_root/fused-ssim" rev-parse HEAD)" = 328dc9836f513d00c4b5bc38fe30478b4435cbb5
+          test "$(git -C "$source_root/fused-ssim" rev-parse HEAD^{tree})" = ac5f1d8fe5d519f9c44b220d235bf1f198463da7
+          git init -q "$source_root/nerfview"
+          git -C "$source_root/nerfview" remote add origin https://github.com/nerfstudio-project/nerfview.git
+          git -C "$source_root/nerfview" fetch -q --depth=1 origin 4538024fe0d15fd1a0e4d760f3695fc44ca72787
+          git -C "$source_root/nerfview" checkout -q --detach FETCH_HEAD
+          test "$(git -C "$source_root/nerfview" rev-parse HEAD)" = 4538024fe0d15fd1a0e4d760f3695fc44ca72787
+          test "$(git -C "$source_root/nerfview" rev-parse HEAD^{tree})" = e333400e39605978a3d1f9cf6d73ddf577a8c8e3
+          export MAX_JOBS=1
+          "$NATIVE_PYTHON" -m pip install --no-deps --no-build-isolation \\
+            "$source_root/fused-ssim" "$source_root/nerfview"
+          "$NATIVE_PYTHON" -m pip check
+
+      - name: Import exact upstream trainer and both CUDA extensions with nerfview and COLMAP reader
+        shell: bash
+        run: |
+          set -euo pipefail
+          reader="$RUNNER_TEMP/gsplat-trainer-dependencies/legacy-reader"
+          git init -q "$reader"
+          git -C "$reader" remote add origin https://github.com/rmbrualla/pycolmap.git
+          git -C "$reader" fetch -q --depth=1 origin cc7ea4b7301720ac29287dbe450952511b32125e
+          git -C "$reader" checkout -q --detach FETCH_HEAD
+          test "$(git -C "$reader" rev-parse HEAD)" = cc7ea4b7301720ac29287dbe450952511b32125e
+          GSPLAT_REFERENCE_EXAMPLES="$RUNNER_TEMP/gsplat-source/examples" \\
+          GSPLAT_REFERENCE_READER="$reader" "$NATIVE_PYTHON" - <<'PY'
+          import os
+          import sys
+          import torch
+          import gsplat
+          import fused_ssim
+          import nerfview
+          from gsplat.cuda._backend import _C
+          import fused_ssim_cuda
+
+          assert not torch.cuda.is_available(), "CPU-hosted import cannot prove GPU"
+          assert torch.__version__ == "2.4.0+cu124"
+          assert gsplat.__version__ == "1.5.3"
+          assert nerfview.__version__ == "0.1.2"
+          assert _C.__file__.endswith(".so")
+          assert fused_ssim_cuda.__file__.endswith(".so")
+          sys.path.insert(0, os.environ["GSPLAT_REFERENCE_READER"])
+          sys.path.insert(0, os.environ["GSPLAT_REFERENCE_EXAMPLES"])
+          from datasets.colmap import Parser, Dataset
+          from simple_trainer import Config, main
+          from gsplat_viewer import GsplatViewer
+
+          assert callable(main) and callable(Parser) and callable(Dataset)
+          assert GsplatViewer is not None and callable(fused_ssim.fused_ssim)
+          cfg = Config(
+              data_dir="/tmp/not-a-real-dataset",
+              result_dir="/tmp/not-a-real-training-output",
+              disable_viewer=True,
+              save_ply=True,
+              max_steps=1,
+          )
+          assert cfg.disable_viewer and cfg.max_steps == 1 and cfg.save_ply
+          print("PASS: real pinned trainer/native co-import and Config construct; "
+                "NO GPU execution, reconstruction or training.")
+          PY
+
       - name: Retain exact native rasterizer build/import evidence
         shell: bash
         run: |
