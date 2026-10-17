@@ -1975,6 +1975,7 @@ jobs:
                 <option value="sift">SIFT 3D points and cameras</option>
               </select>
               <button id="wre-compare-sync" type="button" disabled>Copy left viewpoint to right</button>
+              <button id="wre-compare-link" type="button" aria-pressed="false" disabled>Link orbit angles</button>
               <span id="wre-compare-status" role="status">Comparison off.</span>
               <a href="./wre-real-stereo-cpu-textured.glb" download>Download surface GLB</a>
               <a href="./wre-real-stereo-cpu-lr-consistent.glb" download>Download stereo points GLB</a>
@@ -2038,6 +2039,7 @@ jobs:
               const compareChoice = document.getElementById("wre-compare-choice");
               const compareScene = document.getElementById("wre-compare-scene");
               const compareSync = document.getElementById("wre-compare-sync");
+              const compareLink = document.getElementById("wre-compare-link");
               const compareStatus = document.getElementById("wre-compare-status");
               const viewPair = document.getElementById("wre-views");
               const provenance = document.getElementById("wre-scene-provenance");
@@ -2952,11 +2954,43 @@ jobs:
                   label: "SIFT estimated points + cameras (unknown metric scale) · SHA-256 WRE_SIFT_GLB_SHA256"
                 }
               };
+              // Independently loaded GLBs need not share scale or origin.
+              // Follow only LEFT orbit angles; preserve RIGHT target, radius and FOV.
+              let linkedOrbit = false;
+              function resetLinkedOrbit() {
+                linkedOrbit = false;
+                compareLink.disabled = true;
+                compareLink.setAttribute("aria-pressed", "false");
+                compareLink.textContent = "Link orbit angles";
+              }
+              function updateLinkedOrbit() {
+                if (!linkedOrbit || !scene.loaded || !compareScene.loaded ||
+                    compareScene.hidden) return;
+                const left = scene.getCameraOrbit();
+                const right = compareScene.getCameraOrbit();
+                if (![left.theta, left.phi, right.radius].every(Number.isFinite) ||
+                    right.radius <= 0) return;
+                compareScene.cameraOrbit = left.theta + "rad " + left.phi +
+                  "rad " + right.radius + "m";
+                compareScene.jumpCameraToGoal();
+              }
+              scene.addEventListener("camera-change", updateLinkedOrbit);
+              compareLink.addEventListener("click", () => {
+                if (compareLink.disabled || !scene.loaded || !compareScene.loaded) return;
+                linkedOrbit = !linkedOrbit;
+                compareLink.setAttribute("aria-pressed", String(linkedOrbit));
+                compareLink.textContent = linkedOrbit ? "Unlink orbit angles" : "Link orbit angles";
+                if (linkedOrbit) updateLinkedOrbit();
+                compareStatus.textContent = linkedOrbit
+                  ? "Left rotation linked to right; model origins and scale are NOT registered."
+                  : "Orbit link off; 3D models remain independent.";
+              });
               // Compare two independently rendered real GLB assets. Copying a
               // camera does NOT register different geometries or prove scale.
               compareChoice.addEventListener("change", () => {
                 const other = modes[compareChoice.value];
                 compareSync.disabled = true;
+                resetLinkedOrbit();
                 if (!other) {
                   compareScene.removeAttribute("src");
                   compareScene.hidden = true;
@@ -2973,10 +3007,12 @@ jobs:
               compareScene.addEventListener("load", () => {
                 if (compareScene.hidden) return;
                 compareSync.disabled = !scene.loaded;
+                compareLink.disabled = !scene.loaded;
                 compareStatus.textContent = "Both 3D models rendered; geometry uses uncalibrated units.";
               });
               compareScene.addEventListener("error", () => {
                 compareSync.disabled = true;
+                resetLinkedOrbit();
                 compareStatus.textContent = "Right-hand model could not be loaded.";
               });
               compareSync.addEventListener("click", () => {
@@ -4445,6 +4481,51 @@ jobs:
                   document.getElementById('wre-compare-status').textContent
                     .includes('not registered');
               """), "Real 3D comparison camera-copy action did not complete"
+              # Exercise linked dual-model orientation against TWO REAL loaded
+              # model-viewer WebGL scenes, without any registration claim.
+              js("""
+                const left=document.getElementById('wre-scene');
+                const right=document.getElementById('wre-compare-scene');
+                window.__wreRightBefore = {
+                  radius: right.getCameraOrbit().radius,
+                  target: right.getCameraTarget()
+                };
+                document.getElementById('wre-compare-link').click();
+                left.cameraOrbit='1.2rad 1.1rad '+left.getCameraOrbit().radius+'m';
+                left.jumpCameraToGoal();
+                left.dispatchEvent(new Event('camera-change'));
+              """)
+              assert until("""
+                const left=document.getElementById('wre-scene');
+                const right=document.getElementById('wre-compare-scene');
+                const a=left.getCameraOrbit();
+                const b=right.getCameraOrbit();
+                const t=right.getCameraTarget();
+                const old=window.__wreRightBefore;
+                return left.loaded && right.loaded &&
+                  document.getElementById('wre-compare-link').getAttribute('aria-pressed')==='true' &&
+                  Math.abs(a.theta-b.theta)<0.01 &&
+                  Math.abs(a.phi-b.phi)<0.01 &&
+                  Math.abs(b.radius-old.radius)<0.01 &&
+                  Math.hypot(t.x-old.target.x,t.y-old.target.y,t.z-old.target.z)<0.01 &&
+                  document.getElementById('wre-compare-status').textContent
+                    .includes('NOT registered');
+              """), "Orbit linking did not preserve independent camera position"
+              js("""
+                const left=document.getElementById('wre-scene');
+                const right=document.getElementById('wre-compare-scene');
+                window.__wreUnlinkedTheta=right.getCameraOrbit().theta;
+                document.getElementById('wre-compare-link').click();
+                left.cameraOrbit='1.6rad 1.1rad '+left.getCameraOrbit().radius+'m';
+                left.jumpCameraToGoal();
+                left.dispatchEvent(new Event('camera-change'));
+              """)
+              assert js("""
+                return document.getElementById('wre-compare-link')
+                    .getAttribute('aria-pressed')==='false' &&
+                  Math.abs(document.getElementById('wre-compare-scene').getCameraOrbit().theta -
+                    window.__wreUnlinkedTheta)<0.01;
+              """), "Disabling orbit link did not restore independent 3D control"
               comparison_png = base64.b64decode(
                   call("GET", f"/session/{session}/screenshot"), validate=True
               )
@@ -5570,6 +5651,7 @@ jobs:
                       "photometric_cloud_mode_loaded": True,
                       "sift_camera_mode_loaded": True,
                       "two_real_3d_models_compared_side_by_side": True,
+                      "dual_3d_linked_orbit_verified_in_chrome": True,
                       "side_by_side_screenshot_sha256": side_by_side_sha256,
                       "local_glb_file_loaded_in_chrome": True,
                       "surface_distance_measured_in_chrome": True,
@@ -5700,6 +5782,8 @@ jobs:
               raise ValueError("Actual Chrome did not open a user-selected GLB")
           if receipt.get("two_real_3d_models_compared_side_by_side") is not True:
               raise ValueError("Actual Chrome did not compare two real 3D GLBs side by side")
+          if receipt.get("dual_3d_linked_orbit_verified_in_chrome") is not True:
+              raise ValueError("Actual Chrome did not verify independent linked 3D orbit angles")
           if receipt.get("surface_distance_measured_in_chrome") is not True:
               raise ValueError("Actual Chrome did not measure two real mesh points")
           if receipt.get("surface_measurement_export_verified_in_chrome") is not True:
