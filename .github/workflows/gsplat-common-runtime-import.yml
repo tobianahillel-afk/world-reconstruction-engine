@@ -839,6 +839,134 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      # This is a separate, actually calibrated benchmark: the prior OpenCV
+      # Aloe JPG sample pair was NOT independently proven to be official
+      # Middlebury view1/view5, so never compare its disparity as ground truth.
+      # Official 2006 documentation defines half-size disp1/2 + dmin.
+      - name: Measure stereo disparity on original Middlebury half-size Aloe GT (CPU)
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$COMMON_PYTHON" - <<'PY'
+          import hashlib
+          import io
+          import json
+          import math
+          import os
+          import urllib.request
+          import zipfile
+          from pathlib import Path
+
+          import cv2
+          import numpy as np
+
+          archive_url = (
+              "https://vision.middlebury.edu/stereo/data/scenes2006/"
+              "HalfSize/zip-2views/Aloe-2views.zip"
+          )
+          # 1.4 MiB official ZIP; bound both transport and uncompressed data.
+          with urllib.request.urlopen(archive_url, timeout=90) as response:
+              archive_bytes = response.read(3_000_001)
+          assert 0 < len(archive_bytes) <= 3_000_000
+          archive_sha256 = hashlib.sha256(archive_bytes).hexdigest()
+          with zipfile.ZipFile(io.BytesIO(archive_bytes)) as archive:
+              infos = [item for item in archive.infolist() if not item.is_dir()]
+              assert 4 <= len(infos) <= 16
+              assert sum(item.file_size for item in infos) <= 16_000_000
+
+              def read_member(name):
+                  matches = [
+                      item for item in infos
+                      if item.filename.replace("\\", "/").split("/")[-1] == name
+                  ]
+                  assert len(matches) == 1, (name, len(matches))
+                  with archive.open(matches[0]) as stream:
+                      data = stream.read(8_000_001)
+                  assert 0 < len(data) <= 8_000_000
+                  return data
+
+              left_bytes = read_member("view1.png")
+              right_bytes = read_member("view5.png")
+              gt_bytes = read_member("disp1.png")
+              dmin_bytes = read_member("dmin.txt")
+
+          left = cv2.imdecode(np.frombuffer(left_bytes, np.uint8), cv2.IMREAD_COLOR)
+          right = cv2.imdecode(np.frombuffer(right_bytes, np.uint8), cv2.IMREAD_COLOR)
+          groundtruth = cv2.imdecode(np.frombuffer(gt_bytes, np.uint8), cv2.IMREAD_UNCHANGED)
+          assert left is not None and right is not None and groundtruth is not None
+          assert left.shape == right.shape and left.shape[:2] == groundtruth.shape
+          assert groundtruth.ndim == 2 and groundtruth.dtype == np.uint8
+          height, width = groundtruth.shape
+          assert 500 <= height <= 600 and 600 <= width <= 750
+          dmin = float(dmin_bytes.decode("ascii").strip())
+          assert math.isfinite(dmin) and 0 <= dmin < width / 2
+
+          # Per official 2006 Middlebury spec, half-size encoded disparity
+          # intensity / 2, plus the crop offset dmin; zero is UNKNOWN, not 0 px.
+          reference = groundtruth.astype(np.float32) / 2.0 + dmin
+          known = groundtruth > 0
+          min_disparity = max(0, math.floor(dmin) - 16)
+          matcher = cv2.StereoSGBM_create(
+              minDisparity=min_disparity,
+              numDisparities=160,
+              blockSize=5,
+              P1=8 * 3 * 25,
+              P2=32 * 3 * 25,
+              uniquenessRatio=10,
+              speckleWindowSize=50,
+              speckleRange=2,
+          )
+          predicted = matcher.compute(
+              cv2.cvtColor(left, cv2.COLOR_BGR2GRAY),
+              cv2.cvtColor(right, cv2.COLOR_BGR2GRAY),
+          ).astype(np.float32) / 16.0
+          evaluated = known & np.isfinite(predicted) & (predicted >= min_disparity)
+          count = int(np.count_nonzero(evaluated))
+          assert count > 1000, count
+          delta = np.abs(predicted[evaluated] - reference[evaluated])
+          report = {
+              "benchmark": "Middlebury 2006 HalfSize Aloe view1/view5 disp1",
+              "official_source": archive_url,
+              "source_zip_sha256_observed": archive_sha256,
+              "source_zip_pinned_sha256": False,
+              "image_pair_sha256": [
+                  hashlib.sha256(left_bytes).hexdigest(),
+                  hashlib.sha256(right_bytes).hexdigest(),
+              ],
+              "reference_disp1_sha256": hashlib.sha256(gt_bytes).hexdigest(),
+              "dmin_txt_sha256": hashlib.sha256(dmin_bytes).hexdigest(),
+              "image_height_width": [height, width],
+              "dmin_crop_disparity_px": dmin,
+              "reference_zero_means_unknown": True,
+              "halfsize_reference_encoding": "disp1_png_value/2 + dmin",
+              "algorithm": "OpenCV StereoSGBM CPU independent pair",
+              "matcher_min_disparity": min_disparity,
+              "matcher_num_disparities": 160,
+              "groundtruth_known_pixels": int(np.count_nonzero(known)),
+              "overlapping_valid_pixels": count,
+              "coverage_of_groundtruth": count / int(np.count_nonzero(known)),
+              "disparity_mae_px": float(np.mean(delta)),
+              "disparity_rmse_px": float(np.sqrt(np.mean(delta * delta))),
+              "bad_gt_1px_fraction": float(np.mean(delta > 1.0)),
+              "bad_gt_2px_fraction": float(np.mean(delta > 2.0)),
+              "photographs_are_real": True,
+              "actual_gpu_execution": False,
+              "trained_gaussian_appearance": False,
+              "metric_3d_reconstruction_validated": False,
+          }
+          destination = Path(os.environ["RUNNER_TEMP"]) / "wre-middlebury-half-aloe-gt.json"
+          destination.write_text(json.dumps(report, sort_keys=True, indent=2) + "\n")
+          print(json.dumps(report, sort_keys=True))
+          PY
+
+      - name: Publish independently measured Middlebury stereo quality
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wre-middlebury-aloe-official-gt-cpu-quality
+          path: ${{ runner.temp }}/wre-middlebury-half-aloe-gt.json
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Build BOTH upstream CUDA extensions into the SAME Python interpreter
         shell: bash
         run: |
