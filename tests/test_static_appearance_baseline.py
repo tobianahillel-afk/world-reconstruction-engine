@@ -1342,7 +1342,7 @@ def test_verified_gsplat_gaussian_splat_export_retains_shape_orientation_and_opa
 @pytest.mark.parametrize(
     ("mutation", "expected_message"),
     (
-        ("invalid_ply", "trailing bytes"),
+        ("invalid_ply", "unexpected bytes"),
         ("zero_rotation", "quaternion"),
         ("huge_log_scale", "scale"),
     ),
