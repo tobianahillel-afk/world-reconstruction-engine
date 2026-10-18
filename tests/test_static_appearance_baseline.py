@@ -869,6 +869,7 @@ def test_preflight_has_no_trainer_execution_or_optional_framework_import() -> No
         "tempfile",
         "typing",
         "wre",
+        "zipfile",
         "zlib",
     }
     assert not {"torch", "gsplat", "numpy", "pycolmap"} & imported
@@ -1748,11 +1749,11 @@ def test_verified_gsplat_bundle_contains_usable_viewer_files_and_provenance(
     assert manifest["format"] == "wre-gsplat-viewer-bundle-v1"
     assert manifest["source_ply"] == {
         "relative_path": profile.expected_ply_relative_path,
-        "sha256": _digest(actual_ply),
+        "sha256": _digest(actual_ply).value,
     }
     for name, payload in (("scene.splat", splat_bytes), ("centers.glb", glb_bytes)):
         assert manifest["outputs"][name] == {
-            "sha256": _digest(payload),
+            "sha256": _digest(payload).value,
             "size_bytes": len(payload),
         }
     assert (root / profile.expected_ply_relative_path).read_bytes() == actual_ply
