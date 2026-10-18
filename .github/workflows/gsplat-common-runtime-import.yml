@@ -1217,10 +1217,11 @@ jobs:
           const framePair=document.getElementById('wre-frame-baseline');
           const nearestButton=document.getElementById('wre-nearest-camera');
           const details=document.getElementById('camera-details');
+          let focusCamera=null;
           const clearPairMarkers=()=>{
             viewer.querySelectorAll('[slot^="hotspot-pair-"]').forEach(node=>node.remove());
           };
-          const showPairMarkers=(first,second)=>{
+          const showPairMarkers=(first,second,indices)=>{
             clearPairMarkers();
             [first,second].forEach((center,i)=>{
               const hotspot=document.createElement('button');
@@ -1231,6 +1232,13 @@ jobs:
               hotspot.setAttribute('data-normal','0 1 0');
               hotspot.setAttribute('aria-label','Reconstructed SfM camera '+(i?'B':'A'));
               hotspot.textContent=i?'B':'A';
+              hotspot.title='Inspect reconstructed SfM camera '+(i?'B':'A');
+              hotspot.addEventListener('click',()=>{
+                // Retain the measured A/B pair; navigate only on verified scene.
+                if(!localUrl && !choice.disabled && focusCamera){
+                  focusCamera(indices[i]);
+                }
+              });
               viewer.appendChild(hotspot);
             });
           };
@@ -1388,7 +1396,7 @@ jobs:
                 baselineOutput.textContent='Invalid reconstructed camera geometry.';
                 return;
               }
-              showPairMarkers(first,second);
+              showPairMarkers(first,second,[Number(choice.value),Number(baselineChoice.value)]);
               baselineOutput.textContent='Camera baseline: '+distance.toFixed(6)+
                 ' local SfM units (not metres; no capture-time interpretation). '+
                 'A and B mark reconstructed camera centres in 3D.';
@@ -1436,10 +1444,11 @@ jobs:
               details.textContent='Framed calibrated SfM camera pair in 3D; '+
                 'local reconstruction units, not metres or capture-time motion.';
             });
-            choice.addEventListener('change',()=>{
-              updateBaseline();
-              if(choice.value==='') return;
-              const c=cameras[Number(choice.value)];
+            focusCamera=(index)=>{
+              if(localUrl || !Number.isInteger(index) || index<0 || index>=cameras.length){
+                return;
+              }
+              const c=cameras[index];
               const center=c.camera_center_xyz;
               const m=c.world_from_camera_row_major_4x4;
               const forward=[m[0][2],m[1][2],m[2][2]];
@@ -1456,9 +1465,13 @@ jobs:
                 theta.toPrecision(9)+'rad '+phi.toPrecision(9)+'rad '+
                 radius.toPrecision(9)+'m');
               viewer.jumpCameraToGoal();
-              details.textContent='Camera '+(Number(choice.value)+1)+' · '+c.image_name+
+              details.textContent='Camera '+(index+1)+' · '+c.image_name+
                 ' · SfM XYZ ['+center.map(v=>v.toFixed(3)).join(', ')+
                 '] local units. Approximate orbit, not image-calibrated roll or 4D.';
+            };
+            choice.addEventListener('change',()=>{
+              updateBaseline();
+              if(choice.value!=='') focusCamera(Number(choice.value));
             });
           } catch(error) {
             details.textContent='Camera explorer unavailable: '+String(error);
