@@ -1388,8 +1388,10 @@ jobs:
           #camera-details {font-size:13px;line-height:1.45;flex-basis:100%}
           #wre-native-lookup {padding:9px 18px;background:#1b2a3d;display:flex;
             flex-wrap:wrap;gap:9px;align-items:center}
-          #wre-native-lookup input,#wre-native-lookup button {padding:8px;
+          #wre-native-lookup input,#wre-native-lookup button,
+          #wre-native-lookup select {padding:8px;
             background:#273950;border:1px solid #8097b2;color:white;border-radius:5px}
+          #wre-native-observation-status {flex-basis:100%;font-size:13px}
           #wre-native-lookup-output {flex-basis:100%;font-size:13px;line-height:1.5}
           #wre-sfm-quality {padding:9px 18px;background:#162235;line-height:1.45}
           #local-model {display:flex;flex-wrap:wrap;align-items:center;gap:9px;
@@ -1463,6 +1465,16 @@ jobs:
             <input id="wre-native-point-id" type="number" min="1" step="1"
               placeholder="Point ID">
             <button id="wre-native-point-find" type="button">Find 3D point</button>
+            <label for="wre-native-observation-camera">Measured camera</label>
+            <select id="wre-native-observation-camera" disabled>
+              <option value="">Find a point first</option>
+            </select>
+            <button id="wre-native-observation-open" type="button" disabled>
+              Go to observed camera
+            </button>
+            <output id="wre-native-observation-status" aria-live="polite">
+              Select an observed camera to inspect its measured pixel.
+            </output>
             <output id="wre-native-lookup-output" aria-live="polite">
               Look up all measured SfM 3D points, not only camera-pair samples.
               Coordinates in arbitrary SfM units; no GPU training or capture time.
@@ -1489,7 +1501,9 @@ jobs:
               <figure><div class="wre-photo-frame"><img id="wre-photo-image" hidden
                 alt="Locally provided first reconstructed camera photograph">
                 <span id="wre-measured-pixel-a" class="wre-measured-pixel" hidden
-                  aria-label="Measured SfM observation in camera A"></span></div>
+                  aria-label="Measured SfM observation in camera A"></span>
+                <span id="wre-native-photo-pixel" class="wre-measured-pixel" hidden
+                  aria-label="Measured native 3D point pixel in local photo"></span></div>
                 <figcaption>Camera A · operator-supplied, unverified</figcaption></figure>
               <figure><div class="wre-photo-frame"><img id="wre-photo-image-b" hidden
                 alt="Locally provided second reconstructed camera photograph">
@@ -1522,9 +1536,19 @@ jobs:
           const lookupInput=document.getElementById('wre-native-point-id');
           const lookupButton=document.getElementById('wre-native-point-find');
           const lookupOutput=document.getElementById('wre-native-lookup-output');
+          const nativeCameraChoice=document.getElementById('wre-native-observation-camera');
+          const nativeCameraOpen=document.getElementById('wre-native-observation-open');
+          const nativeCameraStatus=document.getElementById('wre-native-observation-status');
+          const nativePhotoPixel=document.getElementById('wre-native-photo-pixel');
           let nativeLookup=null;
+          let nativePoint=null;
+          let nativeObservation=null;
           const clearNativeLookupMarker=()=>{
             viewer.querySelector('[slot="hotspot-native-lookup"]')?.remove();
+            nativePoint=null;nativeObservation=null;
+            nativeCameraChoice.replaceChildren(new Option('Find a point first',''));
+            nativeCameraChoice.disabled=true;nativeCameraOpen.disabled=true;
+            nativePhotoPixel.hidden=true;
           };
           lookupButton.addEventListener('click',async()=>{
             clearNativeLookupMarker();
@@ -1575,6 +1599,21 @@ jobs:
                    o.pixel.every(Number.isFinite))) {
                 throw Error('Invalid native COLMAP point evidence');
               }
+              // Resolve every native image ID against the 16 actual SfM cameras.
+              // Never navigate by filename alone or extrapolate an unmeasured pixel.
+              const observed=observations.map(o=>{
+                const match=[...cameraEvidence.entries()].find(([,camera])=>
+                  camera.image_id===o.image_id && camera.image_name===o.image_name);
+                if(!match) throw Error('Native observation has no registered camera');
+                return {index:match[0],pixel:o.pixel,image_name:o.image_name};
+              });
+              nativePoint={id,observed};
+              nativeCameraChoice.replaceChildren(new Option('Choose measured camera',''));
+              observed.forEach(o=>nativeCameraChoice.add(new Option(
+                o.image_name+' ('+o.pixel.map(v=>v.toFixed(1)).join(', ')+')',o.index)));
+              nativeCameraChoice.disabled=false;nativeCameraOpen.disabled=false;
+              nativeCameraStatus.textContent='Choose a real observing camera; provide '+
+                'its original photograph locally to display the measured pixel.';
               const marker=document.createElement('button');
               marker.type='button';marker.className='wre-track-hotspot';
               marker.slot='hotspot-native-lookup';
@@ -1598,6 +1637,20 @@ jobs:
             }
           });
 
+          nativeCameraOpen.addEventListener('click',()=>{
+            if(localUrl!==null || !nativePoint || nativeCameraChoice.disabled) return;
+            const observation=nativePoint.observed.find(o=>
+              o.index===nativeCameraChoice.value);
+            if(!observation || choice.disabled) return;
+            nativeObservation=observation;
+            choice.value=observation.index;
+            choice.dispatchEvent(new Event('change',{bubbles:true}));
+            nativeCameraStatus.textContent='Observed native 3D point '+nativePoint.id+
+              ' in camera '+observation.image_name+' at measured pixel ('+
+              observation.pixel.map(v=>v.toFixed(2)).join(', ')+
+              '). A local source photo is required for the image overlay.';
+            drawNativePhotoPixel();
+          });
           const baselineChoice=document.getElementById('wre-baseline-choice');
           const baselineOutput=document.getElementById('wre-camera-baseline');
           const landmarkInspection=document.getElementById('wre-landmark-inspection');
@@ -1615,6 +1668,25 @@ jobs:
           const cameraNames=new Set();
           const cameraEvidence=new Map();
           let selectedPhotoPoint=null;
+          const drawNativePhotoPixel=()=>{
+            nativePhotoPixel.hidden=true;
+            if(!nativeObservation || !nativePoint || localUrl!==null ||
+               choice.value!==nativeObservation.index) return;
+            const camera=cameraEvidence.get(nativeObservation.index);
+            const uv=nativeObservation.pixel;
+            if(!camera || photoImage.hidden || !photoImage.complete ||
+               photoImage.naturalWidth!==camera.image_width ||
+               photoImage.naturalHeight!==camera.image_height ||
+               !uv.every(Number.isFinite) ||
+               uv[0]<0 || uv[1]<0 ||
+               uv[0]>=camera.image_width || uv[1]>=camera.image_height) return;
+            nativePhotoPixel.style.left=(100*uv[0]/camera.image_width)+'%';
+            nativePhotoPixel.style.top=(100*uv[1]/camera.image_height)+'%';
+            nativePhotoPixel.dataset.pixelX=String(uv[0]);
+            nativePhotoPixel.dataset.pixelY=String(uv[1]);
+            nativePhotoPixel.title='Real measured SfM pixel; local photo NOT authenticated';
+            nativePhotoPixel.hidden=false;
+          };
           const drawMeasuredPhotoPixels=()=>{
             photoMarkerA.hidden=true;photoMarkerB.hidden=true;
             if(!selectedPhotoPoint || localUrl!==null) return;
@@ -1640,6 +1712,7 @@ jobs:
             });
           };
           photoImage.addEventListener('load',drawMeasuredPhotoPixels);
+          photoImage.addEventListener('load',drawNativePhotoPixel);
           photoImageB.addEventListener('load',drawMeasuredPhotoPixels);
           const showLocalPhoto=()=>{
             for(const img of [photoImage,photoImageB]){
@@ -1683,6 +1756,7 @@ jobs:
               }
             }
             drawMeasuredPhotoPixels();
+            drawNativePhotoPixel();
           };
           photoInput.addEventListener('change',()=>{
             const files=Array.from(photoInput.files||[]);
