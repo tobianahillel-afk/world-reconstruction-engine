@@ -3204,6 +3204,7 @@ jobs:
           trap 'kill "$http_pid" "$driver_pid" 2>/dev/null || true' EXIT
           python3 - <<'PY'
           import base64
+          import csv
           import hashlib
           import json
           import math
@@ -3237,6 +3238,41 @@ jobs:
           assert depth_report["gpu_training_executed"] is False
           assert depth_report["temporal_reconstruction_executed"] is False
           assert all(c["occupied_depth_bins"] > 0 for c in depth_report["per_camera"])
+          # Verify the downloadable original-resolution observations, not
+          # just the lossy 256-pixel depth PNG or compressed NPZ preview.
+          poses = json.loads((root / "wre-real16-camera-poses.json").read_text())
+          cameras = {int(c["image_id"]): c for c in poses["cameras"]}
+          native_keys = set()
+          with (root / "wre-real16-native-2d3d-tracks.csv").open(newline="") as stream:
+              for track in csv.DictReader(stream):
+                  native_keys.add((
+                      int(track["image_id"]), int(track["point3d_id"]),
+                      int(track["point2d_idx"]),
+                  ))
+          observed = set()
+          csv_path = root / depth_report["depth_observations_csv"]
+          with csv_path.open(newline="") as stream:
+              for row in csv.DictReader(stream):
+                  key = (
+                      int(row["image_id"]), int(row["point3d_id"]),
+                      int(row["point2d_idx"]),
+                  )
+                  assert key in native_keys and key not in observed
+                  observed.add(key)
+                  camera = cameras[key[0]]
+                  assert row["image_name"] == camera["image_name"]
+                  assert row["image_sha256"] == camera["image_sha256"]
+                  transform = camera["camera_from_world_row_major_4x4"]
+                  xyz = [float(row["world_" + axis]) for axis in ("x", "y", "z")]
+                  for axis_index, axis_name in enumerate(("x", "y", "z")):
+                      expected = sum(transform[axis_index][k] * xyz[k] for k in range(3))
+                      expected += transform[axis_index][3]
+                      measured = float(row["camera_" + axis_name + "_sfm_units"])
+                      assert math.isfinite(measured)
+                      assert math.isclose(measured, expected, rel_tol=1e-9, abs_tol=1e-8)
+                  assert float(row["camera_z_sfm_units"]) > 0
+          assert len(observed) == depth_report["depth_observations_csv_records"]
+          assert len(observed) == depth_report["positive_depth_observations"]
           with zipfile.ZipFile(root / "wre-real16-native-sparse-depth.npz") as archive:
               assert len(archive.namelist()) == 16
               assert all(n.startswith("camera_") and n.endswith(".npy") for n in archive.namelist())
