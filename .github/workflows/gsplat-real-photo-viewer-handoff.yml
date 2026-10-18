@@ -595,6 +595,9 @@ jobs:
               "Camera viewpoint does not align unrelated scenes or infer metric scale.\n"
               "Different scenes may not share geometry, metric scale or camera registration.\n"
               "Use Save displayed .splat to download the currently shown scene locally.\n"
+              "Export 3D RGB points (PLY) saves only Gaussian XYZ/RGB centers to a\n"
+              "standard binary point cloud, not a mesh, radiance model or metric proof.\n"
+              "PLY export is limited to input .splat files of 32 MiB or less.\n"
               "The example scene comes from CC BY-NC 4.0 NONCOMMERCIAL photos.\n"
               "A .splat must have 32-byte Gaussian records (max 256 MiB, not ZIP/OBJ).\n"
               "The original 16 photo camera presets do not calibrate your custom scene.\n"
@@ -787,6 +790,52 @@ jobs:
               receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
               print("REAL OFFLINE WEBGL PNG EXPORT PASS: operator clicked, PNG downloaded")
 
+              # Real browser export: source XYZ + RGB from the displayed
+              # scene, not a canvas approximation or a PLY fixture.
+              point_button = webdriver("POST", f"/session/{session}/element", {
+                  "using": "css selector", "value": "#wre-export-centers"
+              })["element-6066-11e4-a52e-4f735466cecf"]
+
+              def verify_real_rgb_ply_export(splat: bytes, points_count: int) -> str:
+                  assert len(splat) == points_count * 32
+                  webdriver("POST", f"/session/{session}/element/{point_button}/click", {})
+                  output = saved_scenes / f"wre-{points_count}-rgb-centers.ply"
+                  for _ in range(100):
+                      if output.is_file() and output.stat().st_size >= points_count * 15:
+                          break
+                      time.sleep(0.2)
+                  else:
+                      raise RuntimeError(f"Real browser PLY did not download: {output}")
+                  payload = output.read_bytes()
+                  header, binary = payload.split(b"end_header\n", 1)
+                  assert header.startswith(b"ply\nformat binary_little_endian 1.0\n")
+                  assert f"element vertex {points_count}\n".encode() in header + b"\n"
+                  assert b"property float x\nproperty float y\nproperty float z\n" in header
+                  assert b"property uchar red\nproperty uchar green\nproperty uchar blue\n" in header
+                  assert len(binary) == points_count * 15
+                  for i in range(points_count):
+                      actual = struct.unpack_from("<fff", binary, i * 15)
+                      original = struct.unpack_from("<fff", splat, i * 32)
+                      assert actual == original, (i, actual, original)
+                      assert binary[i * 15 + 12:i * 15 + 15] == (
+                          splat[i * 32 + 24:i * 32 + 27]
+                      ), i
+                  return hashlib.sha256(payload).hexdigest()
+
+              original_splat = (
+                  root / "offline-viewer" / "observed-GAUSSIANS-UNTRAINED.splat"
+              ).read_bytes()
+              original_ply_sha = verify_real_rgb_ply_export(original_splat, 6917)
+              receipt["offline_rgb_points_export_test"] = {
+                  "original_scene_count": 6917,
+                  "original_ply_sha256": original_ply_sha,
+                  "binary_ply_xyz_rgb_exact": True,
+                  "actual_browser_download": True,
+                  "training_steps": 0,
+              }
+              receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
+              print("REAL OFFLINE RGB PLY EXPORT PASS: 6917 original photographed centers")
+
               # Actually exercise upstream drag/drop + FileReader + WebGL worker.
               # A subset of the REAL exported scene is a second valid .splat;
               # this is not a claim of another reconstruction or GPU training.
@@ -844,6 +893,12 @@ jobs:
               }
               receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
               print("DIRECT FILE OPERATOR SPLAT PASS: 1024 real WRE Gaussian records")
+              local_ply_sha = verify_real_rgb_ply_export(subset, replacement_count)
+              receipt["offline_rgb_points_export_test"]["operator_scene_count"] = 1024
+              receipt["offline_rgb_points_export_test"]["operator_ply_sha256"] = local_ply_sha
+              receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
+              print("REAL OFFLINE RGB PLY EXPORT PASS: 1024 operator-displayed centers")
+
               save_button = webdriver("POST", f"/session/{session}/element", {
                   "using": "css selector", "value": "#wre-save-current"
               })["element-6066-11e4-a52e-4f735466cecf"]
