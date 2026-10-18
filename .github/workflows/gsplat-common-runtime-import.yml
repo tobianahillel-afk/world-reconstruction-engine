@@ -2056,6 +2056,28 @@ jobs:
                   for axis in range(3)
               ))
               expected_radius=max(expected_baseline*1.5,spread*0.12)
+              markers=js("""
+                const viewer=document.getElementById('wre-scene');
+                return ['first','second'].map(name=>{
+                  const el=viewer.querySelector('[slot="hotspot-pair-'+name+'"]');
+                  const hotspot=viewer.queryHotspot('hotspot-pair-'+name);
+                  return {
+                    position:el?.getAttribute('data-position')||null,
+                    label:el?.textContent||null,
+                    projected:Boolean(hotspot && hotspot.canvasPosition &&
+                      Number.isFinite(hotspot.canvasPosition.x) &&
+                      Number.isFinite(hotspot.canvasPosition.y))
+                  };
+                });
+              """)
+              assert [mark["label"] for mark in markers] == ["A", "B"]
+              assert all(mark["projected"] for mark in markers)
+              for mark, center in zip(markers, (first_center,second_center)):
+                  actual=[float(value[:-1]) for value in mark["position"].split()]
+                  assert len(actual)==3 and all(
+                      math.isclose(a,b,rel_tol=1e-8,abs_tol=1e-6)
+                      for a,b in zip(actual,center)
+                  )
               framed=js("""
                 const button=document.getElementById('wre-frame-baseline');
                 const viewer=document.getElementById('wre-scene');
@@ -2121,6 +2143,7 @@ jobs:
                       camera.disabled &&
                       document.getElementById('wre-baseline-choice').disabled &&
                       document.getElementById('wre-frame-baseline').disabled &&
+                      !viewer.querySelector('[slot^="hotspot-pair-"]') &&
                       document.getElementById('wre-camera-baseline').textContent
                         .includes('unavailable for unverified') &&
                       document.getElementById('local-model-status')
@@ -2170,7 +2193,8 @@ jobs:
                 const camera=document.getElementById('wre-camera-choice');
                 return viewer.getAttribute('src')==='./wre-real16-viewable-scene.glb' &&
                   !camera.disabled && viewer.hasAttribute('auto-rotate') &&
-                  document.getElementById('wre-frame-baseline').disabled;
+                  document.getElementById('wre-frame-baseline').disabled &&
+                  !viewer.querySelector('[slot^="hotspot-pair-"]');
               """), "Original real-photo viewer or camera control was not restored"
               for _ in range(40):
                   if js("""
