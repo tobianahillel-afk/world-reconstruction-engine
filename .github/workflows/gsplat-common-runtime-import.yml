@@ -636,6 +636,95 @@ jobs:
           assert prim["attributes"] == {"POSITION": 0, "COLOR_0": 1}
           assert doc["accessors"][0]["count"] == doc["accessors"][1]["count"] == len(points)
           assert hashlib.sha256(payload).hexdigest() == digest.value
+
+          # Retain the existing WRE-generated glTF points + binary attributes,
+          # and add actual registered COLMAP camera nodes in the SAME scene.
+          # glTF cameras look down -Z with +Y up; COLMAP is +Z/+Y down.
+          poses = json.loads((base / "wre-real16-camera-poses.json").read_text())
+          assert poses["registered_views"] == len(poses["cameras"]) == 16
+          assert poses["source_dataset_commit"] == manifest["dataset_commit"]
+          assert poses["coordinate_system"] == "native_colmap_arbitrary_scale"
+          frames = sorted(poses["cameras"], key=lambda frame: frame["image_id"])
+          assert len({frame["image_id"] for frame in frames}) == 16
+          flip = np.diag([1.0, -1.0, -1.0, 1.0])
+          cameras = []
+          nodes = []
+          for index, frame in enumerate(frames):
+              params = np.asarray(frame["intrinsic_parameters"], dtype=np.float64)
+              model_name = str(frame["model"]).upper().split(".")[-1]
+              if model_name == "PINHOLE":
+                  assert params.shape == (4,)
+                  fy = float(params[1])
+              elif model_name == "SIMPLE_PINHOLE":
+                  assert params.shape == (3,)
+                  fy = float(params[0])
+              else:
+                  raise AssertionError("unexpected undistorted COLMAP camera model: " + model_name)
+              height, width = frame["image_height"], frame["image_width"]
+              assert width > 0 and height > 0 and np.isfinite(fy) and fy > 0
+              yfov = 2.0 * math.atan(height / (2.0 * fy))
+              assert 0.0 < yfov < math.pi
+              c2w = np.asarray(frame["world_from_camera_row_major_4x4"], dtype=np.float64)
+              assert c2w.shape == (4, 4) and np.isfinite(c2w).all()
+              assert np.allclose(c2w[3], [0, 0, 0, 1], rtol=0, atol=1e-9)
+              assert np.allclose(c2w[:3, 3], frame["camera_center_xyz"], atol=1e-8)
+              gltf_pose = c2w @ flip
+              assert np.allclose(gltf_pose[:3, :3].T @ gltf_pose[:3, :3], np.eye(3), atol=1e-6)
+              assert np.linalg.det(gltf_pose[:3, :3]) > 0.999
+              cameras.append({
+                  "type": "perspective",
+                  "perspective": {
+                      "yfov": yfov, "aspectRatio": width / height,
+                      "znear": max(radius * 0.02, 1e-6),
+                  },
+              })
+              nodes.append({
+                  "name": f"COLMAP view {index + 1}: {frame['image_name']}",
+                  "camera": index,
+                  "matrix": [float(value) for value in gltf_pose.flatten(order="F")],
+                  "extras": {
+                      "colmap_image_id": frame["image_id"],
+                      "image_sha256": frame["image_sha256"],
+                  },
+              })
+          assert len(cameras) == len(nodes) == 16
+          # Preserve WRE's validated XYZ/RGB GLB buffer untouched.
+          original_bin_offset = 20 + chunk_len
+          binary_length, binary_kind = struct.unpack_from("<I4s", payload, original_bin_offset)
+          assert binary_kind == b"BIN\x00"
+          assert original_bin_offset + 8 + binary_length == len(payload)
+          binary_chunk = payload[original_bin_offset:]
+          doc["asset"]["copyright"] = (
+              f'{manifest["credit"]}; {manifest["license"]}; NONCOMMERCIAL use only'
+          )
+          doc["cameras"] = cameras
+          doc["nodes"].extend(nodes)
+          doc["scenes"][0]["nodes"].extend(range(1, len(nodes) + 1))
+          doc.setdefault("extras", {})
+          doc["extras"]["registered_colmap_cameras"] = 16
+          doc["extras"]["source_dataset_commit"] = manifest["dataset_commit"]
+          doc["extras"]["license"] = manifest["license"]
+          doc["extras"]["camera_pose_basis"] = "COLMAP camera +Z/+Ydown to glTF -Z/+Yup"
+          doc["extras"]["camera_motion_or_time_reconstruction"] = False
+          encoded = json.dumps(
+              doc, sort_keys=True, separators=(",", ":"), allow_nan=False
+          ).encode("utf-8")
+          encoded += b" " * (-len(encoded) % 4)
+          combined = (
+              struct.pack("<4sII", b"glTF", 2, 12 + 8 + len(encoded) + len(binary_chunk))
+              + struct.pack("<I4s", len(encoded), b"JSON")
+              + encoded + binary_chunk
+          )
+          scene_glb = root / "viewable-scene-with-cameras.glb"
+          scene_glb.write_bytes(combined)
+          assert struct.unpack_from("<II", combined, 4) == (2, len(combined))
+          assert combined[-len(binary_chunk):] == binary_chunk
+          scene_doc = json.loads(combined[20:20 + len(encoded)])
+          assert len(scene_doc["cameras"]) == 16
+          assert len(scene_doc["nodes"]) == 17
+          assert len(scene_doc["scenes"][0]["nodes"]) == 17
+          assert scene_doc["accessors"][0]["count"] == len(points)
+          scene_digest = hashlib.sha256(combined).hexdigest()
           report = {
               "schema": "wre.experimental.real16_early_cpu_rgb_glb.v1",
               "kind": "real_photo_observed_rgb_untrained_sfm_points",
@@ -654,7 +743,12 @@ jobs:
                   "viewable-rgb-centers.glb": {
                       "bytes": len(payload), "sha256": digest.value,
                   },
+                  "viewable-scene-with-cameras.glb": {
+                      "bytes": len(combined), "sha256": scene_digest,
+                  },
               },
+              "registered_camera_nodes": len(cameras),
+              "camera_reconstruction": "native registered COLMAP, not dynamic scene 4D",
           }
           (root / "manifest.json").write_text(
               json.dumps(report, indent=2, sort_keys=True, allow_nan=False) + "\n"
@@ -697,6 +791,7 @@ jobs:
               "wre-real16-observed-rgb-LICENSE.txt",
               "wre-real16-early-gltf/ply/point_cloud_0.ply",
               "wre-real16-early-gltf/viewable-rgb-centers.glb",
+              "wre-real16-early-gltf/viewable-scene-with-cameras.glb",
               "wre-real16-early-gltf/manifest.json",
           )
           manifest = {
@@ -730,6 +825,7 @@ jobs:
             wre-real16-observed-rgb-LICENSE.txt
             wre-real16-early-gltf/ply/point_cloud_0.ply
             wre-real16-early-gltf/viewable-rgb-centers.glb
+            wre-real16-early-gltf/viewable-scene-with-cameras.glb
             wre-real16-early-gltf/manifest.json
             wre-real16-native-cpu-sfm-manifest.json
           if-no-files-found: error
