@@ -1508,7 +1508,9 @@ jobs:
               <figure><div class="wre-photo-frame"><img id="wre-photo-image-b" hidden
                 alt="Locally provided second reconstructed camera photograph">
                 <span id="wre-measured-pixel-b" class="wre-measured-pixel" hidden
-                  aria-label="Measured SfM observation in camera B"></span></div>
+                  aria-label="Measured SfM observation in camera B"></span>
+                <span id="wre-native-photo-pixel-b" class="wre-measured-pixel" hidden
+                  aria-label="Native triangulated point measured in camera B"></span></div>
                 <figcaption>Camera B · operator-supplied, unverified</figcaption></figure>
             </div>
           </section>
@@ -1540,6 +1542,7 @@ jobs:
           const nativeCameraOpen=document.getElementById('wre-native-observation-open');
           const nativeCameraStatus=document.getElementById('wre-native-observation-status');
           const nativePhotoPixel=document.getElementById('wre-native-photo-pixel');
+          const nativePhotoPixelB=document.getElementById('wre-native-photo-pixel-b');
           let nativeLookup=null;
           const loadNativeIndex=()=>{
               if(nativeLookup===null){
@@ -1568,7 +1571,7 @@ jobs:
             nativePoint=null;nativeObservation=null;
             nativeCameraChoice.replaceChildren(new Option('Find a point first',''));
             nativeCameraChoice.disabled=true;nativeCameraOpen.disabled=true;
-            nativePhotoPixel.hidden=true;
+            nativePhotoPixel.hidden=true;nativePhotoPixelB.hidden=true;
           };
           const findNativePoint=async()=>{
             clearNativeLookupMarker();
@@ -1673,23 +1676,29 @@ jobs:
           const cameraEvidence=new Map();
           let selectedPhotoPoint=null;
           const drawNativePhotoPixel=()=>{
-            nativePhotoPixel.hidden=true;
-            if(!nativeObservation || !nativePoint || localUrl!==null ||
-               choice.value!==nativeObservation.index) return;
-            const camera=cameraEvidence.get(nativeObservation.index);
-            const uv=nativeObservation.pixel;
-            if(!camera || photoImage.hidden || !photoImage.complete ||
-               photoImage.naturalWidth!==camera.image_width ||
-               photoImage.naturalHeight!==camera.image_height ||
-               !uv.every(Number.isFinite) ||
-               uv[0]<0 || uv[1]<0 ||
-               uv[0]>=camera.image_width || uv[1]>=camera.image_height) return;
-            nativePhotoPixel.style.left=(100*uv[0]/camera.image_width)+'%';
-            nativePhotoPixel.style.top=(100*uv[1]/camera.image_height)+'%';
-            nativePhotoPixel.dataset.pixelX=String(uv[0]);
-            nativePhotoPixel.dataset.pixelY=String(uv[1]);
-            nativePhotoPixel.title='Real measured SfM pixel; local photo NOT authenticated';
-            nativePhotoPixel.hidden=false;
+            nativePhotoPixel.hidden=true;nativePhotoPixelB.hidden=true;
+            if(!nativeObservation || !nativePoint || localUrl!==null) return;
+            // A/B remain independent camera selections. Overlay only genuine
+            // measured native 2D observations, never a computed projection.
+            [
+              [photoImage,nativePhotoPixel,choice],
+              [photoImageB,nativePhotoPixelB,baselineChoice]
+            ].forEach(([img,marker,control])=>{
+              const camera=cameraEvidence.get(control.value);
+              const observation=nativePoint.observed.find(o=>o.index===control.value);
+              if(!camera || !observation || img.hidden || !img.complete ||
+                 img.naturalWidth!==camera.image_width ||
+                 img.naturalHeight!==camera.image_height) return;
+              const uv=observation.pixel;
+              if(!uv.every(Number.isFinite) || uv[0]<0 || uv[1]<0 ||
+                 uv[0]>=camera.image_width || uv[1]>=camera.image_height) return;
+              marker.style.left=(100*uv[0]/camera.image_width)+'%';
+              marker.style.top=(100*uv[1]/camera.image_height)+'%';
+              marker.dataset.pixelX=String(uv[0]);
+              marker.dataset.pixelY=String(uv[1]);
+              marker.title='Native SfM pixel measured in this camera; local photo NOT authenticated';
+              marker.hidden=false;
+            });
           };
           const drawMeasuredPhotoPixels=()=>{
             photoMarkerA.hidden=true;photoMarkerB.hidden=true;
@@ -1759,7 +1768,18 @@ jobs:
               const observation=nativePoint.observed.find(o=>o.index===selectedCamera);
               if(!observation) return;
               nativeCameraChoice.value=selectedCamera;
-              nativeCameraOpen.click();
+              if(cameraControl===baselineChoice){
+                // Clicking photo B must not silently overwrite camera A.
+                nativeObservation=observation;
+                if(focusCamera) focusCamera(Number(selectedCamera));
+                drawNativePhotoPixel();
+                nativeCameraStatus.textContent='Real 3D point '+nativePoint.id+
+                  ' selected from measured camera B pixel ('+
+                  observation.pixel.map(v=>v.toFixed(2)).join(', ')+
+                  '); A/B comparison retained.';
+              } else {
+                nativeCameraOpen.click();
+              }
               nativeCameraStatus.textContent+=' Selected by clicking the local photograph.';
             } catch(error){
               nativeCameraStatus.textContent='Photo-to-3D navigation failed: '+String(error);
@@ -1772,6 +1792,7 @@ jobs:
           photoImage.addEventListener('load',drawMeasuredPhotoPixels);
           photoImage.addEventListener('load',drawNativePhotoPixel);
           photoImageB.addEventListener('load',drawMeasuredPhotoPixels);
+          photoImageB.addEventListener('load',drawNativePhotoPixel);
           const showLocalPhoto=()=>{
             for(const img of [photoImage,photoImageB]){
               img.hidden=true;
@@ -3622,17 +3643,21 @@ jobs:
                  .replace("__V__",repr(second_obs["pixel"][1])))
               for _ in range(60):
                   second_state=js("""
-                    const marker=document.getElementById('wre-native-photo-pixel');
+                    const marker=document.getElementById('wre-native-photo-pixel-b');
                     return {
                       point:document.getElementById('wre-native-point-id').value,
-                      camera:document.getElementById('wre-camera-choice').value,
+                      cameraA:document.getElementById('wre-camera-choice').value,
+                      cameraB:document.getElementById('wre-baseline-choice').value,
                       overlay:!marker.hidden,
                       pixel:[Number(marker.dataset.pixelX),Number(marker.dataset.pixelY)],
+                      left:parseFloat(marker.style.left),
+                      top:parseFloat(marker.style.top),
                       status:document.getElementById('wre-native-observation-status').textContent
                     };
                   """)
                   if (second_state["point"]==str(second_id)
-                      and second_state["camera"]==str(best_overlap_index)
+                      and second_state["cameraA"]=="0"
+                      and second_state["cameraB"]==str(best_overlap_index)
                       and second_state["overlay"]
                       and "Selected by clicking" in second_state["status"]):
                       break
@@ -3645,6 +3670,16 @@ jobs:
                       second_state["pixel"],second_obs["pixel"],strict=True
                   )
               )
+              assert math.isclose(
+                  second_state["left"],
+                  100*second_obs["pixel"][0]/second_camera["image_width"],
+                  abs_tol=1e-4,
+              )
+              assert math.isclose(
+                  second_state["top"],
+                  100*second_obs["pixel"][1]/second_camera["image_height"],
+                  abs_tol=1e-4,
+              )
               # Restore original camera pair for the existing A/B point and
               # screenshot tests. Its SfM pixel evidence remains unchanged.
               assert js("""
@@ -3653,6 +3688,74 @@ jobs:
                 camera.dispatchEvent(new Event('change',{bubbles:true}));
                 return camera.value==='0';
               """)
+              # A native Point3D observed by BOTH chosen cameras must place
+              # independent A and B markers at the two actual measured pixels.
+              common=next(
+                  (
+                      (int(pid),a,b)
+                      for pid,point in lookup["points"].items()
+                      for a in point["observations"]
+                      for b in point["observations"]
+                      if a["image_id"]==overlay_cameras[0]["image_id"]
+                      and a["image_name"]==overlay_cameras[0]["image_name"]
+                      and b["image_id"]==second_camera["image_id"]
+                      and b["image_name"]==second_camera["image_name"]
+                      and 0<=a["pixel"][0]<overlay_cameras[0]["image_width"]
+                      and 0<=a["pixel"][1]<overlay_cameras[0]["image_height"]
+                      and 0<=b["pixel"][0]<second_camera["image_width"]
+                      and 0<=b["pixel"][1]<second_camera["image_height"]
+                  ),None
+              )
+              assert common is not None, "No real common SfM 3D point in camera A/B"
+              common_id,common_a,common_b=common
+              assert js("""
+                const input=document.getElementById('wre-native-point-id');
+                input.value='__ID__';
+                document.getElementById('wre-native-point-find').click();
+                return true;
+              """.replace("__ID__",str(common_id)))
+              for _ in range(60):
+                  common_ready=js("""
+                    const select=document.getElementById('wre-native-observation-camera');
+                    return !select.disabled && [...select.options].some(o=>o.value==='0');
+                  """)
+                  if common_ready:
+                      break
+                  time.sleep(.1)
+              else:
+                  raise RuntimeError("Real common SfM point was not found in browser")
+              assert js("""
+                const select=document.getElementById('wre-native-observation-camera');
+                select.value='0';
+                document.getElementById('wre-native-observation-open').click();
+                return true;
+              """)
+              for _ in range(60):
+                  dual=js("""
+                    const a=document.getElementById('wre-native-photo-pixel');
+                    const b=document.getElementById('wre-native-photo-pixel-b');
+                    return {
+                      cameraA:document.getElementById('wre-camera-choice').value,
+                      cameraB:document.getElementById('wre-baseline-choice').value,
+                      hiddenA:a.hidden,hiddenB:b.hidden,
+                      pixelA:[Number(a.dataset.pixelX),Number(a.dataset.pixelY)],
+                      pixelB:[Number(b.dataset.pixelX),Number(b.dataset.pixelY)]
+                    };
+                  """)
+                  if not dual["hiddenA"] and not dual["hiddenB"]:
+                      break
+                  time.sleep(.1)
+              else:
+                  raise RuntimeError("Common native SfM point did not overlay both photos")
+              assert dual["cameraA"]=="0" and dual["cameraB"]==str(best_overlap_index)
+              for actual,expected in (
+                  (dual["pixelA"],common_a["pixel"]),
+                  (dual["pixelB"],common_b["pixel"]),
+              ):
+                  assert all(
+                      math.isclose(x,y,abs_tol=1e-7)
+                      for x,y in zip(actual,expected,strict=True)
+                  )
               # The very same native 3D track must display the opposite
               # measured pixels when camera A and B are reversed.
               reversed_text=js("""
