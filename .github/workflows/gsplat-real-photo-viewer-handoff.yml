@@ -354,6 +354,10 @@ jobs:
               'Save displayed .splat</button>'
               '<button id="wre-compare-scene" type="button" disabled>'
               'Compare original / local</button>'
+              '<button id="wre-save-view" type="button">Save camera viewpoint</button>'
+              '<label for="wre-load-view">Load camera viewpoint JSON: </label>'
+              '<input id="wre-load-view" type="file" accept=".json" '
+              'aria-label="Load saved camera viewpoint">'
               '<output id="wre-local-status" aria-live="polite"></output>'
               '</section>'
           )
@@ -363,6 +367,8 @@ jobs:
             const reset = document.getElementById('wre-restore-original');
             const save = document.getElementById('wre-save-current');
             const compare = document.getElementById('wre-compare-scene');
+            const saveView = document.getElementById('wre-save-view');
+            const loadView = document.getElementById('wre-load-view');
             const status = document.getElementById('wre-local-status');
             const originalFile = new File([window.__wreEmbeddedSplat],
               'WRE-16-photos.splat', {type: 'application/octet-stream'});
@@ -427,6 +433,50 @@ jobs:
               if (!localFile) return;
               show(activeFile === originalFile ? localFile : originalFile);
             });
+            // A camera pose is a view in a coordinate frame, not model registration.
+            saveView.addEventListener('click', () => {
+              const pose = {format: 'wre-view-matrix-v1', matrix: Array.from(viewMatrix)};
+              const url = URL.createObjectURL(new Blob([JSON.stringify(pose)],
+                {type: 'application/json'}));
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = 'wre-camera-viewpoint.json';
+              link.click();
+              setTimeout(() => URL.revokeObjectURL(url), 30000);
+              status.textContent = 'Saved camera view; no alignment inferred.';
+            });
+            loadView.addEventListener('change', async () => {
+              const file = loadView.files?.[0];
+              if (!file || file.size > 4096) {
+                status.textContent = 'Invalid viewpoint: max 4 KiB JSON.';
+                return;
+              }
+              try {
+                const pose = JSON.parse(await file.text());
+                const m = pose?.matrix;
+                if (pose.format !== 'wre-view-matrix-v1' || !Array.isArray(m) ||
+                    m.length !== 16 || !m.every(Number.isFinite) ||
+                    Math.abs(m[3]) > 1e-5 || Math.abs(m[7]) > 1e-5 ||
+                    Math.abs(m[11]) > 1e-5 || Math.abs(m[15] - 1) > 1e-5) {
+                  throw Error('Invalid affine camera matrix');
+                }
+                const det = m[0]*(m[5]*m[10]-m[6]*m[9]) -
+                  m[1]*(m[4]*m[10]-m[6]*m[8]) +
+                  m[2]*(m[4]*m[9]-m[5]*m[8]);
+                if (!Number.isFinite(det) || Math.abs(det) < 1e-6) {
+                  throw Error('Non-invertible camera matrix');
+                }
+                // The upstream carousel must not overwrite a restored view.
+                window.dispatchEvent(new KeyboardEvent('keydown',
+                  {key:'F13',code:'F13'}));
+                window.dispatchEvent(new KeyboardEvent('keyup',
+                  {key:'F13',code:'F13'}));
+                viewMatrix = m.slice();
+                status.textContent = 'Loaded camera view; scene frames may differ.';
+              } catch (error) {
+                status.textContent = 'Invalid camera JSON; current view unchanged.';
+              }
+            });
           })();
           </script>"""
           assert vendor_html.count("</body>") == 1
@@ -452,6 +502,8 @@ jobs:
               "Choose a local .splat using the file picker, or drag one onto the page.\n"
               "Use Restore 16-photo scene to return to the included example.\n"
               "Use Compare original / local to toggle without reselecting the local file.\n"
+              "Save camera viewpoint as JSON, then load to revisit the same view.\n"
+              "Camera viewpoint does not align unrelated scenes or infer metric scale.\n"
               "Different scenes may not share geometry, metric scale or camera registration.\n"
               "Use Save displayed .splat to download the currently shown scene locally.\n"
               "The example scene comes from CC BY-NC 4.0 NONCOMMERCIAL photos.\n"
