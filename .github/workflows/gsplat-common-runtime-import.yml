@@ -516,6 +516,11 @@ jobs:
               assert image_hash == manifest["file_sha256"]["images/" + image.name]
               params = np.asarray(camera.params, dtype=np.float64)
               assert np.isfinite(params).all()
+              # Native PyCOLMAP track associations in the real registered image.
+              # This is in-sample geometric coverage, NOT held-out photometric quality.
+              keypoints = int(image.num_points2D())
+              tracked = int(image.num_points3D)
+              assert keypoints >= tracked > 0
               frames.append({
                   "image_id": image_id,
                   "image_name": image.name,
@@ -525,6 +530,8 @@ jobs:
                   "image_height": int(camera.height),
                   "intrinsic_parameters": params.tolist(),
                   "image_sha256": image_hash,
+                  "detected_2d_keypoints": keypoints,
+                  "triangulated_2d_observations": tracked,
                   "camera_center_xyz": center.tolist(),
                   "camera_from_world_row_major_4x4": world_to_camera.tolist(),
                   "world_from_camera_row_major_4x4": camera_to_world.tolist(),
@@ -1467,7 +1474,10 @@ jobs:
               viewer.jumpCameraToGoal();
               details.textContent='Camera '+(index+1)+' · '+c.image_name+
                 ' · SfM XYZ ['+center.map(v=>v.toFixed(3)).join(', ')+
-                '] local units. Approximate orbit, not image-calibrated roll or 4D.';
+                '] local units. '+c.triangulated_2d_observations+' of '+
+                c.detected_2d_keypoints+' measured 2D keypoints linked to 3D SfM tracks '+
+                '(in-sample, NOT a novel-view accuracy score). '+
+                'Approximate orbit, not image-calibrated roll or 4D.';
             };
             choice.addEventListener('change',()=>{
               updateBaseline();
@@ -2117,6 +2127,18 @@ jobs:
               actual_cameras=sorted(
                   camera_data["cameras"], key=lambda c: c["image_name"]
               )
+              assert len(actual_cameras)==16
+              assert all(
+                  0 < c["triangulated_2d_observations"] <= c["detected_2d_keypoints"]
+                  for c in actual_cameras
+              )
+              expected_tracks=actual_cameras[0]["triangulated_2d_observations"]
+              expected_keypoints=actual_cameras[0]["detected_2d_keypoints"]
+              shown_tracks=js("""
+                return document.getElementById('camera-details').textContent;
+              """)
+              assert f"{expected_tracks} of {expected_keypoints} measured 2D keypoints" in shown_tracks
+              assert "NOT a novel-view accuracy score" in shown_tracks
               expected_baseline=math.dist(
                   actual_cameras[0]["camera_center_xyz"],
                   actual_cameras[1]["camera_center_xyz"],
