@@ -510,6 +510,8 @@ jobs:
           root = Path(os.environ["RUNNER_TEMP"]) / "wre-real-photo-viewer-result"
           page = root / "VIEW-IN-BROWSER.html"
           assert page.is_file() and page.stat().st_size > 200_000
+          saved_scenes = root / "local-splat-exports"
+          saved_scenes.mkdir()
           driver_base = "http://127.0.0.1:9521"
           def webdriver(method, route, payload=None):
               data = None if payload is None else json.dumps(payload).encode("utf-8")
@@ -535,8 +537,23 @@ jobs:
               "--use-angle=swiftshader", "--window-size=1280,900",
               "--disable-background-networking",
               "--host-resolver-rules=MAP * 0.0.0.0, EXCLUDE localhost",
-          ]}}
+          ], "prefs": {
+              "download.default_directory": str(saved_scenes),
+              "download.prompt_for_download": False,
+              "download.directory_upgrade": True,
+          }}}
           session = webdriver("POST", "/session", {"capabilities": {"alwaysMatch": options}})["sessionId"]
+          def check_browser_download(filename, expected):
+              target = saved_scenes / filename
+              for _ in range(100):
+                  if target.is_file() and target.stat().st_size == len(expected):
+                      break
+                  time.sleep(0.15)
+              else:
+                  raise RuntimeError("Browser did not download " + filename)
+              actual = target.read_bytes()
+              assert actual == expected, filename
+              return hashlib.sha256(actual).hexdigest()
           try:
               webdriver("POST", f"/session/{session}/url", {"url": page.resolve().as_uri()})
               for _ in range(125):
@@ -633,6 +650,12 @@ jobs:
               }
               receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
               print("DIRECT FILE OPERATOR SPLAT PASS: 1024 real WRE Gaussian records")
+              save_button = webdriver("POST", f"/session/{session}/element", {
+                  "using": "css selector", "value": "#wre-save-current"
+              })["element-6066-11e4-a52e-4f735466cecf"]
+              webdriver("POST", f"/session/{session}/element/{save_button}/click", {})
+              assert check_browser_download("operator-local.splat", subset) == hashlib.sha256(subset).hexdigest()
+              print("REAL BROWSER DOWNLOAD PASS: 1024 dropped Gaussian records")
 
               # Exercise the ACTUAL HTML <input type=file> control through
               # ChromeDriver's file upload protocol, not by faking JS changes.
@@ -664,6 +687,10 @@ jobs:
               else:
                   raise RuntimeError("Actual browser file picker did not load: " + str(selected))
               assert selected["external"] == [], selected
+              webdriver("POST", f"/session/{session}/element/{save_button}/click", {})
+              picked_sha = check_browser_download("operator-picked.splat", picked_bytes)
+              assert picked_sha == hashlib.sha256(picked_bytes).hexdigest()
+              print("REAL BROWSER DOWNLOAD PASS: 2048 picked Gaussian records")
               receipt["operator_file_picker_test"] = {
                   "input": "real local file selected via ChromeDriver file upload",
                   "bytes": len(picked_bytes),
@@ -691,6 +718,13 @@ jobs:
               else:
                   raise RuntimeError("Browser restore original WRE scene failed: " + str(restored))
               assert restored["external"] == [], restored
+              webdriver("POST", f"/session/{session}/element/{save_button}/click", {})
+              original_scene = (
+                  root / "offline-viewer" / "observed-GAUSSIANS-UNTRAINED.splat"
+              ).read_bytes()
+              original_sha = check_browser_download("WRE-16-photos.splat", original_scene)
+              assert original_sha == hashlib.sha256(original_scene).hexdigest()
+              print("REAL BROWSER DOWNLOAD PASS: 6917 restored Gaussian records")
               receipt["restore_original_test"] = {
                   "drawn_gaussians": restored["count"],
                   "page_scheme": "file", "external_resource_requests": 0,
