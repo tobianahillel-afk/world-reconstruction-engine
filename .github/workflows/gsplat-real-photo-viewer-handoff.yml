@@ -337,7 +337,104 @@ jobs:
               + offline_js
               + "\n</script>"
           )
-          standalone = vendor_html.replace(script_tag, inline).encode("utf-8")
+          # Usable touch/keyboard alternative to upstream drag/drop. The
+          # existing pinned selectFile -> FileReader -> WebGL path is reused;
+          # nothing reads or uploads the selected file except local Chrome.
+          controls = (
+              '<section id="wre-local-controls" role="region" aria-label="Local 3D scene" '
+              'style="position:fixed;bottom:12px;left:12px;z-index:1000;'
+              'background:#171d28;color:#fff;padding:10px;border-radius:8px;'
+              'font:14px sans-serif;max-width:min(95vw,560px)">'
+              '<label for="wre-local-splat">Open a local .splat file: </label>'
+              '<input id="wre-local-splat" type="file" accept=".splat" '
+              'aria-label="Choose local Gaussian splat file">'
+              '<button id="wre-restore-original" type="button">'
+              'Restore 16-photo scene</button>'
+              '<button id="wre-save-current" type="button">'
+              'Save displayed .splat</button>'
+              '<button id="wre-compare-scene" type="button" disabled>'
+              'Compare original / local</button>'
+              '<output id="wre-local-status" aria-live="polite"></output>'
+              '</section>'
+          )
+          ui_logic = """<script>
+          (() => {
+            const picker = document.getElementById('wre-local-splat');
+            const reset = document.getElementById('wre-restore-original');
+            const save = document.getElementById('wre-save-current');
+            const compare = document.getElementById('wre-compare-scene');
+            const status = document.getElementById('wre-local-status');
+            const originalFile = new File([window.__wreEmbeddedSplat],
+              'WRE-16-photos.splat', {type: 'application/octet-stream'});
+            let activeFile = originalFile;
+            let localFile = null;
+            let internalDrop = false;
+            const valid = file => file && file.size > 0 &&
+              file.size % 32 === 0 && file.size <= 256 * 1024 * 1024;
+            function show(file) {
+              if (!valid(file)) {
+                status.textContent = 'Invalid .splat: expected 32-byte records, maximum 256 MiB.';
+                return;
+              }
+              const transfer = new DataTransfer();
+              transfer.items.add(file);
+              internalDrop = true;
+              try {
+                document.dispatchEvent(new DragEvent('drop', {
+                  bubbles: true, cancelable: true, dataTransfer: transfer
+                }));
+              } finally {
+                internalDrop = false;
+              }
+              activeFile = file;
+              if (file !== originalFile) {
+                localFile = file;
+                compare.disabled = false;
+              }
+              status.textContent = 'Loading ' + file.name + ': ' +
+                (file.size / 32) + ' Gaussian records';
+            }
+            // The pinned upstream handler also accepts raw drag/drop directly.
+            document.addEventListener('drop', event => {
+              const file = event.dataTransfer?.files?.[0];
+              if (valid(file) && !internalDrop) {
+                activeFile = file;
+                if (file !== originalFile) {
+                  localFile = file;
+                  compare.disabled = false;
+                }
+              }
+            }, true);
+            save.addEventListener('click', () => {
+              const url = URL.createObjectURL(activeFile);
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = activeFile.name.endsWith('.splat') ?
+                activeFile.name : 'wre-current-scene.splat';
+              link.click();
+              setTimeout(() => URL.revokeObjectURL(url), 30000);
+              status.textContent = 'Saving ' + link.download + ': ' +
+                (activeFile.size / 32) + ' Gaussian records';
+            });
+            picker.addEventListener('change', () => {
+              if (picker.files && picker.files.length === 1) show(picker.files[0]);
+            });
+            reset.addEventListener('click', () => {
+              picker.value = '';
+              show(originalFile);
+            });
+            compare.addEventListener('click', () => {
+              if (!localFile) return;
+              show(activeFile === originalFile ? localFile : originalFile);
+            });
+          })();
+          </script>"""
+          assert vendor_html.count("</body>") == 1
+          standalone = (
+              vendor_html.replace(script_tag, inline)
+              .replace("</body>", controls + ui_logic + "</body>")
+              .encode("utf-8")
+          )
           assert standalone.count(b"window.__wreEmbeddedSplat") >= 2
           assert b"UNTRAINED (0 steps)" in standalone
           assert b"http://127.0.0.1:8767" not in standalone
@@ -352,8 +449,13 @@ jobs:
               "  python3 -m http.server 8767 --bind 127.0.0.1\n"
               "Open http://127.0.0.1:8767/offline-viewer/index.html in a WebGL2 browser.\n"
               "Mouse orbit/zoom and keyboard 0-9 / +/- for recovered cameras.\n"
-              "Drop your own .splat file on the open HTML page to replace the 3D scene.\n"
-              "A .splat must consist of 32-byte Gaussian records (not a ZIP or OBJ file).\n"
+              "Choose a local .splat using the file picker, or drag one onto the page.\n"
+              "Use Restore 16-photo scene to return to the included example.\n"
+              "Use Compare original / local to toggle without reselecting the local file.\n"
+              "Different scenes may not share geometry, metric scale or camera registration.\n"
+              "Use Save displayed .splat to download the currently shown scene locally.\n"
+              "The example scene comes from CC BY-NC 4.0 NONCOMMERCIAL photos.\n"
+              "A .splat must have 32-byte Gaussian records (max 256 MiB, not ZIP/OBJ).\n"
               "The original 16 photo camera presets do not calibrate your custom scene.\n"
               "Only your local browser reads dropped files; nothing is uploaded.\n"
               "No internet, paid API, Torch, CUDA, installation or server upload is required.\n"
@@ -433,6 +535,8 @@ jobs:
           root = Path(os.environ["RUNNER_TEMP"]) / "wre-real-photo-viewer-result"
           page = root / "VIEW-IN-BROWSER.html"
           assert page.is_file() and page.stat().st_size > 200_000
+          saved_scenes = root / "local-splat-exports"
+          saved_scenes.mkdir()
           driver_base = "http://127.0.0.1:9521"
           def webdriver(method, route, payload=None):
               data = None if payload is None else json.dumps(payload).encode("utf-8")
@@ -458,8 +562,23 @@ jobs:
               "--use-angle=swiftshader", "--window-size=1280,900",
               "--disable-background-networking",
               "--host-resolver-rules=MAP * 0.0.0.0, EXCLUDE localhost",
-          ]}}
+          ], "prefs": {
+              "download.default_directory": str(saved_scenes),
+              "download.prompt_for_download": False,
+              "download.directory_upgrade": True,
+          }}}
           session = webdriver("POST", "/session", {"capabilities": {"alwaysMatch": options}})["sessionId"]
+          def check_browser_download(filename, expected):
+              target = saved_scenes / filename
+              for _ in range(100):
+                  if target.is_file() and target.stat().st_size == len(expected):
+                      break
+                  time.sleep(0.15)
+              else:
+                  raise RuntimeError("Browser did not download " + filename)
+              actual = target.read_bytes()
+              assert actual == expected, filename
+              return hashlib.sha256(actual).hexdigest()
           try:
               webdriver("POST", f"/session/{session}/url", {"url": page.resolve().as_uri()})
               for _ in range(125):
@@ -556,6 +675,119 @@ jobs:
               }
               receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
               print("DIRECT FILE OPERATOR SPLAT PASS: 1024 real WRE Gaussian records")
+              save_button = webdriver("POST", f"/session/{session}/element", {
+                  "using": "css selector", "value": "#wre-save-current"
+              })["element-6066-11e4-a52e-4f735466cecf"]
+              webdriver("POST", f"/session/{session}/element/{save_button}/click", {})
+              assert check_browser_download("operator-local.splat", subset) == hashlib.sha256(subset).hexdigest()
+              print("REAL BROWSER DOWNLOAD PASS: 1024 dropped Gaussian records")
+
+              # Exercise the ACTUAL HTML <input type=file> control through
+              # ChromeDriver's file upload protocol, not by faking JS changes.
+              # The control dispatches the existing MIT viewer drop handler.
+              picker_count = 2048
+              picked_bytes = (
+                  root / "offline-viewer" / "observed-GAUSSIANS-UNTRAINED.splat"
+              ).read_bytes()[:picker_count * 32]
+              picked_path = root / "operator-picked.splat"
+              picked_path.write_bytes(picked_bytes)
+              picker_element = webdriver("POST", f"/session/{session}/element", {
+                  "using": "css selector", "value": "#wre-local-splat"
+              })["element-6066-11e4-a52e-4f735466cecf"]
+              webdriver("POST", f"/session/{session}/element/{picker_element}/value", {
+                  "text": str(picked_path)
+              })
+              for _ in range(125):
+                  selected = webdriver("POST", f"/session/{session}/execute/sync", {
+                      "script": """return {
+                        count: window.__wreRenderedGaussianCount || 0,
+                        status: document.getElementById('wre-local-status').textContent,
+                        external: performance.getEntriesByType('resource')
+                          .filter(x=>/^https?:/.test(x.name)).map(x=>x.name)};""",
+                      "args": [],
+                  })
+                  if selected["count"] == picker_count and "2048 Gaussian" in selected["status"]:
+                      break
+                  time.sleep(0.35)
+              else:
+                  raise RuntimeError("Actual browser file picker did not load: " + str(selected))
+              assert selected["external"] == [], selected
+              webdriver("POST", f"/session/{session}/element/{save_button}/click", {})
+              picked_sha = check_browser_download("operator-picked.splat", picked_bytes)
+              assert picked_sha == hashlib.sha256(picked_bytes).hexdigest()
+              print("REAL BROWSER DOWNLOAD PASS: 2048 picked Gaussian records")
+              receipt["operator_file_picker_test"] = {
+                  "input": "real local file selected via ChromeDriver file upload",
+                  "bytes": len(picked_bytes),
+                  "sha256": hashlib.sha256(picked_bytes).hexdigest(),
+                  "drawn_gaussians": selected["count"],
+                  "page_scheme": "file", "external_resource_requests": 0,
+                  "cuda_training": False,
+              }
+              # Real browser A/B flip: preserve the selected local scene while
+              # switching twice through the upstream WebGL FileReader worker.
+              compare_element = webdriver("POST", f"/session/{session}/element", {
+                  "using": "css selector", "value": "#wre-compare-scene"
+              })["element-6066-11e4-a52e-4f735466cecf"]
+              for target_count, label in ((6917, "WRE-16-photos.splat"),
+                                          (2048, "operator-picked.splat")):
+                  webdriver("POST", f"/session/{session}/element/{compare_element}/click", {})
+                  for _ in range(125):
+                      current = webdriver("POST", f"/session/{session}/execute/sync", {
+                          "script": """return {
+                            count: window.__wreRenderedGaussianCount || 0,
+                            status: document.getElementById('wre-local-status').textContent,
+                            external: performance.getEntriesByType('resource')
+                              .filter(x=>/^https?:/.test(x.name)).map(x=>x.name)};""",
+                          "args": [],
+                      })
+                      if current["count"] == target_count and label in current["status"]:
+                          break
+                      time.sleep(0.35)
+                  else:
+                      raise RuntimeError("Offline WRE 3D A/B comparison failed: " + str(current))
+                  assert current["external"] == [], current
+              receipt["operator_ab_compare_test"] = {
+                  "original_drawn_gaussians": 6917,
+                  "restored_operator_drawn_gaussians": picker_count,
+                  "operator_sha256": picked_sha,
+                  "external_resource_requests": 0,
+                  "cuda_training": False,
+              }
+              print("REAL WEBGL A/B COMPARE PASS: original 6917 -> local 2048")
+              reset_element = webdriver("POST", f"/session/{session}/element", {
+                  "using": "css selector", "value": "#wre-restore-original"
+              })["element-6066-11e4-a52e-4f735466cecf"]
+              webdriver("POST", f"/session/{session}/element/{reset_element}/click", {})
+              for _ in range(125):
+                  restored = webdriver("POST", f"/session/{session}/execute/sync", {
+                      "script": """return {
+                        count: window.__wreRenderedGaussianCount || 0,
+                        status: document.getElementById('wre-local-status').textContent,
+                        external: performance.getEntriesByType('resource')
+                          .filter(x=>/^https?:/.test(x.name)).map(x=>x.name)};""",
+                      "args": [],
+                  })
+                  if restored["count"] == 6917 and "6917 Gaussian" in restored["status"]:
+                      break
+                  time.sleep(0.35)
+              else:
+                  raise RuntimeError("Browser restore original WRE scene failed: " + str(restored))
+              assert restored["external"] == [], restored
+              webdriver("POST", f"/session/{session}/element/{save_button}/click", {})
+              original_scene = (
+                  root / "offline-viewer" / "observed-GAUSSIANS-UNTRAINED.splat"
+              ).read_bytes()
+              original_sha = check_browser_download("WRE-16-photos.splat", original_scene)
+              assert original_sha == hashlib.sha256(original_scene).hexdigest()
+              print("REAL BROWSER DOWNLOAD PASS: 6917 restored Gaussian records")
+              receipt["restore_original_test"] = {
+                  "drawn_gaussians": restored["count"],
+                  "page_scheme": "file", "external_resource_requests": 0,
+                  "cuda_training": False,
+              }
+              receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
+              print("DIRECT FILE PICKER PASS: 2048 WRE records, then RESTORE PASS: 6917")
           finally:
               webdriver("DELETE", f"/session/{session}")
           PY
