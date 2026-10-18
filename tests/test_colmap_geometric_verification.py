@@ -152,6 +152,8 @@ class _FakeDatabase:
             ).fetchall()
         finally:
             connection.close()
+        if self._module.omit_native_raw_pairs:
+            rows = [row for row in rows if int(row[1]) == 0]
         return [int(row[0]) for row in rows], [int(row[1]) for row in rows]
 
     def read_two_view_geometries(self) -> tuple[list[int], list[_FakeGeometry]]:
@@ -160,6 +162,9 @@ class _FakeDatabase:
         if self._module.drop_last_geometry and pair_ids:
             pair_ids = pair_ids[:-1]
             geometries = geometries[:-1]
+        if self._module.add_foreign_geometry:
+            pair_ids.append(self._module._pair_id(3, 4))
+            geometries.append(_FakeGeometry(config=2, num_inliers=0))
         return pair_ids, geometries
 
     def close(self) -> None:
@@ -189,11 +194,19 @@ class _FakePycolmap:
         CALIBRATED_RIG=9,
     )
 
-    def __init__(self, *, drop_last_geometry: bool = False) -> None:
+    def __init__(
+        self,
+        *,
+        drop_last_geometry: bool = False,
+        add_foreign_geometry: bool = False,
+        omit_native_raw_pairs: bool = False,
+    ) -> None:
         self.random_seed: int | None = None
+        self.add_foreign_geometry = add_foreign_geometry
         self.calls: list[dict[str, object]] = []
         self.geometries: dict[int, _FakeGeometry] = {}
         self.drop_last_geometry = drop_last_geometry
+        self.omit_native_raw_pairs = omit_native_raw_pairs
         self.Database = SimpleNamespace(open=self._open_database)
 
     @staticmethod
@@ -464,13 +477,58 @@ def test_existing_output_database_is_never_reused(tmp_path: Path) -> None:
     assert request.database_path.read_bytes() == b"existing"
 
 
-def test_missing_geometry_result_is_rejected_and_partial_output_removed(tmp_path: Path) -> None:
+def test_unverified_raw_match_pair_is_retained_without_inventing_geometry(tmp_path: Path) -> None:
+    # Real COLMAP 4.2 can leave a raw SIFT match row without a verified
+    # two-view geometry. This is not proof of camera motion or inliers.
     matching = _matching_result(tmp_path)
     request = _request(tmp_path, matching)
+    result = verify_colmap_geometry(request, module=_FakePycolmap(drop_last_geometry=True))
 
-    with pytest.raises(ColmapGeometricVerificationError, match="exactly one geometry result"):
-        verify_colmap_geometry(request, module=_FakePycolmap(drop_last_geometry=True))
+    assert matching.database_path.exists()
+    assert result.database_path.exists()
+    assert len(result.geometries) == 1
+    evidence = result.geometries[0]
+    assert evidence.raw_match_count == 25
+    assert evidence.observation_id1 == ObservationId("obs:a")
+    assert evidence.observation_id2 == ObservationId("obs:z")
+    assert evidence.configuration == "UNDEFINED"
+    assert evidence.inlier_matches == ()
+    assert evidence.inlier_count == 0
+    assert evidence.fundamental_matrix is None
+    assert evidence.essential_matrix is None
+    assert evidence.homography_matrix is None
+    assert evidence.relative_pose_matrix is None
+    assert evidence.triangulation_angle_rad is None
+    assert not evidence.has_estimated_camera1
+    assert not evidence.has_estimated_camera2
 
+
+def test_native_count_view_omitting_raw_pair_preserves_sqlite_raw_membership(
+    tmp_path: Path,
+) -> None:
+    # Real CPU PyCOLMAP verification can return fewer pairs from its count view
+    # than the raw SQLite matches table enumerated by canonical L3.3.
+    matching = _matching_result(tmp_path)
+    result = verify_colmap_geometry(
+        _request(tmp_path, matching),
+        module=_FakePycolmap(omit_native_raw_pairs=True),
+    )
+    assert len(result.geometries) == 1
+    evidence = result.geometries[0]
+    assert evidence.observation_id1 == ObservationId("obs:a")
+    assert evidence.observation_id2 == ObservationId("obs:z")
+    assert evidence.raw_match_count == 25
+    assert evidence.configuration == "UNDEFINED"
+    assert evidence.inlier_count == 0
+    assert evidence.relative_pose_matrix is None
+    assert result.database_path.exists()
+
+
+def test_foreign_verified_geometry_without_raw_matches_is_rejected(tmp_path: Path) -> None:
+    matching = _matching_result(tmp_path)
+    request = _request(tmp_path, matching)
+    with pytest.raises(ColmapGeometricVerificationError, match="no raw match pair"):
+        verify_colmap_geometry(request, module=_FakePycolmap(add_foreign_geometry=True))
     assert matching.database_path.exists()
     assert not request.database_path.exists()
 

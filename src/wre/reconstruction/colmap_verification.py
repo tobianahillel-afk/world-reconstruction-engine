@@ -6,6 +6,7 @@ import json
 import math
 import os
 import shutil
+import sqlite3
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -464,23 +465,39 @@ def _read_geometry_evidence(
     database = pycolmap.Database.open(database_path)
     try:
         images = database.read_all_images()
-        pair_ids, raw_counts = database.read_num_matches()
         geometry_pair_ids, geometries = database.read_two_view_geometries()
     finally:
         database.close()
 
+    # L3.3 enumerates the canonical raw matches table directly. Some native
+    # read_num_matches() views omit raw pairs, which must not silently erase
+    # real L3.3 identities after geometric verification.
+    try:
+        with sqlite3.connect(f"file:{database_path}?mode=ro", uri=True) as connection:
+            raw_rows = connection.execute(
+                "SELECT pair_id, rows, cols FROM matches ORDER BY pair_id"
+            ).fetchall()
+    except sqlite3.Error as exc:
+        raise ColmapGeometricVerificationError(
+            "COLMAP verified database raw match table cannot be inspected"
+        ) from exc
+    if any(int(rows) < 0 or int(cols) != 2 for _, rows, cols in raw_rows):
+        raise ColmapGeometricVerificationError(
+            "COLMAP verified database has invalid raw match row dimensions"
+        )
     name_by_id = {int(image.image_id): str(image.name) for image in images}
-    raw_count_by_pair_id = {
-        int(pair_id): int(count) for pair_id, count in zip(pair_ids, raw_counts, strict=True)
-    }
+    raw_count_by_pair_id = {int(pair_id): int(rows) for pair_id, rows, _ in raw_rows}
     geometry_by_pair_id = {
         int(pair_id): geometry
         for pair_id, geometry in zip(geometry_pair_ids, geometries, strict=True)
     }
-    if set(raw_count_by_pair_id) != set(geometry_by_pair_id):
+    # COLMAP can omit a two_view_geometries row for a raw SIFT pair that did
+    # not pass geometric verification. Keep that raw-pair identity explicit
+    # as UNDEFINED with zero verified inliers; never invent an estimated pose.
+    # A geometry with no matching raw-pair parent is always corruption.
+    if set(geometry_by_pair_id) - set(raw_count_by_pair_id):
         raise ColmapGeometricVerificationError(
-            "COLMAP geometric verification did not produce exactly one geometry result "
-            "per raw match pair"
+            "COLMAP returned a verified geometry with no raw match pair"
         )
 
     evidence: list[ColmapPairGeometryEvidence] = []
@@ -504,9 +521,10 @@ def _read_geometry_evidence(
                 "COLMAP verified geometry cannot pair an observation with itself"
             )
 
-        geometry = geometry_by_pair_id[pair_id]
+        geometry = geometry_by_pair_id.get(pair_id)
         if observation_id2.value < observation_id1.value:
-            geometry.invert()
+            if geometry is not None:
+                geometry.invert()
             observation_id1, observation_id2 = observation_id2, observation_id1
             name1, name2 = name2, name1
 
@@ -524,6 +542,27 @@ def _read_geometry_evidence(
         raw_match_count = raw_count_by_pair_id[pair_id]
         if raw_match_count != expected_count:
             raise ColmapGeometricVerificationError("raw match count changed between L3.3 and L3.4")
+
+        if geometry is None:
+            evidence.append(
+                ColmapPairGeometryEvidence(
+                    observation_id1=observation_id1,
+                    observation_id2=observation_id2,
+                    image_name1=name1,
+                    image_name2=name2,
+                    raw_match_count=raw_match_count,
+                    configuration="UNDEFINED",
+                    inlier_matches=(),
+                    fundamental_matrix=None,
+                    essential_matrix=None,
+                    homography_matrix=None,
+                    relative_pose_matrix=None,
+                    triangulation_angle_rad=None,
+                    has_estimated_camera1=False,
+                    has_estimated_camera2=False,
+                )
+            )
+            continue
 
         tri_angle = float(geometry.tri_angle)
         tri_angle_value = None if tri_angle < 0 else tri_angle
