@@ -921,6 +921,55 @@ jobs:
               webm = video_path.read_bytes()
               assert webm[:4] == bytes((0x1a, 0x45, 0xdf, 0xa3))
               assert bytes((0x1f, 0x43, 0xb6, 0x75)) in webm
+              # REAL decoder/player: the exact locally recorded WebM must be
+              # replayable in the offline page, not merely have an EBML header.
+              for _ in range(60):
+                  player_state = webdriver("POST", f"/session/{session}/execute/sync", {
+                      "script": """const v=document.getElementById('wre-video-preview');
+                        return {visible:!v.hidden, ready:v.readyState,
+                          width:v.videoWidth, height:v.videoHeight,
+                          src:v.currentSrc, controls:v.controls};""",
+                      "args": [],
+                  })
+                  if player_state["ready"] >= 2:
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("Offline recorded WebM did not decode as local video")
+              assert player_state["visible"] and player_state["controls"]
+              assert player_state["width"] >= 640 and player_state["height"] >= 400
+              assert player_state["src"].startswith("blob:")
+              webdriver("POST", f"/session/{session}/execute/sync", {
+                  "script": """const v=document.getElementById('wre-video-preview');
+                    v.muted=true; v.currentTime=0;
+                    v.play().catch(error => { v.dataset.playbackError=String(error); });""",
+                  "args": [],
+              })
+              decoded = None
+              for _ in range(60):
+                  decoded = webdriver("POST", f"/session/{session}/execute/sync", {
+                      "script": """const v=document.getElementById('wre-video-preview');
+                        const canvas=document.createElement('canvas');
+                        canvas.width=96; canvas.height=54;
+                        const ctx=canvas.getContext('2d');
+                        if (v.readyState >= 2) ctx.drawImage(v,0,0,96,54);
+                        const px=ctx.getImageData(0,0,96,54).data;
+                        let colored=0;
+                        for(let i=0;i<px.length;i+=4)
+                          if(px[i]+px[i+1]+px[i+2]>12) colored++;
+                        return {seconds:v.currentTime, paused:v.paused,
+                          error:v.dataset.playbackError||'', colored};""",
+                      "args": [],
+                  })
+                  if decoded["seconds"] > 0.25 and decoded["colored"] > 25:
+                      break
+                  time.sleep(0.1)
+              assert decoded is not None and not decoded["error"], decoded
+              assert decoded["seconds"] > 0.25 and decoded["colored"] > 25, decoded
+              webdriver("POST", f"/session/{session}/execute/sync", {
+                  "script": "document.getElementById('wre-video-preview').pause();",
+                  "args": [],
+              })
               after_clip = webdriver("POST", f"/session/{session}/execute/sync", {
                   "script": """return {
                     pose:Array.from(viewMatrix),
@@ -938,6 +987,11 @@ jobs:
               receipt["offline_camera_video_test"] = {
                   "actual_chrome_mediarecorder": True,
                   "actual_browser_webm_download": True,
+                  "actual_local_decoder_playback": True,
+                  "playback_seconds": decoded["seconds"],
+                  "playback_colored_samples": decoded["colored"],
+                  "playback_width": player_state["width"],
+                  "playback_height": player_state["height"],
                   "observed_viewpoint_motion": True,
                   "restored_starting_camera": True,
                   "webm_bytes": len(webm),
