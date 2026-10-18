@@ -246,7 +246,10 @@ jobs:
           fetch_exact fused-ssim-source https://github.com/rahul-goel/fused-ssim.git "$FUSED_SSIM_REVISION" "$FUSED_SSIM_TREE"
           fetch_exact nerfview-source https://github.com/nerfstudio-project/nerfview.git "$NERFVIEW_REVISION" "$NERFVIEW_TREE"
           fetch_exact gsplat-legacy-pycolmap https://github.com/rmbrualla/pycolmap.git "$LEGACY_PYCOLMAP_REVISION" ""
-          "$NATIVE_PYTHON" - <<'PY'
+          # WRE's contracts use enum.StrEnum (Python >=3.11). Keep its
+          # source-identity verifier on exact Python 3.12, separate from the
+          # upstream native gsplat/Torch build's required Python 3.10.21.
+          uv run --no-project --python 3.12.12 python - <<'PY'
           import os
           import sys
           from pathlib import Path
