@@ -403,8 +403,9 @@ jobs:
               "  python3 -m http.server 8767 --bind 127.0.0.1\n"
               "Open http://127.0.0.1:8767/offline-viewer/index.html in a WebGL2 browser.\n"
               "Mouse orbit/zoom and keyboard 0-9 / +/- for recovered cameras.\n"
-              "Drop your own .splat file on the open HTML page to replace the 3D scene.\n"
-              "A .splat must consist of 32-byte Gaussian records (not a ZIP or OBJ file).\n"
+              "Choose a local .splat using the file picker, or drag one onto the page.\n"
+              "Use Restore 16-photo scene to return to the included example.\n"
+              "A .splat must have 32-byte Gaussian records (max 256 MiB, not ZIP/OBJ).\n"
               "The original 16 photo camera presets do not calibrate your custom scene.\n"
               "Only your local browser reads dropped files; nothing is uploaded.\n"
               "No internet, paid API, Torch, CUDA, installation or server upload is required.\n"
@@ -607,6 +608,71 @@ jobs:
               }
               receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
               print("DIRECT FILE OPERATOR SPLAT PASS: 1024 real WRE Gaussian records")
+
+              # Exercise the ACTUAL HTML <input type=file> control through
+              # ChromeDriver's file upload protocol, not by faking JS changes.
+              # The control dispatches the existing MIT viewer drop handler.
+              picker_count = 2048
+              picked_bytes = (
+                  root / "offline-viewer" / "observed-GAUSSIANS-UNTRAINED.splat"
+              ).read_bytes()[:picker_count * 32]
+              picked_path = root / "operator-picked.splat"
+              picked_path.write_bytes(picked_bytes)
+              picker_element = webdriver("POST", f"/session/{session}/element", {
+                  "using": "css selector", "value": "#wre-local-splat"
+              })["element-6066-11e4-a52e-4f735466cecf"]
+              webdriver("POST", f"/session/{session}/element/{picker_element}/value", {
+                  "text": str(picked_path)
+              })
+              for _ in range(125):
+                  selected = webdriver("POST", f"/session/{session}/execute/sync", {
+                      "script": """return {
+                        count: window.__wreRenderedGaussianCount || 0,
+                        status: document.getElementById('wre-local-status').textContent,
+                        external: performance.getEntriesByType('resource')
+                          .filter(x=>/^https?:/.test(x.name)).map(x=>x.name)};""",
+                      "args": [],
+                  })
+                  if selected["count"] == picker_count and "2048 Gaussian" in selected["status"]:
+                      break
+                  time.sleep(0.35)
+              else:
+                  raise RuntimeError("Actual browser file picker did not load: " + str(selected))
+              assert selected["external"] == [], selected
+              receipt["operator_file_picker_test"] = {
+                  "input": "real local file selected via ChromeDriver file upload",
+                  "bytes": len(picked_bytes),
+                  "sha256": hashlib.sha256(picked_bytes).hexdigest(),
+                  "drawn_gaussians": selected["count"],
+                  "page_scheme": "file", "external_resource_requests": 0,
+                  "cuda_training": False,
+              }
+              reset_element = webdriver("POST", f"/session/{session}/element", {
+                  "using": "css selector", "value": "#wre-restore-original"
+              })["element-6066-11e4-a52e-4f735466cecf"]
+              webdriver("POST", f"/session/{session}/element/{reset_element}/click")
+              for _ in range(125):
+                  restored = webdriver("POST", f"/session/{session}/execute/sync", {
+                      "script": """return {
+                        count: window.__wreRenderedGaussianCount || 0,
+                        status: document.getElementById('wre-local-status').textContent,
+                        external: performance.getEntriesByType('resource')
+                          .filter(x=>/^https?:/.test(x.name)).map(x=>x.name)};""",
+                      "args": [],
+                  })
+                  if restored["count"] == 6917 and "6917 Gaussian" in restored["status"]:
+                      break
+                  time.sleep(0.35)
+              else:
+                  raise RuntimeError("Browser restore original WRE scene failed: " + str(restored))
+              assert restored["external"] == [], restored
+              receipt["restore_original_test"] = {
+                  "drawn_gaussians": restored["count"],
+                  "page_scheme": "file", "external_resource_requests": 0,
+                  "cuda_training": False,
+              }
+              receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
+              print("DIRECT FILE PICKER PASS: 2048 WRE records, then RESTORE PASS: 6917")
           finally:
               webdriver("DELETE", f"/session/{session}")
           PY
