@@ -818,6 +818,11 @@ jobs:
               "p95_nearest_rank_rgb_difference_0_to_255": round(
                   values[math.ceil(0.95 * len(values)) - 1], 6
               ),
+              # Real native COLMAP point IDs, NOT sampled view synthesis.
+              "per_landmark_mean_rgb_difference_0_to_255": {
+                  str(point_id): round(value, 6)
+                  for point_id, value in sorted(errors.items())
+              },
               "held_out_image_quality_measured": False,
               "gpu_training_executed": False,
               "metric_scale_known": False,
