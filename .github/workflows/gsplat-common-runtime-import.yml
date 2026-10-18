@@ -469,6 +469,7 @@ jobs:
         run: |
           set -euo pipefail
           .venv/bin/python - <<'PY'
+          import csv
           import hashlib
           import json
           import math
@@ -580,6 +581,9 @@ jobs:
               int(frame["image_id"]): i for i, frame in enumerate(ordered_frames)
           }
           by_track = [[0] * 16 for _ in range(16)]
+          # Complete source-measured tracks; the WebGL pairwise preview
+          # remains a bounded sample of eight shared points.
+          native_observation_rows = []
           pixels_by_camera = [{} for _ in range(16)]
           pixel_index_by_camera = [{} for _ in range(16)]
           for point_id, point in model.points3D.items():
@@ -597,6 +601,18 @@ jobs:
                   assert int(observation.point3D_id) == point_id
                   xy = np.asarray(observation.xy, dtype=np.float64)
                   assert xy.shape == (2,) and np.isfinite(xy).all()
+                  xyz = np.asarray(point.xyz, dtype=np.float64)
+                  error = float(point.error)
+                  assert xyz.shape == (3,) and np.isfinite(xyz).all()
+                  assert np.isfinite(error) and error >= 0
+                  frame = ordered_frames[camera_index]
+                  assert 0 <= xy[0] < frame["image_width"]
+                  assert 0 <= xy[1] < frame["image_height"]
+                  native_observation_rows.append((
+                      point_id, image_id, frame["image_name"], frame["image_sha256"],
+                      point2d_index, float(xy[0]), float(xy[1]),
+                      *(float(value) for value in xyz), error,
+                  ))
                   previous = pixel_index_by_camera[camera_index].get(point_id)
                   if previous is None or point2d_index < previous:
                       pixel_index_by_camera[camera_index][point_id] = point2d_index
@@ -607,6 +623,12 @@ jobs:
                   for j in members:
                       by_track[i][j] += 1
           assert by_track == shared_tracks
+          assert len(native_observation_rows) == sum(
+              frame["triangulated_2d_observations"] for frame in ordered_frames
+          )
+          assert len({
+              (row[1], row[4]) for row in native_observation_rows
+          }) == len(native_observation_rows)
           assert all(
               set(measured) == expected
               for measured, expected in zip(pixels_by_camera, observed_ids, strict=True)
@@ -659,6 +681,19 @@ jobs:
               },
           }
           out = Path(os.environ["GITHUB_WORKSPACE"])
+          track_csv = out / "wre-real16-native-2d3d-tracks.csv"
+          with track_csv.open("x", encoding="utf-8", newline="") as stream:
+              writer = csv.writer(stream, lineterminator="\n")
+              writer.writerow((
+                  "point3d_id", "image_id", "image_name", "image_sha256",
+                  "point2d_idx", "pixel_x", "pixel_y", "x", "y", "z",
+                  "in_sample_error_px",
+              ))
+              writer.writerows(sorted(
+                  native_observation_rows, key=lambda row: (row[0], row[1], row[4])
+              ))
+          print("EXPORTED ACTUAL NATIVE SFM TRACK OBSERVATIONS:",
+                len(native_observation_rows), "for", len(model.points3D), "3D landmarks")
           (out / "wre-real16-camera-poses.json").write_text(
               json.dumps(descriptor, indent=2, sort_keys=True, allow_nan=False) + "\n"
           )
