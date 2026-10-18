@@ -2628,6 +2628,13 @@ jobs:
           assert receipt["registered_cameras"] == 16
           quality = json.loads((root / "wre-real16-sfm-quality.json").read_text())
           geom_quality = quality["geometry_quality"]
+          lookup = json.loads(
+              (root / "wre-real16-native-landmark-lookup.json").read_text()
+          )
+          assert lookup["schema"] == "wre.experimental.real16_native_landmark_lookup.v1"
+          assert lookup["point_count"] == geom_quality["sparse_points3d"]
+          assert lookup["observation_count"] == geom_quality["track_observations"]
+          assert len(lookup["points"]) == lookup["point_count"]
           assert quality["source_dataset_commit"] == receipt["source_dataset_commit"]
           assert geom_quality["registered_views"] == 16
           assert geom_quality["sparse_points3d"] > 100
@@ -2707,6 +2714,58 @@ jobs:
                   time.sleep(0.25)
               else:
                   raise RuntimeError("Sixteen actual SfM camera choices never loaded")
+              # Search a REAL native COLMAP landmark from the full 3D index,
+              # not just the first 8 sampled points per selected camera pair.
+              selected_id=min(int(pid) for pid in lookup["points"])
+              selected_point=lookup["points"][str(selected_id)]
+              assert len(selected_point["observations"]) >= 2
+              assert js("""
+                const field=document.getElementById('wre-native-point-id');
+                field.value='__ID__';
+                document.getElementById('wre-native-point-find').click();
+                return true;
+              """.replace("__ID__",str(selected_id)))
+              for _ in range(60):
+                  result=js("""
+                    const viewer=document.getElementById('wre-scene');
+                    const marker=viewer.querySelector('[slot="hotspot-native-lookup"]');
+                    const text=document.getElementById('wre-native-lookup-output').textContent;
+                    if(!marker || !text.includes('Real COLMAP point')) return null;
+                    const position=viewer.queryHotspot('hotspot-native-lookup');
+                    return {
+                      label:marker.getAttribute('aria-label'),
+                      position:marker.getAttribute('data-position'),
+                      text,
+                      projected:Boolean(position && position.canvasPosition &&
+                        Number.isFinite(position.canvasPosition.x) &&
+                        Number.isFinite(position.canvasPosition.y))
+                    };
+                  """)
+                  if result is not None:
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("Real Chrome native 3D landmark lookup did not render")
+              assert result["label"] == "Native COLMAP 3D point "+str(selected_id)
+              actual_xyz=[float(v[:-1]) for v in result["position"].split()]
+              assert len(actual_xyz)==3
+              assert all(
+                  math.isclose(a,b,rel_tol=1e-7,abs_tol=1e-6)
+                  for a,b in zip(actual_xyz,selected_point["xyz"],strict=True)
+              )
+              assert result["projected"]
+              assert str(len(selected_point["observations"]))+" measured camera observations" in result["text"]
+              for observation in selected_point["observations"][:3]:
+                  assert observation["image_name"] in result["text"]
+                  assert "#"+str(observation["point2d_idx"]) in result["text"]
+              assert "Not metric, held-out quality, time, GPU training or 4D" in result["text"]
+              assert js("""
+                document.getElementById('wre-native-point-id').value='-1';
+                document.getElementById('wre-native-point-find').click();
+                return !document.querySelector('[slot="hotspot-native-lookup"]') &&
+                  document.getElementById('wre-native-lookup-output').textContent
+                    .includes('Enter a positive native COLMAP point ID');
+              """), "Invalid point IDs must not leave a misleading hotspot"
               assert js("""
                 const c=document.getElementById('wre-camera-choice');
                 const v=document.getElementById('wre-scene');
