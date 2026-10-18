@@ -650,7 +650,7 @@ jobs:
               reset_element = webdriver("POST", f"/session/{session}/element", {
                   "using": "css selector", "value": "#wre-restore-original"
               })["element-6066-11e4-a52e-4f735466cecf"]
-              webdriver("POST", f"/session/{session}/element/{reset_element}/click")
+              webdriver("POST", f"/session/{session}/element/{reset_element}/click", {})
               for _ in range(125):
                   restored = webdriver("POST", f"/session/{session}/execute/sync", {
                       "script": """return {
