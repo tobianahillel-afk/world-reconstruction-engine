@@ -700,6 +700,34 @@ jobs:
               receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
               print("DIRECT FILE WEBGL PASS: 6917 WRE 16-photo untrained Gaussians")
 
+              # Test the OPERATOR'S screenshot button with an actual Chrome
+              # click and a real downloaded PNG from the running WebGL canvas.
+              png_button = webdriver("POST", f"/session/{session}/element", {
+                  "using": "css selector", "value": "#wre-save-png"
+              })["element-6066-11e4-a52e-4f735466cecf"]
+              webdriver("POST", f"/session/{session}/element/{png_button}/click", {})
+              saved_png = saved_scenes / "wre-current-view.png"
+              for _ in range(100):
+                  if saved_png.is_file() and saved_png.stat().st_size > 10_000:
+                      break
+                  time.sleep(0.2)
+              else:
+                  raise RuntimeError("Real WebGL canvas PNG did not download or is blank")
+              exported_png = saved_png.read_bytes()
+              assert exported_png[:8] == b"\x89PNG\r\n\x1a\n"
+              exported_width, exported_height = struct.unpack_from(">II", exported_png, 16)
+              assert exported_width >= 640 and exported_height >= 400
+              assert len(exported_png) > 10_000
+              receipt["offline_view_png_export_test"] = {
+                  "actual_browser_button": True,
+                  "actual_downloaded_png": True,
+                  "width": exported_width, "height": exported_height,
+                  "sha256": hashlib.sha256(exported_png).hexdigest(),
+                  "file_scheme": True, "cuda_training": False,
+              }
+              receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
+              print("REAL OFFLINE WEBGL PNG EXPORT PASS: operator clicked, PNG downloaded")
+
               # Actually exercise upstream drag/drop + FileReader + WebGL worker.
               # A subset of the REAL exported scene is a second valid .splat;
               # this is not a claim of another reconstruction or GPU training.
