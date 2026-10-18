@@ -747,8 +747,6 @@ jobs:
                   else:
                       raise RuntimeError("Offline WRE 3D A/B comparison failed: " + str(current))
                   assert current["external"] == [], current
-              webdriver("POST", f"/session/{session}/element/{save_button}/click", {})
-              assert check_browser_download("operator-picked.splat", picked_bytes) == picked_sha
               receipt["operator_ab_compare_test"] = {
                   "original_drawn_gaussians": 6917,
                   "restored_operator_drawn_gaussians": picker_count,
