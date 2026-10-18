@@ -3580,6 +3580,79 @@ jobs:
               else:
                   raise RuntimeError("Unmeasured photo pixel was not rejected")
               assert js("return document.getElementById('wre-native-point-id').value;")==str(photo_id)
+              # Reverse 2D -> 3D must also work from the *second* locally
+              # supplied real-camera image, not only primary camera A. The
+              # observed coordinates below belong to the genuine native
+              # PyCOLMAP 16-image SfM output, not to our local synthetic PNG.
+              second_camera=overlay_cameras[1]
+              second_available=[
+                  (int(pid),ob) for pid,entry in lookup["points"].items()
+                  for ob in entry["observations"]
+                  if ob["image_id"]==second_camera["image_id"]
+                  and ob["image_name"]==second_camera["image_name"]
+                  and 2 < ob["pixel"][0] < second_camera["image_width"]-2
+                  and 2 < ob["pixel"][1] < second_camera["image_height"]-2
+              ]
+              assert len(second_available)>5
+              second_pick=next(
+                  (
+                      (pid,ob) for pid,ob in second_available
+                      if all(
+                          (ob["pixel"][0]-peer["pixel"][0])**2+
+                          (ob["pixel"][1]-peer["pixel"][1])**2>64
+                          for other,peer in second_available if other!=pid
+                      )
+                  ),None
+              )
+              assert second_pick is not None, (
+                  "No isolated real camera B observation for reverse 2D-to-3D navigation"
+              )
+              second_id,second_obs=second_pick
+              assert js("""
+                const img=document.getElementById('wre-photo-image-b');
+                if(img.hidden || !img.complete) return false;
+                const r=img.getBoundingClientRect();
+                img.dispatchEvent(new MouseEvent('click',{
+                  bubbles:true,
+                  clientX:r.left+__U__*r.width/img.naturalWidth,
+                  clientY:r.top+__V__*r.height/img.naturalHeight
+                }));
+                return true;
+              """.replace("__U__",repr(second_obs["pixel"][0]))
+                 .replace("__V__",repr(second_obs["pixel"][1])))
+              for _ in range(60):
+                  second_state=js("""
+                    const marker=document.getElementById('wre-native-photo-pixel');
+                    return {
+                      point:document.getElementById('wre-native-point-id').value,
+                      camera:document.getElementById('wre-camera-choice').value,
+                      overlay:!marker.hidden,
+                      pixel:[Number(marker.dataset.pixelX),Number(marker.dataset.pixelY)],
+                      status:document.getElementById('wre-native-observation-status').textContent
+                    };
+                  """)
+                  if (second_state["point"]==str(second_id)
+                      and second_state["camera"]==str(best_overlap_index)
+                      and second_state["overlay"]
+                      and "Selected by clicking" in second_state["status"]):
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("Camera B photo pixel failed reverse SfM navigation")
+              assert all(
+                  math.isclose(actual,expected,abs_tol=1e-7)
+                  for actual,expected in zip(
+                      second_state["pixel"],second_obs["pixel"],strict=True
+                  )
+              )
+              # Restore original camera pair for the existing A/B point and
+              # screenshot tests. Its SfM pixel evidence remains unchanged.
+              assert js("""
+                const camera=document.getElementById('wre-camera-choice');
+                camera.value='0';
+                camera.dispatchEvent(new Event('change',{bubbles:true}));
+                return camera.value==='0';
+              """)
               # The very same native 3D track must display the opposite
               # measured pixels when camera A and B are reversed.
               reversed_text=js("""
