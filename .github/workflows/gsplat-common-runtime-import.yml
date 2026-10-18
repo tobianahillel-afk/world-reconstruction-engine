@@ -715,6 +715,132 @@ jobs:
           PY
 
       # Genuine real-photo RGB GLB is available before slow CUDA compilation.
+      # Quantify REAL observed image-colour disagreement at REAL PyCOLMAP
+      # Point2D tracks, before native CUDA compilation or any 3DGS training.
+      # Original NC source photographs remain local to the CI runner.
+      - name: Measure true multiview observed RGB agreement on CPU
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv/bin/python - <<'PY'
+          import csv
+          import hashlib
+          import itertools
+          import json
+          import math
+          import os
+          import statistics
+          from pathlib import Path
+          import numpy as np
+          from PIL import Image
+
+          root = Path(os.environ["GITHUB_WORKSPACE"])
+          capture = root / "wre-common-real-photo-capture"
+          poses = json.loads((root / "wre-real16-camera-poses.json").read_text())
+          quality = json.loads((root / "wre-real16-sfm-quality.json").read_text())
+          cameras = {int(c["image_id"]): c for c in poses["cameras"]}
+          assert len(cameras) == 16 and poses["registered_views"] == 16
+          assert poses["source_dataset_commit"] == quality["source_dataset_commit"]
+          # Decode each original (undistorted) photograph only once; verify
+          # actual byte SHA and native camera dimensions BEFORE sampling.
+          images = {}
+          for image_id, camera in sorted(cameras.items()):
+              path = capture / "images" / camera["image_name"]
+              assert path.is_file() and not path.is_symlink()
+              assert hashlib.sha256(path.read_bytes()).hexdigest() == camera["image_sha256"]
+              with Image.open(path) as source:
+                  image = np.asarray(source.convert("RGB"), dtype=np.uint8)
+              assert image.shape == (camera["image_height"], camera["image_width"], 3)
+              images[image_id] = image
+
+          observations = {}
+          native_rows = 0
+          with (root / "wre-real16-native-2d3d-tracks.csv").open(
+              encoding="utf-8", newline=""
+          ) as stream:
+              for row in csv.DictReader(stream):
+                  native_rows += 1
+                  point_id = int(row["point3d_id"])
+                  image_id = int(row["image_id"])
+                  camera = cameras[image_id]
+                  assert row["image_name"] == camera["image_name"]
+                  assert row["image_sha256"] == camera["image_sha256"]
+                  u, v = float(row["pixel_x"]), float(row["pixel_y"])
+                  if not (math.isfinite(u) and math.isfinite(v)):
+                      raise AssertionError("Nonfinite native COLMAP pixel")
+                  image = images[image_id]
+                  assert 0 <= u < image.shape[1] and 0 <= v < image.shape[0]
+                  rgb = tuple(int(c) for c in image[math.floor(v), math.floor(u)])
+                  # A COLMAP Point3D may be referenced by multiple Point2D
+                  # indexes in one image. The lowest native index wins, so a
+                  # view never counts twice towards a cross-view comparison.
+                  key = (point_id, image_id)
+                  point2d_idx = int(row["point2d_idx"])
+                  if key not in observations or point2d_idx < observations[key][0]:
+                      observations[key] = (point2d_idx, rgb)
+          assert native_rows == quality["geometry_quality"]["track_observations"]
+          grouped = {}
+          for (point_id, image_id), (idx, rgb) in observations.items():
+              grouped.setdefault(point_id, []).append((image_id, rgb))
+          errors = {}
+          pair_count = 0
+          for point_id, views in grouped.items():
+              if len(views) < 2:
+                  continue
+              differences = [
+                  sum(abs(first[c] - second[c]) for c in range(3)) / 3.0
+                  for (_, first), (_, second) in itertools.combinations(views, 2)
+              ]
+              assert differences
+              pair_count += len(differences)
+              errors[point_id] = statistics.fmean(differences)
+          assert len(grouped) == quality["geometry_quality"]["sparse_points3d"]
+          assert len(errors) > 100 and pair_count >= len(errors)
+          values = sorted(errors.values())
+          assert all(math.isfinite(x) and 0 <= x <= 255 for x in values)
+          # View-dependent BRIGHTNESS, exposure and occlusion all affect the
+          # score; it is NOT a held-out, perceptual, Gaussian or GPU benchmark.
+          report = {
+              "schema": "wre.experimental.real16_observed_rgb_agreement.v1",
+              "source_dataset_commit": poses["source_dataset_commit"],
+              "license": poses["license"],
+              "coordinate_system": "native_colmap_arbitrary_scale",
+              "measure": "mean_absolute_rgb_channel_difference_across_measured_views",
+              "pixel_sampling": "floor_native_measured_uv_nearest_source_pixel",
+              "per_camera_point_rule": "lowest_native_track_point2D_idx",
+              "image_count": len(images),
+              "sparse_points3d": len(grouped),
+              "track_observations": native_rows,
+              "points_with_cross_view_observations": len(errors),
+              "cross_view_pairs": pair_count,
+              "mean_rgb_difference_0_to_255": round(statistics.fmean(values), 6),
+              "median_rgb_difference_0_to_255": round(statistics.median(values), 6),
+              "p95_nearest_rank_rgb_difference_0_to_255": round(
+                  values[math.ceil(0.95 * len(values)) - 1], 6
+              ),
+              # Real native COLMAP point IDs, NOT sampled view synthesis.
+              "per_landmark_mean_rgb_difference_0_to_255": {
+                  str(point_id): round(value, 6)
+                  for point_id, value in sorted(errors.items())
+              },
+              "held_out_image_quality_measured": False,
+              "gpu_training_executed": False,
+              "metric_scale_known": False,
+              "temporal_reconstruction_executed": False,
+              "interpretation": (
+                  "Observed in-sample pixel RGB disagreement across real camera views; "
+                  "not a reconstruction-fidelity, relighting, held-out or GPU metric."
+              ),
+          }
+          dest = root / "wre-real16-observed-rgb-agreement.json"
+          dest.write_text(
+              json.dumps(report, indent=2, sort_keys=True, allow_nan=False) + "\n",
+              encoding="utf-8",
+          )
+          print("REAL PHOTO OBSERVED RGB AGREEMENT:", report["mean_rgb_difference_0_to_255"],
+                "across", len(errors), "actual 3D points and", pair_count, "camera pairs")
+          PY
+
       - name: Publish-ready real SfM RGB glTF on CPU before native CUDA build
         shell: bash
         run: |
@@ -1120,6 +1246,7 @@ jobs:
               "wre-real16-sfm-quality.json",
               "wre-real16-camera-poses.json",
               "wre-real16-native-2d3d-tracks.csv",
+              "wre-real16-observed-rgb-agreement.json",
               "wre-real16-camera-centers.ply",
               "wre-real16-observed-rgb-LICENSE.txt",
               "wre-real16-early-gltf/ply/point_cloud_0.ply",
@@ -1155,6 +1282,7 @@ jobs:
             wre-real16-sfm-quality.json
             wre-real16-camera-poses.json
             wre-real16-native-2d3d-tracks.csv
+            wre-real16-observed-rgb-agreement.json
             wre-real16-camera-centers.ply
             wre-real16-observed-rgb-LICENSE.txt
             wre-real16-early-gltf/ply/point_cloud_0.ply
@@ -1268,6 +1396,25 @@ jobs:
               f'mean reprojection error {geom["mean_reprojection_error_colmap_px"]:.3f} px '
               '(COLMAP, in-sample; NOT held-out image quality or trained 3DGS).'
           )
+          observed_rgb = json.loads(
+              Path("wre-real16-observed-rgb-agreement.json").read_text()
+          )
+          assert observed_rgb["schema"] == "wre.experimental.real16_observed_rgb_agreement.v1"
+          assert observed_rgb["source_dataset_commit"] == quality["source_dataset_commit"]
+          assert observed_rgb["image_count"] == 16
+          assert observed_rgb["sparse_points3d"] == geom["sparse_points3d"]
+          assert observed_rgb["track_observations"] == geom["track_observations"]
+          assert observed_rgb["held_out_image_quality_measured"] is False
+          assert observed_rgb["gpu_training_executed"] is False
+          score = observed_rgb["mean_rgb_difference_0_to_255"]
+          assert 0 <= score <= 255
+          colour_summary = (
+              f'{observed_rgb["points_with_cross_view_observations"]} real 3D landmarks · '
+              f'{observed_rgb["cross_view_pairs"]} observed view pairs · '
+              f'mean RGB disagreement {score:.2f}/255 '
+              '(measured source pixels; affected by lighting, exposure and occlusion; '
+              'NOT held-out reconstruction quality, trained 3DGS or temporal 4D).'
+          )
           output = Path("wre-real16-offline-viewer")
           output.mkdir(exist_ok=False)
           shutil.copyfile(source, output / source.name)
@@ -1277,6 +1424,7 @@ jobs:
               "wre-real16-observed-rgb-LICENSE.txt",
               "wre-real16-camera-poses.json",
               "wre-real16-native-2d3d-tracks.csv",
+              "wre-real16-observed-rgb-agreement.json",
           ):
               shutil.copyfile(name, output / name)
 
@@ -1431,6 +1579,10 @@ jobs:
             <strong>Measured CPU SfM quality (in-sample)</strong>
             <output id="wre-sfm-quality-value">WRE_MEASURED_QUALITY</output>
           </section>
+          <section id="wre-source-rgb-agreement" aria-label="Measured source-view RGB agreement">
+            <strong>Cross-view original-photo RGB differences (in-sample, CPU)</strong>
+            <output id="wre-source-rgb-agreement-value">WRE_OBSERVED_RGB_AGREEMENT</output>
+          </section>
           <section id="camera-navigation" aria-label="Inspect reconstructed cameras">
             <label for="wre-camera-choice">Reconstructed camera (filename order, not time)</label>
             <select id="wre-camera-choice" disabled>
@@ -1532,6 +1684,7 @@ jobs:
           · <a download href="./wre-real16-camera-poses.json">Camera poses</a>
           · <a download href="./wre-real16-native-2d3d-tracks.csv">All measured 2D/3D tracks (CSV)</a>
           · <a download href="./wre-real16-sfm-quality.json">SfM quality evidence</a>
+          · <a download href="./wre-real16-observed-rgb-agreement.json">Original-photo RGB observations</a>
           · <a href="./wre-real16-viewable-scene-receipt.json">Provenance</a></p>
           <p>Offline: extract the archive and run
           <code>python3 -m http.server 8765 --bind 127.0.0.1</code>,
@@ -1570,6 +1723,26 @@ jobs:
               }
             return nativeLookup;
           };
+          let nativeRgbEvidence=null;
+          const loadNativeRgbEvidence=()=>{
+            if(nativeRgbEvidence===null){
+              nativeRgbEvidence=fetch('./wre-real16-observed-rgb-agreement.json')
+                .then(response=>{
+                  if(!response.ok) throw Error('Missing source RGB observation report');
+                  return response.json();
+                }).then(report=>{
+                  if(report.schema!=='wre.experimental.real16_observed_rgb_agreement.v1' ||
+                     report.gpu_training_executed!==false ||
+                     report.held_out_image_quality_measured!==false ||
+                     !report.per_landmark_mean_rgb_difference_0_to_255 ||
+                     typeof report.per_landmark_mean_rgb_difference_0_to_255!=='object'){
+                    throw Error('Invalid native landmark RGB observation report');
+                  }
+                  return report;
+                });
+            }
+            return nativeRgbEvidence;
+          };
           let nativePoint=null;
           let nativeObservation=null;
           const clearNativeLookupMarker=()=>{
@@ -1591,8 +1764,14 @@ jobs:
               return;
             }
             try {
-              const index=await loadNativeIndex();
+              const [index,colourEvidence]=await Promise.all([
+                loadNativeIndex(),loadNativeRgbEvidence()
+              ]);
               if(localUrl!==null) return;
+              if(colourEvidence.source_dataset_commit!==index.source_dataset_commit ||
+                 colourEvidence.sparse_points3d!==index.point_count){
+                throw Error('Landmark RGB data does not belong to this SfM scene');
+              }
               const point=index.points[String(id)];
               if(!point){
                 lookupOutput.textContent='No triangulated COLMAP point '+id+'.';
@@ -1634,11 +1813,18 @@ jobs:
               marker.setAttribute('aria-label','Native COLMAP 3D point '+id);
               marker.textContent='◆';
               viewer.appendChild(marker);
+              const observedRgb=colourEvidence
+                .per_landmark_mean_rgb_difference_0_to_255[String(id)];
+              const rgbDescription=Number.isFinite(observedRgb) &&
+                observedRgb>=0 && observedRgb<=255
+                ? observedRgb.toFixed(2)+'/255 observed in-sample source-view RGB disagreement; '
+                : 'no comparable cross-view RGB observation for this point; ';
               lookupOutput.textContent='Real COLMAP point '+id+' XYZ ('+
                 xyz.map(v=>v.toFixed(5)).join(', ')+') in arbitrary SfM units; '+
                 observations.length+' measured camera observations; '+
                 'native in-sample reprojection error '+
                 point.in_sample_error_px.toFixed(4)+' px. '+
+                rgbDescription+
                 observations.map(o=>o.image_name+' #'+o.point2d_idx+
                   ' ('+o.pixel.map(v=>v.toFixed(1)).join(', ')+')').join(' · ')+
                 '. Not metric, held-out quality, time, GPU training or 4D.';
@@ -2314,6 +2500,7 @@ jobs:
           </body></html>"""
           html = html.replace("WRE_SCENE_SHA256", receipt["sha256"])
           html = html.replace("WRE_MEASURED_QUALITY", measured_quality)
+          html = html.replace("WRE_OBSERVED_RGB_AGREEMENT", colour_summary)
           (output / "wre-real16-viewer.html").write_text(html, encoding="utf-8")
           manifest = {
               "schema": "wre.experimental.real16_offline_viewer.v1",
@@ -2854,6 +3041,27 @@ jobs:
           assert receipt["registered_cameras"] == 16
           quality = json.loads((root / "wre-real16-sfm-quality.json").read_text())
           geom_quality = quality["geometry_quality"]
+          colour = json.loads(
+              (root / "wre-real16-observed-rgb-agreement.json").read_text()
+          )
+          assert colour["schema"] == "wre.experimental.real16_observed_rgb_agreement.v1"
+          assert colour["source_dataset_commit"] == quality["source_dataset_commit"]
+          assert colour["image_count"] == 16
+          assert colour["sparse_points3d"] == geom_quality["sparse_points3d"]
+          assert colour["track_observations"] == geom_quality["track_observations"]
+          assert colour["points_with_cross_view_observations"] > 100
+          point_rgb = colour["per_landmark_mean_rgb_difference_0_to_255"]
+          assert len(point_rgb) == colour["points_with_cross_view_observations"]
+          assert point_rgb and all(
+              isinstance(value, (int, float)) and math.isfinite(value) and 0 <= value <= 255
+              for value in point_rgb.values()
+          )
+          assert abs(
+              sum(point_rgb.values()) / len(point_rgb)
+              - colour["mean_rgb_difference_0_to_255"]
+          ) < 0.000002
+          assert colour["held_out_image_quality_measured"] is False
+          assert colour["gpu_training_executed"] is False
           lookup = json.loads(
               (root / "wre-real16-native-landmark-lookup.json").read_text()
           )
@@ -2861,6 +3069,7 @@ jobs:
           assert lookup["point_count"] == geom_quality["sparse_points3d"]
           assert lookup["observation_count"] == geom_quality["track_observations"]
           assert len(lookup["points"]) == lookup["point_count"]
+          assert set(point_rgb) <= set(lookup["points"])
           assert quality["source_dataset_commit"] == receipt["source_dataset_commit"]
           assert geom_quality["registered_views"] == 16
           assert geom_quality["sparse_points3d"] > 100
@@ -2928,6 +3137,20 @@ jobs:
               """)
               assert str(geom_quality["sparse_points3d"]) in shown
               assert str(geom_quality["track_observations"]) in shown
+              observed_rgb_shown=js("""
+                const result=document.getElementById('wre-source-rgb-agreement-value');
+                return result && result.textContent;
+              """)
+              assert observed_rgb_shown is not None
+              assert str(colour["points_with_cross_view_observations"]) in observed_rgb_shown
+              assert str(colour["cross_view_pairs"]) in observed_rgb_shown
+              assert f'{colour["mean_rgb_difference_0_to_255"]:.2f}/255' in observed_rgb_shown
+              assert "NOT held-out reconstruction quality" in observed_rgb_shown
+              assert js("""
+                const href=[...document.querySelectorAll('a[download]')]
+                  .find(a=>a.href.endsWith('/wre-real16-observed-rgb-agreement.json'));
+                return Boolean(href);
+              """), "Observed RGB diagnostic was not downloadable in real Chrome"
               expected_error=f'{geom_quality["mean_reprojection_error_colmap_px"]:.3f}'
               assert expected_error+' px (COLMAP, in-sample;' in shown
               assert "NOT held-out image quality or trained 3DGS" in shown
@@ -2942,7 +3165,7 @@ jobs:
                   raise RuntimeError("Sixteen actual SfM camera choices never loaded")
               # Search a REAL native COLMAP landmark from the full 3D index,
               # not just the first 8 sampled points per selected camera pair.
-              selected_id=min(int(pid) for pid in lookup["points"])
+              selected_id=min(int(pid) for pid in point_rgb)
               selected_point=lookup["points"][str(selected_id)]
               assert len(selected_point["observations"]) >= 2
               assert js("""
@@ -2980,6 +3203,10 @@ jobs:
                   for a,b in zip(actual_xyz,selected_point["xyz"],strict=True)
               )
               assert result["projected"]
+              assert (
+                  f'{point_rgb[str(selected_id)]:.2f}/255 observed in-sample source-view '
+                  'RGB disagreement'
+              ) in result["text"]
               assert str(len(selected_point["observations"]))+" measured camera observations" in result["text"]
               for observation in selected_point["observations"][:3]:
                   assert observation["image_name"] in result["text"]
