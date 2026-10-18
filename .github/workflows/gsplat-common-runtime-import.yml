@@ -2273,6 +2273,7 @@ jobs:
                       camera.disabled &&
                       document.getElementById('wre-baseline-choice').disabled &&
                       document.getElementById('wre-frame-baseline').disabled &&
+                      document.getElementById('wre-nearest-camera').disabled &&
                       !viewer.querySelector('[slot^="hotspot-pair-"]') &&
                       document.getElementById('wre-camera-baseline').textContent
                         .includes('unavailable for unverified') &&
@@ -2325,6 +2326,7 @@ jobs:
                 return viewer.getAttribute('src')==='./wre-real16-viewable-scene.glb' &&
                   !camera.disabled && viewer.hasAttribute('auto-rotate') &&
                   document.getElementById('wre-frame-baseline').disabled &&
+                  document.getElementById('wre-nearest-camera').disabled &&
                   !viewer.querySelector('[slot^="hotspot-pair-"]') &&
                   !document.getElementById('wre-sfm-quality').hidden;
               """), "Original real-photo viewer or camera control was not restored"
