@@ -4105,6 +4105,18 @@ jobs:
                       math.isclose(x,y,rel_tol=1e-7,abs_tol=1e-6)
                       for x,y in zip(actual,xyz,strict=True)
                   )
+              # User-provided scale is an explicit EXTERNAL reference:
+              # it does not turn original SfM geometry into verified metres.
+              assert js("""
+                const known=document.getElementById('wre-native-reference-metres');
+                known.value='2.5';
+                known.dispatchEvent(new Event('input',{bubbles:true}));
+                document.getElementById('wre-native-reference-calibrate').click();
+                return document.getElementById('wre-native-calibration-status')
+                  .textContent.includes('metres per SfM unit') &&
+                  document.getElementById('wre-native-distance-result')
+                  .textContent.includes('NOT WRE-verified');
+              """), "An external reference did not calibrate actual SfM landmarks"
               # Export actual measured coordinates as portable original-scene
               # evidence, using independent Python XYZ/GLB provenance checks.
               assert js("""
@@ -4151,8 +4163,74 @@ jobs:
                   expected_separation,rel_tol=1e-12,abs_tol=1e-10
               )
               assert exported_pair["metric_scale_known"] is False
+              assert exported_pair["user_supplied_metric_reference"][
+                  "reference_point3d_ids"
+              ]==[int(first_point_id),int(second_point_id)]
+              assert exported_pair["user_supplied_metric_reference"][
+                  "reference_verified_by_wre"
+              ] is False
+              assert math.isclose(
+                  exported_pair["user_supplied_metric_reference"]["metres_per_sfm_unit"],
+                  2.5/expected_separation,rel_tol=1e-12,abs_tol=1e-12
+              )
+              assert math.isclose(
+                  exported_pair["estimated_distance_m_user_calibrated"],
+                  2.5,rel_tol=1e-12,abs_tol=1e-12
+              )
               assert exported_pair["gpu_training_executed"] is False
               assert "noncommercial" in exported_pair["source_photo_license"]
+              # New actual native landmark pair reuses calibrated scale,
+              # but only as an estimate conditional on that user measurement.
+              third_point_id=next(
+                  pid for pid in real_point_ids
+                  if pid!=first_point_id and pid!=second_point_id
+                  and math.dist(second_point_xyz,lookup["points"][pid]["xyz"])>1e-6
+              )
+              expected_scaled_distance=(
+                  math.dist(second_point_xyz,lookup["points"][third_point_id]["xyz"])
+                  *2.5/expected_separation
+              )
+              assert js("""
+                document.getElementById('wre-native-distance-a').value='__SECOND_ID__';
+                document.getElementById('wre-native-distance-b').value='__THIRD_ID__';
+                document.getElementById('wre-native-distance-measure').click();
+                return true;
+              """.replace("__SECOND_ID__",second_point_id).replace(
+                  "__THIRD_ID__",third_point_id
+              ))
+              for _ in range(60):
+                  scaled_text=js(
+                      "return document.getElementById('wre-native-distance-result').textContent;"
+                  )
+                  if "Estimated" in scaled_text:
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("Metric reference was not preserved for next point pair")
+              assert "NOT WRE-verified" in scaled_text
+              assert f"{expected_scaled_distance:.6f}" in scaled_text
+              assert js("""
+                window.__nativeDistanceJsonText=null;
+                document.getElementById('wre-native-distance-export').click();
+                return true;
+              """)
+              for _ in range(40):
+                  next_pair_text=js("return window.__nativeDistanceJsonText;")
+                  if next_pair_text is not None:
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("User-referenced next real point pair did not export")
+              next_pair=json.loads(next_pair_text)
+              assert next_pair["second"]["point3d_id"]==int(third_point_id)
+              assert math.isclose(
+                  next_pair["estimated_distance_m_user_calibrated"],
+                  expected_scaled_distance,rel_tol=1e-12,abs_tol=1e-10
+              )
+              assert next_pair["metric_scale_known"] is False
+              assert next_pair["user_supplied_metric_reference"][
+                  "reference_verified_by_wre"
+              ] is False
               # Input IDs are selectors, never authority to invent a 3D point.
               assert js("""
                 document.getElementById('wre-native-distance-b').value=
