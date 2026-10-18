@@ -2203,12 +2203,12 @@ jobs:
                 const uniqueWorldPoints=[...new Map(measurements.map(
                   m=>[m.point3d_id,m.world_xyz_sfm_units]
                 )).values()];
-                const xyzMin=[0,1,2].map(axis=>Math.min(
-                  ...uniqueWorldPoints.map(xyz=>xyz[axis])
-                ));
-                const xyzMax=[0,1,2].map(axis=>Math.max(
-                  ...uniqueWorldPoints.map(xyz=>xyz[axis])
-                ));
+                const xyzMin=[Infinity,Infinity,Infinity];
+                const xyzMax=[-Infinity,-Infinity,-Infinity];
+                for(const xyz of uniqueWorldPoints) for(let axis=0;axis<3;axis++){
+                  xyzMin[axis]=Math.min(xyzMin[axis],xyz[axis]);
+                  xyzMax[axis]=Math.max(xyzMax[axis],xyz[axis]);
+                }
                 const xyzExtent=xyzMax.map((value,axis)=>value-xyzMin[axis]);
                 const xyzDiagonal=Math.hypot(...xyzExtent);
                 depthRoiReport={
