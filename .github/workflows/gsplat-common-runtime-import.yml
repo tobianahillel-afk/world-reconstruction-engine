@@ -347,13 +347,13 @@ jobs:
               raster = image.tobytes()
               stride = width * 3
               scanlines = b"".join(
-                  b"\\x00" + raster[start : start + stride]
+                  b"\x00" + raster[start : start + stride]
                   for start in range(0, len(raster), stride)
               )
               return (
-                  b"\\x89PNG\\r\\n\\x1a\\n"
+                  b"\x89PNG\r\n\x1a\n"
                   + png_chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
-                  + png_chunk(b"sRGB", b"\\x00")
+                  + png_chunk(b"sRGB", b"\x00")
                   + png_chunk(b"IDAT", zlib.compress(scanlines, 6))
                   + png_chunk(b"IEND", b"")
               )
