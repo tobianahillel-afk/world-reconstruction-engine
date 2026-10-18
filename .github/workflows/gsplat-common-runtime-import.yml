@@ -1123,6 +1123,11 @@ jobs:
             padding:10px 18px;background:#202b3d}
           #local-model input,#local-model button {color:#fff;padding:7px}
           #local-model-status {font-size:13px;flex-basis:100%}
+          .wre-pair-hotspot {border:2px solid #eaf5ff;border-radius:50%;
+            width:30px;height:30px;display:grid;place-items:center;
+            font:bold 16px system-ui;box-shadow:0 0 0 2px #162236;
+            color:#162236;background:#ffc65a;pointer-events:none}
+          .wre-pair-hotspot.secondary {background:#70d7ff}
           </style></head><body><main>
           <header><h1>WRE · Real 16-photograph SfM 3D</h1>
           <p>Orbit and zoom the actual reconstructed RGB point cloud,
@@ -1182,6 +1187,23 @@ jobs:
           const baselineOutput=document.getElementById('wre-camera-baseline');
           const framePair=document.getElementById('wre-frame-baseline');
           const details=document.getElementById('camera-details');
+          const clearPairMarkers=()=>{
+            viewer.querySelectorAll('[slot^="hotspot-pair-"]').forEach(node=>node.remove());
+          };
+          const showPairMarkers=(first,second)=>{
+            clearPairMarkers();
+            [first,second].forEach((center,i)=>{
+              const hotspot=document.createElement('button');
+              hotspot.className='wre-pair-hotspot'+(i?' secondary':'');
+              hotspot.type='button';
+              hotspot.slot='hotspot-pair-'+(i?'second':'first');
+              hotspot.setAttribute('data-position',center.map(v=>v+'m').join(' '));
+              hotspot.setAttribute('data-normal','0 1 0');
+              hotspot.setAttribute('aria-label','Reconstructed SfM camera '+(i?'B':'A'));
+              hotspot.textContent=i?'B':'A';
+              viewer.appendChild(hotspot);
+            });
+          };
           const input=document.getElementById('wre-local-glb');
           const importStatus=document.getElementById('local-model-status');
           const originalScene='./wre-real16-viewable-scene.glb';
@@ -1219,6 +1241,7 @@ jobs:
             choice.disabled=choice.options.length!==17;
             baselineChoice.disabled=baselineChoice.options.length!==17;
             framePair.disabled=true;
+            clearPairMarkers();
             choice.value='';
             baselineChoice.value='';
             baselineOutput.textContent='Select two original cameras for a local SfM baseline.';
@@ -1248,6 +1271,7 @@ jobs:
               choice.disabled=true;
               baselineChoice.disabled=true;
               framePair.disabled=true;
+              clearPairMarkers();
               choice.value='';
               baselineChoice.value='';
               baselineOutput.textContent='Baseline unavailable for unverified local GLB.';
@@ -1275,6 +1299,7 @@ jobs:
             choice.value='';
             baselineChoice.value='';
             framePair.disabled=true;
+            clearPairMarkers();
             baselineOutput.textContent='Select two SfM cameras; distance is not in metres.';
             details.textContent='General orbit restored; filename order is not chronology.';
           });
@@ -1315,7 +1340,8 @@ jobs:
             const updateBaseline=()=>{
               framePair.disabled=choice.value==='' || baselineChoice.value==='' ||
                 localUrl!==null;
-              if(choice.value==='' || baselineChoice.value===''){
+              clearPairMarkers();
+              if(choice.value==='' || baselineChoice.value==='' || localUrl!==null){
                 baselineOutput.textContent='Select two SfM cameras to measure their baseline.';
                 return;
               }
@@ -1326,8 +1352,10 @@ jobs:
                 baselineOutput.textContent='Invalid reconstructed camera geometry.';
                 return;
               }
+              showPairMarkers(first,second);
               baselineOutput.textContent='Camera baseline: '+distance.toFixed(6)+
-                ' local SfM units (not metres; no capture-time interpretation).';
+                ' local SfM units (not metres; no capture-time interpretation). '+
+                'A and B mark reconstructed camera centres in 3D.';
             };
             baselineChoice.addEventListener('change',updateBaseline);
             framePair.addEventListener('click',()=>{
