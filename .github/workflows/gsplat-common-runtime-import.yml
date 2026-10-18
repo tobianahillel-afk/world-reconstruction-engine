@@ -7,6 +7,10 @@ on:
     paths:
       - ".github/workflows/gsplat-common-runtime-import.yml"
       - "registry/dependencies.yaml"
+      # Real 16-photo CPU SfM must rerun when its geometry-verification
+      # semantics change, even without editing the optional workflow again.
+      - "src/wre/reconstruction/colmap_verification.py"
+      - "tests/test_colmap_geometric_verification.py"
   workflow_dispatch:
 
 permissions:
