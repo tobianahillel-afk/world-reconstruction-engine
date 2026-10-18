@@ -1315,6 +1315,182 @@ jobs:
           )
           PY
 
+      - name: Recover two-view pose and 3D directly from real SIFT photograph matches (CPU)
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$COMMON_PYTHON" - <<'PY'
+          import json
+          import os
+          import struct
+          import zipfile
+          from pathlib import Path
+
+          import cv2
+          import numpy as np
+          from scipy.spatial.transform import Rotation
+
+          root = Path(os.environ["RUNNER_TEMP"])
+          metadata = json.loads((root / "wre-real-stereo-cpu-metrics.json").read_text())
+          photographs = cv2.imread(str(root / "wre-real-stereo-cpu-photos.png"))
+          assert photographs is not None and photographs.shape[1] % 2 == 0
+          h, w2 = photographs.shape[:2]
+          w = w2 // 2
+          assert [h, w] == metadata["processed_photo_height_width"]
+          left, right = photographs[:, :w], photographs[:, w:]
+          focal = float(metadata["approximate_focal_pixels"])
+          K = np.array([[focal, 0, (w - 1) / 2],
+                        [0, focal, (h - 1) / 2], [0, 0, 1]], dtype=np.float64)
+          sift = cv2.SIFT_create(nfeatures=3000, contrastThreshold=0.015)
+          key0, des0 = sift.detectAndCompute(cv2.cvtColor(left, cv2.COLOR_BGR2GRAY), None)
+          key1, des1 = sift.detectAndCompute(cv2.cvtColor(right, cv2.COLOR_BGR2GRAY), None)
+          assert des0 is not None and des1 is not None
+          pairs = []
+          for nearest in cv2.BFMatcher(cv2.NORM_L2).knnMatch(des0, des1, k=2):
+              if len(nearest) != 2:
+                  continue
+              a, b = nearest
+              p0, p1 = key0[a.queryIdx].pt, key1[a.trainIdx].pt
+              if (a.distance < 0.8 * b.distance and
+                  abs(p0[1] - p1[1]) < 2.5 and
+                  1.5 < p0[0] - p1[0] < 160):
+                  pairs.append((p0, p1))
+          assert len(pairs) >= 25, f"Only {len(pairs)} SIFT real-photo matches"
+          p0 = np.array([x for x, _ in pairs], dtype=np.float64)
+          p1 = np.array([y for _, y in pairs], dtype=np.float64)
+          cv2.setRNGSeed(20261017)
+          E, mask = cv2.findEssentialMat(
+              p0, p1, K, method=cv2.RANSAC, prob=0.999, threshold=1.5
+          )
+          assert E is not None and E.shape == (3, 3)
+          inlier_count, R, t, mask = cv2.recoverPose(E, p0, p1, K, mask=mask)
+          inliers = mask.ravel() != 0
+          assert inlier_count == int(inliers.sum()) >= 20
+          p0, p1 = p0[inliers], p1[inliers]
+          P0 = K @ np.column_stack((np.eye(3), np.zeros(3)))
+          P1 = K @ np.column_stack((R, t))
+          homogeneous = cv2.triangulatePoints(P0, P1, p0.T, p1.T)
+          xyz = np.full((len(p0), 3), np.nan, dtype=np.float64)
+          finite_w = np.abs(homogeneous[3]) > 1e-10
+          xyz[finite_w] = (homogeneous[:3, finite_w] / homogeneous[3, finite_w]).T
+          z1 = (R @ xyz.T + t).T[:, 2]
+          accepted = np.isfinite(xyz).all(axis=1) & (xyz[:, 2] > 1e-6) & (z1 > 1e-6)
+          assert accepted.sum() >= 20
+          xyz, p0, p1 = xyz[accepted], p0[accepted], p1[accepted]
+          X = np.column_stack((xyz, np.ones(len(xyz))))
+          projection0 = (P0 @ X.T).T
+          projection1 = (P1 @ X.T).T
+          uv0 = projection0[:, :2] / projection0[:, 2:3]
+          uv1 = projection1[:, :2] / projection1[:, 2:3]
+          rmse = float(np.sqrt((
+              np.square(uv0 - p0).sum() + np.square(uv1 - p1).sum()
+          ) / (2 * len(xyz))))
+          assert np.isfinite(rmse) and rmse < 8.0
+          xy = np.rint(p0).astype(int)
+          xy[:, 0] = np.clip(xy[:, 0], 0, w - 1)
+          xy[:, 1] = np.clip(xy[:, 1], 0, h - 1)
+          rgb = left[xy[:, 1], xy[:, 0], ::-1]
+          ply = root / "wre-real-stereo-sift-estimated-3d.ply"
+          with ply.open("w", encoding="ascii") as file:
+              file.write("ply\nformat ascii 1.0\n" +
+                         f"element vertex {len(xyz)}\n" +
+                         "property float x\nproperty float y\nproperty float z\n" +
+                         "property uchar red\nproperty uchar green\nproperty uchar blue\nend_header\n")
+              for point, color in zip(xyz, rgb, strict=True):
+                  file.write(
+                      f"{point[0]:.8g} {point[1]:.8g} {point[2]:.8g} " +
+                      f"{int(color[0])} {int(color[1])} {int(color[2])}\n"
+                  )
+          record = {
+              "real_photographs": True,
+              "algorithm": "OpenCV SIFT + EssentialMat RANSAC + recoverPose + triangulatePoints",
+              "input_matches": len(pairs),
+              "pose_ransac_inliers": int(inlier_count),
+              "triangulated_positive_depth_rgb_points": int(len(xyz)),
+              "two_view_in_sample_reprojection_rmse_pixels": rmse,
+              "estimated_rotation_world_to_right_camera": R.tolist(),
+              "estimated_translation_direction_world_to_right_camera": t.ravel().tolist(),
+              "intrinsics_approximate": K.tolist(),
+              "estimated_translation_metric_scale_known": False,
+              "external_pose_or_precomputed_3d_tracks_used_in_solver": False,
+              "reprojection_error_is_held_out": False,
+              "gpu_execution": False,
+              "gaussian_training": False,
+              "dynamic_4d_scene": False,
+          }
+          (root / "wre-real-stereo-sift-estimated-pose.json").write_text(
+              json.dumps(record, sort_keys=True, indent=2) + "\n"
+          )
+          # Reuse the existing COLMAP binary writer's format, but serialize
+          # ESTIMATED SIFT R/t and triangulated inlier tracks; no assumed baseline.
+          scene = root / "wre-real-stereo-sift-colmap"
+          photos_root, sparse = scene / "images", scene / "sparse" / "0"
+          photos_root.mkdir(parents=True)
+          sparse.mkdir(parents=True)
+          names = ("aloe-left.png", "aloe-right.png")
+          for name, photo in zip(names, (left, right), strict=True):
+              assert cv2.imwrite(str(photos_root / name), photo)
+          (sparse / "cameras.bin").write_bytes(
+              struct.pack("<Q", 1)
+              + struct.pack("<IiQQ4d", 1, 1, w, h, focal, focal,
+                            (w - 1) / 2, (h - 1) / 2)
+          )
+          qxyzw = Rotation.from_matrix(R).as_quat()
+          assert np.allclose(Rotation.from_quat(qxyzw).as_matrix(), R, atol=1e-10)
+          qright = (float(qxyzw[3]), *map(float, qxyzw[:3]))
+          images_bin = bytearray(struct.pack("<Q", 2))
+          for image_id, (name, pixels) in enumerate(zip(names, (p0, p1), strict=True), 1):
+              qvec = (1.0, 0.0, 0.0, 0.0) if image_id == 1 else qright
+              trans = (0.0, 0.0, 0.0) if image_id == 1 else tuple(map(float, t.ravel()))
+              images_bin.extend(struct.pack("<I4d3dI", image_id, *qvec, *trans, 1))
+              images_bin.extend(name.encode("ascii") + b"\x00")
+              images_bin.extend(struct.pack("<Q", len(xyz)))
+              for point_id, (u, v) in enumerate(pixels, 1):
+                  images_bin.extend(struct.pack("<ddq", float(u), float(v), point_id))
+          (sparse / "images.bin").write_bytes(images_bin)
+          errors = np.sqrt(
+              (np.square(uv0 - p0).sum(axis=1) + np.square(uv1 - p1).sum(axis=1)) / 2
+          )
+          points_bin = bytearray(struct.pack("<Q", len(xyz)))
+          for i, (point, color, error) in enumerate(zip(xyz, rgb, errors, strict=True)):
+              points_bin.extend(struct.pack(
+                  "<Q3d3BdQ", i + 1, *map(float, point), *map(int, color),
+                  float(error), 2
+              ))
+              for image_id in (1, 2):
+                  points_bin.extend(struct.pack("<II", image_id, i))
+          (sparse / "points3D.bin").write_bytes(points_bin)
+          archive_path = root / "wre-real-stereo-sift-estimated-colmap-dataset.zip"
+          with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as archive:
+              for item in sorted(scene.rglob("*")):
+                  if item.is_file():
+                      archive.write(item, item.relative_to(scene))
+          with zipfile.ZipFile(archive_path) as archive:
+              assert sorted(archive.namelist()) == [
+                  "images/aloe-left.png", "images/aloe-right.png",
+                  "sparse/0/cameras.bin", "sparse/0/images.bin",
+                  "sparse/0/points3D.bin",
+              ]
+              assert struct.unpack("<Q", archive.read("sparse/0/points3D.bin")[:8])[0] == len(xyz)
+              assert struct.unpack("<Q", archive.read("sparse/0/images.bin")[:8])[0] == 2
+          (root / "wre-real-stereo-sift-estimated-colmap-handoff.json").write_text(
+              json.dumps({
+                  "real_photographs": True,
+                  "registered_views": 2,
+                  "triangulated_rgb_tracks": int(len(xyz)),
+                  "camera_pose_estimated_from_sift": True,
+                  "intrinsics_approximate": True,
+                  "metric_scale_known": False,
+                  "two_view_in_sample_reprojection_rmse_pixels": rmse,
+                  "colmap_dataset_binary_roundtrip_with_upstream_parser": False,
+                  "gpu_training_executed": False,
+              }, sort_keys=True, indent=2) + "\n"
+          )
+          assert ply.stat().st_size > 250
+          print(f"Real-photo image-only pose: {len(xyz)} RGB 3D points; "
+                f"in-sample reprojection RMSE={rmse:.3f} pixels")
+          PY
+
       # Prepare a genuine two-image COLMAP input from the previously computed
       # REAL-image stereo cloud. Approximate K/baseline: arbitrary scale.
       - name: Export true photographed stereo points as registered COLMAP (CPU)
@@ -1411,7 +1587,7 @@ jobs:
       # Run the actual-photo CPU reconstruction BEFORE expensive native CUDA
       # compilation. Keep the original photo pipeline in one place and make
       # its real 3D/preview outputs inspectable even while CUDA builds run.
-      - name: Stage twenty-seven real-photo CPU 3D, animated mesh, GLB and COLMAP outputs early
+      - name: Stage 31 real-photo CPU 3D, animated mesh, GLB and COLMAP outputs early
         shell: bash
         run: |
           set -euo pipefail
@@ -1444,12 +1620,16 @@ jobs:
             wre-real-stereo-cpu-right-reprojection.png \
             wre-real-stereo-cpu-metrics.json \
             wre-real-stereo-colmap-dataset.zip \
-            wre-real-stereo-colmap-handoff.json
+            wre-real-stereo-colmap-handoff.json \
+            wre-real-stereo-sift-estimated-3d.ply \
+            wre-real-stereo-sift-estimated-pose.json \
+            wre-real-stereo-sift-estimated-colmap-dataset.zip \
+            wre-real-stereo-sift-estimated-colmap-handoff.json
           do
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 27
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 31
 
       - name: Publish real-photo CPU 3D plus COLMAP before native CUDA builds
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -1517,6 +1697,7 @@ jobs:
         run: |
           set -euo pipefail
           "$COMMON_PYTHON" -I - <<'PY'
+          import json
           import os
           import sys
           from pathlib import Path
@@ -1543,8 +1724,42 @@ jobs:
               assert batch["camtoworld"].shape == (4, 4)
               assert torch.isfinite(batch["camtoworld"]).all()
           assert np.all(np.isfinite(parsed.points))
+          # Independent functional round-trip of SIFT-estimated camera R/t and
+          # RGB tracks, with the ACTUAL pinned gsplat COLMAP reader and Dataset.
+          estimated_root = Path(os.environ["RUNNER_TEMP"]) / "wre-real-stereo-sift-colmap"
+          handoff = json.loads((
+              Path(os.environ["RUNNER_TEMP"])
+              / "wre-real-stereo-sift-estimated-colmap-handoff.json"
+          ).read_text())
+          estimated = Parser(str(estimated_root), factor=1, normalize=False, test_every=8)
+          assert estimated.image_names == ["aloe-left.png", "aloe-right.png"]
+          assert estimated.points.shape == (handoff["triangulated_rgb_tracks"], 3)
+          assert estimated.points.shape[0] >= 20
+          assert np.isfinite(estimated.points).all()
+          estimated_train = Dataset(estimated, split="train")
+          estimated_eval = Dataset(estimated, split="test")
+          assert len(estimated_train) == 1 and len(estimated_eval) == 1
+          for batch in (estimated_train[0], estimated_eval[0]):
+              assert batch["image"].device.type == "cpu"
+              assert batch["image"].shape[-1] == 3
+              assert torch.isfinite(batch["camtoworld"]).all()
+          evidence = {
+              "real_photographs": True,
+              "actual_gsplat_colmap_parser_executed": True,
+              "actual_gsplat_dataset_pixels_loaded": True,
+              "registered_views": 2,
+              "triangulated_tracks": int(len(estimated.points)),
+              "source_intrinsics_approximate": True,
+              "translation_metric_scale_known": False,
+              "gpu_training_executed": False,
+          }
+          (Path(os.environ["RUNNER_TEMP"])
+           / "wre-real-stereo-sift-colmap-parser-evidence.json").write_text(
+              json.dumps(evidence, sort_keys=True, indent=2) + "\n"
+          )
           print("Real stereo photographs: pinned gsplat COLMAP Parser and Dataset decoded")
-          print("Two real images, >=500 estimated XYZ points, no CUDA or training")
+          print("SIFT-estimated R/t -> REAL pinned gsplat Parser/Dataset:",
+                len(estimated.points), "RGB 3D tracks, 2 photographs; NO GPU training")
           PY
 
       - name: Decode a real 3-view COLMAP binary dataset with the pinned trainer (CPU)
@@ -2463,13 +2678,18 @@ jobs:
             wre-real-stereo-cpu-novel-views.png \
             wre-real-stereo-cpu-dense-warps.png \
             wre-real-stereo-cpu-right-reprojection.png \
-            wre-real-stereo-cpu-metrics.json
+            wre-real-stereo-cpu-metrics.json \
+            wre-real-stereo-sift-estimated-3d.ply \
+            wre-real-stereo-sift-estimated-pose.json \
+            wre-real-stereo-sift-estimated-colmap-dataset.zip \
+            wre-real-stereo-sift-estimated-colmap-handoff.json \
+            wre-real-stereo-sift-colmap-parser-evidence.json
           do
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 43
-          echo "Staged all 43 real PLY/OBJ/GLB/GIF/MTL/PNG/PFM/NPY/JSON/ZIP files for artifact upload"
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 48
+          echo "Staged all 48 real PLY/OBJ/GLB/GIF/MTL/PNG/PFM/NPY/JSON/ZIP files for artifact upload"
 
       - name: Publish CPU COLMAP 3D preview and measured reprojection
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
