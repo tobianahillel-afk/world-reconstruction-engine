@@ -1173,6 +1173,9 @@ jobs:
             <button id="wre-frame-baseline" type="button" disabled>
               Frame selected camera pair in 3D
             </button>
+            <button id="wre-nearest-camera" type="button" disabled>
+              Find nearest other reconstructed camera
+            </button>
             <output id="camera-details" aria-live="polite">
               Choose a camera to inspect its SfM position (not an exact source photo view).
             </output>
@@ -1212,6 +1215,7 @@ jobs:
           const baselineChoice=document.getElementById('wre-baseline-choice');
           const baselineOutput=document.getElementById('wre-camera-baseline');
           const framePair=document.getElementById('wre-frame-baseline');
+          const nearestButton=document.getElementById('wre-nearest-camera');
           const details=document.getElementById('camera-details');
           const clearPairMarkers=()=>{
             viewer.querySelectorAll('[slot^="hotspot-pair-"]').forEach(node=>node.remove());
@@ -1267,6 +1271,7 @@ jobs:
             choice.disabled=choice.options.length!==17;
             baselineChoice.disabled=baselineChoice.options.length!==17;
             framePair.disabled=true;
+            nearestButton.disabled=true;
             clearPairMarkers();
             choice.value='';
             baselineChoice.value='';
@@ -1298,6 +1303,7 @@ jobs:
               choice.disabled=true;
               baselineChoice.disabled=true;
               framePair.disabled=true;
+              nearestButton.disabled=true;
               clearPairMarkers();
               choice.value='';
               baselineChoice.value='';
@@ -1327,6 +1333,7 @@ jobs:
             choice.value='';
             baselineChoice.value='';
             framePair.disabled=true;
+            nearestButton.disabled=true;
             clearPairMarkers();
             baselineOutput.textContent='Select two SfM cameras; distance is not in metres.';
             details.textContent='General orbit restored; filename order is not chronology.';
@@ -1366,6 +1373,7 @@ jobs:
             choice.disabled=false;
             baselineChoice.disabled=false;
             const updateBaseline=()=>{
+              nearestButton.disabled=choice.value==='' || localUrl!==null;
               framePair.disabled=choice.value==='' || baselineChoice.value==='' ||
                 localUrl!==null;
               clearPairMarkers();
@@ -1386,6 +1394,29 @@ jobs:
                 'A and B mark reconstructed camera centres in 3D.';
             };
             baselineChoice.addEventListener('change',updateBaseline);
+            nearestButton.addEventListener('click',()=>{
+              if(nearestButton.disabled || localUrl || choice.value==='') return;
+              const firstIndex=Number(choice.value);
+              const first=centers[firstIndex];
+              let nearestIndex=-1;
+              let bestDistance=Infinity;
+              centers.forEach((center,index)=>{
+                if(index===firstIndex) return;
+                const distance=Math.hypot(...first.map((v,axis)=>v-center[axis]));
+                // Equal-distance ties resolve by the already sorted image name.
+                if(Number.isFinite(distance) && distance<bestDistance) {
+                  nearestIndex=index;
+                  bestDistance=distance;
+                }
+              });
+              if(nearestIndex<0) return;
+              baselineChoice.value=String(nearestIndex);
+              updateBaseline();
+              framePair.click();
+              details.textContent='Nearest other reconstructed camera framed in 3D. '+
+                'Spatial proximity in local SfM coordinates; NOT capture time, '+
+                'source image overlap or physical metres.';
+            });
             framePair.addEventListener('click',()=>{
               if(framePair.disabled || localUrl) return;
               const first=centers[Number(choice.value)];
