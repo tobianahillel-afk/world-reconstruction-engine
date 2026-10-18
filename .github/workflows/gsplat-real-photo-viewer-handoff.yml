@@ -361,6 +361,18 @@ jobs:
               '<button id="wre-record-video" type="button">Record 3D camera move (WebM)</button>'
               '<button id="wre-save-track" type="button" disabled>Save recorded camera path (JSON)</button>'
               '<button id="wre-replay-track" type="button" disabled>Replay 3D camera path</button>'
+              '<details id="wre-snapshot-series">'
+              '<summary>Ordered 3D snapshots (NOT reconstructed 4D motion)</summary>'
+              '<label for="wre-snapshot-files">Choose 2–32 local .splat snapshots: </label>'
+              '<input id="wre-snapshot-files" type="file" accept=".splat" multiple '
+              'aria-label="Choose ordered 3D snapshot files">'
+              '<label for="wre-snapshot-index">Snapshot index: </label>'
+              '<input id="wre-snapshot-index" type="range" min="0" max="1" value="0" '
+              'disabled aria-label="3D snapshot index">'
+              '<button id="wre-play-snapshots" type="button" disabled>Play snapshots</button>'
+              '<button id="wre-export-snapshots" type="button" disabled>Export list (JSON)</button>'
+              '<output id="wre-snapshot-status" aria-live="polite"></output>'
+              '</details>'
               '<video id="wre-video-preview" controls playsinline hidden '
               'aria-label="Replay recorded 3D camera movement" '
               'style="max-width:100%;max-height:180px"></video>'
@@ -384,6 +396,11 @@ jobs:
             const replayTrack = document.getElementById('wre-replay-track');
             const videoPreview = document.getElementById('wre-video-preview');
             const loadView = document.getElementById('wre-load-view');
+            const seriesPicker = document.getElementById('wre-snapshot-files');
+            const seriesSeek = document.getElementById('wre-snapshot-index');
+            const seriesPlay = document.getElementById('wre-play-snapshots');
+            const seriesSave = document.getElementById('wre-export-snapshots');
+            const seriesStatus = document.getElementById('wre-snapshot-status');
             const status = document.getElementById('wre-local-status');
             const originalFile = new File([window.__wreEmbeddedSplat],
               'WRE-16-photos.splat', {type: 'application/octet-stream'});
@@ -493,14 +510,97 @@ jobs:
                 pointCloudSaving = false;
               }
             });
+            // Ordered 3D FILES, not acquired timestamps, geometric alignment
+            // or real motion reconstruction. Uses the existing WebGL loader.
+            let snapshotFiles = [];
+            let snapshotTimer = null;
+            function pauseSnapshots() {
+              if (snapshotTimer !== null) clearInterval(snapshotTimer);
+              snapshotTimer = null;
+              seriesPlay.textContent = 'Play snapshots';
+            }
+            function showSnapshot(index) {
+              if (!snapshotFiles.length || index < 0 || index >= snapshotFiles.length) return;
+              seriesSeek.value = String(index);
+              show(snapshotFiles[index]);
+              seriesStatus.textContent = 'Snapshot ' + (index + 1) + '/' +
+                snapshotFiles.length + ': ' + snapshotFiles[index].name +
+                ' (ordinal only, NOT acquisition time)';
+            }
+            seriesPicker.addEventListener('change', () => {
+              pauseSnapshots();
+              const files = Array.from(seriesPicker.files || []);
+              const total = files.reduce((sum, file) => sum + file.size, 0);
+              if (files.length < 2 || files.length > 32 ||
+                  total > 256 * 1024 * 1024 || !files.every(valid) ||
+                  !files.every(file => file.name.toLowerCase().endsWith('.splat')) ||
+                  new Set(files.map(file => file.name)).size !== files.length) {
+                snapshotFiles = [];
+                seriesSeek.disabled = seriesPlay.disabled = seriesSave.disabled = true;
+                seriesStatus.textContent = 'Use 2–32 distinct .splat names, <=256 MiB total.';
+                return;
+              }
+              snapshotFiles = files.sort((a, b) =>
+                a.name.localeCompare(b.name, undefined, {numeric:true}));
+              seriesSeek.max = String(snapshotFiles.length - 1);
+              seriesSeek.disabled = seriesPlay.disabled = seriesSave.disabled = false;
+              showSnapshot(0);
+            });
+            seriesSeek.addEventListener('input', () => {
+              pauseSnapshots();
+              showSnapshot(Number(seriesSeek.value));
+            });
+            seriesPlay.addEventListener('click', () => {
+              if (!snapshotFiles.length) return;
+              if (snapshotTimer !== null) { pauseSnapshots(); return; }
+              if (videoRecording || trackPlaying) {
+                seriesStatus.textContent = 'Finish camera recording/replay first.';
+                return;
+              }
+              let next = Number(seriesSeek.value) + 1;
+              if (next >= snapshotFiles.length) {
+                showSnapshot(0);
+                next = 1;
+              }
+              seriesPlay.textContent = 'Pause snapshots';
+              snapshotTimer = setInterval(() => {
+                if (next >= snapshotFiles.length) pauseSnapshots();
+                else showSnapshot(next++);
+              }, 1400);
+            });
+            seriesSave.addEventListener('click', () => {
+              if (snapshotFiles.length < 2) return;
+              const payload = {
+                format:'wre-local-3d-snapshot-sequence-v1',
+                time_axis:'ordered_file_index_only',
+                capture_times_verified:false,
+                scene_motion_reconstructed:false,
+                geometric_registration_verified:false,
+                snapshots:snapshotFiles.map((file, index) => ({
+                  index, name:file.name, size_bytes:file.size,
+                  gaussian_records:file.size / 32
+                }))
+              };
+              const url = URL.createObjectURL(new Blob([JSON.stringify(payload)],
+                {type:'application/json'}));
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = 'wre-3d-snapshot-order.json';
+              link.click();
+              setTimeout(() => URL.revokeObjectURL(url), 30000);
+              seriesStatus.textContent = 'Saved ORDINAL snapshot list, not physical 4D.';
+            });
             picker.addEventListener('change', () => {
+              pauseSnapshots();
               if (picker.files && picker.files.length === 1) show(picker.files[0]);
             });
             reset.addEventListener('click', () => {
+              pauseSnapshots();
               picker.value = '';
               show(originalFile);
             });
             compare.addEventListener('click', () => {
+              pauseSnapshots();
               if (!localFile) return;
               show(activeFile === originalFile ? localFile : originalFile);
             });
@@ -760,6 +860,10 @@ jobs:
               "Choose a local .splat using the file picker, or drag one onto the page.\n"
               "Use Restore 16-photo scene to return to the included example.\n"
               "Use Compare original / local to toggle without reselecting the local file.\n"
+              "Choose 2-32 .splat files for ordered scene snapshots and scrub/play them.\n"
+              "Frames are sorted by filename (use zero-padding for explicit order).\n"
+              "This is an ordinal sequence, NOT captured-time 4D reconstruction.\n"
+              "Export snapshot list JSON includes filenames/sizes, NOT motion.\n"
               "Save camera viewpoint as JSON, then load to revisit the same view.\n"
               "Save current 3D view (PNG) captures the WebGL canvas locally.\n"
               "Record 3D camera move (WebM) saves a local 3-second WebGL clip.\n"
@@ -1052,17 +1156,24 @@ jobs:
                   "script": "document.getElementById('wre-video-preview').pause();",
                   "args": [],
               })
-              after_clip = webdriver("POST", f"/session/{session}/execute/sync", {
-                  "script": """return {
-                    pose:Array.from(viewMatrix),
-                    status:document.getElementById('wre-local-status').textContent,
-                    enabled:!document.getElementById('wre-record-video').disabled,
-                    external:performance.getEntriesByType('resource')
-                      .filter(x=>/^https?:/.test(x.name)).map(x=>x.name)
-                  };""",
-                  "args": [],
-              })
-              assert after_clip["enabled"] and "Saved WebM" in after_clip["status"]
+              # File download and MediaRecorder onstop are asynchronous; a
+              # downloaded WebM can exist before the UI's final status updates.
+              for _ in range(75):
+                  after_clip = webdriver("POST", f"/session/{session}/execute/sync", {
+                      "script": """return {
+                        pose:Array.from(viewMatrix),
+                        status:document.getElementById('wre-local-status').textContent,
+                        enabled:!document.getElementById('wre-record-video').disabled,
+                        external:performance.getEntriesByType('resource')
+                          .filter(x=>/^https?:/.test(x.name)).map(x=>x.name)
+                      };""",
+                      "args": [],
+                  })
+                  if after_clip["enabled"] and "Saved WebM" in after_clip["status"]:
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("WebM completed but UI not ready: " + str(after_clip))
               assert all(abs(x - y) < 1e-5
                          for x, y in zip(after_clip["pose"], baseline_pose["pose"]))
               assert after_clip["external"] == []
@@ -1352,6 +1463,116 @@ jobs:
                   "cuda_training": False,
               }
               print("REAL WEBGL A/B COMPARE PASS: original 6917 -> local 2048")
+              # Actual Chrome local multi-file picker, WebGL scene change,
+              # ordinal frame seek, replay and downloadable JSON. Both frames
+              # are subsets of one real 3D scene, NOT real temporal motion.
+              frame1 = root / "snapshot-frame-01.splat"
+              frame2 = root / "snapshot-frame-02.splat"
+              frame1.write_bytes(subset)
+              frame2.write_bytes(picked_bytes)
+              # The timeline is deliberately collapsed by default. Open it
+              # through the actual operator-facing Chrome UI first.
+              timeline_summary = webdriver("POST", f"/session/{session}/element", {
+                  "using": "css selector", "value": "#wre-snapshot-series summary"
+              })["element-6066-11e4-a52e-4f735466cecf"]
+              webdriver("POST", f"/session/{session}/element/{timeline_summary}/click", {})
+              series_el = webdriver("POST", f"/session/{session}/element", {
+                  "using": "css selector", "value": "#wre-snapshot-files"
+              })["element-6066-11e4-a52e-4f735466cecf"]
+              webdriver("POST", f"/session/{session}/element/{series_el}/value", {
+                  "text": str(frame1) + chr(10) + str(frame2)
+              })
+              def get_snapshot_state():
+                  return webdriver("POST", f"/session/{session}/execute/sync", {
+                      "script": """return {
+                        count:window.__wreRenderedGaussianCount || 0,
+                        index:document.getElementById('wre-snapshot-index').value,
+                        status:document.getElementById('wre-snapshot-status').textContent,
+                        play:document.getElementById('wre-play-snapshots').textContent,
+                        enabled:!document.getElementById('wre-snapshot-index').disabled,
+                        external:performance.getEntriesByType('resource')
+                          .filter(x=>/^https?:/.test(x.name)).map(x=>x.name)
+                      };""",
+                      "args": [],
+                  })
+              for _ in range(100):
+                  frame_state = get_snapshot_state()
+                  if (frame_state["enabled"] and frame_state["count"] == 1024
+                          and frame_state["index"] == "0"):
+                      break
+                  time.sleep(0.2)
+              else:
+                  raise RuntimeError("Real browser did not load first 3D snapshot: " + str(frame_state))
+              assert "snapshot-frame-01.splat" in frame_state["status"], frame_state
+              assert frame_state["external"] == [], frame_state
+              webdriver("POST", f"/session/{session}/execute/sync", {
+                  "script": """const seek=document.getElementById('wre-snapshot-index');
+                    seek.value='1'; seek.dispatchEvent(new Event('input',{bubbles:true}));
+                    return true;""",
+                  "args": [],
+              })
+              for _ in range(100):
+                  frame_state = get_snapshot_state()
+                  if frame_state["count"] == 2048 and frame_state["index"] == "1":
+                      break
+                  time.sleep(0.2)
+              else:
+                  raise RuntimeError("Real WebGL snapshot scrub failed: " + str(frame_state))
+              assert "snapshot-frame-02.splat" in frame_state["status"], frame_state
+              assert frame_state["external"] == [], frame_state
+              export_el = webdriver("POST", f"/session/{session}/element", {
+                  "using": "css selector", "value": "#wre-export-snapshots"
+              })["element-6066-11e4-a52e-4f735466cecf"]
+              webdriver("POST", f"/session/{session}/element/{export_el}/click", {})
+              timeline_download = saved_scenes / "wre-3d-snapshot-order.json"
+              for _ in range(100):
+                  if timeline_download.is_file() and timeline_download.stat().st_size > 100:
+                      break
+                  time.sleep(0.2)
+              else:
+                  raise RuntimeError("Browser did not export snapshot order JSON")
+              manifest_frames = json.loads(timeline_download.read_text())
+              assert manifest_frames["format"] == "wre-local-3d-snapshot-sequence-v1"
+              assert manifest_frames["time_axis"] == "ordered_file_index_only"
+              assert manifest_frames["capture_times_verified"] is False
+              assert manifest_frames["scene_motion_reconstructed"] is False
+              assert manifest_frames["geometric_registration_verified"] is False
+              assert [(f["name"], f["gaussian_records"]) for f in
+                      manifest_frames["snapshots"]] == [
+                          ("snapshot-frame-01.splat", 1024),
+                          ("snapshot-frame-02.splat", 2048),
+                      ]
+              webdriver("POST", f"/session/{session}/execute/sync", {
+                  "script": """const seek=document.getElementById('wre-snapshot-index');
+                    seek.value='0'; seek.dispatchEvent(new Event('input',{bubbles:true}));
+                    return true;""",
+                  "args": [],
+              })
+              play_el = webdriver("POST", f"/session/{session}/element", {
+                  "using": "css selector", "value": "#wre-play-snapshots"
+              })["element-6066-11e4-a52e-4f735466cecf"]
+              webdriver("POST", f"/session/{session}/element/{play_el}/click", {})
+              for _ in range(100):
+                  frame_state = get_snapshot_state()
+                  if (frame_state["count"] == 2048 and frame_state["index"] == "1"
+                          and frame_state["play"] == "Play snapshots"):
+                      break
+                  time.sleep(0.2)
+              else:
+                  raise RuntimeError("Real WebGL snapshot playback did not complete: " + str(frame_state))
+              assert frame_state["external"] == [], frame_state
+              receipt["ordinal_3d_snapshot_replay"] = {
+                  "frames_rendered": [1024, 2048],
+                  "frame_order": ["snapshot-frame-01.splat", "snapshot-frame-02.splat"],
+                  "manifest_sha256": hashlib.sha256(timeline_download.read_bytes()).hexdigest(),
+                  "real_camera_time_verified": False,
+                  "dynamic_scene_motion_reconstructed": False,
+                  "real_cuda_training": False,
+                  "external_resource_requests": 0,
+              }
+              receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + chr(10))
+              print("REAL WEBGL ORDINAL SNAPSHOT REPLAY PASS: 1024 -> 2048, NO 4D INFERENCE")
+
               reset_element = webdriver("POST", f"/session/{session}/element", {
                   "using": "css selector", "value": "#wre-restore-original"
               })["element-6066-11e4-a52e-4f735466cecf"]
