@@ -1155,7 +1155,10 @@ jobs:
             display:flex;align-items:center;flex-wrap:wrap;gap:10px}
           #wre-source-photo input {color:#fff}
           #wre-photo-status {font-size:13px;flex-basis:100%}
-          #wre-photo-image {max-height:180px;max-width:100%;object-fit:contain}
+          #wre-photo-image,#wre-photo-image-b {max-height:180px;max-width:100%;object-fit:contain}
+          #wre-source-photo .wre-photo-pair {display:flex;gap:12px;flex-wrap:wrap;width:100%}
+          #wre-source-photo figure {margin:0;max-width:46%;min-width:170px}
+          #wre-source-photo figcaption {font-size:12px;margin-top:4px}
           .wre-pair-hotspot {border:2px solid #eaf5ff;border-radius:50%;
             width:30px;height:30px;display:grid;place-items:center;
             font:bold 16px system-ui;box-shadow:0 0 0 2px #162236;
@@ -1212,7 +1215,14 @@ jobs:
               Source photos are not bundled. Supply files matching reconstructed camera names;
               they stay in this browser, with no upload or calibration claim.
             </output>
-            <img id="wre-photo-image" hidden alt="Locally provided camera photograph">
+            <div class="wre-photo-pair">
+              <figure><img id="wre-photo-image" hidden
+                alt="Locally provided first reconstructed camera photograph">
+                <figcaption>Camera A · local operator photograph</figcaption></figure>
+              <figure><img id="wre-photo-image-b" hidden
+                alt="Locally provided second reconstructed camera photograph">
+                <figcaption>Camera B · local operator photograph</figcaption></figure>
+            </div>
           </section>
           <model-viewer id="wre-scene" camera-controls auto-rotate
             interaction-prompt="auto"
@@ -1242,33 +1252,50 @@ jobs:
           const photoInput=document.getElementById('wre-source-files');
           const photoStatus=document.getElementById('wre-photo-status');
           const photoImage=document.getElementById('wre-photo-image');
+          const photoImageB=document.getElementById('wre-photo-image-b');
           const photoUrls=new Map();
           const cameraNames=new Set();
           const showLocalPhoto=()=>{
-            photoImage.hidden=true;
-            photoImage.removeAttribute('src');
+            for(const img of [photoImage,photoImageB]){
+              img.hidden=true;
+              img.removeAttribute('src');
+            }
             if(localUrl){
               photoStatus.textContent='Original source-photo comparison is disabled for '+
                 'an unverified local GLB.';
               return;
             }
             if(choice.value===''){
-              photoStatus.textContent='Select a reconstructed camera to compare a '+
-                'locally supplied source photograph (not a calibrated rendering).';
+              photoStatus.textContent='Select a reconstructed camera to compare '+
+                'locally supplied source photographs (not calibrated renderings).';
               return;
             }
             const name=choice.selectedOptions[0]?.textContent?.split(' · ').slice(1).join(' · ');
             const url=photoUrls.get(name);
-            if(!url){
+            if(url){
+              photoImage.alt='Locally provided photo matching camera A '+name;
+              photoImage.src=url;
+              photoImage.hidden=false;
+              photoStatus.textContent='Local photo: '+name+
+                ' (user supplied; not verified WRE image evidence or GPU render).';
+            } else {
               photoStatus.textContent='No local photograph supplied for '+name+
                 '. Images are never uploaded.';
-              return;
             }
-            photoImage.alt='Locally provided photo matching reconstructed camera '+name;
-            photoImage.src=url;
-            photoImage.hidden=false;
-            photoStatus.textContent='Local photo: '+name+
-              ' (user supplied; not verified WRE image evidence or GPU render).';
+            if(baselineChoice.value!==''){
+              const secondName=baselineChoice.selectedOptions[0]?.textContent
+                ?.split(' · ').slice(1).join(' · ');
+              const secondUrl=photoUrls.get(secondName);
+              if(secondUrl){
+                photoImageB.alt='Locally provided photo matching camera B '+secondName;
+                photoImageB.src=secondUrl;
+                photoImageB.hidden=false;
+                photoStatus.textContent+=' Local photo B: '+secondName+
+                  ' (operator supplied, not a calibrated reprojection).';
+              } else {
+                photoStatus.textContent+=' No local photograph supplied for camera B '+secondName+'.';
+              }
+            }
           };
           photoInput.addEventListener('change',()=>{
             const files=Array.from(photoInput.files||[]);
@@ -1470,6 +1497,7 @@ jobs:
               framePair.disabled=choice.value==='' || baselineChoice.value==='' ||
                 localUrl!==null;
               clearPairMarkers();
+              showLocalPhoto();
               if(choice.value==='' || baselineChoice.value==='' || localUrl!==null){
                 baselineOutput.textContent='Select two SfM cameras to measure their baseline.';
                 return;
