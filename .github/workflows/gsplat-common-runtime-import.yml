@@ -3526,6 +3526,70 @@ jobs:
                   time.sleep(0.25)
               else:
                   raise RuntimeError("Sixteen actual SfM camera choices never loaded")
+              # Click a genuinely observed depth bin in the REAL browser:
+              # the pixel must select the matching true SfM Point3D in the GLB.
+              depth_bins=lookup["depth_bin_to_point3d_id"]
+              assert lookup["depth_tile_resolution"]==256
+              assert lookup["depth_tile_order"]=="image_name_sorted_four_by_four"
+              assert len(depth_bins)>100
+              picked_key=min(depth_bins, key=lambda key:tuple(int(v) for v in key.split(":")))
+              selected_tile,selected_x,selected_y=(int(v) for v in picked_key.split(":"))
+              selected_depth_id=str(depth_bins[picked_key])
+              assert selected_depth_id in lookup["points"]
+              assert js("""
+                const preview=document.getElementById('wre-sparse-depth-preview');
+                const r=preview.getBoundingClientRect();
+                const x=__X__,y=__Y__;
+                preview.dispatchEvent(new MouseEvent('click',{
+                  bubbles:true,
+                  clientX:r.left+(x+0.5)/1024*r.width,
+                  clientY:r.top+(y+0.5)/1024*r.height
+                }));
+                return true;
+              """.replace("__X__",str(256*(selected_tile%4)+selected_x))
+                 .replace("__Y__",str(256*(selected_tile//4)+selected_y)))
+              for _ in range(80):
+                  selection=js("""
+                    return {
+                      id:document.getElementById('wre-native-point-id').value,
+                      status:document.getElementById('wre-depth-selection-status').textContent,
+                      label:document.querySelector('[slot="hotspot-native-lookup"]')
+                        ?.getAttribute('aria-label')||null
+                    };
+                  """)
+                  if (selection["id"]==selected_depth_id
+                      and "Selected real COLMAP point" in selection["status"]
+                      and selection["label"]=="Native COLMAP 3D point "+selected_depth_id):
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("Real Chrome sparse-depth-to-native-3D selection failed")
+              # No bright sample in an empty bin: do not synthesize XYZ.
+              missing=next(
+                  (f"0:{x}:{y}" for y in range(256) for x in range(256)
+                   if f"0:{x}:{y}" not in depth_bins)
+              )
+              empty_tile,empty_x,empty_y=(int(v) for v in missing.split(":"))
+              assert js("""
+                const preview=document.getElementById('wre-sparse-depth-preview');
+                const r=preview.getBoundingClientRect();
+                preview.dispatchEvent(new MouseEvent('click',{
+                  bubbles:true,clientX:r.left+(__X__+0.5)/1024*r.width,
+                  clientY:r.top+(__Y__+0.5)/1024*r.height
+                }));
+                return true;
+              """.replace("__X__",str(256*(empty_tile%4)+empty_x))
+                 .replace("__Y__",str(256*(empty_tile//4)+empty_y)))
+              for _ in range(20):
+                  if js("""
+                    return document.getElementById('wre-depth-selection-status')
+                      .textContent.includes('Black cell: no measured') &&
+                      !document.querySelector('[slot="hotspot-native-lookup"]');
+                  """):
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("Unobserved black SfM bin invented a 3D point")
               # Search a REAL native COLMAP landmark from the full 3D index,
               # not just the first 8 sampled points per selected camera pair.
               selected_id=min(int(pid) for pid in point_rgb)
