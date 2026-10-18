@@ -1388,8 +1388,10 @@ jobs:
           #camera-details {font-size:13px;line-height:1.45;flex-basis:100%}
           #wre-native-lookup {padding:9px 18px;background:#1b2a3d;display:flex;
             flex-wrap:wrap;gap:9px;align-items:center}
-          #wre-native-lookup input,#wre-native-lookup button {padding:8px;
+          #wre-native-lookup input,#wre-native-lookup button,
+          #wre-native-lookup select {padding:8px;
             background:#273950;border:1px solid #8097b2;color:white;border-radius:5px}
+          #wre-native-observation-status {flex-basis:100%;font-size:13px}
           #wre-native-lookup-output {flex-basis:100%;font-size:13px;line-height:1.5}
           #wre-sfm-quality {padding:9px 18px;background:#162235;line-height:1.45}
           #local-model {display:flex;flex-wrap:wrap;align-items:center;gap:9px;
@@ -1463,6 +1465,16 @@ jobs:
             <input id="wre-native-point-id" type="number" min="1" step="1"
               placeholder="Point ID">
             <button id="wre-native-point-find" type="button">Find 3D point</button>
+            <label for="wre-native-observation-camera">Measured camera</label>
+            <select id="wre-native-observation-camera" disabled>
+              <option value="">Find a point first</option>
+            </select>
+            <button id="wre-native-observation-open" type="button" disabled>
+              Go to observed camera
+            </button>
+            <output id="wre-native-observation-status" aria-live="polite">
+              Select an observed camera to inspect its measured pixel.
+            </output>
             <output id="wre-native-lookup-output" aria-live="polite">
               Look up all measured SfM 3D points, not only camera-pair samples.
               Coordinates in arbitrary SfM units; no GPU training or capture time.
@@ -1489,7 +1501,9 @@ jobs:
               <figure><div class="wre-photo-frame"><img id="wre-photo-image" hidden
                 alt="Locally provided first reconstructed camera photograph">
                 <span id="wre-measured-pixel-a" class="wre-measured-pixel" hidden
-                  aria-label="Measured SfM observation in camera A"></span></div>
+                  aria-label="Measured SfM observation in camera A"></span>
+                <span id="wre-native-photo-pixel" class="wre-measured-pixel" hidden
+                  aria-label="Measured native 3D point pixel in local photo"></span></div>
                 <figcaption>Camera A · operator-supplied, unverified</figcaption></figure>
               <figure><div class="wre-photo-frame"><img id="wre-photo-image-b" hidden
                 alt="Locally provided second reconstructed camera photograph">
@@ -1522,22 +1536,12 @@ jobs:
           const lookupInput=document.getElementById('wre-native-point-id');
           const lookupButton=document.getElementById('wre-native-point-find');
           const lookupOutput=document.getElementById('wre-native-lookup-output');
+          const nativeCameraChoice=document.getElementById('wre-native-observation-camera');
+          const nativeCameraOpen=document.getElementById('wre-native-observation-open');
+          const nativeCameraStatus=document.getElementById('wre-native-observation-status');
+          const nativePhotoPixel=document.getElementById('wre-native-photo-pixel');
           let nativeLookup=null;
-          const clearNativeLookupMarker=()=>{
-            viewer.querySelector('[slot="hotspot-native-lookup"]')?.remove();
-          };
-          lookupButton.addEventListener('click',async()=>{
-            clearNativeLookupMarker();
-            if(localUrl!==null){
-              lookupOutput.textContent='Native SfM lookup disabled for unverified GLB.';
-              return;
-            }
-            const id=Number(lookupInput.value);
-            if(!Number.isSafeInteger(id) || id<=0){
-              lookupOutput.textContent='Enter a positive native COLMAP point ID.';
-              return;
-            }
-            try {
+          const loadNativeIndex=()=>{
               if(nativeLookup===null){
                 nativeLookup=fetch('./wre-real16-native-landmark-lookup.json')
                   .then(response=>{
@@ -1555,7 +1559,30 @@ jobs:
                     return index;
                   });
               }
-              const index=await nativeLookup;
+            return nativeLookup;
+          };
+          let nativePoint=null;
+          let nativeObservation=null;
+          const clearNativeLookupMarker=()=>{
+            viewer.querySelector('[slot="hotspot-native-lookup"]')?.remove();
+            nativePoint=null;nativeObservation=null;
+            nativeCameraChoice.replaceChildren(new Option('Find a point first',''));
+            nativeCameraChoice.disabled=true;nativeCameraOpen.disabled=true;
+            nativePhotoPixel.hidden=true;
+          };
+          const findNativePoint=async()=>{
+            clearNativeLookupMarker();
+            if(localUrl!==null){
+              lookupOutput.textContent='Native SfM lookup disabled for unverified GLB.';
+              return;
+            }
+            const id=Number(lookupInput.value);
+            if(!Number.isSafeInteger(id) || id<=0){
+              lookupOutput.textContent='Enter a positive native COLMAP point ID.';
+              return;
+            }
+            try {
+              const index=await loadNativeIndex();
               if(localUrl!==null) return;
               const point=index.points[String(id)];
               if(!point){
@@ -1575,6 +1602,21 @@ jobs:
                    o.pixel.every(Number.isFinite))) {
                 throw Error('Invalid native COLMAP point evidence');
               }
+              // Resolve every native image ID against the 16 actual SfM cameras.
+              // Never navigate by filename alone or extrapolate an unmeasured pixel.
+              const observed=observations.map(o=>{
+                const match=[...cameraEvidence.entries()].find(([,camera])=>
+                  camera.image_id===o.image_id && camera.image_name===o.image_name);
+                if(!match) throw Error('Native observation has no registered camera');
+                return {index:match[0],pixel:o.pixel,image_name:o.image_name};
+              });
+              nativePoint={id,observed};
+              nativeCameraChoice.replaceChildren(new Option('Choose measured camera',''));
+              observed.forEach(o=>nativeCameraChoice.add(new Option(
+                o.image_name+' ('+o.pixel.map(v=>v.toFixed(1)).join(', ')+')',o.index)));
+              nativeCameraChoice.disabled=false;nativeCameraOpen.disabled=false;
+              nativeCameraStatus.textContent='Choose a real observing camera; provide '+
+                'its original photograph locally to display the measured pixel.';
               const marker=document.createElement('button');
               marker.type='button';marker.className='wre-track-hotspot';
               marker.slot='hotspot-native-lookup';
@@ -1596,8 +1638,23 @@ jobs:
               lookupOutput.textContent='Native point lookup failed: '+String(error);
               nativeLookup=null;
             }
-          });
+          };
+          lookupButton.addEventListener('click',findNativePoint);
 
+          nativeCameraOpen.addEventListener('click',()=>{
+            if(localUrl!==null || !nativePoint || nativeCameraChoice.disabled) return;
+            const observation=nativePoint.observed.find(o=>
+              o.index===nativeCameraChoice.value);
+            if(!observation || choice.disabled) return;
+            nativeObservation=observation;
+            choice.value=observation.index;
+            choice.dispatchEvent(new Event('change',{bubbles:true}));
+            nativeCameraStatus.textContent='Observed native 3D point '+nativePoint.id+
+              ' in camera '+observation.image_name+' at measured pixel ('+
+              observation.pixel.map(v=>v.toFixed(2)).join(', ')+
+              '). A local source photo is required for the image overlay.';
+            drawNativePhotoPixel();
+          });
           const baselineChoice=document.getElementById('wre-baseline-choice');
           const baselineOutput=document.getElementById('wre-camera-baseline');
           const landmarkInspection=document.getElementById('wre-landmark-inspection');
@@ -1615,6 +1672,25 @@ jobs:
           const cameraNames=new Set();
           const cameraEvidence=new Map();
           let selectedPhotoPoint=null;
+          const drawNativePhotoPixel=()=>{
+            nativePhotoPixel.hidden=true;
+            if(!nativeObservation || !nativePoint || localUrl!==null ||
+               choice.value!==nativeObservation.index) return;
+            const camera=cameraEvidence.get(nativeObservation.index);
+            const uv=nativeObservation.pixel;
+            if(!camera || photoImage.hidden || !photoImage.complete ||
+               photoImage.naturalWidth!==camera.image_width ||
+               photoImage.naturalHeight!==camera.image_height ||
+               !uv.every(Number.isFinite) ||
+               uv[0]<0 || uv[1]<0 ||
+               uv[0]>=camera.image_width || uv[1]>=camera.image_height) return;
+            nativePhotoPixel.style.left=(100*uv[0]/camera.image_width)+'%';
+            nativePhotoPixel.style.top=(100*uv[1]/camera.image_height)+'%';
+            nativePhotoPixel.dataset.pixelX=String(uv[0]);
+            nativePhotoPixel.dataset.pixelY=String(uv[1]);
+            nativePhotoPixel.title='Real measured SfM pixel; local photo NOT authenticated';
+            nativePhotoPixel.hidden=false;
+          };
           const drawMeasuredPhotoPixels=()=>{
             photoMarkerA.hidden=true;photoMarkerB.hidden=true;
             if(!selectedPhotoPoint || localUrl!==null) return;
@@ -1639,7 +1715,62 @@ jobs:
               marker.hidden=false;
             });
           };
+          // Reverse navigation searches ONLY measured native observations.
+          // Pixel proximity is an explicit selection aid, not new triangulation.
+          const selectNativePointFromPhoto=async (event,img,cameraControl)=>{
+            if(localUrl!==null || img.hidden || !img.complete ||
+               cameraControl.disabled || cameraControl.value==='') return;
+            const selectedCamera=cameraControl.value;
+            const camera=cameraEvidence.get(selectedCamera);
+            const rect=img.getBoundingClientRect();
+            if(!camera || img.naturalWidth!==camera.image_width ||
+               img.naturalHeight!==camera.image_height ||
+               rect.width<=0 || rect.height<=0) return;
+            const u=(event.clientX-rect.left)*camera.image_width/rect.width;
+            const v=(event.clientY-rect.top)*camera.image_height/rect.height;
+            if(u<0 || v<0 || u>=camera.image_width || v>=camera.image_height) return;
+            try {
+              const index=await loadNativeIndex();
+              if(localUrl!==null || cameraControl.value!==selectedCamera) return;
+              let nearest=null, bestDistance=64;
+              for(const [id,point] of Object.entries(index.points)){
+                if(!Array.isArray(point.observations)) continue;
+                for(const observed of point.observations){
+                  if(observed.image_id!==camera.image_id ||
+                     observed.image_name!==camera.image_name ||
+                     !Array.isArray(observed.pixel) || observed.pixel.length!==2 ||
+                     !observed.pixel.every(Number.isFinite)) continue;
+                  const dx=u-observed.pixel[0],dy=v-observed.pixel[1];
+                  const squaredDistance=dx*dx+dy*dy;
+                  if(squaredDistance<bestDistance){
+                    bestDistance=squaredDistance;nearest=id;
+                  }
+                }
+              }
+              if(nearest===null){
+                nativeCameraStatus.textContent='No measured SfM point within 8 pixels. '+
+                  'No 3D coordinate was invented.';
+                return;
+              }
+              lookupInput.value=nearest;
+              await findNativePoint();
+              if(localUrl!==null || cameraControl.value!==selectedCamera ||
+                 !nativePoint || String(nativePoint.id)!==nearest) return;
+              const observation=nativePoint.observed.find(o=>o.index===selectedCamera);
+              if(!observation) return;
+              nativeCameraChoice.value=selectedCamera;
+              nativeCameraOpen.click();
+              nativeCameraStatus.textContent+=' Selected by clicking the local photograph.';
+            } catch(error){
+              nativeCameraStatus.textContent='Photo-to-3D navigation failed: '+String(error);
+            }
+          };
+          photoImage.addEventListener('click',event=>
+            selectNativePointFromPhoto(event,photoImage,choice));
+          photoImageB.addEventListener('click',event=>
+            selectNativePointFromPhoto(event,photoImageB,baselineChoice));
           photoImage.addEventListener('load',drawMeasuredPhotoPixels);
+          photoImage.addEventListener('load',drawNativePhotoPixel);
           photoImageB.addEventListener('load',drawMeasuredPhotoPixels);
           const showLocalPhoto=()=>{
             for(const img of [photoImage,photoImageB]){
@@ -1683,6 +1814,7 @@ jobs:
               }
             }
             drawMeasuredPhotoPixels();
+            drawNativePhotoPixel();
           };
           photoInput.addEventListener('change',()=>{
             const files=Array.from(photoInput.files||[]);
@@ -2760,6 +2892,36 @@ jobs:
                   assert observation["image_name"] in result["text"]
                   assert "#"+str(observation["point2d_idx"]) in result["text"]
               assert "Not metric, held-out quality, time, GPU training or 4D" in result["text"]
+              # A real native 3D track must navigate to one of its ACTUAL
+              # observing cameras, not merely display an ID and XYZ.
+              native_navigation=js("""
+                const observed=document.getElementById('wre-native-observation-camera');
+                const button=document.getElementById('wre-native-observation-open');
+                if(observed.disabled || button.disabled) return null;
+                const count=observed.options.length-1;
+                observed.selectedIndex=1;
+                const selected=observed.selectedOptions[0];
+                button.click();
+                const chosen=document.getElementById('wre-camera-choice');
+                const nativeMarker=document.getElementById('wre-native-photo-pixel');
+                return {count, camera:chosen.selectedOptions[0].textContent,
+                  observation:selected.textContent, cameraIndex:chosen.value,
+                  overlayHidden:nativeMarker.hidden,
+                  status:document.getElementById('wre-native-observation-status')
+                    .textContent,
+                  navigated:Boolean(document.getElementById('wre-scene')
+                    .getAttribute('camera-orbit'))};
+              """)
+              assert native_navigation is not None
+              assert native_navigation["count"]==len(selected_point["observations"])
+              assert selected_point["observations"][0]["image_name"] in native_navigation["camera"]
+              assert selected_point["observations"][0]["image_name"] in native_navigation["observation"]
+              assert native_navigation["navigated"]
+              assert native_navigation["overlayHidden"], (
+                  "Do not draw an SfM pixel overlay without a matching local photograph"
+              )
+              assert str(selected_id) in native_navigation["status"]
+              assert "measured pixel" in native_navigation["status"]
               assert js("""
                 document.getElementById('wre-native-point-id').value='-1';
                 document.getElementById('wre-native-point-find').click();
@@ -2767,6 +2929,11 @@ jobs:
                   document.getElementById('wre-native-lookup-output').textContent
                     .includes('Enter a positive native COLMAP point ID');
               """), "Invalid point IDs must not leave a misleading hotspot"
+              assert js("""
+                return document.getElementById('wre-native-observation-camera').disabled &&
+                  document.getElementById('wre-native-observation-open').disabled &&
+                  document.getElementById('wre-native-photo-pixel').hidden;
+              """), "Invalid point lookup left stale measured-camera controls enabled"
               assert js("""
                 const c=document.getElementById('wre-camera-choice');
                 const v=document.getElementById('wre-scene');
@@ -3261,6 +3428,231 @@ jobs:
                   assert math.isclose(marker["left"],100*xy[0]/cam["image_width"],abs_tol=1e-4)
                   assert math.isclose(marker["top"],100*xy[1]/cam["image_height"],abs_tol=1e-4)
                   assert "local photo not authenticated" in marker["title"]
+              # Every native track is navigable, including points NOT among
+              # the eight sampled pair hotspots; measured pixels are plotted
+              # only on a locally supplied same-size image (NOT authenticated).
+              available=sorted(
+                  (
+                      (int(pid),obs)
+                      for pid,entry in lookup["points"].items()
+                      for obs in entry["observations"]
+                      if obs["image_name"]==overlay_cameras[0]["image_name"]
+                  ),
+                  key=lambda item:item[0],
+              )
+              assert available
+              native_id,native_obs=available[0]
+              assert js("""
+                const input=document.getElementById('wre-native-point-id');
+                input.value='__ID__';
+                document.getElementById('wre-native-point-find').click();
+                return true;
+              """.replace("__ID__",str(native_id)))
+              for _ in range(60):
+                  option_count=js("""
+                    const camera=document.getElementById('wre-native-observation-camera');
+                    return camera.disabled ? 0 : camera.options.length-1;
+                  """)
+                  if option_count>=2:
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("Native point camera observations not loaded")
+              native_overlay=js("""
+                const name=__CAMERA_NAME__;
+                const select=document.getElementById('wre-native-observation-camera');
+                const option=[...select.options].find(o=>o.textContent.startsWith(name+' ('));
+                if(!option) throw Error('Actual camera missing from 3D point observations');
+                select.value=option.value;
+                document.getElementById('wre-native-observation-open').click();
+                const marker=document.getElementById('wre-native-photo-pixel');
+                return {hidden:marker.hidden,
+                  x:Number(marker.dataset.pixelX),
+                  y:Number(marker.dataset.pixelY),
+                  left:parseFloat(marker.style.left),
+                  top:parseFloat(marker.style.top),
+                  title:marker.title,
+                  selected:document.getElementById('wre-camera-choice')
+                    .selectedOptions[0].textContent};
+              """.replace("__CAMERA_NAME__",json.dumps(native_obs["image_name"])))
+              assert not native_overlay["hidden"]
+              assert native_obs["image_name"] in native_overlay["selected"]
+              assert math.isclose(native_overlay["x"],native_obs["pixel"][0],abs_tol=1e-7)
+              assert math.isclose(native_overlay["y"],native_obs["pixel"][1],abs_tol=1e-7)
+              assert math.isclose(
+                  native_overlay["left"],
+                  100*native_obs["pixel"][0]/overlay_cameras[0]["image_width"],
+                  abs_tol=1e-4,
+              )
+              assert math.isclose(
+                  native_overlay["top"],
+                  100*native_obs["pixel"][1]/overlay_cameras[0]["image_height"],
+                  abs_tol=1e-4,
+              )
+              assert "NOT authenticated" in native_overlay["title"]
+
+              # Real browser reverse interaction: click at an observed pixel
+              # on a locally supplied same-size image to select the actual
+              # native 3D point. Choose a well-separated track to disambiguate
+              # the explicit eight-pixel hit radius from nearby observations.
+              width=overlay_cameras[0]["image_width"]
+              height=overlay_cameras[0]["image_height"]
+              photo_candidates=[
+                  (pid,ob) for pid,ob in available
+                  if 2 < ob["pixel"][0] < width-2
+                  and 2 < ob["pixel"][1] < height-2
+              ]
+              assert len(photo_candidates)>5
+              def other_track_gap(item):
+                  pid,obs=item
+                  return min(
+                      (obs["pixel"][0]-peer["pixel"][0])**2
+                      +(obs["pixel"][1]-peer["pixel"][1])**2
+                      for other,peer in photo_candidates if other!=pid
+                  )
+              photo_pick=max(photo_candidates,key=other_track_gap)
+              assert other_track_gap(photo_pick)>64, (
+                  "No isolated real SfM observation for photo-to-3D browser smoke"
+              )
+              photo_id,photo_obs=photo_pick
+              assert js("""
+                const img=document.getElementById('wre-photo-image');
+                if(img.hidden || !img.complete) return false;
+                const r=img.getBoundingClientRect();
+                img.dispatchEvent(new MouseEvent('click',{
+                  bubbles:true,
+                  clientX:r.left+__U__*r.width/img.naturalWidth,
+                  clientY:r.top+__V__*r.height/img.naturalHeight
+                }));
+                return true;
+              """.replace("__U__",repr(photo_obs["pixel"][0]))
+                 .replace("__V__",repr(photo_obs["pixel"][1])))
+              for _ in range(60):
+                  reverse_state=js("""
+                    const marker=document.getElementById('wre-native-photo-pixel');
+                    return {
+                      point:document.getElementById('wre-native-point-id').value,
+                      overlay:!marker.hidden,
+                      status:document.getElementById('wre-native-observation-status').textContent
+                    };
+                  """)
+                  if (reverse_state["point"]==str(photo_id)
+                      and reverse_state["overlay"]
+                      and "Selected by clicking" in reverse_state["status"]):
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("Real photographed pixel did not navigate to native 3D")
+              # Explicit empty-area selection must not fabricate a native 3D
+              # observation or silently replace the previously selected point.
+              blank=next(
+                  (
+                      (u,v)
+                      for u,v in (
+                          (1.0,1.0),(width-2.0,1.0),
+                          (1.0,height-2.0),(width-2.0,height-2.0)
+                      )
+                      if all(
+                          (u-ob["pixel"][0])**2+(v-ob["pixel"][1])**2>64
+                          for _,ob in available
+                      )
+                  ),None
+              )
+              assert blank is not None
+              assert js("""
+                const img=document.getElementById('wre-photo-image');
+                const r=img.getBoundingClientRect();
+                img.dispatchEvent(new MouseEvent('click',{
+                  bubbles:true,
+                  clientX:r.left+__U__*r.width/img.naturalWidth,
+                  clientY:r.top+__V__*r.height/img.naturalHeight
+                }));
+                return true;
+              """.replace("__U__",repr(blank[0])).replace("__V__",repr(blank[1])))
+              for _ in range(60):
+                  negative_state=js("""
+                    return document.getElementById('wre-native-observation-status')
+                      .textContent;
+                  """)
+                  if "No measured SfM point within 8 pixels" in negative_state:
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("Unmeasured photo pixel was not rejected")
+              assert js("return document.getElementById('wre-native-point-id').value;")==str(photo_id)
+              # Reverse 2D -> 3D must also work from the *second* locally
+              # supplied real-camera image, not only primary camera A. The
+              # observed coordinates below belong to the genuine native
+              # PyCOLMAP 16-image SfM output, not to our local synthetic PNG.
+              second_camera=overlay_cameras[1]
+              second_available=[
+                  (int(pid),ob) for pid,entry in lookup["points"].items()
+                  for ob in entry["observations"]
+                  if ob["image_id"]==second_camera["image_id"]
+                  and ob["image_name"]==second_camera["image_name"]
+                  and 2 < ob["pixel"][0] < second_camera["image_width"]-2
+                  and 2 < ob["pixel"][1] < second_camera["image_height"]-2
+              ]
+              assert len(second_available)>5
+              second_pick=next(
+                  (
+                      (pid,ob) for pid,ob in second_available
+                      if all(
+                          (ob["pixel"][0]-peer["pixel"][0])**2+
+                          (ob["pixel"][1]-peer["pixel"][1])**2>64
+                          for other,peer in second_available if other!=pid
+                      )
+                  ),None
+              )
+              assert second_pick is not None, (
+                  "No isolated real camera B observation for reverse 2D-to-3D navigation"
+              )
+              second_id,second_obs=second_pick
+              assert js("""
+                const img=document.getElementById('wre-photo-image-b');
+                if(img.hidden || !img.complete) return false;
+                const r=img.getBoundingClientRect();
+                img.dispatchEvent(new MouseEvent('click',{
+                  bubbles:true,
+                  clientX:r.left+__U__*r.width/img.naturalWidth,
+                  clientY:r.top+__V__*r.height/img.naturalHeight
+                }));
+                return true;
+              """.replace("__U__",repr(second_obs["pixel"][0]))
+                 .replace("__V__",repr(second_obs["pixel"][1])))
+              for _ in range(60):
+                  second_state=js("""
+                    const marker=document.getElementById('wre-native-photo-pixel');
+                    return {
+                      point:document.getElementById('wre-native-point-id').value,
+                      camera:document.getElementById('wre-camera-choice').value,
+                      overlay:!marker.hidden,
+                      pixel:[Number(marker.dataset.pixelX),Number(marker.dataset.pixelY)],
+                      status:document.getElementById('wre-native-observation-status').textContent
+                    };
+                  """)
+                  if (second_state["point"]==str(second_id)
+                      and second_state["camera"]==str(best_overlap_index)
+                      and second_state["overlay"]
+                      and "Selected by clicking" in second_state["status"]):
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("Camera B photo pixel failed reverse SfM navigation")
+              assert all(
+                  math.isclose(actual,expected,abs_tol=1e-7)
+                  for actual,expected in zip(
+                      second_state["pixel"],second_obs["pixel"],strict=True
+                  )
+              )
+              # Restore original camera pair for the existing A/B point and
+              # screenshot tests. Its SfM pixel evidence remains unchanged.
+              assert js("""
+                const camera=document.getElementById('wre-camera-choice');
+                camera.value='0';
+                camera.dispatchEvent(new Event('change',{bubbles:true}));
+                return camera.value==='0';
+              """)
               # The very same native 3D track must display the opposite
               # measured pixels when camera A and B are reversed.
               reversed_text=js("""
