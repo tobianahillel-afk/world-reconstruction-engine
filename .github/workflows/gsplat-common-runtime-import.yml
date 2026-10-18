@@ -1889,6 +1889,13 @@ jobs:
             <button id="wre-native-reference-calibrate" type="button">
               Use currently selected landmark pair as scale reference
             </button>
+            <button id="wre-native-reference-export" type="button" disabled>
+              Save user-provided scale reference as JSON
+            </button>
+            <label for="wre-native-reference-import">
+              Restore same-scene user scale reference (.json, max 64 KiB)
+            </label>
+            <input id="wre-native-reference-import" type="file" accept=".json,application/json">
             <output id="wre-native-calibration-status" aria-live="polite">
               Scale not calibrated. Reference lengths are user supplied, not verified by WRE.
             </output>
@@ -2107,11 +2114,23 @@ jobs:
           const distanceExport=document.getElementById('wre-native-distance-export');
           const referenceMetres=document.getElementById('wre-native-reference-metres');
           const calibrationStatus=document.getElementById('wre-native-calibration-status');
+          const referenceExport=document.getElementById('wre-native-reference-export');
+          const referenceImport=document.getElementById('wre-native-reference-import');
           let distanceEvidence=null,userMetricReference=null;
           const clearMetricReference=()=>{
             userMetricReference=null;
+            referenceExport.disabled=true;
             calibrationStatus.textContent=
               'Scale not calibrated. User measurements are not verified by WRE.';
+            if(distanceEvidence){
+              delete distanceEvidence.user_supplied_metric_reference;
+              delete distanceEvidence.estimated_distance_m_user_calibrated;
+              distanceOutput.textContent='Native COLMAP points '+
+                distanceEvidence.first.point3d_id+' and '+
+                distanceEvidence.second.point3d_id+': distance '+
+                distanceEvidence.euclidean_distance_sfm_units.toFixed(6)+
+                ' arbitrary SfM units; metric estimate cleared.';
+            }
           };
           const applyMetricReference=evidence=>{
             if(!userMetricReference) return null;
@@ -2191,18 +2210,7 @@ jobs:
               }
             });
 
-          referenceMetres.addEventListener('input',()=>{
-            clearMetricReference();
-            if(distanceEvidence){
-              delete distanceEvidence.user_supplied_metric_reference;
-              delete distanceEvidence.estimated_distance_m_user_calibrated;
-              distanceOutput.textContent='Native COLMAP points '+
-                distanceEvidence.first.point3d_id+' and '+
-                distanceEvidence.second.point3d_id+': distance '+
-                distanceEvidence.euclidean_distance_sfm_units.toFixed(6)+
-                ' arbitrary SfM units. Previous metric estimate cleared.';
-            }
-          });
+          referenceMetres.addEventListener('input',clearMetricReference);
 
           document.getElementById('wre-native-reference-calibrate')
             .addEventListener('click',()=>{
@@ -2233,12 +2241,104 @@ jobs:
                 reference_verified_by_wre:false
               };
               const estimated=applyMetricReference(distanceEvidence);
+              referenceExport.disabled=false;
               distanceOutput.textContent+=' Estimated '+estimated.toFixed(6)+
                 ' metres from user reference; NOT WRE-verified.';
               calibrationStatus.textContent=
                 'User-supplied scale: '+factor.toPrecision(8)+
                 ' metres per SfM unit. Accuracy depends on external measurement.';
             });
+
+          // Portable source-bound receipt: user-provided metres are never WRE-certified.
+          referenceExport.addEventListener('click',()=>{
+            if(!userMetricReference || referenceExport.disabled ||
+               localUrl!==null || !viewer.loaded) return;
+            const receipt={
+              schema:'wre.experimental.real16_user_metric_reference.v1',
+              ...userMetricReference,
+              metric_scale_known:false,
+              gpu_training_executed:false,
+              source_photo_license:'CC BY-NC 4.0 (noncommercial)'
+            };
+            const blob=new Blob([JSON.stringify(receipt,null,2)],{
+              type:'application/json'
+            });
+            const href=URL.createObjectURL(blob);
+            const link=document.createElement('a');
+            link.href=href;link.download='wre-real16-user-scale-reference.json';
+            document.body.appendChild(link);link.click();link.remove();
+            setTimeout(()=>URL.revokeObjectURL(href),1000);
+          });
+
+          referenceImport.addEventListener('change',async()=>{
+            const file=referenceImport.files && referenceImport.files[0];
+            clearMetricReference();
+            try {
+              if(!file || file.size===0 || file.size>65536 ||
+                 localUrl!==null || !viewer.loaded)
+                throw Error('Choose a small reference file for the original scene');
+              const receipt=JSON.parse(await file.text());
+              if(localUrl!==null || !viewer.loaded ||
+                 receipt.schema!=='wre.experimental.real16_user_metric_reference.v1' ||
+                 receipt.source_scene_glb_sha256!=='WRE_SCENE_SHA256' ||
+                 !Array.isArray(receipt.reference_point3d_ids) ||
+                 receipt.reference_point3d_ids.length!==2 ||
+                 !receipt.reference_point3d_ids.every(Number.isSafeInteger) ||
+                 receipt.reference_point3d_ids.some(id=>id<=0) ||
+                 receipt.reference_point3d_ids[0]===receipt.reference_point3d_ids[1])
+                throw Error('Reference is not for this verified 3D scene');
+              const index=await loadNativeIndex();
+              if(localUrl!==null || !viewer.loaded)
+                throw Error('Verified scene changed during reference loading');
+              const [idA,idB]=receipt.reference_point3d_ids;
+              const first=index.points[String(idA)],second=index.points[String(idB)];
+              const valid=point=>point && Array.isArray(point.xyz) &&
+                point.xyz.length===3 && point.xyz.every(Number.isFinite) &&
+                Array.isArray(point.observations) && point.observations.length>=2;
+              if(!valid(first) || !valid(second))
+                throw Error('Reference landmarks absent from original native SfM');
+              const sfm=Math.hypot(...first.xyz.map((v,i)=>v-second.xyz[i]));
+              const metres=receipt.reference_length_m_user_supplied;
+              const factor=metres/sfm;
+              if(!Number.isFinite(sfm) || sfm<=0 ||
+                 typeof metres!=='number' || !Number.isFinite(metres) || metres<=0 ||
+                 !Number.isFinite(factor) || factor<=0 ||
+                 typeof receipt.metres_per_sfm_unit!=='number' ||
+                 !Number.isFinite(receipt.metres_per_sfm_unit) ||
+                 !Number.isFinite(receipt.reference_distance_sfm_units) ||
+                 Math.abs(receipt.reference_distance_sfm_units-sfm)>
+                   1e-8*Math.max(1,sfm) ||
+                 Math.abs(receipt.metres_per_sfm_unit-factor)>
+                   1e-8*Math.max(1,factor))
+                throw Error('User reference disagrees with actual native 3D geometry');
+              userMetricReference={
+                source_scene_glb_sha256:'WRE_SCENE_SHA256',
+                reference_point3d_ids:[idA,idB],
+                reference_distance_sfm_units:sfm,
+                reference_length_m_user_supplied:metres,
+                metres_per_sfm_unit:factor,
+                reference_verified_by_wre:false
+              };
+              referenceMetres.value=String(metres);
+              referenceExport.disabled=false;
+              calibrationStatus.textContent='Restored user reference: '+
+                factor.toPrecision(8)+' metres per SfM unit; NOT WRE-verified.';
+              if(distanceEvidence){
+                const estimated=applyMetricReference(distanceEvidence);
+                distanceOutput.textContent='Native COLMAP points '+
+                  distanceEvidence.first.point3d_id+' and '+
+                  distanceEvidence.second.point3d_id+': distance '+
+                  distanceEvidence.euclidean_distance_sfm_units.toFixed(6)+
+                  ' arbitrary SfM units. Estimated '+estimated.toFixed(6)+
+                  ' metres IF the user reference is accurate; NOT WRE-verified.';
+              }
+            }catch(error){
+              clearMetricReference();
+              calibrationStatus.textContent='Scale reference rejected: '+String(error);
+            }finally{
+              referenceImport.value='';
+            }
+          });
 
           distanceExport.addEventListener('click',()=>{
             if(!distanceEvidence || distanceExport.disabled || localUrl!==null ||
@@ -4179,6 +4279,99 @@ jobs:
               )
               assert exported_pair["gpu_training_executed"] is False
               assert "noncommercial" in exported_pair["source_photo_license"]
+              # Portable scale receipt is independently tested against the
+              # authentic native GLB digest and native Point3D coordinates.
+              assert js("""
+                const button=document.getElementById('wre-native-reference-export');
+                if(button.disabled) return false;
+                window.__userScaleReceipt=null;
+                const old=URL.createObjectURL.bind(URL);
+                URL.createObjectURL=blob=>{
+                  if(blob.type==='application/json')
+                    blob.text().then(text=>window.__userScaleReceipt=text);
+                  return old(blob);
+                };
+                button.click();
+                return true;
+              """), "User-provided reference could not be exported from original GLB"
+              for _ in range(40):
+                  scale_text=js("return window.__userScaleReceipt;")
+                  if scale_text is not None:
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("Actual native viewer did not export user scale JSON")
+              scale_receipt=json.loads(scale_text)
+              assert scale_receipt["schema"]==(
+                  "wre.experimental.real16_user_metric_reference.v1"
+              )
+              assert scale_receipt["source_scene_glb_sha256"]==receipt["sha256"]
+              assert scale_receipt["reference_point3d_ids"]==[
+                  int(first_point_id),int(second_point_id)
+              ]
+              assert scale_receipt["reference_verified_by_wre"] is False
+              assert scale_receipt["metric_scale_known"] is False
+              assert scale_receipt["gpu_training_executed"] is False
+              assert "noncommercial" in scale_receipt["source_photo_license"]
+              assert math.isclose(
+                  scale_receipt["reference_distance_sfm_units"],
+                  expected_separation,rel_tol=1e-12,abs_tol=1e-10
+              )
+              assert math.isclose(
+                  scale_receipt["metres_per_sfm_unit"],
+                  2.5/expected_separation,rel_tol=1e-12,abs_tol=1e-12
+              )
+              # A different GLB digest must be rejected even when its fields
+              # otherwise copy legitimate native landmark IDs and geometry.
+              assert js("""
+                const input=document.getElementById('wre-native-reference-import');
+                const corrupted=JSON.parse(window.__userScaleReceipt);
+                corrupted.source_scene_glb_sha256='other-unverified-scene';
+                const transfer=new DataTransfer();
+                transfer.items.add(new File([JSON.stringify(corrupted)],'wrong.json',{
+                  type:'application/json'
+                }));
+                input.files=transfer.files;
+                input.dispatchEvent(new Event('change',{bubbles:true}));
+                return true;
+              """)
+              for _ in range(40):
+                  wrong_scale_state=js("""
+                    return document.getElementById('wre-native-calibration-status').textContent;
+                  """)
+                  if "Scale reference rejected:" in wrong_scale_state:
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("Mismatched native scene scale receipt was not rejected")
+              assert js("""
+                return document.getElementById('wre-native-reference-export').disabled;
+              """), "Rejected untrusted scene scale still enabled export"
+              # The exact original receipt restores the conditional ratio.
+              assert js("""
+                const input=document.getElementById('wre-native-reference-import');
+                const transfer=new DataTransfer();
+                transfer.items.add(new File([window.__userScaleReceipt],'scale.json',{
+                  type:'application/json'
+                }));
+                input.files=transfer.files;
+                input.dispatchEvent(new Event('change',{bubbles:true}));
+                return true;
+              """)
+              for _ in range(60):
+                  restored_status=js("""
+                    return document.getElementById('wre-native-calibration-status')
+                      .textContent;
+                  """)
+                  if "Restored user reference:" in restored_status:
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("Correct native-scene scale receipt was not restored")
+              assert "NOT WRE-verified" in restored_status
+              assert js("""
+                return !document.getElementById('wre-native-reference-export').disabled;
+              """), "Restored reference did not become reusable"
               # New actual native landmark pair reuses calibrated scale,
               # but only as an estimate conditional on that user measurement.
               third_point_id=next(
