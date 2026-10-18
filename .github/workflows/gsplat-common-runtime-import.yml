@@ -580,6 +580,19 @@ jobs:
                   for j in members:
                       by_track[i][j] += 1
           assert by_track == shared_tracks
+          # Only real PyCOLMAP 3D points observed by BOTH cameras are sampled.
+          # Sorted point IDs make a bounded, deterministic spatial overlay.
+          sampled_shared_points = {}
+          for i in range(16):
+              for j in range(i + 1, 16):
+                  shared_ids = sorted(observed_ids[i] & observed_ids[j])
+                  assert len(shared_ids) == shared_tracks[i][j]
+                  samples = []
+                  for point_id in shared_ids[:8]:
+                      xyz = np.asarray(model.points3D[point_id].xyz, dtype=np.float64)
+                      assert xyz.shape == (3,) and np.isfinite(xyz).all()
+                      samples.append([int(point_id), *(float(value) for value in xyz)])
+                  sampled_shared_points[f"{i}:{j}"] = samples
           centers = np.asarray([frame["camera_center_xyz"] for frame in frames])
           assert np.linalg.norm(np.ptp(centers, axis=0)) > 0
           descriptor = {
@@ -597,6 +610,8 @@ jobs:
               "pairwise_shared_sfm_tracks": {
                   "camera_names": [f["image_name"] for f in ordered_frames],
                   "counts": shared_tracks,
+                  "samples": sampled_shared_points,
+                  "sample_limit_per_distinct_pair": 8,
                   "measurement": "common_triangulated_3d_point_ids_in_sample",
               },
           }
