@@ -891,6 +891,7 @@ jobs:
           maps = {}
           frame_metrics = []
           all_positive_z = []
+          depth_rows = []
           rejected_nonpositive = 0
           for frame in frames:
               image_id = int(frame["image_id"])
@@ -913,6 +914,12 @@ jobs:
                   py = min(tile_size - 1, int(xy[1] * tile_size / frame["image_height"]))
                   depth[py, px] = min(depth[py, px], z)
                   all_positive_z.append(z)
+                  depth_rows.append((
+                      image_id, frame["image_name"], frame["image_sha256"],
+                      _point_id, _index, xy[0], xy[1],
+                      xyz[0], xyz[1], xyz[2],
+                      float(camera_xyz[0]), float(camera_xyz[1]), z,
+                  ))
                   count += 1
               valid = np.isfinite(depth)
               assert count > 0 and np.any(valid), frame["image_name"]
@@ -929,6 +936,19 @@ jobs:
           assert sum(row["native_tracked_points_with_positive_depth"] for row in frame_metrics) + rejected_nonpositive == len(selected)
           positive = np.asarray(all_positive_z, dtype=np.float64)
           assert positive.size > 100 and np.all(np.isfinite(positive))
+          # Export native pixel, XYZ and camera-depth at ORIGINAL resolution.
+          # The 256x256 NPZ is a visualization, not the measurement table.
+          assert len(depth_rows) == positive.size
+          depth_csv = root / "wre-real16-native-sparse-depth-observations.csv"
+          with depth_csv.open("x", encoding="utf-8", newline="") as stream:
+              writer = csv.writer(stream, lineterminator="\n")
+              writer.writerow((
+                  "image_id", "image_name", "image_sha256", "point3d_id",
+                  "point2d_idx", "pixel_x", "pixel_y",
+                  "world_x", "world_y", "world_z",
+                  "camera_x_sfm_units", "camera_y_sfm_units", "camera_z_sfm_units",
+              ))
+              writer.writerows(sorted(depth_rows, key=lambda row: (row[0], row[3], row[4])))
           near, far = (float(x) for x in np.percentile(positive, [5, 95]))
           assert near > 0 and far >= near
           span = max(far - near, np.finfo(np.float64).eps)
@@ -951,6 +971,8 @@ jobs:
               "input_native_track_observations": total_native_observations,
               "distinct_camera_landmark_observations": len(selected),
               "positive_depth_observations": int(positive.size),
+              "depth_observations_csv": depth_csv.name,
+              "depth_observations_csv_records": len(depth_rows),
               "nonpositive_or_nonfinite_depth_observations": rejected_nonpositive,
               "tile_resolution": [tile_size, tile_size],
               "tile_order": "image_name_sorted_four_by_four",
@@ -1388,6 +1410,7 @@ jobs:
               "wre-real16-native-sparse-depth.npz",
               "wre-real16-native-sparse-depth.json",
               "wre-real16-native-sparse-depth-preview.png",
+              "wre-real16-native-sparse-depth-observations.csv",
               "wre-real16-camera-centers.ply",
               "wre-real16-observed-rgb-LICENSE.txt",
               "wre-real16-early-gltf/ply/point_cloud_0.ply",
@@ -1427,6 +1450,7 @@ jobs:
             wre-real16-native-sparse-depth.npz
             wre-real16-native-sparse-depth.json
             wre-real16-native-sparse-depth-preview.png
+            wre-real16-native-sparse-depth-observations.csv
             wre-real16-camera-centers.ply
             wre-real16-observed-rgb-LICENSE.txt
             wre-real16-early-gltf/ply/point_cloud_0.ply
@@ -1572,6 +1596,7 @@ jobs:
               "wre-real16-native-sparse-depth.npz",
               "wre-real16-native-sparse-depth.json",
               "wre-real16-native-sparse-depth-preview.png",
+              "wre-real16-native-sparse-depth-observations.csv",
           ):
               shutil.copyfile(name, output / name)
 
@@ -1737,7 +1762,8 @@ jobs:
             <img id="wre-sparse-depth-preview" alt="Sixteen real COLMAP sparse depth tiles"
               src="./wre-real16-native-sparse-depth-preview.png" style="max-width:100%;height:auto">
             <p><a download href="./wre-real16-native-sparse-depth.npz">Sparse camera depth maps (NPZ)</a>
-            · <a download href="./wre-real16-native-sparse-depth.json">Depth scale and observation metadata</a></p>
+            · <a download href="./wre-real16-native-sparse-depth.json">Depth scale and observation metadata</a>
+            · <a download href="./wre-real16-native-sparse-depth-observations.csv">Original-resolution measured depths (CSV)</a></p>
           </section>
           <section id="camera-navigation" aria-label="Inspect reconstructed cameras">
             <label for="wre-camera-choice">Reconstructed camera (filename order, not time)</label>
@@ -3336,7 +3362,8 @@ jobs:
               assert js("""
                 const links=[...document.querySelectorAll('a[download]')].map(a=>a.href);
                 return links.some(h=>h.endsWith('/wre-real16-native-sparse-depth.npz')) &&
-                  links.some(h=>h.endsWith('/wre-real16-native-sparse-depth.json'));
+                  links.some(h=>h.endsWith('/wre-real16-native-sparse-depth.json')) &&
+                  links.some(h=>h.endsWith('/wre-real16-native-sparse-depth-observations.csv'));
               """), "Native sparse depth files were not downloadable in Chrome"
               expected_error=f'{geom_quality["mean_reprojection_error_colmap_px"]:.3f}'
               assert expected_error+' px (COLMAP, in-sample;' in shown
