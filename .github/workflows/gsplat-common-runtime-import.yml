@@ -145,135 +145,6 @@ jobs:
           test "$(git -C "$glm" rev-parse HEAD^{tree})" = "$GLM_TREE"
           echo "COMMON_SOURCES=$root" >> "$GITHUB_ENV"
 
-      - name: Build BOTH upstream CUDA extensions into the SAME Python interpreter
-        shell: bash
-        run: |
-          set -euo pipefail
-          export BUILD_NO_CUDA=0
-          "$COMMON_PYTHON" -m pip install --no-deps --no-build-isolation --no-cache-dir \
-            "$COMMON_SOURCES/ssim"
-          "$COMMON_PYTHON" -m pip install --no-deps --no-build-isolation --no-cache-dir \
-            "$COMMON_SOURCES/gsplat"
-          # Install the exact selected nerfview checkout into site-packages.
-          # The -I child in PR #234 does not insert this repo onto sys.path.
-          "$COMMON_PYTHON" -m pip install --no-deps --no-build-isolation --no-cache-dir \
-            "$COMMON_SOURCES/nerfview"
-          # The isolated trainer child has only gsplat/examples on sys.path.
-          # Install the exact historic SceneManager rather than masking a
-          # missing dependency by inserting its source checkout into sys.path.
-          "$COMMON_PYTHON" -m pip install --no-deps --no-build-isolation --no-cache-dir \
-            "$COMMON_SOURCES/scene-manager"
-
-      - name: Actually import trainer, native extensions, viewer and COLMAP together
-        shell: bash
-        run: |
-          set -euo pipefail
-          "$COMMON_PYTHON" -I - <<'PY'
-          import os
-          import sys
-          from pathlib import Path
-
-          root = Path(os.environ["COMMON_SOURCES"])
-          # Mirror PR #234: -I adds only the immutable trainer examples path.
-          sys.path.insert(0, str(root / "gsplat" / "examples"))
-          import torch
-          import gsplat
-          from gsplat.cuda._backend import _C
-          from fused_ssim import fused_ssim
-          from nerfview import CameraState
-          import pycolmap
-          from pycolmap import SceneManager
-          from datasets.colmap import Dataset, Parser
-          from simple_trainer import Config, main
-
-          assert gsplat.__version__ == "1.5.3"
-          assert torch.__version__ == "2.4.0+cu124"
-          assert not torch.cuda.is_available(), "CPU-hosted gate must not claim GPU"
-          assert _C is not None and callable(fused_ssim)
-          assert all(obj is not None for obj in (CameraState, SceneManager, Dataset, Parser, main))
-          assert Path(pycolmap.__file__).resolve().is_relative_to(Path(sys.prefix).resolve())
-          cfg = Config()
-          assert cfg.camera_model == "pinhole"
-          print("ALL selected trainer native/viewer/COLMAP modules imported together.")
-          print("No CUDA kernel, training, reconstruction, or GPU was executed.")
-          PY
-
-      - name: Actually decode COLMAP binary cameras, images, points and image tensors on CPU
-        shell: bash
-        run: |
-          set -euo pipefail
-          "$COMMON_PYTHON" -I - <<'PY'
-          import os
-          import struct
-          import sys
-          from pathlib import Path
-
-          import numpy as np
-          from PIL import Image
-
-          sources = Path(os.environ["COMMON_SOURCES"])
-          sys.path.insert(0, str(sources / "gsplat" / "examples"))
-          from datasets.colmap import Dataset, Parser
-
-          # Tiny deterministic binary COLMAP fixture: two calibrated camera
-          # observations, one shared 3D track, two actually decodable RGB PNGs.
-          # This exercises the real pinned SceneManager/Parser/Dataset, not a
-          # stub, but does not imply a real photographic reconstruction.
-          root = Path(os.environ["RUNNER_TEMP"]) / "wre-colmap-real-codec-smoke"
-          images = root / "images"
-          model = root / "sparse" / "0"
-          images.mkdir(parents=True, exist_ok=False)
-          model.mkdir(parents=True, exist_ok=False)
-          for image_id in (1, 2):
-              rgb = np.full((16, 16, 3), (20 * image_id, 40, 100), dtype=np.uint8)
-              Image.fromarray(rgb, mode="RGB").save(images / f"{image_id:04d}.png")
-
-          # COLMAP binary formats: count uint64; PINHOLE camera ID=1,
-          # model=1, dimensions, then fx/fy/cx/cy as four doubles.
-          (model / "cameras.bin").write_bytes(
-              struct.pack("<QiiQQdddd", 1, 1, 1, 16, 16, 12.0, 12.0, 8.0, 8.0)
-          )
-          image_records = [struct.pack("<Q", 2)]
-          for image_id in (1, 2):
-              image_records.extend(
-                  (
-                      struct.pack(
-                          "<i4d3di",
-                          image_id, 1.0, 0.0, 0.0, 0.0,
-                          0.0, 0.0, float(image_id - 1) * 0.25, 1,
-                      ),
-                      f"{image_id:04d}.png".encode("ascii") + b"\x00",
-                      struct.pack("<Qddq", 1, 8.0, 8.0, 7),
-                  )
-              )
-          (model / "images.bin").write_bytes(b"".join(image_records))
-          (model / "points3D.bin").write_bytes(
-              struct.pack("<Q", 1)
-              + struct.pack("<QdddBBBdQ", 7, 0.0, 0.0, 2.0, 200, 120, 40, 0.25, 2)
-              + struct.pack("<iiii", 1, 0, 2, 0)
-          )
-
-          parser = Parser(str(root), factor=1, normalize=False)
-          assert parser.image_names == ["0001.png", "0002.png"]
-          assert parser.camtoworlds.shape == (2, 4, 4)
-          assert parser.points.shape == (1, 3)
-          assert parser.points_rgb.tolist() == [[200, 120, 40]]
-          train = Dataset(parser, split="train", load_depths=True)
-          test = Dataset(parser, split="test")
-          assert len(train) == len(test) == 1
-          train_item, test_item = train[0], test[0]
-          assert tuple(train_item["image"].shape) == (16, 16, 3)
-          assert tuple(test_item["image"].shape) == (16, 16, 3)
-          assert tuple(train_item["K"].shape) == (3, 3)
-          assert tuple(train_item["camtoworld"].shape) == (4, 4)
-          assert tuple(train_item["points"].shape) == (1, 2)
-          assert tuple(train_item["depths"].shape) == (1,)
-          assert train_item["image"][0, 0].tolist() == [40.0, 40.0, 100.0]
-          assert test_item["image"][0, 0].tolist() == [20.0, 40.0, 100.0]
-          print("REAL UPSTREAM CPU COLMAP DATASET PASS: 2 images, 1 track, train/test tensors.")
-          print("No CUDA GPU, trainer optimization or real-photo geometry claimed.")
-          PY
-
       # Reconstruct genuine openMVG photographs at an immutable git revision.
       # No cross-run expiring GitHub artifact, invented poses, or GPU requirement.
       - name: Reconstruct and undistort sixteen genuine pinned photos on CPU
@@ -568,6 +439,190 @@ jobs:
                 sfm_quality["mean_reprojection_error_colmap_px"])
           print("REGENERATED AUTHENTIC 16-PHOTO COLMAP:", len(views), "registered,", points, "3D points")
           print("Noncommercial photos; GPU kernels and trainer optimization NOT executed")
+          PY
+
+      # Produce an independently reusable genuine SfM artifact before the
+      # host-only CUDA native compilation, which can be slow or fail.
+      # This has NO CUDA kernel execution or 3DGS optimization.
+      - name: Retain noncommercial source attribution for CPU SfM outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' \
+            'Photographs by Pierre Moulon, OpenMVG Palm Desert Micro DJI, CC BY-NC 4.0.' \
+            'Derived native sparse XYZ/RGB PLY is NONCOMMERCIAL experimental data only.' \
+            'No metric scale, 3DGS training, GPU execution or world-time 4D verified.' \
+            > wre-real16-observed-rgb-LICENSE.txt
+          test -s wre-real16-observed-rgb.ply
+          test -s wre-real16-sfm-quality.json
+          .venv/bin/python -I - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          quality = json.loads(Path("wre-real16-sfm-quality.json").read_text(encoding="utf-8"))
+          assert quality["schema"] == "wre.experimental.real_photo_sfm_quality.v1"
+          assert quality["source_dataset_commit"] == "323989164b1ea003aade5bf49480630ffc64acde"
+          files = ("wre-real16-observed-rgb.ply", "wre-real16-sfm-quality.json",
+                   "wre-real16-observed-rgb-LICENSE.txt")
+          manifest = {
+              "schema": "wre.experimental.native_cpu_sfm_delivery.v1",
+              "source_dataset_commit": quality["source_dataset_commit"],
+              "license": quality["license"],
+              "gpu_training_executed": False,
+              "real_photo_count": quality["geometry_quality"]["registered_views"],
+              "files": {
+                  name: {
+                      "bytes": Path(name).stat().st_size,
+                      "sha256": hashlib.sha256(Path(name).read_bytes()).hexdigest(),
+                  }
+                  for name in files
+              },
+          }
+          Path("wre-real16-native-cpu-sfm-manifest.json").write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          PY
+
+      - name: Publish genuine CPU SfM RGB PLY and in-sample quality independently of CUDA
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wre-real16-native-cpu-sfm-independent
+          path: |
+            wre-real16-observed-rgb.ply
+            wre-real16-sfm-quality.json
+            wre-real16-observed-rgb-LICENSE.txt
+            wre-real16-native-cpu-sfm-manifest.json
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Build BOTH upstream CUDA extensions into the SAME Python interpreter
+        shell: bash
+        run: |
+          set -euo pipefail
+          export BUILD_NO_CUDA=0
+          "$COMMON_PYTHON" -m pip install --no-deps --no-build-isolation --no-cache-dir \
+            "$COMMON_SOURCES/ssim"
+          "$COMMON_PYTHON" -m pip install --no-deps --no-build-isolation --no-cache-dir \
+            "$COMMON_SOURCES/gsplat"
+          # Install the exact selected nerfview checkout into site-packages.
+          # The -I child in PR #234 does not insert this repo onto sys.path.
+          "$COMMON_PYTHON" -m pip install --no-deps --no-build-isolation --no-cache-dir \
+            "$COMMON_SOURCES/nerfview"
+          # The isolated trainer child has only gsplat/examples on sys.path.
+          # Install the exact historic SceneManager rather than masking a
+          # missing dependency by inserting its source checkout into sys.path.
+          "$COMMON_PYTHON" -m pip install --no-deps --no-build-isolation --no-cache-dir \
+            "$COMMON_SOURCES/scene-manager"
+
+      - name: Actually import trainer, native extensions, viewer and COLMAP together
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$COMMON_PYTHON" -I - <<'PY'
+          import os
+          import sys
+          from pathlib import Path
+
+          root = Path(os.environ["COMMON_SOURCES"])
+          # Mirror PR #234: -I adds only the immutable trainer examples path.
+          sys.path.insert(0, str(root / "gsplat" / "examples"))
+          import torch
+          import gsplat
+          from gsplat.cuda._backend import _C
+          from fused_ssim import fused_ssim
+          from nerfview import CameraState
+          import pycolmap
+          from pycolmap import SceneManager
+          from datasets.colmap import Dataset, Parser
+          from simple_trainer import Config, main
+
+          assert gsplat.__version__ == "1.5.3"
+          assert torch.__version__ == "2.4.0+cu124"
+          assert not torch.cuda.is_available(), "CPU-hosted gate must not claim GPU"
+          assert _C is not None and callable(fused_ssim)
+          assert all(obj is not None for obj in (CameraState, SceneManager, Dataset, Parser, main))
+          assert Path(pycolmap.__file__).resolve().is_relative_to(Path(sys.prefix).resolve())
+          cfg = Config()
+          assert cfg.camera_model == "pinhole"
+          print("ALL selected trainer native/viewer/COLMAP modules imported together.")
+          print("No CUDA kernel, training, reconstruction, or GPU was executed.")
+          PY
+
+      - name: Actually decode COLMAP binary cameras, images, points and image tensors on CPU
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$COMMON_PYTHON" -I - <<'PY'
+          import os
+          import struct
+          import sys
+          from pathlib import Path
+
+          import numpy as np
+          from PIL import Image
+
+          sources = Path(os.environ["COMMON_SOURCES"])
+          sys.path.insert(0, str(sources / "gsplat" / "examples"))
+          from datasets.colmap import Dataset, Parser
+
+          # Tiny deterministic binary COLMAP fixture: two calibrated camera
+          # observations, one shared 3D track, two actually decodable RGB PNGs.
+          # This exercises the real pinned SceneManager/Parser/Dataset, not a
+          # stub, but does not imply a real photographic reconstruction.
+          root = Path(os.environ["RUNNER_TEMP"]) / "wre-colmap-real-codec-smoke"
+          images = root / "images"
+          model = root / "sparse" / "0"
+          images.mkdir(parents=True, exist_ok=False)
+          model.mkdir(parents=True, exist_ok=False)
+          for image_id in (1, 2):
+              rgb = np.full((16, 16, 3), (20 * image_id, 40, 100), dtype=np.uint8)
+              Image.fromarray(rgb, mode="RGB").save(images / f"{image_id:04d}.png")
+
+          # COLMAP binary formats: count uint64; PINHOLE camera ID=1,
+          # model=1, dimensions, then fx/fy/cx/cy as four doubles.
+          (model / "cameras.bin").write_bytes(
+              struct.pack("<QiiQQdddd", 1, 1, 1, 16, 16, 12.0, 12.0, 8.0, 8.0)
+          )
+          image_records = [struct.pack("<Q", 2)]
+          for image_id in (1, 2):
+              image_records.extend(
+                  (
+                      struct.pack(
+                          "<i4d3di",
+                          image_id, 1.0, 0.0, 0.0, 0.0,
+                          0.0, 0.0, float(image_id - 1) * 0.25, 1,
+                      ),
+                      f"{image_id:04d}.png".encode("ascii") + b"\x00",
+                      struct.pack("<Qddq", 1, 8.0, 8.0, 7),
+                  )
+              )
+          (model / "images.bin").write_bytes(b"".join(image_records))
+          (model / "points3D.bin").write_bytes(
+              struct.pack("<Q", 1)
+              + struct.pack("<QdddBBBdQ", 7, 0.0, 0.0, 2.0, 200, 120, 40, 0.25, 2)
+              + struct.pack("<iiii", 1, 0, 2, 0)
+          )
+
+          parser = Parser(str(root), factor=1, normalize=False)
+          assert parser.image_names == ["0001.png", "0002.png"]
+          assert parser.camtoworlds.shape == (2, 4, 4)
+          assert parser.points.shape == (1, 3)
+          assert parser.points_rgb.tolist() == [[200, 120, 40]]
+          train = Dataset(parser, split="train", load_depths=True)
+          test = Dataset(parser, split="test")
+          assert len(train) == len(test) == 1
+          train_item, test_item = train[0], test[0]
+          assert tuple(train_item["image"].shape) == (16, 16, 3)
+          assert tuple(test_item["image"].shape) == (16, 16, 3)
+          assert tuple(train_item["K"].shape) == (3, 3)
+          assert tuple(train_item["camtoworld"].shape) == (4, 4)
+          assert tuple(train_item["points"].shape) == (1, 2)
+          assert tuple(train_item["depths"].shape) == (1,)
+          assert train_item["image"][0, 0].tolist() == [40.0, 40.0, 100.0]
+          assert test_item["image"][0, 0].tolist() == [20.0, 40.0, 100.0]
+          print("REAL UPSTREAM CPU COLMAP DATASET PASS: 2 images, 1 track, train/test tensors.")
+          print("No CUDA GPU, trainer optimization or real-photo geometry claimed.")
           PY
 
       - name: Decode ALL real-photo COLMAP data in the SAME pinned native trainer environment
