@@ -649,6 +649,7 @@ jobs:
           flip = np.diag([1.0, -1.0, -1.0, 1.0])
           cameras = []
           nodes = []
+          frustum_nodes = []
           for index, frame in enumerate(frames):
               params = np.asarray(frame["intrinsic_parameters"], dtype=np.float64)
               model_name = str(frame["model"]).upper().split(".")[-1]
@@ -681,24 +682,69 @@ jobs:
               nodes.append({
                   "name": f"COLMAP view {index + 1}: {frame['image_name']}",
                   "camera": index,
+                  "children": [17 + index],
                   "matrix": [float(value) for value in gltf_pose.flatten(order="F")],
                   "extras": {
                       "colmap_image_id": frame["image_id"],
                       "image_sha256": frame["image_sha256"],
                   },
               })
-          assert len(cameras) == len(nodes) == 16
-          # Preserve WRE's validated XYZ/RGB GLB buffer untouched.
+              # Field of view is calibrated; LINE length is chosen only for
+              # visibility in arbitrary COLMAP reconstruction units.
+              visual_depth = max(spread * 0.035, radius * 4.0)
+              half_height = visual_depth * math.tan(yfov / 2.0)
+              frustum_nodes.append({
+                  "name": f"Visible COLMAP frustum {index + 1}",
+                  "mesh": 1,
+                  "scale": [half_height * width / height, half_height, visual_depth],
+                  "extras": {"visual_depth_only_nonmetric": True},
+              })
+          assert len(cameras) == len(nodes) == len(frustum_nodes) == 16
+          # Preserve WRE's validated XYZ/RGB GLB binary POINTS prefix.
           original_bin_offset = 20 + chunk_len
           binary_length, binary_kind = struct.unpack_from("<I4s", payload, original_bin_offset)
           assert binary_kind == b"BIN\x00"
           assert original_bin_offset + 8 + binary_length == len(payload)
           binary_chunk = payload[original_bin_offset:]
+          assert doc["buffers"][0]["byteLength"] == binary_length
+          # Reuse one 5-vertex, 8-edge unit frustum mesh for all cameras.
+          # Camera node matrices orient it; child node scale gives true FOV.
+          # No fabricated metric frustum depth or inferred image pixels.
+          frustum_xyz = struct.pack(
+              "<15f", 0, 0, 0, -1, -1, -1, 1, -1, -1, 1, 1, -1, -1, 1, -1
+          )
+          frustum_edges = struct.pack(
+              "<16H", 0, 1, 0, 2, 0, 3, 0, 4, 1, 2, 2, 3, 3, 4, 4, 1
+          )
+          assert len(frustum_xyz) == 60 and len(frustum_edges) == 32
+          edge_offset = binary_length + len(frustum_xyz)
+          doc["buffers"][0]["byteLength"] = edge_offset + len(frustum_edges)
+          doc["bufferViews"].extend([
+              {"buffer": 0, "byteOffset": binary_length,
+               "byteLength": len(frustum_xyz), "target": 34962},
+              {"buffer": 0, "byteOffset": edge_offset,
+               "byteLength": len(frustum_edges), "target": 34963},
+          ])
+          doc["accessors"].extend([
+              {"bufferView": 1, "componentType": 5126, "count": 5,
+               "type": "VEC3", "min": [-1, -1, -1], "max": [1, 1, 0]},
+              {"bufferView": 2, "componentType": 5123, "count": 16,
+               "type": "SCALAR", "min": [0], "max": [4]},
+          ])
+          doc["meshes"].append({
+              "name": "Registered COLMAP visible camera frustums",
+              "primitives": [{"attributes": {"POSITION": 2}, "indices": 3, "mode": 1}],
+          })
+          extended_bin = binary_chunk[8:] + frustum_xyz + frustum_edges
+          extended_bin_chunk = struct.pack(
+              "<I4s", len(extended_bin), b"BIN\x00"
+          ) + extended_bin
           doc["asset"]["copyright"] = (
               f'{manifest["credit"]}; {manifest["license"]}; NONCOMMERCIAL use only'
           )
           doc["cameras"] = cameras
           doc["nodes"].extend(nodes)
+          doc["nodes"].extend(frustum_nodes)
           doc["scenes"][0]["nodes"].extend(range(1, len(nodes) + 1))
           doc.setdefault("extras", {})
           doc["extras"]["registered_colmap_cameras"] = 16
@@ -711,18 +757,29 @@ jobs:
           ).encode("utf-8")
           encoded += b" " * (-len(encoded) % 4)
           combined = (
-              struct.pack("<4sII", b"glTF", 2, 12 + 8 + len(encoded) + len(binary_chunk))
+              struct.pack("<4sII", b"glTF", 2, 12 + 8 + len(encoded) + len(extended_bin_chunk))
               + struct.pack("<I4s", len(encoded), b"JSON")
-              + encoded + binary_chunk
+              + encoded + extended_bin_chunk
           )
           scene_glb = root / "viewable-scene-with-cameras.glb"
           scene_glb.write_bytes(combined)
           assert struct.unpack_from("<II", combined, 4) == (2, len(combined))
-          assert combined[-len(binary_chunk):] == binary_chunk
+          final_bin = combined[20 + len(encoded):]
+          assert final_bin[:8] == struct.pack(
+              "<I4s", len(extended_bin), b"BIN\x00"
+          )
+          assert final_bin[8:8 + binary_length] == binary_chunk[8:]
+          assert final_bin[8 + binary_length:] == frustum_xyz + frustum_edges
           scene_doc = json.loads(combined[20:20 + len(encoded)])
           assert len(scene_doc["cameras"]) == 16
-          assert len(scene_doc["nodes"]) == 17
+          assert len(scene_doc["nodes"]) == 33
           assert len(scene_doc["scenes"][0]["nodes"]) == 17
+          assert len(scene_doc["meshes"]) == 2
+          assert scene_doc["meshes"][1]["primitives"][0]["mode"] == 1
+          assert all(
+              node["children"] == [17 + idx]
+              for idx, node in enumerate(scene_doc["nodes"][1:17])
+          )
           assert scene_doc["accessors"][0]["count"] == len(points)
           scene_digest = hashlib.sha256(combined).hexdigest()
           report = {
@@ -748,6 +805,8 @@ jobs:
                   },
               },
               "registered_camera_nodes": len(cameras),
+              "visible_camera_frustums": len(frustum_nodes),
+              "camera_frustum_depth": "visual-only arbitrary COLMAP units",
               "camera_reconstruction": "native registered COLMAP, not dynamic scene 4D",
           }
           (root / "manifest.json").write_text(
