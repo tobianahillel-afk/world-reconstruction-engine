@@ -878,7 +878,7 @@ jobs:
           splat_output = export_splats(**gaussians, format="splat", save_to=str(seed_splat))
           assert seed_ply.read_bytes() == ply_output
           assert seed_splat.read_bytes() == splat_output
-          assert b"element vertex " + str(n_points).encode() + b"\\n" in ply_output
+          assert b"element vertex " + str(n_points).encode() + b"\n" in ply_output
           assert len(splat_output) == n_points * 32
           # The viewer's official .splat exporter changes record order.
           # Verify the full *set* of emitted positions, not just one point.
@@ -902,7 +902,7 @@ jobs:
               "license": manifest["license"],
           }
           (preview_dir / "preview-manifest.json").write_text(
-              json.dumps(preview_evidence, indent=2, sort_keys=True) + "\\n",
+              json.dumps(preview_evidence, indent=2, sort_keys=True) + "\n",
               encoding="utf-8",
           )
           print(
@@ -957,6 +957,51 @@ jobs:
               len(parser.points), "actual SfM points, 14/2 CPU dataset tensors."
           )
           print("GPU training NONE; native extensions were imported, never executed on GPU.")
+          PY
+
+      - name: Verify genuine COLMAP-derived gsplat PLY with WRE artifact contracts (CPU)
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PYTHONPATH="$GITHUB_WORKSPACE/src"
+          "$GITHUB_WORKSPACE/.venv/bin/python" - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          from wre.domain.appearance import APPEARANCE_MODEL_ARTIFACT_KIND
+          from wre.domain.artifacts import ArtifactId, ArtifactRef
+          from wre.reconstruction.static_appearance_baseline import (
+              GsplatStaticAppearanceTrainingProfile,
+              materialize_verified_gsplat_ply,
+          )
+
+          root = Path(os.environ["GITHUB_WORKSPACE"]) / "wre-real16-gsplat-seeds"
+          manifest = json.loads((root / "preview-manifest.json").read_text())
+          assert manifest["gpu_training_executed"] is False
+          assert manifest["metric_scale_known"] is False
+          assert manifest["points"] > 100
+          output = materialize_verified_gsplat_ply(
+              artifact_ref=ArtifactRef(
+                  ArtifactId("appearance:gsplat:real16-untrained-seeds"),
+                  APPEARANCE_MODEL_ARTIFACT_KIND,
+              ),
+              output_root=root,
+              profile=GsplatStaticAppearanceTrainingProfile(max_steps=1),
+          )
+          assert len(output.entries) == 1
+          verified = output.entries[0]
+          ply = root / verified.relative_path
+          splat = root / "scene.splat"
+          assert verified.relative_path == "ply/point_cloud_0.ply"
+          assert verified.byte_length == manifest["seed_ply_bytes"] == ply.stat().st_size
+          assert verified.sha256.value == manifest["seed_ply_sha256"]
+          assert hashlib.sha256(ply.read_bytes()).hexdigest() == verified.sha256.value
+          assert splat.stat().st_size == manifest["scene_splat_bytes"] == manifest["points"] * 32
+          assert hashlib.sha256(splat.read_bytes()).hexdigest() == manifest["scene_splat_sha256"]
+          print("REAL 16-PHOTO WRE PLY MATERIALIZATION + VIEWABLE SPLAT VERIFIED")
+          print("UNTRAINED initialization: 0 CUDA kernels, 0 optimization steps, no 4D.")
           PY
 
       - name: Publish real 16-photo SfM RGB PLY and attribution without source photographs
