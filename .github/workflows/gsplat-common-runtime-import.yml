@@ -441,6 +441,109 @@ jobs:
           print("Noncommercial photos; GPU kernels and trainer optimization NOT executed")
           PY
 
+      - name: Export actual SfM camera positions and poses on CPU before CUDA build
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv/bin/python - <<'PY'
+          import hashlib
+          import json
+          import math
+          import os
+          import struct
+          from pathlib import Path
+
+          import numpy as np
+          import pycolmap
+
+          capture = Path(os.environ["GITHUB_WORKSPACE"]) / "wre-common-real-photo-capture"
+          model = pycolmap.Reconstruction(str(capture / "sparse" / "0"))
+          manifest = json.loads((capture / "wre-capture-manifest.json").read_text())
+          assert manifest["native_registered_views"] == 16
+          assert model.num_reg_images() == 16
+          frames = []
+          for image_id in sorted(int(value) for value in model.reg_image_ids()):
+              image = model.image(image_id)
+              camera = model.camera(image.camera_id)
+              pose = image.cam_from_world()
+              world_to_camera_rotation = np.asarray(pose.rotation.matrix(), dtype=np.float64)
+              world_to_camera_translation = np.asarray(pose.translation, dtype=np.float64)
+              assert world_to_camera_rotation.shape == (3, 3)
+              assert world_to_camera_translation.shape == (3,)
+              assert np.isfinite(world_to_camera_rotation).all()
+              assert np.isfinite(world_to_camera_translation).all()
+              assert np.allclose(
+                  world_to_camera_rotation @ world_to_camera_rotation.T,
+                  np.eye(3), atol=1e-6,
+              )
+              camera_to_world_rotation = world_to_camera_rotation.T
+              center = -(camera_to_world_rotation @ world_to_camera_translation)
+              assert np.isfinite(center).all()
+              assert max(abs(float(value)) for value in center) < 1e20
+              world_to_camera = np.eye(4)
+              world_to_camera[:3, :3] = world_to_camera_rotation
+              world_to_camera[:3, 3] = world_to_camera_translation
+              camera_to_world = np.eye(4)
+              camera_to_world[:3, :3] = camera_to_world_rotation
+              camera_to_world[:3, 3] = center
+              assert np.allclose(world_to_camera @ camera_to_world, np.eye(4), atol=1e-6)
+              image_path = capture / "images" / image.name
+              assert image_path.is_file()
+              image_hash = hashlib.sha256(image_path.read_bytes()).hexdigest()
+              assert image_hash == manifest["file_sha256"]["images/" + image.name]
+              params = np.asarray(camera.params, dtype=np.float64)
+              assert np.isfinite(params).all()
+              frames.append({
+                  "image_id": image_id,
+                  "image_name": image.name,
+                  "camera_id": int(image.camera_id),
+                  "model": camera.model.name if hasattr(camera.model, "name") else str(camera.model),
+                  "image_width": int(camera.width),
+                  "image_height": int(camera.height),
+                  "intrinsic_parameters": params.tolist(),
+                  "image_sha256": image_hash,
+                  "camera_center_xyz": center.tolist(),
+                  "camera_from_world_row_major_4x4": world_to_camera.tolist(),
+                  "world_from_camera_row_major_4x4": camera_to_world.tolist(),
+              })
+          assert len(frames) == 16
+          assert len({frame["image_name"] for frame in frames}) == 16
+          centers = np.asarray([frame["camera_center_xyz"] for frame in frames])
+          assert np.linalg.norm(np.ptp(centers, axis=0)) > 0
+          descriptor = {
+              "schema": "wre.experimental.native_cpu_colmap_registered_cameras.v1",
+              "source_dataset_commit": manifest["dataset_commit"],
+              "source_credit": manifest["credit"],
+              "license": manifest["license"],
+              "coordinate_system": "native_colmap_arbitrary_scale",
+              "metric_scale_known": False,
+              "capture_time_axis_verified": False,
+              "reconstructed_world_motion": False,
+              "training_gpu_executed": False,
+              "registered_views": len(frames),
+              "cameras": frames,
+          }
+          out = Path(os.environ["GITHUB_WORKSPACE"])
+          (out / "wre-real16-camera-poses.json").write_text(
+              json.dumps(descriptor, indent=2, sort_keys=True, allow_nan=False) + "\n"
+          )
+          header = (
+              "ply\nformat binary_little_endian 1.0\n"
+              f"element vertex {len(frames)}\n"
+              "property float x\nproperty float y\nproperty float z\n"
+              "property uchar red\nproperty uchar green\nproperty uchar blue\n"
+              "end_header\n"
+          ).encode("ascii")
+          payload = b"".join(
+              struct.pack("<fffBBB", *frame["camera_center_xyz"], 255, 190, 30)
+              for frame in frames
+          )
+          (out / "wre-real16-camera-centers.ply").write_bytes(header + payload)
+          assert len(payload) == len(frames) * struct.calcsize("<fffBBB")
+          print("REAL 16-PHOTO CAMERA POSES AND XYZ CENTERS EXPORTED:", len(frames))
+          print("Native SfM scale only; no temporal motion, metric scale or GPU training")
+          PY
+
       # Produce an independently reusable genuine SfM artifact before the
       # host-only CUDA native compilation, which can be slow or fail.
       # This has NO CUDA kernel execution or 3DGS optimization.
@@ -463,8 +566,17 @@ jobs:
           quality = json.loads(Path("wre-real16-sfm-quality.json").read_text(encoding="utf-8"))
           assert quality["schema"] == "wre.experimental.real_photo_sfm_quality.v1"
           assert quality["source_dataset_commit"] == "323989164b1ea003aade5bf49480630ffc64acde"
-          files = ("wre-real16-observed-rgb.ply", "wre-real16-sfm-quality.json",
-                   "wre-real16-observed-rgb-LICENSE.txt")
+          poses = json.loads(Path("wre-real16-camera-poses.json").read_text())
+          assert poses["schema"] == "wre.experimental.native_cpu_colmap_registered_cameras.v1"
+          assert poses["registered_views"] == quality["geometry_quality"]["registered_views"]
+          assert poses["source_dataset_commit"] == quality["source_dataset_commit"]
+          files = (
+              "wre-real16-observed-rgb.ply",
+              "wre-real16-sfm-quality.json",
+              "wre-real16-camera-poses.json",
+              "wre-real16-camera-centers.ply",
+              "wre-real16-observed-rgb-LICENSE.txt",
+          )
           manifest = {
               "schema": "wre.experimental.native_cpu_sfm_delivery.v1",
               "source_dataset_commit": quality["source_dataset_commit"],
@@ -491,6 +603,8 @@ jobs:
           path: |
             wre-real16-observed-rgb.ply
             wre-real16-sfm-quality.json
+            wre-real16-camera-poses.json
+            wre-real16-camera-centers.ply
             wre-real16-observed-rgb-LICENSE.txt
             wre-real16-native-cpu-sfm-manifest.json
           if-no-files-found: error
