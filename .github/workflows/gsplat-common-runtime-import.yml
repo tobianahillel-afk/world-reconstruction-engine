@@ -700,6 +700,27 @@ jobs:
                   "extras": {"visual_depth_only_nonmetric": True},
               })
           assert len(cameras) == len(nodes) == len(frustum_nodes) == 16
+          # Spatial connections are ordered by source filename only: this is
+          # NOT verified capture time, temporal tracking or moving-scene 4D.
+          path_frames = sorted(frames, key=lambda frame: frame["image_name"])
+          assert len({frame["image_name"] for frame in path_frames}) == 16
+          path_centers = np.asarray(
+              [frame["camera_center_xyz"] for frame in path_frames], dtype=np.float64
+          )
+          assert path_centers.shape == (16, 3) and np.isfinite(path_centers).all()
+          path_xyz = path_centers.astype("<f4").tobytes()
+          # Vertex colors distinguish the ends of the non-temporal ordering,
+          # without any implication of elapsed time or metric travel distance.
+          path_rgb = bytes(
+              channel
+              for index in range(len(path_frames))
+              for channel in (
+                  round(255 * index / (len(path_frames) - 1)),
+                  128,
+                  round(255 * (len(path_frames) - 1 - index) / (len(path_frames) - 1)),
+              )
+          )
+          assert len(path_xyz) == 16 * 12 and len(path_rgb) == 16 * 3
           # Preserve WRE's validated XYZ/RGB GLB binary POINTS prefix.
           original_bin_offset = 20 + chunk_len
           binary_length, binary_kind = struct.unpack_from("<I4s", payload, original_bin_offset)
@@ -718,24 +739,44 @@ jobs:
           )
           assert len(frustum_xyz) == 60 and len(frustum_edges) == 32
           edge_offset = binary_length + len(frustum_xyz)
-          doc["buffers"][0]["byteLength"] = edge_offset + len(frustum_edges)
+          path_offset = edge_offset + len(frustum_edges)
+          color_offset = path_offset + len(path_xyz)
+          doc["buffers"][0]["byteLength"] = color_offset + len(path_rgb)
           doc["bufferViews"].extend([
               {"buffer": 0, "byteOffset": binary_length,
                "byteLength": len(frustum_xyz), "target": 34962},
               {"buffer": 0, "byteOffset": edge_offset,
                "byteLength": len(frustum_edges), "target": 34963},
+              {"buffer": 0, "byteOffset": path_offset,
+               "byteLength": len(path_xyz), "target": 34962},
+              {"buffer": 0, "byteOffset": color_offset,
+               "byteLength": len(path_rgb), "target": 34962},
           ])
           doc["accessors"].extend([
               {"bufferView": 1, "componentType": 5126, "count": 5,
                "type": "VEC3", "min": [-1, -1, -1], "max": [1, 1, 0]},
               {"bufferView": 2, "componentType": 5123, "count": 16,
                "type": "SCALAR", "min": [0], "max": [4]},
+              {"bufferView": 3, "componentType": 5126, "count": 16,
+               "type": "VEC3", "min": path_centers.min(axis=0).astype("<f4").tolist(),
+               "max": path_centers.max(axis=0).astype("<f4").tolist()},
+              {"bufferView": 4, "componentType": 5121, "count": 16,
+               "type": "VEC3", "normalized": True},
           ])
           doc["meshes"].append({
               "name": "Registered COLMAP visible camera frustums",
               "primitives": [{"attributes": {"POSITION": 2}, "indices": 3, "mode": 1}],
           })
-          extended_bin = binary_chunk[8:] + frustum_xyz + frustum_edges
+          doc["meshes"].append({
+              "name": "Registered COLMAP camera-center filename-order connections",
+              "primitives": [{
+                  "attributes": {"POSITION": 4, "COLOR_0": 5},
+                  "mode": 3,
+              }],
+          })
+          extended_bin = (
+              binary_chunk[8:] + frustum_xyz + frustum_edges + path_xyz + path_rgb
+          )
           extended_bin_chunk = struct.pack(
               "<I4s", len(extended_bin), b"BIN\x00"
           ) + extended_bin
@@ -745,13 +786,22 @@ jobs:
           doc["cameras"] = cameras
           doc["nodes"].extend(nodes)
           doc["nodes"].extend(frustum_nodes)
+          doc["nodes"].append({
+              "name": "COLMAP camera-center connections (not time or 4D)",
+              "mesh": 2,
+          })
           doc["scenes"][0]["nodes"].extend(range(1, len(nodes) + 1))
+          doc["scenes"][0]["nodes"].append(33)
           doc.setdefault("extras", {})
           doc["extras"]["registered_colmap_cameras"] = 16
           doc["extras"]["source_dataset_commit"] = manifest["dataset_commit"]
           doc["extras"]["license"] = manifest["license"]
           doc["extras"]["camera_pose_basis"] = "COLMAP camera +Z/+Ydown to glTF -Z/+Yup"
           doc["extras"]["camera_motion_or_time_reconstruction"] = False
+          doc["extras"]["camera_center_path_order"] = "source_filename_not_capture_time"
+          doc["extras"]["camera_center_path_image_ids"] = [
+              frame["image_id"] for frame in path_frames
+          ]
           encoded = json.dumps(
               doc, sort_keys=True, separators=(",", ":"), allow_nan=False
           ).encode("utf-8")
@@ -769,12 +819,25 @@ jobs:
               "<I4s", len(extended_bin), b"BIN\x00"
           )
           assert final_bin[8:8 + binary_length] == binary_chunk[8:]
-          assert final_bin[8 + binary_length:] == frustum_xyz + frustum_edges
+          assert final_bin[8 + binary_length:] == (
+              frustum_xyz + frustum_edges + path_xyz + path_rgb
+          )
           scene_doc = json.loads(combined[20:20 + len(encoded)])
           assert len(scene_doc["cameras"]) == 16
-          assert len(scene_doc["nodes"]) == 33
-          assert len(scene_doc["scenes"][0]["nodes"]) == 17
-          assert len(scene_doc["meshes"]) == 2
+          assert len(scene_doc["nodes"]) == 34
+          assert len(scene_doc["scenes"][0]["nodes"]) == 18
+          assert len(scene_doc["meshes"]) == 3
+          assert scene_doc["nodes"][33]["mesh"] == 2
+          assert scene_doc["meshes"][2]["primitives"][0] == {
+              "attributes": {"POSITION": 4, "COLOR_0": 5}, "mode": 3
+          }
+          assert scene_doc["accessors"][4]["count"] == 16
+          assert scene_doc["accessors"][5]["count"] == 16
+          assert np.allclose(
+              np.frombuffer(extended_bin, dtype="<f4", count=48, offset=path_offset)
+              .reshape(16, 3), path_centers, atol=1e-5
+          )
+          assert extended_bin[color_offset:color_offset + len(path_rgb)] == path_rgb
           assert scene_doc["meshes"][1]["primitives"][0]["mode"] == 1
           assert all(
               node["children"] == [17 + idx]
@@ -806,6 +869,8 @@ jobs:
               },
               "registered_camera_nodes": len(cameras),
               "visible_camera_frustums": len(frustum_nodes),
+              "camera_center_connections": len(path_frames) - 1,
+              "camera_center_connection_order": "filename_only_not_capture_time",
               "camera_frustum_depth": "visual-only arbitrary COLMAP units",
               "camera_reconstruction": "native registered COLMAP, not dynamic scene 4D",
           }
