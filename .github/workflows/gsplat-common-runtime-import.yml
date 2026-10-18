@@ -454,6 +454,15 @@ jobs:
           ), module=pycolmap)
           models = [m for m in mapped.models if m.num_registered_images == 16 and m.num_points3d > 100]
           assert len(models) == 1, "the pinned genuine 16-view reconstruction was not reproduced"
+          # The gsplat Parser seeds SH0 appearance from native points3D RGB.
+          # Pure SfM can leave those RGB values black: extract observed colors
+          # from the REAL registered source photographs before undistortion.
+          # This uses COLMAP's own track-based color extraction, no new solver.
+          native_model_path = root / "native-sparse" / "0"
+          colored_model = pycolmap.Reconstruction(str(native_model_path))
+          colored_model.extract_colors_for_all_images(str(canonical))
+          colored_model.write(str(native_model_path))
+          print("NATIVE PHOTO-OBSERVED 3D POINT RGB EXTRACTED")
           capture = Path(os.environ["GITHUB_WORKSPACE"]) / "wre-common-real-photo-capture"
           undistorted = root / "undistorted"
           pycolmap.undistort_images(
