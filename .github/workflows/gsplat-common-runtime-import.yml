@@ -1241,6 +1241,7 @@ jobs:
               "wre-real16-sfm-quality.json",
               "wre-real16-camera-poses.json",
               "wre-real16-native-2d3d-tracks.csv",
+              "wre-real16-observed-rgb-agreement.json",
               "wre-real16-camera-centers.ply",
               "wre-real16-observed-rgb-LICENSE.txt",
               "wre-real16-early-gltf/ply/point_cloud_0.ply",
@@ -1276,6 +1277,7 @@ jobs:
             wre-real16-sfm-quality.json
             wre-real16-camera-poses.json
             wre-real16-native-2d3d-tracks.csv
+            wre-real16-observed-rgb-agreement.json
             wre-real16-camera-centers.ply
             wre-real16-observed-rgb-LICENSE.txt
             wre-real16-early-gltf/ply/point_cloud_0.ply
@@ -1398,6 +1400,7 @@ jobs:
               "wre-real16-observed-rgb-LICENSE.txt",
               "wre-real16-camera-poses.json",
               "wre-real16-native-2d3d-tracks.csv",
+              "wre-real16-observed-rgb-agreement.json",
           ):
               shutil.copyfile(name, output / name)
 
