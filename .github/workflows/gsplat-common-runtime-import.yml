@@ -3486,6 +3486,96 @@ jobs:
                   abs_tol=1e-4,
               )
               assert "NOT authenticated" in native_overlay["title"]
+
+              # Real browser reverse interaction: click at an observed pixel
+              # on a locally supplied same-size image to select the actual
+              # native 3D point. Choose a well-separated track to disambiguate
+              # the explicit eight-pixel hit radius from nearby observations.
+              width=overlay_cameras[0]["image_width"]
+              height=overlay_cameras[0]["image_height"]
+              photo_candidates=[
+                  (pid,ob) for pid,ob in available
+                  if 2 < ob["pixel"][0] < width-2
+                  and 2 < ob["pixel"][1] < height-2
+              ]
+              assert len(photo_candidates)>5
+              def other_track_gap(item):
+                  pid,obs=item
+                  return min(
+                      (obs["pixel"][0]-peer["pixel"][0])**2
+                      +(obs["pixel"][1]-peer["pixel"][1])**2
+                      for other,peer in photo_candidates if other!=pid
+                  )
+              photo_pick=max(photo_candidates,key=other_track_gap)
+              assert other_track_gap(photo_pick)>64, (
+                  "No isolated real SfM observation for photo-to-3D browser smoke"
+              )
+              photo_id,photo_obs=photo_pick
+              assert js("""
+                const img=document.getElementById('wre-photo-image');
+                if(img.hidden || !img.complete) return false;
+                const r=img.getBoundingClientRect();
+                img.dispatchEvent(new MouseEvent('click',{
+                  bubbles:true,
+                  clientX:r.left+__U__*r.width/img.naturalWidth,
+                  clientY:r.top+__V__*r.height/img.naturalHeight
+                }));
+                return true;
+              """.replace("__U__",repr(photo_obs["pixel"][0]))
+                 .replace("__V__",repr(photo_obs["pixel"][1])))
+              for _ in range(60):
+                  reverse_state=js("""
+                    const marker=document.getElementById('wre-native-photo-pixel');
+                    return {
+                      point:document.getElementById('wre-native-point-id').value,
+                      overlay:!marker.hidden,
+                      status:document.getElementById('wre-native-observation-status').textContent
+                    };
+                  """)
+                  if (reverse_state["point"]==str(photo_id)
+                      and reverse_state["overlay"]
+                      and "Selected by clicking" in reverse_state["status"]):
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("Real photographed pixel did not navigate to native 3D")
+              # Explicit empty-area selection must not fabricate a native 3D
+              # observation or silently replace the previously selected point.
+              blank=next(
+                  (
+                      (u,v)
+                      for u,v in (
+                          (1.0,1.0),(width-2.0,1.0),
+                          (1.0,height-2.0),(width-2.0,height-2.0)
+                      )
+                      if all(
+                          (u-ob["pixel"][0])**2+(v-ob["pixel"][1])**2>64
+                          for _,ob in available
+                      )
+                  ),None
+              )
+              assert blank is not None
+              assert js("""
+                const img=document.getElementById('wre-photo-image');
+                const r=img.getBoundingClientRect();
+                img.dispatchEvent(new MouseEvent('click',{
+                  bubbles:true,
+                  clientX:r.left+__U__*r.width/img.naturalWidth,
+                  clientY:r.top+__V__*r.height/img.naturalHeight
+                }));
+                return true;
+              """.replace("__U__",repr(blank[0])).replace("__V__",repr(blank[1])))
+              for _ in range(60):
+                  negative_state=js("""
+                    return document.getElementById('wre-native-observation-status')
+                      .textContent;
+                  """)
+                  if "No measured SfM point within 8 pixels" in negative_state:
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("Unmeasured photo pixel was not rejected")
+              assert js("return document.getElementById('wre-native-point-id').value;")==str(photo_id)
               # The very same native 3D track must display the opposite
               # measured pixels when camera A and B are reversed.
               reversed_text=js("""
