@@ -1855,7 +1855,7 @@ jobs:
             </div>
           </section>
           <model-viewer id="wre-scene" camera-controls auto-rotate
-            interaction-prompt="auto"
+            loading="eager" interaction-prompt="auto"
             alt="Sparse CPU 3D reconstruction of 16 real photographs"
             src="./wre-real16-viewable-scene.glb"></model-viewer>
           <footer><p>SfM RGB geometry from real photographs. No metric scale,
@@ -3354,6 +3354,10 @@ jobs:
               call("POST", f"/session/{session}/url", {
                   "url": "http://127.0.0.1:8765/wre-real16-viewer.html"
               })
+              assert js("""
+                const v=document.getElementById('wre-scene');
+                return v && v.getAttribute('loading') === 'eager';
+              """), "Real 3D scene must start loading even below the depth preview"
               for _ in range(180):
                   if js("""
                     const v=document.getElementById('wre-scene');
@@ -3364,7 +3368,21 @@ jobs:
                       break
                   time.sleep(0.5)
               else:
-                  raise RuntimeError("actual Chrome model-viewer GLB load failed")
+                  state=js("""
+                    const v=document.getElementById('wre-scene');
+                    return {
+                      registered:Boolean(customElements.get('model-viewer')),
+                      loaded:Boolean(v && v.loaded),
+                      src:v && v.getAttribute('src'),
+                      eager:v && v.getAttribute('loading'),
+                      viewportY:v && Math.round(v.getBoundingClientRect().top),
+                      viewportHeight:window.innerHeight,
+                      glbRequested:performance.getEntriesByType('resource').some(
+                        item=>item.name.endsWith('/wre-real16-viewable-scene.glb')),
+                    };
+                  """)
+                  raise RuntimeError("actual Chrome model-viewer GLB load failed: " +
+                                     json.dumps(state, sort_keys=True))
               assert js("""
                 const c=document.createElement('canvas');
                 return Boolean(c.getContext('webgl2') || c.getContext('webgl'));
