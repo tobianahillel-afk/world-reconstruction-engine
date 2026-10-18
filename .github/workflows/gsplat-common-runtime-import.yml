@@ -2218,6 +2218,73 @@ jobs:
               """)
               assert f"{expected_tracks} of {expected_keypoints} measured 2D keypoints" in shown_tracks
               assert "NOT a novel-view accuracy score" in shown_tracks
+              # Actual Chrome File API: compare a user-provided LOCAL image to
+              # the real SfM camera name, without bundling licensed photos.
+              # The uploaded pixels are a controlled test image, not the
+              # reconstruction's source photograph or a rendering benchmark.
+              assert js("""
+                const image=document.getElementById('wre-photo-image');
+                return image.hidden && !image.hasAttribute('src');
+              """), "Local source-photo view must start empty"
+              camera_name=actual_cameras[0]["image_name"]
+              browser_local_photo=js("""
+                const name=__CAMERA_NAME__;
+                const canvas=document.createElement('canvas');
+                canvas.width=8;canvas.height=8;
+                const context=canvas.getContext('2d');
+                context.fillStyle='rgb(30,120,200)';
+                context.fillRect(0,0,8,8);
+                const encoded=atob(canvas.toDataURL('image/png').split(',')[1]);
+                const bytes=Uint8Array.from(encoded,c=>c.charCodeAt(0));
+                const original=new File([bytes],name,{type:'image/png'});
+                const transfer=new DataTransfer();
+                transfer.items.add(original);
+                const input=document.getElementById('wre-source-files');
+                input.files=transfer.files;
+                input.dispatchEvent(new Event('change',{bubbles:true}));
+                return {
+                  accepted:document.getElementById('wre-photo-status')
+                    .textContent.includes('Local photo: '+name),
+                  privateUrl:document.getElementById('wre-photo-image')
+                    .getAttribute('src')?.startsWith('blob:')
+                };
+              """.replace("__CAMERA_NAME__",json.dumps(camera_name)))
+              assert browser_local_photo == {"accepted": True, "privateUrl": True}
+              for _ in range(40):
+                  if js("""
+                    const image=document.getElementById('wre-photo-image');
+                    return !image.hidden && image.complete &&
+                      image.naturalWidth===8 && image.naturalHeight===8;
+                  """):
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("Real Chrome did not display the local photo")
+              assert js("""
+                const input=document.getElementById('wre-source-files');
+                const invalid=new File([new Uint8Array([1,2,3])],
+                  'unrelated-source.png',{type:'image/png'});
+                const transfer=new DataTransfer();transfer.items.add(invalid);
+                input.files=transfer.files;
+                input.dispatchEvent(new Event('change',{bubbles:true}));
+                return document.getElementById('wre-photo-status')
+                  .textContent.includes('selection rejected') &&
+                  !document.getElementById('wre-photo-image').hidden;
+              """), "An unmatched local photo was wrongly accepted"
+              assert js("""
+                const camera=document.getElementById('wre-camera-choice');
+                camera.value='1';
+                camera.dispatchEvent(new Event('change',{bubbles:true}));
+                return document.getElementById('wre-photo-image').hidden &&
+                  document.getElementById('wre-photo-status')
+                    .textContent.includes('No local photograph supplied');
+              """), "The local photo leaked into a different SfM camera"
+              assert js("""
+                const camera=document.getElementById('wre-camera-choice');
+                camera.value='0';
+                camera.dispatchEvent(new Event('change',{bubbles:true}));
+                return !document.getElementById('wre-photo-image').hidden;
+              """), "Previously selected source photo could not be restored"
               expected_baseline=math.dist(
                   actual_cameras[0]["camera_center_xyz"],
                   actual_cameras[1]["camera_center_xyz"],
