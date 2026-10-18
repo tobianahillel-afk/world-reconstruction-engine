@@ -4285,6 +4285,99 @@ jobs:
               )
               assert exported_pair["gpu_training_executed"] is False
               assert "noncommercial" in exported_pair["source_photo_license"]
+              # Portable scale receipt is independently tested against the
+              # authentic native GLB digest and native Point3D coordinates.
+              assert js("""
+                const button=document.getElementById('wre-native-reference-export');
+                if(button.disabled) return false;
+                window.__userScaleReceipt=null;
+                const old=URL.createObjectURL.bind(URL);
+                URL.createObjectURL=blob=>{
+                  if(blob.type==='application/json')
+                    blob.text().then(text=>window.__userScaleReceipt=text);
+                  return old(blob);
+                };
+                button.click();
+                return true;
+              """), "User-provided reference could not be exported from original GLB"
+              for _ in range(40):
+                  scale_text=js("return window.__userScaleReceipt;")
+                  if scale_text is not None:
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("Actual native viewer did not export user scale JSON")
+              scale_receipt=json.loads(scale_text)
+              assert scale_receipt["schema"]==(
+                  "wre.experimental.real16_user_metric_reference.v1"
+              )
+              assert scale_receipt["source_scene_glb_sha256"]==receipt["sha256"]
+              assert scale_receipt["reference_point3d_ids"]==[
+                  int(first_point_id),int(second_point_id)
+              ]
+              assert scale_receipt["reference_verified_by_wre"] is False
+              assert scale_receipt["metric_scale_known"] is False
+              assert scale_receipt["gpu_training_executed"] is False
+              assert "noncommercial" in scale_receipt["source_photo_license"]
+              assert math.isclose(
+                  scale_receipt["reference_distance_sfm_units"],
+                  expected_separation,rel_tol=1e-12,abs_tol=1e-10
+              )
+              assert math.isclose(
+                  scale_receipt["metres_per_sfm_unit"],
+                  2.5/expected_separation,rel_tol=1e-12,abs_tol=1e-12
+              )
+              # A different GLB digest must be rejected even when its fields
+              # otherwise copy legitimate native landmark IDs and geometry.
+              assert js("""
+                const input=document.getElementById('wre-native-reference-import');
+                const corrupted=JSON.parse(window.__userScaleReceipt);
+                corrupted.source_scene_glb_sha256='other-unverified-scene';
+                const transfer=new DataTransfer();
+                transfer.items.add(new File([JSON.stringify(corrupted)],'wrong.json',{
+                  type:'application/json'
+                }));
+                input.files=transfer.files;
+                input.dispatchEvent(new Event('change',{bubbles:true}));
+                return true;
+              """)
+              for _ in range(40):
+                  wrong_scale_state=js("""
+                    return document.getElementById('wre-native-calibration-status').textContent;
+                  """)
+                  if "Scale reference rejected:" in wrong_scale_state:
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("Mismatched native scene scale receipt was not rejected")
+              assert js("""
+                return document.getElementById('wre-native-reference-export').disabled;
+              """), "Rejected untrusted scene scale still enabled export"
+              # The exact original receipt restores the conditional ratio.
+              assert js("""
+                const input=document.getElementById('wre-native-reference-import');
+                const transfer=new DataTransfer();
+                transfer.items.add(new File([window.__userScaleReceipt],'scale.json',{
+                  type:'application/json'
+                }));
+                input.files=transfer.files;
+                input.dispatchEvent(new Event('change',{bubbles:true}));
+                return true;
+              """)
+              for _ in range(60):
+                  restored_status=js("""
+                    return document.getElementById('wre-native-calibration-status')
+                      .textContent;
+                  """)
+                  if "Restored user reference:" in restored_status:
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("Correct native-scene scale receipt was not restored")
+              assert "NOT WRE-verified" in restored_status
+              assert js("""
+                return !document.getElementById('wre-native-reference-export').disabled;
+              """), "Restored reference did not become reusable"
               # New actual native landmark pair reuses calibrated scale,
               # but only as an estimate conditional on that user measurement.
               third_point_id=next(
