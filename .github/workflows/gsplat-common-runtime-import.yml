@@ -217,7 +217,7 @@ jobs:
           root = Path(os.environ["COMMON_SOURCES"])
           sys.path.insert(0, str(root / "gsplat" / "examples"))
           from datasets.colmap import Dataset, Parser
-          from utils import rgb_to_sh
+          from simple_trainer import create_splats_with_optimizers
 
           # Eight non-coplanar coloured points, observed in all three
           # calibrated COLMAP camera views with actual projected 2D tracks.
@@ -293,24 +293,43 @@ jobs:
               assert batch["camtoworld"].shape == (4, 4)
               assert torch.isfinite(batch["K"]).all()
               assert torch.isfinite(batch["camtoworld"]).all()
-          # Actual end-to-end COLMAP points and RGB -> pinned gsplat
-          # exporter -> portable viewer files. These are initialized
-          # (UNTRAINED) Gaussians, not photorealistic reconstructions.
+          # The REAL upstream reference trainer builds its Gaussian model
+          # and six optimizer groups from the decoded native COLMAP points.
+          # device="cpu": no CUDA kernel, optimizer step or training is run.
           assert parsed.points.shape == (n, 3)
           assert parsed.points_rgb.shape == (n, 3)
+          torch.manual_seed(7)
+          splats, optimizers = create_splats_with_optimizers(
+              parsed, init_type="sfm", init_opacity=0.1, init_scale=1.0,
+              sh_degree=3, device="cpu", world_rank=0, world_size=1,
+          )
+          assert len(optimizers) == 6
+          assert set(optimizers) == {
+              "means", "scales", "quats", "opacities", "sh0", "shN",
+          }
+          assert all(param.device.type == "cpu" for param in splats.values())
+          assert all(torch.isfinite(param).all() for param in splats.values())
+          assert splats["means"].shape == (n, 3)
+          assert splats["scales"].shape == (n, 3)
+          assert splats["quats"].shape == (n, 4)
+          assert splats["sh0"].shape == (n, 1, 3)
+          assert splats["shN"].shape == (n, 15, 3)
+          np.testing.assert_allclose(
+              splats["means"].detach().numpy(), parsed.points, atol=1e-6
+          )
+          # The selected upstream trainer calculates its own KNN scale
+          # logits, opacity logits, SH colour parameters and quaternions.
+          assert (torch.exp(splats["scales"]) > 0).all()
+          assert torch.allclose(
+              torch.sigmoid(splats["opacities"]),
+              torch.full((n,), 0.1), atol=1e-6,
+          )
+          gaussian_names = ("means", "scales", "quats", "opacities", "sh0", "shN")
+          gaussians = {
+              name: splats[name].detach().cpu() for name in gaussian_names
+          }
           export_root = Path(os.environ["RUNNER_TEMP"]) / "wre-colmap-derived-splats"
           (export_root / "ply").mkdir(parents=True, exist_ok=False)
-          means = torch.from_numpy(parsed.points.copy()).float()
-          rgb = torch.from_numpy(parsed.points_rgb.copy()).float() / 255.0
-          sh0 = rgb_to_sh(rgb).unsqueeze(1)
-          gaussians = dict(
-              means=means,
-              scales=torch.full((n, 3), -2.0),
-              quats=torch.tensor([[1.0, 0.0, 0.0, 0.0]]).repeat(n, 1),
-              opacities=torch.zeros(n),
-              sh0=sh0,
-              shN=torch.zeros((n, 15, 3)),
-          )
           ply_file = export_root / "ply" / "point_cloud_0.ply"
           splat_file = export_root / "point_cloud_0.splat"
           ply_bytes = export_splats(**gaussians, format="ply", save_to=str(ply_file))
@@ -319,24 +338,34 @@ jobs:
           )
           assert ply_file.read_bytes() == ply_bytes
           assert splat_file.read_bytes() == splat_bytes
-          assert f"element vertex {n}\n".encode("ascii") in ply_bytes
-          assert b"property float f_rest_44\n" in ply_bytes
+          assert f"element vertex {n}\\n".encode("ascii") in ply_bytes
+          assert b"property float f_rest_44\\n" in ply_bytes
           assert len(splat_bytes) == n * 32
+          # gsplat's binary .splat writer Morton-sorts the points.
+          # Match by decoded 3D position rather than assuming input order.
+          unmatched = set(range(n))
           for idx in range(n):
               splat = splat_bytes[idx * 32 : (idx + 1) * 32]
+              xyz = np.array(struct.unpack("<3f", splat[:12]))
+              options = [
+                  point_idx for point_idx in unmatched
+                  if np.allclose(parsed.points[point_idx], xyz, atol=1e-6)
+              ]
+              assert len(options) == 1
+              point_idx = options[0]
+              unmatched.remove(point_idx)
+              expected_scale = torch.exp(splats["scales"][point_idx]).detach().numpy()
               np.testing.assert_allclose(
-                  struct.unpack("<3f", splat[:12]), parsed.points[idx], atol=1e-6
-              )
-              np.testing.assert_allclose(
-                  struct.unpack("<3f", splat[12:24]), [np.exp(-2.)] * 3, atol=1e-6
+                  struct.unpack("<3f", splat[12:24]), expected_scale, atol=1e-6
               )
               assert all(
                   abs(actual - expected) <= 1
-                  for actual, expected in zip(splat[24:27], parsed.points_rgb[idx])
+                  for actual, expected in zip(splat[24:27], parsed.points_rgb[point_idx])
               )
-              assert splat[27] == 127
-          print("Eight tracked COLMAP 3D points+RGB exported by pinned gsplat as PLY and .splat.")
-          print("Viewable initialization, not SfM execution or trained appearance.")
+              assert splat[27] == 25  # floor(sigmoid(logit(.1)) * 255)
+          assert not unmatched
+          print("Eight tracked COLMAP points initialized by REAL pinned trainer on CPU.")
+          print("Upstream KNN, colour SH, quats and optimizers used; NO TRAINING.")
 
           print("Three REAL binary COLMAP views and 24 tracks decoded with upstream Parser/Dataset.")
           print("CPU tensor generation verified; no CUDA kernel or training occurred.")
@@ -397,7 +426,10 @@ jobs:
               "tracked_points": 8,
               "colmap_observations": 24,
               "dataset": "synthetic COLMAP binary, 3 registered views, 8 tracked 3D points",
-              "producer": "pinned upstream gsplat 1.5.3 CPU exporter (untrained)",
+              "producer": "pinned upstream gsplat 1.5.3 CPU initializer and exporter (untrained)",
+              "initialization": "simple_trainer.create_splats_with_optimizers, sfm, CPU",
+              "optimizer_groups_initialized": 6,
+              "optimizer_steps_executed": 0,
               "gpu_training_executed": False,
               "ply_sha256": entry.sha256.value,
               "ply_bytes": entry.byte_length,
