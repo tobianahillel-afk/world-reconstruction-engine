@@ -359,6 +359,9 @@ jobs:
               '<button id="wre-save-view" type="button">Save camera viewpoint</button>'
               '<button id="wre-save-png" type="button">Save current 3D view (PNG)</button>'
               '<button id="wre-record-video" type="button">Record 3D camera move (WebM)</button>'
+              '<video id="wre-video-preview" controls playsinline hidden '
+              'aria-label="Replay recorded 3D camera movement" '
+              'style="max-width:100%;max-height:180px"></video>'
               '<label for="wre-load-view">Load camera viewpoint JSON: </label>'
               '<input id="wre-load-view" type="file" accept=".json" '
               'aria-label="Load saved camera viewpoint">'
@@ -375,6 +378,7 @@ jobs:
             const saveView = document.getElementById('wre-save-view');
             const savePng = document.getElementById('wre-save-png');
             const recordVideo = document.getElementById('wre-record-video');
+            const videoPreview = document.getElementById('wre-video-preview');
             const loadView = document.getElementById('wre-load-view');
             const status = document.getElementById('wre-local-status');
             const originalFile = new File([window.__wreEmbeddedSplat],
@@ -525,6 +529,10 @@ jobs:
             // Record an actual video stream from the existing vendor WebGL canvas.
             // Move only the camera; the 16-photo scene itself is STATIC (not 4D).
             let videoRecording = false;
+            let playbackUrl = null;
+            window.addEventListener('pagehide', () => {
+              if (playbackUrl) URL.revokeObjectURL(playbackUrl);
+            });
             recordVideo.addEventListener('click', () => {
               const canvas = document.getElementById('canvas');
               const mime = ['video/webm;codecs=vp8', 'video/webm'].find(
@@ -568,12 +576,17 @@ jobs:
                     return;
                   }
                   const url = URL.createObjectURL(blob);
+                  videoPreview.pause();
+                  if (playbackUrl) URL.revokeObjectURL(playbackUrl);
+                  playbackUrl = url;
+                  videoPreview.src = playbackUrl;
+                  videoPreview.hidden = false;
+                  videoPreview.load();
                   const link = document.createElement('a');
                   link.href = url;
                   link.download = 'wre-3d-camera-move.webm';
                   link.click();
-                  setTimeout(() => URL.revokeObjectURL(url), 30000);
-                  status.textContent = 'Saved WebM of static 3D camera motion.';
+                  status.textContent = 'Saved WebM; replay the STATIC scene camera move below.';
                 };
                 recorder.start(200);
                 status.textContent = 'Recording a 3-second local 3D camera move...';
