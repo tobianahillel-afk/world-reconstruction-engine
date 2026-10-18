@@ -1873,6 +1873,20 @@ jobs:
               Coordinates in arbitrary SfM units; no GPU training or capture time.
             </output>
           </section>
+          <section id="wre-native-distance" aria-label="Measure genuine SfM 3D points">
+            <strong>Distance between two reconstructed COLMAP landmarks</strong>
+            <label for="wre-native-distance-a">First Point3D ID</label>
+            <input id="wre-native-distance-a" type="number" min="1" step="1">
+            <label for="wre-native-distance-b">Second Point3D ID</label>
+            <input id="wre-native-distance-b" type="number" min="1" step="1">
+            <button id="wre-native-distance-measure" type="button">Measure 3D separation</button>
+            <button id="wre-native-distance-export" type="button" disabled>
+              Save measured landmark pair as JSON
+            </button>
+            <output id="wre-native-distance-result" aria-live="polite">
+              Two distinct native points; arbitrary SfM units, NOT meters.
+            </output>
+          </section>
           <section id="local-model" aria-label="Open your own 3D GLB">
             <label for="wre-local-glb">Open your own 3D model (.glb, max 128 MiB)</label>
             <input id="wre-local-glb" type="file" accept=".glb,model/gltf-binary">
@@ -2076,6 +2090,86 @@ jobs:
             }
           };
           lookupButton.addEventListener('click',findNativePoint);
+
+          // Measure original native SfM XYZ without reconstructing or inferring points.
+          const distanceA=document.getElementById('wre-native-distance-a');
+          const distanceB=document.getElementById('wre-native-distance-b');
+          const distanceOutput=document.getElementById('wre-native-distance-result');
+          const distanceExport=document.getElementById('wre-native-distance-export');
+          let distanceEvidence=null;
+          const clearDistanceMarkers=()=>{
+            distanceEvidence=null;
+            distanceExport.disabled=true;
+            viewer.querySelectorAll('[slot^="hotspot-native-distance-"]').forEach(x=>x.remove());
+          };
+          document.getElementById('wre-native-distance-measure')
+            .addEventListener('click',async()=>{
+              clearDistanceMarkers();
+              if(localUrl!==null || !viewer.loaded){
+                distanceOutput.textContent='Restore verified source SfM scene first.';
+                return;
+              }
+              const idA=Number(distanceA.value),idB=Number(distanceB.value);
+              if(!Number.isSafeInteger(idA) || !Number.isSafeInteger(idB) ||
+                 idA<=0 || idB<=0 || idA===idB){
+                distanceOutput.textContent='Choose two distinct positive native COLMAP point IDs.';
+                return;
+              }
+              try {
+                const index=await loadNativeIndex();
+                if(localUrl!==null || !viewer.loaded) return;
+                const first=index.points[String(idA)],second=index.points[String(idB)];
+                const valid=point=>point && Array.isArray(point.xyz) &&
+                  point.xyz.length===3 && point.xyz.every(Number.isFinite) &&
+                  Array.isArray(point.observations) && point.observations.length>=2;
+                if(!valid(first) || !valid(second))
+                  throw Error('No measured native COLMAP 3D point for one or both IDs');
+                const delta=first.xyz.map((v,i)=>v-second.xyz[i]);
+                const measured=Math.hypot(...delta);
+                if(!Number.isFinite(measured)) throw Error('Non-finite SfM distance');
+                for(const [id,point,label] of [[idA,first,'A'],[idB,second,'B']]){
+                  const marker=document.createElement('button');
+                  marker.type='button';
+                  marker.className='wre-pair-hotspot';
+                  marker.slot='hotspot-native-distance-'+label.toLowerCase();
+                  marker.setAttribute('data-position',point.xyz.map(v=>v+'m').join(' '));
+                  marker.setAttribute('data-normal','0 1 0');
+                  marker.setAttribute('aria-label','Measured native point '+label+' '+id);
+                  marker.textContent=label;
+                  viewer.appendChild(marker);
+                }
+                distanceOutput.textContent='Native COLMAP points '+idA+' and '+idB+
+                  ': distance '+measured.toFixed(6)+
+                  ' arbitrary SfM units; NOT meters, GPU training or 4D.';
+                distanceEvidence={
+                  schema:'wre.experimental.real16_native_landmark_distance.v1',
+                  source_scene_glb_sha256:'WRE_SCENE_SHA256',
+                  first:{point3d_id:idA,xyz_sfm_units:first.xyz.slice()},
+                  second:{point3d_id:idB,xyz_sfm_units:second.xyz.slice()},
+                  euclidean_distance_sfm_units:measured,
+                  metric_scale_known:false,
+                  gpu_training_executed:false,
+                  source_photo_license:'CC BY-NC 4.0 (noncommercial)'
+                };
+                distanceExport.disabled=false;
+              }catch(error){
+                clearDistanceMarkers();
+                distanceOutput.textContent='Native 3D distance failed: '+String(error);
+              }
+            });
+
+          distanceExport.addEventListener('click',()=>{
+            if(!distanceEvidence || distanceExport.disabled || localUrl!==null ||
+               !viewer.loaded) return;
+            const blob=new Blob([JSON.stringify(distanceEvidence,null,2)],{
+              type:'application/json'
+            });
+            const href=URL.createObjectURL(blob);
+            const link=document.createElement('a');
+            link.href=href;link.download='wre-real16-native-3d-landmark-distance.json';
+            document.body.appendChild(link);link.click();link.remove();
+            setTimeout(()=>URL.revokeObjectURL(href),1000);
+          });
 
           // Native frontmost sparse-depth sample -> exact SfM Point3D lookup.
           // Do not project any unobserved black bin or infer dense depth.
@@ -2631,6 +2725,8 @@ jobs:
             nearestButton.disabled=true;
             sharedButton.disabled=true;
             clearPairMarkers();
+            clearDistanceMarkers();
+            distanceOutput.textContent='Choose two native COLMAP points in the restored scene.';
             choice.value='';
             baselineChoice.value='';
             baselineOutput.textContent='Select two original cameras for a local SfM baseline.';
@@ -2666,6 +2762,8 @@ jobs:
               sharedButton.disabled=true;
               clearPairMarkers();
               clearNativeLookupMarker();
+              clearDistanceMarkers();
+              distanceOutput.textContent='Distance unavailable for unverified local GLB.';
               lookupOutput.textContent='Native SfM points unavailable for third-party GLB.';
               choice.value='';
               baselineChoice.value='';
@@ -3872,6 +3970,117 @@ jobs:
                   math.isclose(actual,expected,rel_tol=1e-7,abs_tol=1e-6)
                   for actual,expected in zip(actual_xyz,selected_world_xyz,strict=True)
               )
+              # Real Chrome interaction: measure two DISTINCT genuine SfM 3D
+              # landmarks and compare against independent Python math.dist.
+              real_point_ids=sorted(lookup["points"],key=int)
+              first_point_id=real_point_ids[0]
+              first_point_xyz=lookup["points"][first_point_id]["xyz"]
+              second_point_id=next(
+                  pid for pid in real_point_ids[1:]
+                  if math.dist(first_point_xyz,lookup["points"][pid]["xyz"])>1e-6
+              )
+              second_point_xyz=lookup["points"][second_point_id]["xyz"]
+              expected_separation=math.dist(first_point_xyz,second_point_xyz)
+              assert js("""
+                const a=document.getElementById('wre-native-distance-a');
+                const b=document.getElementById('wre-native-distance-b');
+                const button=document.getElementById('wre-native-distance-measure');
+                a.value='__FIRST_ID__';b.value='__SECOND_ID__';
+                button.click();
+                return true;
+              """.replace("__FIRST_ID__",first_point_id).replace(
+                  "__SECOND_ID__",second_point_id
+              ))
+              for _ in range(60):
+                  actual_separation=js("""
+                    return {
+                      text:document.getElementById('wre-native-distance-result').textContent,
+                      first:document.querySelector('[slot="hotspot-native-distance-a"]')
+                        ?.getAttribute('data-position')||'',
+                      second:document.querySelector('[slot="hotspot-native-distance-b"]')
+                        ?.getAttribute('data-position')||''
+                    };
+                  """)
+                  if actual_separation["first"] and actual_separation["second"]:
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("Real native two-point SfM measurement was not rendered")
+              assert "Native COLMAP points "+first_point_id+" and "+second_point_id in (
+                  actual_separation["text"]
+              )
+              assert f"{expected_separation:.6f}" in actual_separation["text"]
+              assert "arbitrary SfM units; NOT meters" in actual_separation["text"]
+              for marker,xyz in (
+                  (actual_separation["first"],first_point_xyz),
+                  (actual_separation["second"],second_point_xyz),
+              ):
+                  actual=[float(value[:-1]) for value in marker.split()]
+                  assert len(actual)==3
+                  assert all(
+                      math.isclose(x,y,rel_tol=1e-7,abs_tol=1e-6)
+                      for x,y in zip(actual,xyz,strict=True)
+                  )
+              # Export actual measured coordinates as portable original-scene
+              # evidence, using independent Python XYZ/GLB provenance checks.
+              assert js("""
+                const button=document.getElementById('wre-native-distance-export');
+                if(button.disabled) return false;
+                window.__nativeDistanceJsonText=null;
+                const original=URL.createObjectURL.bind(URL);
+                URL.createObjectURL=blob=>{
+                  if(blob.type==='application/json') {
+                    blob.text().then(value=>window.__nativeDistanceJsonText=value);
+                  }
+                  return original(blob);
+                };
+                button.click();
+                return true;
+              """), "Original reconstructed point-pair measurement was not exportable"
+              for _ in range(40):
+                  native_pair_text=js("return window.__nativeDistanceJsonText;")
+                  if native_pair_text is not None:
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("Native 16-photo measured pair JSON was not downloaded")
+              exported_pair=json.loads(native_pair_text)
+              assert exported_pair["schema"]==(
+                  "wre.experimental.real16_native_landmark_distance.v1"
+              )
+              assert exported_pair["source_scene_glb_sha256"]==receipt["sha256"]
+              assert exported_pair["first"]["point3d_id"]==int(first_point_id)
+              assert exported_pair["second"]["point3d_id"]==int(second_point_id)
+              for measured_point,truth_xyz in (
+                  (exported_pair["first"],first_point_xyz),
+                  (exported_pair["second"],second_point_xyz),
+              ):
+                  assert len(measured_point["xyz_sfm_units"])==3
+                  assert all(
+                      math.isclose(a,b,rel_tol=1e-12,abs_tol=1e-10)
+                      for a,b in zip(
+                          measured_point["xyz_sfm_units"],truth_xyz,strict=True
+                      )
+                  )
+              assert math.isclose(
+                  exported_pair["euclidean_distance_sfm_units"],
+                  expected_separation,rel_tol=1e-12,abs_tol=1e-10
+              )
+              assert exported_pair["metric_scale_known"] is False
+              assert exported_pair["gpu_training_executed"] is False
+              assert "noncommercial" in exported_pair["source_photo_license"]
+              # Input IDs are selectors, never authority to invent a 3D point.
+              assert js("""
+                document.getElementById('wre-native-distance-b').value=
+                  document.getElementById('wre-native-distance-a').value;
+                document.getElementById('wre-native-distance-measure').click();
+                return !document.querySelector('[slot^="hotspot-native-distance-"]') &&
+                  document.getElementById('wre-native-distance-result')
+                    .textContent.includes('Choose two distinct positive');
+              """), "Repeated native point ID must not leave stale measured markers"
+              assert js(
+                  "return document.getElementById('wre-native-distance-export').disabled;"
+              ), "Invalid native IDs must clear previously exportable evidence"
               # A region across different original camera tiles must not
               # silently combine unrelated SfM camera-Z coordinate frames.
               assert js("""
