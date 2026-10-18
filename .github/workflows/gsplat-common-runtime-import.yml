@@ -1135,9 +1135,16 @@ jobs:
             <select id="wre-camera-choice" disabled>
               <option>Loading camera poses...</option>
             </select>
+            <label for="wre-baseline-choice">Measure to second SfM camera</label>
+            <select id="wre-baseline-choice" disabled>
+              <option>Loading camera poses...</option>
+            </select>
             <button id="wre-camera-reset" type="button">Reset orbit</button>
             <output id="camera-details" aria-live="polite">
               Choose a camera to inspect its SfM position (not an exact source photo view).
+            </output>
+            <output id="wre-camera-baseline" aria-live="polite">
+              Select two cameras to measure their SfM baseline; no metric scale.
             </output>
           </section>
           <section id="local-model" aria-label="Open your own 3D GLB">
@@ -1168,6 +1175,8 @@ jobs:
           <script type="module">
           const viewer=document.getElementById('wre-scene');
           const choice=document.getElementById('wre-camera-choice');
+          const baselineChoice=document.getElementById('wre-baseline-choice');
+          const baselineOutput=document.getElementById('wre-camera-baseline');
           const details=document.getElementById('camera-details');
           const input=document.getElementById('wre-local-glb');
           const importStatus=document.getElementById('local-model-status');
@@ -1204,7 +1213,10 @@ jobs:
             viewer.setAttribute('src',originalScene);
             if(oldUrl) URL.revokeObjectURL(oldUrl);
             choice.disabled=choice.options.length!==17;
+            baselineChoice.disabled=baselineChoice.options.length!==17;
             choice.value='';
+            baselineChoice.value='';
+            baselineOutput.textContent='Select two original cameras for a local SfM baseline.';
             resetOrbit();
             details.textContent='Original 16-camera reconstruction restored.';
             importStatus.textContent='Verified WRE source scene restored.';
@@ -1229,7 +1241,10 @@ jobs:
               viewer.setAttribute('src',nextUrl);
               if(previousUrl) URL.revokeObjectURL(previousUrl);
               choice.disabled=true;
+              baselineChoice.disabled=true;
               choice.value='';
+              baselineChoice.value='';
+              baselineOutput.textContent='Baseline unavailable for unverified local GLB.';
               resetOrbit();
               details.textContent='Original COLMAP cameras only apply to the original scene.';
               importStatus.textContent='Loading local GLB: '+file.name+
@@ -1252,6 +1267,8 @@ jobs:
             viewer.removeAttribute('camera-orbit');
             viewer.setAttribute('auto-rotate','');
             choice.value='';
+            baselineChoice.value='';
+            baselineOutput.textContent='Select two SfM cameras; distance is not in metres.';
             details.textContent='General orbit restored; filename order is not chronology.';
           });
           try {
@@ -1280,10 +1297,32 @@ jobs:
             if (!(span>0 && Number.isFinite(span))) throw Error('Zero camera spread');
             const radius=span*0.18;
             choice.replaceChildren(new Option('Select camera',''));
-            cameras.forEach((c,i)=>choice.add(
-              new Option((i+1)+' · '+c.image_name,String(i))));
+            baselineChoice.replaceChildren(new Option('Select second camera',''));
+            cameras.forEach((c,i)=>{
+              const label=(i+1)+' · '+c.image_name;
+              choice.add(new Option(label,String(i)));
+              baselineChoice.add(new Option(label,String(i)));
+            });
             choice.disabled=false;
+            baselineChoice.disabled=false;
+            const updateBaseline=()=>{
+              if(choice.value==='' || baselineChoice.value===''){
+                baselineOutput.textContent='Select two SfM cameras to measure their baseline.';
+                return;
+              }
+              const first=cameras[Number(choice.value)].camera_center_xyz;
+              const second=cameras[Number(baselineChoice.value)].camera_center_xyz;
+              const distance=Math.hypot(...first.map((v,i)=>v-second[i]));
+              if(!Number.isFinite(distance)) {
+                baselineOutput.textContent='Invalid reconstructed camera geometry.';
+                return;
+              }
+              baselineOutput.textContent='Camera baseline: '+distance.toFixed(6)+
+                ' local SfM units (not metres; no capture-time interpretation).';
+            };
+            baselineChoice.addEventListener('change',updateBaseline);
             choice.addEventListener('change',()=>{
+              updateBaseline();
               if(choice.value==='') return;
               const c=cameras[Number(choice.value)];
               const center=c.camera_center_xyz;
@@ -1924,6 +1963,39 @@ jobs:
                   document.getElementById('camera-details').textContent.includes(
                     'Approximate orbit'));
               """), "Camera selection did not navigate the real WebGL viewer"
+              # An independent Python geometry calculation verifies the actual
+              # displayed SfM baseline from the SAME 16 recovered camera poses.
+              import math
+              camera_data=json.loads(
+                  (root / "wre-real16-camera-poses.json").read_text()
+              )
+              actual_cameras=sorted(
+                  camera_data["cameras"], key=lambda c: c["image_name"]
+              )
+              expected_baseline=math.dist(
+                  actual_cameras[0]["camera_center_xyz"],
+                  actual_cameras[1]["camera_center_xyz"],
+              )
+              assert math.isfinite(expected_baseline) and expected_baseline>0
+              browser_baseline=js("""
+                const second=document.getElementById('wre-baseline-choice');
+                if(second.disabled || second.options.length!==17) {
+                  throw Error('Missing real SfM baseline choices');
+                }
+                second.value='1';
+                second.dispatchEvent(new Event('change',{bubbles:true}));
+                return document.getElementById('wre-camera-baseline').textContent;
+              """)
+              assert f"{expected_baseline:.6f}" in browser_baseline
+              assert "local SfM units (not metres" in browser_baseline
+              assert "no capture-time interpretation" in browser_baseline
+              same_camera=js("""
+                const second=document.getElementById('wre-baseline-choice');
+                second.value='0';
+                second.dispatchEvent(new Event('change',{bubbles:true}));
+                return document.getElementById('wre-camera-baseline').textContent;
+              """)
+              assert "0.000000 local SfM units" in same_camera
               # Real browser File API: use the actual generated 3D GLB as if
               # selected locally. This is a real WebGL interaction, no GPU CUDA.
               local_result = call("POST", f"/session/{session}/execute/async", {
@@ -1954,7 +2026,11 @@ jobs:
                     const viewer=document.getElementById('wre-scene');
                     const camera=document.getElementById('wre-camera-choice');
                     return viewer.loaded && viewer.getAttribute('src').startsWith('blob:') &&
-                      camera.disabled && document.getElementById('local-model-status')
+                      camera.disabled &&
+                      document.getElementById('wre-baseline-choice').disabled &&
+                      document.getElementById('wre-camera-baseline').textContent
+                        .includes('unavailable for unverified') &&
+                      document.getElementById('local-model-status')
                         .textContent.includes('Local GLB loaded');
                   """):
                       break
