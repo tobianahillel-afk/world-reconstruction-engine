@@ -477,10 +477,13 @@ def _read_geometry_evidence(
         int(pair_id): geometry
         for pair_id, geometry in zip(geometry_pair_ids, geometries, strict=True)
     }
-    if set(raw_count_by_pair_id) != set(geometry_by_pair_id):
+    # Raw feature matches do not guarantee a verified two-view geometry:
+    # RANSAC can reject a pair even when some raw correspondences exist.
+    # Preserve that pair only in the independently hashed L3.3 database;
+    # never invent inliers, a pose, or a geometry row for it.
+    if set(geometry_by_pair_id) - set(raw_count_by_pair_id):
         raise ColmapGeometricVerificationError(
-            "COLMAP geometric verification did not produce exactly one geometry result "
-            "per raw match pair"
+            "COLMAP geometric verification returned unexpected geometry"
         )
 
     evidence: list[ColmapPairGeometryEvidence] = []
@@ -504,9 +507,8 @@ def _read_geometry_evidence(
                 "COLMAP verified geometry cannot pair an observation with itself"
             )
 
-        geometry = geometry_by_pair_id[pair_id]
-        if observation_id2.value < observation_id1.value:
-            geometry.invert()
+        inverted = observation_id2.value < observation_id1.value
+        if inverted:
             observation_id1, observation_id2 = observation_id2, observation_id1
             name1, name2 = name2, name1
 
@@ -524,6 +526,12 @@ def _read_geometry_evidence(
         raw_match_count = raw_count_by_pair_id[pair_id]
         if raw_match_count != expected_count:
             raise ColmapGeometricVerificationError("raw match count changed between L3.3 and L3.4")
+        geometry = geometry_by_pair_id.get(pair_id)
+        if geometry is None:
+            # The L3.3 zero-match record remains in its hashed source database.
+            continue
+        if inverted:
+            geometry.invert()
 
         tri_angle = float(geometry.tri_angle)
         tri_angle_value = None if tri_angle < 0 else tri_angle
@@ -547,11 +555,15 @@ def _read_geometry_evidence(
         )
 
     evidence.sort(key=lambda item: (item.observation_id1.value, item.observation_id2.value))
-    if set(expected_raw_counts) != {
-        (item.observation_id1.value, item.observation_id2.value) for item in evidence
-    }:
+    # Every *nonempty raw pair* must still exist in the native raw-match
+    # reader with its exact count (checked above). A missing verified geometry
+    # is different from a missing raw pair, and must not become fake evidence.
+    missing_raw_pairs = set(expected_raw_counts) - seen_wre_pairs
+    if seen_wre_pairs - set(expected_raw_counts) or any(
+        expected_raw_counts[pair] != 0 for pair in missing_raw_pairs
+    ):
         raise ColmapGeometricVerificationError(
-            "L3.4 geometry evidence membership differs from L3.3 raw-match membership"
+            "L3.4 raw-match membership differs from L3.3 source membership"
         )
     return tuple(evidence)
 
