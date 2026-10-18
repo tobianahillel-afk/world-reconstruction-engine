@@ -322,6 +322,10 @@ jobs:
               + vendor_js[end:]
           )
           assert "fetch(" not in offline_js
+          # Keep the upstream file-drop handler intact: this one-file viewer
+          # also opens operator-owned .splat scenes without a server or upload.
+          assert 'document.addEventListener("drop", (e) => {' in offline_js
+          assert "selectFile(e.dataTransfer.files[0])" in offline_js
           data_b64 = base64.b64encode(canonical).decode("ascii")
           bootstrap = (
               "<script>window.__wreEmbeddedSplat=Uint8Array.from("
@@ -348,6 +352,10 @@ jobs:
               "  python3 -m http.server 8767 --bind 127.0.0.1\n"
               "Open http://127.0.0.1:8767/offline-viewer/index.html in a WebGL2 browser.\n"
               "Mouse orbit/zoom and keyboard 0-9 / +/- for recovered cameras.\n"
+              "Drop your own .splat file on the open HTML page to replace the 3D scene.\n"
+              "A .splat must consist of 32-byte Gaussian records (not a ZIP or OBJ file).\n"
+              "The original 16 photo camera presets do not calibrate your custom scene.\n"
+              "Only your local browser reads dropped files; nothing is uploaded.\n"
               "No internet, paid API, Torch, CUDA, installation or server upload is required.\n"
               "The inner ZIP contains canonical WRE scene.splat, centers.glb, manifest.json.\n"
               "The screenshot and evidence.json record actual headless Chrome CPU/WebGL proof.\n"
@@ -490,6 +498,64 @@ jobs:
               }
               receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
               print("DIRECT FILE WEBGL PASS: 6917 WRE 16-photo untrained Gaussians")
+
+              # Actually exercise upstream drag/drop + FileReader + WebGL worker.
+              # A subset of the REAL exported scene is a second valid .splat;
+              # this is not a claim of another reconstruction or GPU training.
+              replacement_count = 1024
+              subset = (
+                  root / "offline-viewer" / "observed-GAUSSIANS-UNTRAINED.splat"
+              ).read_bytes()[:replacement_count * 32]
+              assert len(subset) == replacement_count * 32
+              webdriver("POST", f"/session/{session}/execute/sync", {
+                  "script": """const source=window.__wreEmbeddedSplat;
+                    if (!source || source.byteLength !== 6917*32)
+                      throw Error('Expected WRE source data is unavailable');
+                    const transfer=new DataTransfer();
+                    transfer.items.add(new File(
+                      [source.slice(0,1024*32)], 'operator-local.splat',
+                      {type:'application/octet-stream'}));
+                    document.dispatchEvent(new DragEvent('drop',{
+                      bubbles:true,cancelable:true,dataTransfer:transfer}));
+                    return transfer.files.length;""",
+                  "args": [],
+              })
+              for _ in range(125):
+                  switched = webdriver("POST", f"/session/{session}/execute/sync", {
+                      "script": """const canvas=document.getElementById('canvas');
+                        return {count:window.__wreRenderedGaussianCount || 0,
+                          error:document.getElementById('message')?.textContent || '',
+                          webgl:!!canvas?.getContext('webgl2'),
+                          external:performance.getEntriesByType('resource')
+                            .filter(x=>/^https?:/.test(x.name)).map(x=>x.name)};""",
+                      "args": [],
+                  })
+                  if switched["error"]:
+                      raise RuntimeError("Operator .splat drop: " + switched["error"])
+                  if switched["count"] == replacement_count and switched["webgl"]:
+                      break
+                  time.sleep(0.35)
+              else:
+                  raise RuntimeError("Dropped operator .splat was not displayed: " + str(switched))
+              assert switched["external"] == [], switched
+              replacement_png = base64.b64decode(
+                  webdriver("GET", f"/session/{session}/screenshot")
+              )
+              assert replacement_png[:8] == b"\\x89PNG\\r\\n\\x1a\\n"
+              assert len(replacement_png) > 10_000
+              (root / "WRE-local-splat-drop-WebGL.png").write_bytes(replacement_png)
+              receipt["operator_local_splat_test"] = {
+                  "input": "1024 real WRE-exported records via browser FileReader",
+                  "bytes": len(subset),
+                  "sha256": hashlib.sha256(subset).hexdigest(),
+                  "drawn_gaussians": switched["count"],
+                  "page_scheme": "file",
+                  "external_resource_requests": len(switched["external"]),
+                  "screenshot_sha256": hashlib.sha256(replacement_png).hexdigest(),
+                  "cuda_training": False,
+              }
+              receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\\n")
+              print("DIRECT FILE OPERATOR SPLAT PASS: 1024 real WRE Gaussian records")
           finally:
               webdriver("DELETE", f"/session/{session}")
           PY
