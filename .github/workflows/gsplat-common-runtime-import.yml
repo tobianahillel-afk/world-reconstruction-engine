@@ -1140,6 +1140,9 @@ jobs:
               <option>Loading camera poses...</option>
             </select>
             <button id="wre-camera-reset" type="button">Reset orbit</button>
+            <button id="wre-frame-baseline" type="button" disabled>
+              Frame selected camera pair in 3D
+            </button>
             <output id="camera-details" aria-live="polite">
               Choose a camera to inspect its SfM position (not an exact source photo view).
             </output>
@@ -1177,6 +1180,7 @@ jobs:
           const choice=document.getElementById('wre-camera-choice');
           const baselineChoice=document.getElementById('wre-baseline-choice');
           const baselineOutput=document.getElementById('wre-camera-baseline');
+          const framePair=document.getElementById('wre-frame-baseline');
           const details=document.getElementById('camera-details');
           const input=document.getElementById('wre-local-glb');
           const importStatus=document.getElementById('local-model-status');
@@ -1214,6 +1218,7 @@ jobs:
             if(oldUrl) URL.revokeObjectURL(oldUrl);
             choice.disabled=choice.options.length!==17;
             baselineChoice.disabled=baselineChoice.options.length!==17;
+            framePair.disabled=true;
             choice.value='';
             baselineChoice.value='';
             baselineOutput.textContent='Select two original cameras for a local SfM baseline.';
@@ -1242,6 +1247,7 @@ jobs:
               if(previousUrl) URL.revokeObjectURL(previousUrl);
               choice.disabled=true;
               baselineChoice.disabled=true;
+              framePair.disabled=true;
               choice.value='';
               baselineChoice.value='';
               baselineOutput.textContent='Baseline unavailable for unverified local GLB.';
@@ -1268,6 +1274,7 @@ jobs:
             viewer.setAttribute('auto-rotate','');
             choice.value='';
             baselineChoice.value='';
+            framePair.disabled=true;
             baselineOutput.textContent='Select two SfM cameras; distance is not in metres.';
             details.textContent='General orbit restored; filename order is not chronology.';
           });
@@ -1306,6 +1313,8 @@ jobs:
             choice.disabled=false;
             baselineChoice.disabled=false;
             const updateBaseline=()=>{
+              framePair.disabled=choice.value==='' || baselineChoice.value==='' ||
+                localUrl!==null;
               if(choice.value==='' || baselineChoice.value===''){
                 baselineOutput.textContent='Select two SfM cameras to measure their baseline.';
                 return;
@@ -1321,6 +1330,25 @@ jobs:
                 ' local SfM units (not metres; no capture-time interpretation).';
             };
             baselineChoice.addEventListener('change',updateBaseline);
+            framePair.addEventListener('click',()=>{
+              if(framePair.disabled || localUrl) return;
+              const first=centers[Number(choice.value)];
+              const second=centers[Number(baselineChoice.value)];
+              const distance=Math.hypot(...first.map((v,i)=>v-second[i]));
+              if(!Number.isFinite(distance)) return;
+              const midpoint=first.map((v,i)=>(v+second[i])/2);
+              const viewingRadius=Math.max(distance*1.5,span*0.12);
+              if(!midpoint.every(Number.isFinite) ||
+                  !(viewingRadius>0 && Number.isFinite(viewingRadius))) return;
+              viewer.removeAttribute('auto-rotate');
+              viewer.setAttribute('camera-target',
+                midpoint.map(v=>v.toPrecision(9)+'m').join(' '));
+              viewer.setAttribute('camera-orbit',
+                '45deg 65deg '+viewingRadius.toPrecision(9)+'m');
+              viewer.jumpCameraToGoal();
+              details.textContent='Framed calibrated SfM camera pair in 3D; '+
+                'local reconstruction units, not metres or capture-time motion.';
+            });
             choice.addEventListener('change',()=>{
               updateBaseline();
               if(choice.value==='') return;
