@@ -1062,8 +1062,10 @@ jobs:
           test -s wre-real16-observed-rgb.ply
           test -s wre-real16-sfm-quality.json
           .venv/bin/python -I - <<'PY'
+          import csv
           import hashlib
           import json
+          import math
           from pathlib import Path
 
           quality = json.loads(Path("wre-real16-sfm-quality.json").read_text(encoding="utf-8"))
@@ -1073,10 +1075,51 @@ jobs:
           assert poses["schema"] == "wre.experimental.native_cpu_colmap_registered_cameras.v1"
           assert poses["registered_views"] == quality["geometry_quality"]["registered_views"]
           assert poses["source_dataset_commit"] == quality["source_dataset_commit"]
+          with Path("wre-real16-native-2d3d-tracks.csv").open(
+              encoding="utf-8", newline=""
+          ) as stream:
+              tracks = list(csv.DictReader(stream))
+          cameras = {int(c["image_id"]): c for c in poses["cameras"]}
+          assert len(cameras) == 16
+          assert len(tracks) == quality["geometry_quality"]["track_observations"]
+          assert len(tracks) == sum(
+              c["triangulated_2d_observations"] for c in cameras.values()
+          )
+          assert len({(int(r["image_id"]), int(r["point2d_idx"])) for r in tracks}) == len(tracks)
+          assert len({int(r["point3d_id"]) for r in tracks}) == quality["geometry_quality"]["sparse_points3d"]
+          indexed = {}
+          for row in tracks:
+              c = cameras[int(row["image_id"])]
+              assert row["image_name"] == c["image_name"]
+              assert row["image_sha256"] == c["image_sha256"]
+              assert 0 <= float(row["pixel_x"]) < c["image_width"]
+              assert 0 <= float(row["pixel_y"]) < c["image_height"]
+              assert int(row["point3d_id"]) > 0 and int(row["point2d_idx"]) >= 0
+              assert all(
+                  math.isfinite(float(row[k]))
+                  for k in ("x", "y", "z", "in_sample_error_px")
+              )
+              assert float(row["in_sample_error_px"]) >= 0
+              indexed.setdefault((int(row["image_id"]), int(row["point3d_id"])), []).append(row)
+          ordered = sorted(cameras.values(), key=lambda c: c["image_name"])
+          # Independently compare EVERY displayed sample against full native
+          # track observations, not another copy of the exported pair JSON.
+          for pair, points in poses["pairwise_shared_sfm_tracks"]["samples"].items():
+              left, right = (int(v) for v in pair.split(":"))
+              for point in points:
+                  for camera_index, pixel in ((left, point[6:8]), (right, point[8:10])):
+                      image_id = int(ordered[camera_index]["image_id"])
+                      candidates = indexed[(image_id, int(point[0]))]
+                      selected = min(candidates, key=lambda r: int(r["point2d_idx"]))
+                      assert all(
+                          abs(float(selected[key]) - float(val)) < 1e-9
+                          for key, val in zip(("pixel_x", "pixel_y"), pixel, strict=True)
+                      )
           files = (
               "wre-real16-observed-rgb.ply",
               "wre-real16-sfm-quality.json",
               "wre-real16-camera-poses.json",
+              "wre-real16-native-2d3d-tracks.csv",
               "wre-real16-camera-centers.ply",
               "wre-real16-observed-rgb-LICENSE.txt",
               "wre-real16-early-gltf/ply/point_cloud_0.ply",
@@ -1111,6 +1154,7 @@ jobs:
             wre-real16-observed-rgb.ply
             wre-real16-sfm-quality.json
             wre-real16-camera-poses.json
+            wre-real16-native-2d3d-tracks.csv
             wre-real16-camera-centers.ply
             wre-real16-observed-rgb-LICENSE.txt
             wre-real16-early-gltf/ply/point_cloud_0.ply
@@ -1230,6 +1274,7 @@ jobs:
               "wre-real16-viewable-scene-receipt.json",
               "wre-real16-observed-rgb-LICENSE.txt",
               "wre-real16-camera-poses.json",
+              "wre-real16-native-2d3d-tracks.csv",
           ):
               shutil.copyfile(name, output / name)
 
