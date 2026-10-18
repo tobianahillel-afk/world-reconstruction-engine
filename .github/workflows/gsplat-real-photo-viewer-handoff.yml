@@ -355,6 +355,7 @@ jobs:
               '<button id="wre-compare-scene" type="button" disabled>'
               'Compare original / local</button>'
               '<button id="wre-save-view" type="button">Save camera viewpoint</button>'
+              '<button id="wre-save-png" type="button">Save current 3D view (PNG)</button>'
               '<label for="wre-load-view">Load camera viewpoint JSON: </label>'
               '<input id="wre-load-view" type="file" accept=".json" '
               'aria-label="Load saved camera viewpoint">'
@@ -368,6 +369,7 @@ jobs:
             const save = document.getElementById('wre-save-current');
             const compare = document.getElementById('wre-compare-scene');
             const saveView = document.getElementById('wre-save-view');
+            const savePng = document.getElementById('wre-save-png');
             const loadView = document.getElementById('wre-load-view');
             const status = document.getElementById('wre-local-status');
             const originalFile = new File([window.__wreEmbeddedSplat],
@@ -432,6 +434,32 @@ jobs:
             compare.addEventListener('click', () => {
               if (!localFile) return;
               show(activeFile === originalFile ? localFile : originalFile);
+            });
+            // Capture one actual frame from the existing upstream WebGL canvas.
+            // No new renderer, remote service, GPU trainer or pixel conversion.
+            let imageSaving = false;
+            savePng.addEventListener('click', () => {
+              const canvas = document.getElementById('canvas');
+              if (!canvas || imageSaving) return;
+              imageSaving = true;
+              // Queue behind the upstream requestAnimationFrame drawing call.
+              // The WebGL canvas uses a non-preserved drawing buffer.
+              requestAnimationFrame(() => {
+                canvas.toBlob(blob => {
+                  imageSaving = false;
+                  if (!blob || blob.size === 0) {
+                    status.textContent = 'Could not capture the WebGL view.';
+                    return;
+                  }
+                  const url = URL.createObjectURL(blob);
+                  const link = document.createElement('a');
+                  link.href = url;
+                  link.download = 'wre-current-view.png';
+                  link.click();
+                  setTimeout(() => URL.revokeObjectURL(url), 30000);
+                  status.textContent = 'Saved local 3D PNG (not metric evidence).';
+                }, 'image/png');
+              });
             });
             // A camera pose is a view in a coordinate frame, not model registration.
             saveView.addEventListener('click', () => {
@@ -503,6 +531,8 @@ jobs:
               "Use Restore 16-photo scene to return to the included example.\n"
               "Use Compare original / local to toggle without reselecting the local file.\n"
               "Save camera viewpoint as JSON, then load to revisit the same view.\n"
+              "Save current 3D view (PNG) captures the WebGL canvas locally.\n"
+              "PNG is illustrative, not metric/camera/quality evidence.\n"
               "Camera viewpoint does not align unrelated scenes or infer metric scale.\n"
               "Different scenes may not share geometry, metric scale or camera registration.\n"
               "Use Save displayed .splat to download the currently shown scene locally.\n"
