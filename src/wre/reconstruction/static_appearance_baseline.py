@@ -1905,16 +1905,18 @@ def run_gsplat_reference_training(
         raise GsplatStaticAppearancePreflightError(
             "gsplat external trainer output must be an appearance artifact"
         )
+    # Upstream Runner always instantiates LPIPS/AlexNet, even with evaluation
+    # disabled. A missing cache would otherwise fail only after GPU startup.
+    # Require the explicitly pinned offline weights before creating a workspace.
+    if lpips_alexnet_weights is None or lpips_alexnet_sha256 is None:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat LPIPS offline weights and SHA-256 are required before training"
+        )
     # Ownership is intentionally explicit: only WRE's new private output
     # directory is created, and is not removed when a run fails.
     output_root.mkdir(mode=0o700)
-    # Upstream Runner instantiates LPIPS/AlexNet even without evaluation.
     # Torchvision expects the standard weight basename in torch.hub's cache.
     # Supply a trusted, independently SHA-256-pinned local copy; never fetch it.
-    if (lpips_alexnet_weights is None) != (lpips_alexnet_sha256 is None):
-        raise GsplatStaticAppearancePreflightError(
-            "gsplat LPIPS offline weights require both a local file and SHA-256"
-        )
     torch_home: Path | None = None
     if lpips_alexnet_weights is not None:
         if not isinstance(lpips_alexnet_weights, Path) or not lpips_alexnet_weights.is_file():
