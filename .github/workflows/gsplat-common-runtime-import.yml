@@ -338,8 +338,8 @@ jobs:
           )
           assert ply_file.read_bytes() == ply_bytes
           assert splat_file.read_bytes() == splat_bytes
-          assert f"element vertex {n}\\n".encode("ascii") in ply_bytes
-          assert b"property float f_rest_44\\n" in ply_bytes
+          assert f"element vertex {n}\n".encode("ascii") in ply_bytes
+          assert b"property float f_rest_44\n" in ply_bytes
           assert len(splat_bytes) == n * 32
           # gsplat's binary .splat writer Morton-sorts the points.
           # Match by decoded 3D position rather than assuming input order.
