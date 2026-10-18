@@ -474,8 +474,8 @@ def test_nonempty_raw_pair_without_verified_geometry_keeps_native_evidence(tmp_p
 
     assert matching.database_path.read_bytes() == parent_bytes
     assert result.source_matching_database_sha256 == matching.database_sha256
-    assert len(result.geometries) == 1
-    assert result.geometries[0].raw_match_count == 25
+    assert len(result.geometries) == 0  # Native rejected all pairs: no fabricated pose.
+    assert matching.pairs[0].num_matches == 25
     assert hash_file_content(result.database_path).sha256 == result.database_sha256
 
 
@@ -557,9 +557,7 @@ def test_native_reader_distinguishes_missing_raw_pair_from_unverified_geometry(
     if omit_native_raw and omitted_raw_count != 0:
         # The L3.3 source proves the raw pair exists. Native raw-reader loss
         # remains a hard error, not a permissible failed RANSAC estimate.
-        with pytest.raises(
-            ColmapGeometricVerificationError, match="raw-match membership"
-        ):
+        with pytest.raises(ColmapGeometricVerificationError, match="raw-match membership"):
             verify_colmap_geometry(request, module=fake)
         assert not request.database_path.exists()
     else:
