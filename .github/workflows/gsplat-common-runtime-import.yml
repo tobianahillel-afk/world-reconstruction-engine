@@ -1819,6 +1819,7 @@ jobs:
             <output id="wre-depth-roi-status" aria-live="polite">No measured region selected.</output>
             <button id="wre-depth-roi-download" type="button" disabled>Download measured ROI and 3D point IDs (JSON)</button>
             <button id="wre-depth-roi-ply-download" type="button" disabled>Download measured native ROI as viewable XYZ PLY</button>
+            <button id="wre-depth-roi-inspect-3d" type="button" disabled>Inspect nearest measured ROI point in 3D</button>
             <p><a download href="./wre-real16-native-sparse-depth.npz">Sparse camera depth maps (NPZ)</a>
             · <a download href="./wre-real16-native-sparse-depth.json">Depth scale and observation metadata</a>
             · <a download href="./wre-real16-native-sparse-depth-observations.csv">Original-resolution measured depths (CSV)</a></p>
@@ -2083,6 +2084,7 @@ jobs:
           const depthRoiStatus=document.getElementById('wre-depth-roi-status');
           const depthRoiDownload=document.getElementById('wre-depth-roi-download');
           const depthRoiPlyDownload=document.getElementById('wre-depth-roi-ply-download');
+          const depthRoiInspect3d=document.getElementById('wre-depth-roi-inspect-3d');
           let depthRoiCorner=null,depthRoiReport=null;
           depthRoiDownload.addEventListener('click',()=>{
             if(!depthRoiReport || localUrl!==null) return;
@@ -2092,6 +2094,15 @@ jobs:
             link.href=href;link.download='wre-measured-sparse-depth-roi.json';
             document.body.appendChild(link);link.click();link.remove();
             setTimeout(()=>URL.revokeObjectURL(href),1000);
+          });
+          depthRoiInspect3d.addEventListener('click',async()=>{
+            if(!depthRoiReport || depthRoiInspect3d.disabled || localUrl!==null) return;
+            // Measurements are sorted by actual positive camera-Z within ONE tile.
+            // Reuse the existing native Point3D finder, not a new projection/solver.
+            const nearest=depthRoiReport.measurements[0];
+            if(!nearest) return;
+            lookupInput.value=nearest.point3d_id;
+            await findNativePoint();
           });
           depthRoiPlyDownload.addEventListener('click',()=>{
             if(!depthRoiReport || depthRoiPlyDownload.disabled || localUrl!==null) return;
@@ -2141,6 +2152,7 @@ jobs:
                 }
                 depthRoiReport=null;depthRoiDownload.disabled=true;
                 depthRoiPlyDownload.disabled=true;
+                depthRoiInspect3d.disabled=true;
                 const corner={tile,x:ix%256,y:iy%256};
                 if(!depthRoiCorner){
                   depthRoiCorner=corner;
@@ -2186,6 +2198,19 @@ jobs:
                     measurements[n/2].camera_z_sfm_units)/2;
                 const min=measurements[0].camera_z_sfm_units;
                 const max=measurements[n-1].camera_z_sfm_units;
+                // Measure only distinct, actually triangulated native SfM points.
+                // Multiple depth bins of one Point3D must not inflate the 3D count.
+                const uniqueWorldPoints=[...new Map(measurements.map(
+                  m=>[m.point3d_id,m.world_xyz_sfm_units]
+                )).values()];
+                const xyzMin=[Infinity,Infinity,Infinity];
+                const xyzMax=[-Infinity,-Infinity,-Infinity];
+                for(const xyz of uniqueWorldPoints) for(let axis=0;axis<3;axis++){
+                  xyzMin[axis]=Math.min(xyzMin[axis],xyz[axis]);
+                  xyzMax[axis]=Math.max(xyzMax[axis],xyz[axis]);
+                }
+                const xyzExtent=xyzMax.map((value,axis)=>value-xyzMin[axis]);
+                const xyzDiagonal=Math.hypot(...xyzExtent);
                 depthRoiReport={
                   schema:'wre.experimental.real16_measured_sparse_depth_roi.v1',
                   source_dataset_commit:index.source_dataset_commit,
@@ -2196,19 +2221,29 @@ jobs:
                   camera_z_min_sfm_units:min,
                   camera_z_median_sfm_units:median,
                   camera_z_max_sfm_units:max,
+                  native_unique_point3d_count:uniqueWorldPoints.length,
+                  native_sparse_xyz_bounds_sfm_units:{
+                    min_xyz:xyzMin,max_xyz:xyzMax,
+                    extent_xyz:xyzExtent,diagonal:xyzDiagonal
+                  },
                   dense_depth_inferred:false,
                   metric_depth_verified:false,
                   measurements
                 };
                 depthRoiDownload.disabled=false;
                 depthRoiPlyDownload.disabled=false;
+                depthRoiInspect3d.disabled=false;
                 depthRoiStatus.textContent='Camera '+tile+' ROI: '+n+
                   ' observed frontmost SfM bins; camera-Z min '+min.toFixed(4)+
                   ', median '+median.toFixed(4)+', max '+max.toFixed(4)+
-                  ' (arbitrary units). Empty cells excluded; NOT dense depth or meters.';
+                  ' (arbitrary units). Empty cells excluded; NOT dense depth or meters. '+
+                  'Native 3D bounds over '+uniqueWorldPoints.length+' distinct SfM points: '+
+                  'XYZ extent '+xyzExtent.map(x=>x.toFixed(4)).join(', ')+
+                  '; diagonal '+xyzDiagonal.toFixed(4)+' (arbitrary SfM units).';
               }catch(error){
                 depthRoiCorner=null;depthRoiReport=null;depthRoiDownload.disabled=true;
                 depthRoiPlyDownload.disabled=true;
+                depthRoiInspect3d.disabled=true;
                 depthRoiStatus.textContent='Measured ROI failed: '+String(error);
               }
               return;
@@ -3696,6 +3731,62 @@ jobs:
               assert f'{min(real_first_tile_depths):.4f}' in roi_state["status"]
               assert f'{max(real_first_tile_depths):.4f}' in roi_state["status"]
               assert "NOT dense depth or meters" in roi_state["status"]
+              # Verify spatial measurements through the ACTUAL Chrome JSON export,
+              # independently computed from genuine original SfM Point3D XYZ.
+              assert js("""
+                const button=document.getElementById('wre-depth-roi-download');
+                if(button.disabled) return false;
+                window.__roiSpatialActualText=null;
+                const original=URL.createObjectURL.bind(URL);
+                URL.createObjectURL=(blob)=>{
+                  if(blob.type==='application/json') {
+                    blob.text().then(value=>window.__roiSpatialActualText=value);
+                  }
+                  return original(blob);
+                };
+                button.click();
+                return true;
+              """), "Real measured ROI JSON export was unavailable"
+              for _ in range(40):
+                  roi_json=js("return window.__roiSpatialActualText;")
+                  if roi_json is not None:
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("Real Chrome ROI XYZ measurement JSON was not produced")
+              roi_spatial=json.loads(roi_json)
+              real_native_ids={
+                  str(depth_bins[key]) for key in depth_bins if key.startswith("0:")
+              }
+              source_xyz=[lookup["points"][pid]["xyz"] for pid in real_native_ids]
+              expected_xyz_min=[min(v[axis] for v in source_xyz) for axis in range(3)]
+              expected_xyz_max=[max(v[axis] for v in source_xyz) for axis in range(3)]
+              expected_extent=[
+                  upper-lower for lower,upper in zip(
+                      expected_xyz_min,expected_xyz_max,strict=True
+                  )
+              ]
+              expected_diagonal=math.dist(expected_xyz_min,expected_xyz_max)
+              assert roi_spatial["native_unique_point3d_count"]==len(real_native_ids)
+              assert roi_spatial["measured_frontmost_bins"]==len(real_first_tile_depths)
+              bounds=roi_spatial["native_sparse_xyz_bounds_sfm_units"]
+              for name,expected in (
+                  ("min_xyz",expected_xyz_min),("max_xyz",expected_xyz_max),
+                  ("extent_xyz",expected_extent)
+              ):
+                  assert len(bounds[name])==3
+                  assert all(
+                      math.isclose(float(a),float(b),rel_tol=1e-12,abs_tol=1e-10)
+                      for a,b in zip(bounds[name],expected,strict=True)
+                  )
+              assert math.isclose(
+                  float(bounds["diagonal"]),expected_diagonal,
+                  rel_tol=1e-12,abs_tol=1e-10
+              )
+              assert f'{expected_diagonal:.4f}' in roi_state["status"]
+              assert "Native 3D bounds" in roi_state["status"]
+              assert roi_spatial["dense_depth_inferred"] is False
+              assert roi_spatial["metric_depth_verified"] is False
               # Actually download the measured ROI PLY through Chrome, inspect
               # the Blob bytes, and compare each world XYZ to ORIGINAL COLMAP.
               assert js("""
@@ -3739,6 +3830,48 @@ jobs:
                       math.isclose(x,y,rel_tol=1e-12,abs_tol=1e-12)
                       for x,y in zip(coords,expected,strict=True)
                   )
+              # ROI-to-3D is a real product navigation path, not just a JSON/PLY export.
+              # Find the frontmost measured native Point3D in this camera tile,
+              # breaking equal-depth ties by the ROI's row-major scan order.
+              nearest_key=min(
+                  (key for key in depth_bins if key.startswith("0:")),
+                  key=lambda key: (
+                      float(depth_values[key]),
+                      int(key.split(":")[2]), int(key.split(":")[1])
+                  ),
+              )
+              nearest_id=str(depth_bins[nearest_key])
+              assert js("""
+                const button=document.getElementById('wre-depth-roi-inspect-3d');
+                if(button.disabled) return false;
+                button.click();
+                return true;
+              """), "Real ROI-to-3D navigation was unavailable"
+              for _ in range(60):
+                  roi_native_result=js("""
+                    const value=document.getElementById('wre-native-point-id').value;
+                    const output=document.getElementById('wre-native-lookup-output').textContent;
+                    const marker=document.querySelector('[slot="hotspot-native-lookup"]');
+                    return {
+                      value,output,marker:marker?.getAttribute('aria-label')||'',
+                      xyz:marker?.getAttribute('data-position')||''
+                    };
+                  """)
+                  if (roi_native_result["value"]==nearest_id
+                          and roi_native_result["marker"]==
+                          "Native COLMAP 3D point "+nearest_id):
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("Measured ROI did not open its nearest real 3D landmark")
+              assert "Real COLMAP point "+nearest_id in roi_native_result["output"]
+              selected_world_xyz=lookup["points"][nearest_id]["xyz"]
+              actual_xyz=[float(value[:-1]) for value in roi_native_result["xyz"].split()]
+              assert len(actual_xyz)==3
+              assert all(
+                  math.isclose(actual,expected,rel_tol=1e-7,abs_tol=1e-6)
+                  for actual,expected in zip(actual_xyz,selected_world_xyz,strict=True)
+              )
               # A region across different original camera tiles must not
               # silently combine unrelated SfM camera-Z coordinate frames.
               assert js("""
