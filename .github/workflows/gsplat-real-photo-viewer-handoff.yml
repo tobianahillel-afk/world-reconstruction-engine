@@ -350,6 +350,8 @@ jobs:
               'aria-label="Choose local Gaussian splat file">'
               '<button id="wre-restore-original" type="button">'
               'Restore 16-photo scene</button>'
+              '<button id="wre-save-current" type="button">'
+              'Save displayed .splat</button>'
               '<output id="wre-local-status" aria-live="polite"></output>'
               '</section>'
           )
@@ -357,10 +359,14 @@ jobs:
           (() => {
             const picker = document.getElementById('wre-local-splat');
             const reset = document.getElementById('wre-restore-original');
+            const save = document.getElementById('wre-save-current');
             const status = document.getElementById('wre-local-status');
+            let activeFile = new File([window.__wreEmbeddedSplat],
+              'WRE-16-photos.splat', {type: 'application/octet-stream'});
+            const valid = file => file && file.size > 0 &&
+              file.size % 32 === 0 && file.size <= 256 * 1024 * 1024;
             function show(file) {
-              if (!file || file.size === 0 || file.size % 32 !== 0 ||
-                  file.size > 256 * 1024 * 1024) {
+              if (!valid(file)) {
                 status.textContent = 'Invalid .splat: expected 32-byte records, maximum 256 MiB.';
                 return;
               }
@@ -369,9 +375,26 @@ jobs:
               document.dispatchEvent(new DragEvent('drop', {
                 bubbles: true, cancelable: true, dataTransfer: transfer
               }));
+              activeFile = file;
               status.textContent = 'Loading ' + file.name + ': ' +
                 (file.size / 32) + ' Gaussian records';
             }
+            // The pinned upstream handler also accepts raw drag/drop directly.
+            document.addEventListener('drop', event => {
+              const file = event.dataTransfer?.files?.[0];
+              if (valid(file)) activeFile = file;
+            }, true);
+            save.addEventListener('click', () => {
+              const url = URL.createObjectURL(activeFile);
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = activeFile.name.endsWith('.splat') ?
+                activeFile.name : 'wre-current-scene.splat';
+              link.click();
+              setTimeout(() => URL.revokeObjectURL(url), 30000);
+              status.textContent = 'Saving ' + link.download + ': ' +
+                (activeFile.size / 32) + ' Gaussian records';
+            });
             picker.addEventListener('change', () => {
               if (picker.files && picker.files.length === 1) show(picker.files[0]);
             });
@@ -405,6 +428,8 @@ jobs:
               "Mouse orbit/zoom and keyboard 0-9 / +/- for recovered cameras.\n"
               "Choose a local .splat using the file picker, or drag one onto the page.\n"
               "Use Restore 16-photo scene to return to the included example.\n"
+              "Use Save displayed .splat to download the currently shown scene locally.\n"
+              "The example scene comes from CC BY-NC 4.0 NONCOMMERCIAL photos.\n"
               "A .splat must have 32-byte Gaussian records (max 256 MiB, not ZIP/OBJ).\n"
               "The original 16 photo camera presets do not calibrate your custom scene.\n"
               "Only your local browser reads dropped files; nothing is uploaded.\n"
