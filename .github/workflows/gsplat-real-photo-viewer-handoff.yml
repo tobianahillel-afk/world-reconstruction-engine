@@ -318,7 +318,7 @@ jobs:
               + "    const req = new Response(window.__wreEmbeddedSplat, "
                 "{status: 200, headers: {'content-length': '"
               + str(len(canonical))
-              + "'}});\\n"
+              + "'}});\n"
               + vendor_js[end:]
           )
           assert "fetch(" not in offline_js
@@ -329,9 +329,9 @@ jobs:
           )
           inline = (
               bootstrap
-              + "<script>\\n"
+              + "<script>\n"
               + offline_js
-              + "\\n</script>"
+              + "\n</script>"
           )
           standalone = vendor_html.replace(script_tag, inline).encode("utf-8")
           assert standalone.count(b"window.__wreEmbeddedSplat") >= 2
@@ -476,7 +476,7 @@ jobs:
               assert state["embedded"] == 6917 * 32, state
               assert state["external"] == [], state
               png = base64.b64decode(webdriver("GET", f"/session/{session}/screenshot"))
-              assert png[:8] == b"\\x89PNG\\r\\n\\x1a\\n"
+              assert png[:8] == b"\x89PNG\r\n\x1a\n"
               width, height = struct.unpack_from(">II", png, 16)
               assert width >= 1100 and height >= 700 and len(png) > 10_000
               (root / "WRE-one-file-real-photo-WebGL.png").write_bytes(png)
@@ -488,7 +488,7 @@ jobs:
                   "page_scheme": "file", "external_resource_requests": 0,
                   "gpu_training": False,
               }
-              receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\\n")
+              receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
               print("DIRECT FILE WEBGL PASS: 6917 WRE 16-photo untrained Gaussians")
           finally:
               webdriver("DELETE", f"/session/{session}")
