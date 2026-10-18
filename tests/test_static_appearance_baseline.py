@@ -1135,6 +1135,7 @@ def test_one_call_gsplat_reconstruction_stages_real_files_and_returns_candidate(
         "verify_gsplat_static_appearance_native_geometry",
         lambda *_args, **_kwargs: None,
     )
+    viewer_bundle = tmp_path / "reconstruction-viewer.zip"
     result = reconstruct_gsplat_static_appearance(
         request=request,
         source=source,
@@ -1150,6 +1151,7 @@ def test_one_call_gsplat_reconstruction_stages_real_files_and_returns_candidate(
         producer=producer,
         cuda_device_index=0,
         timeout_seconds=30,
+        viewer_bundle_path=viewer_bundle,
     )
     assert len(subprocess_calls) == 1
     assert result.request is request
@@ -1159,6 +1161,18 @@ def test_one_call_gsplat_reconstruction_stages_real_files_and_returns_candidate(
     assert result.materialization.entries[0].sha256 == _digest(_gsplat_ply(vertices=2))
     assert (staged.dataset_root / "sparse" / "0" / "cameras.bin").is_file()
     assert (output / "wre-reference-training.log").is_file()
+    assert viewer_bundle.is_file()
+    with zipfile.ZipFile(viewer_bundle) as archive:
+        assert sorted(archive.namelist()) == ["centers.glb", "manifest.json", "scene.splat"]
+        splat = archive.read("scene.splat")
+        glb = archive.read("centers.glb")
+        manifest = json.loads(archive.read("manifest.json"))
+    assert len(splat) == 2 * 32
+    assert glb[:4] == b"glTF"
+    assert manifest["source_ply"]["sha256"] == str(result.materialization.entries[0].sha256)
+    assert manifest["outputs"]["scene.splat"]["sha256"] == hashlib.sha256(splat).hexdigest()
+    assert manifest["outputs"]["centers.glb"]["sha256"] == hashlib.sha256(glb).hexdigest()
+    assert (output / profile.expected_ply_relative_path).read_bytes() == _gsplat_ply(vertices=2)
 
 
 def test_one_call_gsplat_reconstruction_does_not_stage_false_producer(
