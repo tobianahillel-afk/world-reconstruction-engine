@@ -541,18 +541,23 @@ jobs:
           # Derive real image-pair overlap from exact shared triangulated
           # COLMAP point IDs. No fake photo, capture time or learned model.
           ordered_frames = sorted(frames, key=lambda f: f["image_name"])
-          observed_ids = [
-              {
+          # PyCOLMAP's num_points3D counts 2D OBSERVATIONS, whereas a
+          # pairwise intersection must operate on UNIQUE triangulated IDs.
+          # Preserve multiplicities for the count cross-check first.
+          observed_point_ids = [
+              [
                   int(p.point3D_id)
                   for p in model.image(frame["image_id"]).points2D
                   if p.has_point3D()
-              }
+              ]
               for frame in ordered_frames
           ]
           assert all(
-              len(ids) == frame["triangulated_2d_observations"] > 0
-              for ids, frame in zip(observed_ids, ordered_frames, strict=True)
+              len(observations) == frame["triangulated_2d_observations"] > 0
+              for observations, frame in zip(observed_point_ids, ordered_frames, strict=True)
           )
+          observed_ids = [set(observations) for observations in observed_point_ids]
+          assert all(ids for ids in observed_ids)
           shared_tracks = [
               [len(a & b) for b in observed_ids] for a in observed_ids
           ]
