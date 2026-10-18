@@ -1,0 +1,369 @@
+name: gsplat-real-photo-viewer-handoff
+on:
+  pull_request:
+    paths:
+      - .github/workflows/gsplat-real-photo-viewer-handoff.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  viewer:
+    name: real-16-photo-COLMAP-Gaussian-viewer-bundle-no-GPU
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout audited WRE viewer source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned WRE Python
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.13"
+          python-version: "3.12"
+      - run: uv sync --frozen
+      - name: Download real 16-photo upstream Gaussian seed artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          repository: tobianahillel-afk/world-reconstruction-engine
+          run-id: 39082307350
+          name: wre-real-photo-GAUSSIANS-UNTRAINED
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/real-photo-gaussians
+      - name: Export canonical WRE viewer ZIP from actual real-photo Gaussian PLY
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run --no-sync python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import shutil
+          import struct
+          import zipfile
+          from collections import Counter
+          from pathlib import Path
+
+          from wre.domain.appearance import APPEARANCE_MODEL_ARTIFACT_KIND
+          from wre.domain.artifacts import ArtifactId, ArtifactRef
+          from wre.reconstruction.static_appearance_baseline import (
+              GsplatStaticAppearanceTrainingProfile,
+              export_verified_gsplat_viewer_bundle,
+          )
+
+          temp = Path(os.environ["RUNNER_TEMP"])
+          source = temp / "real-photo-gaussians"
+          def only(name):
+              matches = list(source.rglob(name))
+              assert len(matches) == 1, (name, len(matches))
+              return matches[0]
+
+          raw_ply = only("observed-GAUSSIANS-UNTRAINED.ply")
+          raw_splat = only("observed-GAUSSIANS-UNTRAINED.splat")
+          provenance = json.loads(only("untrained-gaussian-provenance.json").read_text())
+          n = provenance["gaussians_original_rgb_observed"]
+          assert n == 6917
+          assert provenance["training_steps"] == 0
+          assert provenance["gpu_kernel_executed"] is False
+          assert provenance["source_gsplat_commit"] == "937e29912570c372bed6747a5c9bf85fed877bae"
+          assert provenance["dataset_license"].startswith("CC BY-NC 4.0: Attribution-NonCommercial")
+          source_sha = provenance["upstream_exporter_ply_sha256"]
+          assert hashlib.sha256(raw_ply.read_bytes()).hexdigest() == source_sha
+          native = raw_splat.read_bytes()
+          assert len(native) == n * 32
+          assert hashlib.sha256(native).hexdigest() == provenance["upstream_exporter_splat_sha256"]
+
+          # max_steps=1 is used solely for the WRE *filename* point_cloud_0.ply.
+          # The source is explicitly UNTRAINED: 0 optimization iterations.
+          profile = GsplatStaticAppearanceTrainingProfile(max_steps=1)
+          staged = temp / "wre-verified-source"
+          ply = staged / profile.expected_ply_relative_path
+          ply.parent.mkdir(parents=True)
+          shutil.copyfile(raw_ply, ply)
+          result = temp / "wre-real-photo-viewer-result"
+          result.mkdir()
+          bundle = result / "16-real-photo-untrained-gaussians.zip"
+          digest = export_verified_gsplat_viewer_bundle(
+              artifact_ref=ArtifactRef(
+                  ArtifactId("appearance:gsplat:real-16photo-untrained"),
+                  APPEARANCE_MODEL_ARTIFACT_KIND,
+              ),
+              output_root=staged,
+              profile=profile,
+              bundle_path=bundle,
+          )
+          assert hashlib.sha256(bundle.read_bytes()).hexdigest() == str(digest)
+          with zipfile.ZipFile(bundle) as archive:
+              assert set(archive.namelist()) == {"scene.splat", "centers.glb", "manifest.json"}
+              derived = archive.read("scene.splat")
+              glb = archive.read("centers.glb")
+              manifest = json.loads(archive.read("manifest.json"))
+          assert len(derived) == n * 32
+          assert glb[:4] == b"glTF"
+          assert manifest["source_ply"]["sha256"] == source_sha
+          for name, value in (("scene.splat", derived), ("centers.glb", glb)):
+              assert manifest["outputs"][name]["sha256"] == hashlib.sha256(value).hexdigest()
+              assert manifest["outputs"][name]["size_bytes"] == len(value)
+          json_size, chunk_type = struct.unpack_from("<I4s", glb, 12)
+          assert chunk_type == b"JSON"
+          scene = json.loads(glb[20:20 + json_size])
+          assert scene["accessors"][0]["count"] == n
+          assert scene["meshes"][0]["primitives"][0]["mode"] == 0
+          def positions(data):
+              return Counter(
+                  struct.unpack_from("<3f", data, offset)
+                  for offset in range(0, len(data), 32)
+              )
+          assert positions(derived) == positions(native)
+          assert hashlib.sha256(ply.read_bytes()).hexdigest() == source_sha
+
+          # Reuse the exact already-proven 16-camera offline WebGL viewer from
+          # the pinned real-photo producer, but display WRE's DERIVED .splat.
+          # No original upstream .splat is copied into this browser handoff.
+          viewer = result / "offline-viewer"
+          viewer.mkdir()
+          vendor_html = only("index.html").read_bytes()
+          vendor_js = only("main.js").read_bytes()
+          vendor_license = only("Gaussian-WebGL-viewer-MIT-LICENSE.txt").read_bytes()
+          assert b"UNTRAINED (0 steps)" in vendor_html
+          assert b"observed-GAUSSIANS-UNTRAINED.splat" in vendor_js
+          assert b"Copyright (c) 2023 Kevin Kwok" in vendor_license
+          assert hashlib.sha256(vendor_js).hexdigest() == provenance["real_gaussian_webgl"]["local_main_js_sha256"]
+          (viewer / "index.html").write_bytes(vendor_html)
+          (viewer / "main.js").write_bytes(vendor_js)
+          (viewer / "Gaussian-WebGL-viewer-MIT-LICENSE.txt").write_bytes(vendor_license)
+          (viewer / "observed-GAUSSIANS-UNTRAINED.splat").write_bytes(derived)
+          (viewer / "HOW_TO_VIEW.txt").write_text(
+              "UNTRAINED Gaussian scene from 16 real photos, nonmetric, noncommercial.\n"
+              "Run: python3 -m http.server 8767 --bind 127.0.0.1\n"
+              "Open http://127.0.0.1:8767/offline-viewer/index.html and orbit/zoom.\n"
+              "Keyboard 0-9 or +/- changes real recovered camera positions.\n"
+              "The .splat is generated by the WRE exporter; CUDA/training steps: 0.\n"
+              "Pierre Moulon original photographs: CC BY-NC 4.0.\n",
+              encoding="utf-8",
+          )
+          assert hashlib.sha256(
+              (viewer / "observed-GAUSSIANS-UNTRAINED.splat").read_bytes()
+          ).hexdigest() == manifest["outputs"]["scene.splat"]["sha256"]
+
+          evidence = {
+              "source_workflow_run": 39082307350,
+              "source_head_sha": "6e503dbff2c8df6dad0ecd82cbcddb9657ed5070",
+              "input": "16 genuine DJI photos -> actual CPU COLMAP -> pinned gsplat CPU export",
+              "gaussians": n,
+              "training_steps": 0,
+              "gpu_training_verified": False,
+              "viewer_zip_sha256": str(digest),
+              "offline_webgl_viewer": {
+                  "entrypoint": "offline-viewer/index.html",
+                  "source": "pinned 16-view upstream WebGL viewer; WRE-derived splat",
+                  "splat_sha256": manifest["outputs"]["scene.splat"]["sha256"],
+                  "javascript_sha256": hashlib.sha256(vendor_js).hexdigest(),
+                  "training_steps": 0,
+                  "gpu_training": False,
+              },
+              "input_ply_sha256": source_sha,
+              "original_splat_sha256": provenance["upstream_exporter_splat_sha256"],
+              "source_license": provenance["dataset_license"],
+              "source_credit": provenance["dataset_credit"],
+              "limits": "Untrained static SH0 Gaussian seeds; no 4D, real GPU training or held-out quality",
+          }
+          (result / "evidence.json").write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
+          (result / "LICENSE-NOTICE.txt").write_text(
+              "16 source DJI photos: Pierre Moulon, CC BY-NC 4.0 (noncommercial).\n"
+              "Generated WRE viewer ZIP: untrained Gaussian seeds (0 steps).\n"
+              "scene.splat: SH0 only. centers.glb: RGB point cloud, not radiance.\n"
+              "No GPU kernel/training, metric scale or 4D validated.\n"
+          )
+          print(f"REAL-PHOTO WRE VIEWER ZIP PASS: {n} Gaussians, 16 photos; SHA256 {digest}")
+          PY
+      - name: Render WRE-derived 6917 real-photo Gaussian splats in headless Chrome WebGL
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/wre-real-photo-viewer-result"
+          google-chrome --version
+          driver="$CHROMEWEBDRIVER/chromedriver"
+          test -x "$driver"
+          python3 -m http.server 8767 --bind 127.0.0.1 --directory "$root" >/tmp/wre-handoff-http.log 2>&1 &
+          http_pid="$!"
+          "$driver" --port=9517 --allowed-ips=127.0.0.1 >/tmp/wre-handoff-driver.log 2>&1 &
+          driver_pid="$!"
+          trap 'kill "$http_pid" "$driver_pid" 2>/dev/null || true' EXIT
+          uv run --no-sync python - <<'PY'
+          import base64
+          import hashlib
+          import json
+          import os
+          import struct
+          import time
+          from pathlib import Path
+          from urllib.request import Request, urlopen
+
+          destination = Path(os.environ["RUNNER_TEMP"]) / "wre-real-photo-viewer-result"
+          evidence_path = destination / "evidence.json"
+          evidence = json.loads(evidence_path.read_text())
+          assert evidence["gaussians"] == 6917
+          url_base = "http://127.0.0.1:9517"
+          def webdriver(method, route, payload=None):
+              data = None if payload is None else json.dumps(payload).encode("utf-8")
+              request = Request(url_base + route, data=data, method=method,
+                                headers={"Content-Type": "application/json"})
+              with urlopen(request, timeout=45) as response:
+                  result = json.load(response)["value"]
+              if isinstance(result, dict) and result.get("error"):
+                  raise RuntimeError(str(result))
+              return result
+
+          for _ in range(75):
+              try:
+                  if webdriver("GET", "/status")["ready"]:
+                      break
+              except (OSError, KeyError):
+                  time.sleep(0.4)
+          else:
+              raise RuntimeError("Real ChromeDriver was not ready")
+          options = {"browserName": "chrome", "goog:chromeOptions": {"args": [
+              "--headless=new", "--no-sandbox", "--disable-dev-shm-usage",
+              "--enable-unsafe-swiftshader", "--use-gl=angle",
+              "--use-angle=swiftshader", "--window-size=1280,900",
+              "--disable-background-networking",
+              "--host-resolver-rules=MAP * 0.0.0.0, EXCLUDE localhost",
+          ]}}
+          session = webdriver("POST", "/session", {"capabilities": {"alwaysMatch": options}})["sessionId"]
+          try:
+              webdriver("POST", f"/session/{session}/url", {
+                  "url": "http://127.0.0.1:8767/offline-viewer/index.html",
+              })
+              for _ in range(125):
+                  rendered = webdriver("POST", f"/session/{session}/execute/sync", {
+                      "script": """const canvas=document.getElementById('canvas');
+                        return {count: window.__wreRenderedGaussianCount || 0,
+                          error: document.getElementById('message')?.textContent || '',
+                          webgl: Boolean(canvas?.getContext('webgl2')),
+                          width: canvas?.width || 0};""",
+                      "args": [],
+                  })
+                  if rendered["error"]:
+                      raise RuntimeError("WebGL viewer: " + rendered["error"])
+                  if rendered["count"] == 6917 and rendered["webgl"] and rendered["width"] >= 640:
+                      break
+                  time.sleep(0.35)
+              else:
+                  raise RuntimeError("WRE-derived .splat not drawn in real WebGL: " + str(rendered))
+              screenshot = base64.b64decode(webdriver("GET", f"/session/{session}/screenshot"))
+              assert screenshot[:8] == b"\x89PNG\r\n\x1a\n"
+              width, height = struct.unpack_from(">II", screenshot, 16)
+              assert width >= 1100 and height >= 700 and len(screenshot) > 10_000
+              (destination / "WRE-derived-real-photo-WebGL.png").write_bytes(screenshot)
+              evidence["webgl_chrome"] = {
+                  "actual_webgl2": True,
+                  "drawn_gaussians": rendered["count"],
+                  "screenshot_sha256": hashlib.sha256(screenshot).hexdigest(),
+                  "renderer": "headless Chrome SwiftShader, CPU; CUDA training 0",
+              }
+              evidence_path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
+              print("ACTUAL WRE-DERIVED WEBGL PASS: 6917 real-photo, untrained splats; GPU training 0")
+          finally:
+              webdriver("DELETE", f"/session/{session}")
+          PY
+      - name: Package a single portable offline 16-photo WebGL viewer ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run --no-sync python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import zipfile
+          from pathlib import Path
+
+          root = Path(os.environ["RUNNER_TEMP"]) / "wre-real-photo-viewer-result"
+          evidence = json.loads((root / "evidence.json").read_text())
+          assert evidence["gaussians"] == 6917
+          assert evidence["training_steps"] == 0
+          assert evidence["gpu_training_verified"] is False
+          assert evidence["webgl_chrome"]["actual_webgl2"] is True
+          assert evidence["webgl_chrome"]["drawn_gaussians"] == 6917
+
+          viewer = "offline-viewer/observed-GAUSSIANS-UNTRAINED.splat"
+          source = root / viewer
+          with zipfile.ZipFile(root / "16-real-photo-untrained-gaussians.zip") as inner:
+              manifest = json.loads(inner.read("manifest.json"))
+              canonical = inner.read("scene.splat")
+          assert source.read_bytes() == canonical
+          assert hashlib.sha256(canonical).hexdigest() == manifest["outputs"]["scene.splat"]["sha256"]
+          screenshot = root / "WRE-derived-real-photo-WebGL.png"
+          assert hashlib.sha256(screenshot.read_bytes()).hexdigest() == (
+              evidence["webgl_chrome"]["screenshot_sha256"]
+          )
+
+          instructions = (
+              "WRE — 16 genuine DJI photos -> native CPU COLMAP -> 6917 untrained Gaussians.\n"
+              "UNTRAINED, zero CUDA steps, unknown metric scale; NOT a GPU-trained radiance scene.\n"
+              "Photos: Pierre Moulon, CC BY-NC 4.0; NONCOMMERCIAL use only.\n"
+              "Unzip all contents, then run inside the extracted directory:\n"
+              "  python3 -m http.server 8767 --bind 127.0.0.1\n"
+              "Open http://127.0.0.1:8767/offline-viewer/index.html in a WebGL2 browser.\n"
+              "Mouse orbit/zoom and keyboard 0-9 / +/- for recovered cameras.\n"
+              "No internet, paid API, Torch, CUDA, installation or server upload is required.\n"
+              "The inner ZIP contains canonical WRE scene.splat, centers.glb, manifest.json.\n"
+              "The screenshot and evidence.json record actual headless Chrome CPU/WebGL proof.\n"
+          ).encode("utf-8")
+          contents = {
+              "START_HERE.txt": instructions,
+              "16-real-photo-untrained-gaussians.zip": (
+                  root / "16-real-photo-untrained-gaussians.zip"
+              ).read_bytes(),
+              "LICENSE-NOTICE.txt": (root / "LICENSE-NOTICE.txt").read_bytes(),
+              "WRE-derived-real-photo-WebGL.png": screenshot.read_bytes(),
+              "evidence.json": (root / "evidence.json").read_bytes(),
+          }
+          for name in (
+              "index.html",
+              "main.js",
+              "Gaussian-WebGL-viewer-MIT-LICENSE.txt",
+              "observed-GAUSSIANS-UNTRAINED.splat",
+              "HOW_TO_VIEW.txt",
+          ):
+              path = f"offline-viewer/{name}"
+              contents[path] = (root / path).read_bytes()
+          assert len(contents) == 10
+
+          portable = root / "WRE-16-real-photos-OPEN-ME.zip"
+          with zipfile.ZipFile(portable, "x", compression=zipfile.ZIP_STORED) as archive:
+              for name in sorted(contents):
+                  info = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+                  info.compress_type = zipfile.ZIP_STORED
+                  info.external_attr = 0o100644 << 16
+                  archive.writestr(info, contents[name])
+          with zipfile.ZipFile(portable) as archive:
+              assert set(archive.namelist()) == set(contents)
+              for name, original in contents.items():
+                  assert archive.read(name) == original
+          portable_hash = hashlib.sha256(portable.read_bytes()).hexdigest()
+          receipt = {
+              "filename": portable.name,
+              "sha256": portable_hash,
+              "gaussians": 6917,
+              "input_photos": 16,
+              "training_steps": 0,
+              "cuda_training": False,
+              "browser_entrypoint": "offline-viewer/index.html",
+              "license": "CC BY-NC 4.0 (noncommercial source photographs)",
+              "files": sorted(contents),
+          }
+          (root / "portable-viewer-receipt.json").write_text(
+              json.dumps(receipt, sort_keys=True, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          print(f"PORTABLE REAL-PHOTO VIEWER ZIP PASS: {portable.name} sha256={portable_hash}")
+          PY
+      - name: Upload WRE real-photo 3D viewer archive and evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wre-16-real-photos-viewer-handoff
+          path: ${{ runner.temp }}/wre-real-photo-viewer-result/
+          if-no-files-found: error
+          retention-days: 7

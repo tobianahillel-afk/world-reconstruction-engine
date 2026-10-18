@@ -1865,6 +1865,7 @@ def run_gsplat_reference_training(
     timeout_seconds: int,
     lpips_alexnet_weights: Path | None = None,
     lpips_alexnet_sha256: str | None = None,
+    viewer_bundle_path: Path | None = None,
 ) -> StaticAppearanceCandidateResult:
     """Run the exact reference trainer on an EXPLICIT external CUDA environment.
 
@@ -2010,7 +2011,7 @@ def run_gsplat_reference_training(
         raise GsplatStaticAppearancePreflightError(
             "gsplat reference training failed; inspect the private training log"
         )
-    return assemble_verified_gsplat_static_appearance_result(
+    result = assemble_verified_gsplat_static_appearance_result(
         request=request,
         source=source,
         staged=staged,
@@ -2019,6 +2020,17 @@ def run_gsplat_reference_training(
         profile=profile,
         producer=producer,
     )
+    if viewer_bundle_path is not None:
+        # Real bytes from the exact model just materialized above, not a
+        # preview or GPU-training claim. The existing exporter hashes and
+        # archives both viewer formats with a provenance manifest.
+        export_verified_gsplat_viewer_bundle(
+            artifact_ref=artifact_ref,
+            output_root=output_root,
+            profile=profile,
+            bundle_path=viewer_bundle_path,
+        )
+    return result
 
 
 def reconstruct_gsplat_static_appearance(
@@ -2039,6 +2051,7 @@ def reconstruct_gsplat_static_appearance(
     timeout_seconds: int,
     lpips_alexnet_weights: Path | None = None,
     lpips_alexnet_sha256: str | None = None,
+    viewer_bundle_path: Path | None = None,
 ) -> StaticAppearanceCandidateResult:
     """Stage real COLMAP/PNG files, execute the selected trainer, retain its 3D PLY.
 
@@ -2072,6 +2085,7 @@ def reconstruct_gsplat_static_appearance(
         timeout_seconds=timeout_seconds,
         lpips_alexnet_weights=lpips_alexnet_weights,
         lpips_alexnet_sha256=lpips_alexnet_sha256,
+        viewer_bundle_path=viewer_bundle_path,
     )
 
 
