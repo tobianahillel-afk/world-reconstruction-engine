@@ -352,6 +352,8 @@ jobs:
               'Restore 16-photo scene</button>'
               '<button id="wre-save-current" type="button">'
               'Save displayed .splat</button>'
+              '<button id="wre-compare-scene" type="button" disabled>'
+              'Compare original / local</button>'
               '<output id="wre-local-status" aria-live="polite"></output>'
               '</section>'
           )
@@ -360,9 +362,13 @@ jobs:
             const picker = document.getElementById('wre-local-splat');
             const reset = document.getElementById('wre-restore-original');
             const save = document.getElementById('wre-save-current');
+            const compare = document.getElementById('wre-compare-scene');
             const status = document.getElementById('wre-local-status');
-            let activeFile = new File([window.__wreEmbeddedSplat],
+            const originalFile = new File([window.__wreEmbeddedSplat],
               'WRE-16-photos.splat', {type: 'application/octet-stream'});
+            let activeFile = originalFile;
+            let localFile = null;
+            let internalDrop = false;
             const valid = file => file && file.size > 0 &&
               file.size % 32 === 0 && file.size <= 256 * 1024 * 1024;
             function show(file) {
@@ -372,17 +378,32 @@ jobs:
               }
               const transfer = new DataTransfer();
               transfer.items.add(file);
-              document.dispatchEvent(new DragEvent('drop', {
-                bubbles: true, cancelable: true, dataTransfer: transfer
-              }));
+              internalDrop = true;
+              try {
+                document.dispatchEvent(new DragEvent('drop', {
+                  bubbles: true, cancelable: true, dataTransfer: transfer
+                }));
+              } finally {
+                internalDrop = false;
+              }
               activeFile = file;
+              if (file !== originalFile) {
+                localFile = file;
+                compare.disabled = false;
+              }
               status.textContent = 'Loading ' + file.name + ': ' +
                 (file.size / 32) + ' Gaussian records';
             }
             // The pinned upstream handler also accepts raw drag/drop directly.
             document.addEventListener('drop', event => {
               const file = event.dataTransfer?.files?.[0];
-              if (valid(file)) activeFile = file;
+              if (valid(file) && !internalDrop) {
+                activeFile = file;
+                if (file !== originalFile) {
+                  localFile = file;
+                  compare.disabled = false;
+                }
+              }
             }, true);
             save.addEventListener('click', () => {
               const url = URL.createObjectURL(activeFile);
@@ -400,9 +421,11 @@ jobs:
             });
             reset.addEventListener('click', () => {
               picker.value = '';
-              show(new File([window.__wreEmbeddedSplat], 'WRE-16-photos.splat', {
-                type: 'application/octet-stream'
-              }));
+              show(originalFile);
+            });
+            compare.addEventListener('click', () => {
+              if (!localFile) return;
+              show(activeFile === originalFile ? localFile : originalFile);
             });
           })();
           </script>"""
@@ -428,6 +451,8 @@ jobs:
               "Mouse orbit/zoom and keyboard 0-9 / +/- for recovered cameras.\n"
               "Choose a local .splat using the file picker, or drag one onto the page.\n"
               "Use Restore 16-photo scene to return to the included example.\n"
+              "Use Compare original / local to toggle without reselecting the local file.\n"
+              "Different scenes may not share geometry, metric scale or camera registration.\n"
               "Use Save displayed .splat to download the currently shown scene locally.\n"
               "The example scene comes from CC BY-NC 4.0 NONCOMMERCIAL photos.\n"
               "A .splat must have 32-byte Gaussian records (max 256 MiB, not ZIP/OBJ).\n"
