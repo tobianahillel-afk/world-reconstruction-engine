@@ -1695,6 +1695,9 @@ jobs:
               "depth_bin_to_point3d_id": {
                   key: value[1] for key, value in sorted(depth_bins.items())
               },
+              "depth_bin_to_camera_z_sfm_units": {
+                  key: value[0] for key, value in sorted(depth_bins.items())
+              },
               "points": points,
           }
           (output / "wre-real16-native-landmark-lookup.json").write_text(
@@ -1812,6 +1815,10 @@ jobs:
               src="./wre-real16-native-sparse-depth-preview.png"
               style="max-width:100%;height:auto;cursor:crosshair">
             <output id="wre-depth-selection-status">Click a bright depth cell to select its measured COLMAP 3D point. Black is unobserved.</output>
+            <p>Shift-click two corners in the same camera tile to measure an observed sparse-depth region.</p>
+            <output id="wre-depth-roi-status" aria-live="polite">No measured region selected.</output>
+            <button id="wre-depth-roi-download" type="button" disabled>Download measured ROI and 3D point IDs (JSON)</button>
+            <button id="wre-depth-roi-ply-download" type="button" disabled>Download measured native ROI as viewable XYZ PLY</button>
             <p><a download href="./wre-real16-native-sparse-depth.npz">Sparse camera depth maps (NPZ)</a>
             · <a download href="./wre-real16-native-sparse-depth.json">Depth scale and observation metadata</a>
             · <a download href="./wre-real16-native-sparse-depth-observations.csv">Original-resolution measured depths (CSV)</a></p>
@@ -2073,6 +2080,41 @@ jobs:
           // Do not project any unobserved black bin or infer dense depth.
           const depthPreview=document.getElementById('wre-sparse-depth-preview');
           const depthStatus=document.getElementById('wre-depth-selection-status');
+          const depthRoiStatus=document.getElementById('wre-depth-roi-status');
+          const depthRoiDownload=document.getElementById('wre-depth-roi-download');
+          const depthRoiPlyDownload=document.getElementById('wre-depth-roi-ply-download');
+          let depthRoiCorner=null,depthRoiReport=null;
+          depthRoiDownload.addEventListener('click',()=>{
+            if(!depthRoiReport || localUrl!==null) return;
+            const blob=new Blob([JSON.stringify(depthRoiReport,null,2)],{type:'application/json'});
+            const href=URL.createObjectURL(blob);
+            const link=document.createElement('a');
+            link.href=href;link.download='wre-measured-sparse-depth-roi.json';
+            document.body.appendChild(link);link.click();link.remove();
+            setTimeout(()=>URL.revokeObjectURL(href),1000);
+          });
+          depthRoiPlyDownload.addEventListener('click',()=>{
+            if(!depthRoiReport || depthRoiPlyDownload.disabled || localUrl!==null) return;
+            // One actual native SfM XYZ per measured Point3D, not dense or inferred depth.
+            const positions=new Map();
+            for(const m of depthRoiReport.measurements){
+              positions.set(m.point3d_id,m.world_xyz_sfm_units);
+            }
+            const lines=[
+              'ply','format ascii 1.0',
+              'comment WRE native COLMAP sparse measured ROI; arbitrary SfM units, not meters',
+              'comment source license CC BY-NC 4.0 NONCOMMERCIAL',
+              'element vertex '+positions.size,
+              'property double x','property double y','property double z','end_header'
+            ];
+            for(const xyz of positions.values()) lines.push(xyz.join(' '));
+            const blob=new Blob([lines.join('\\n')+'\\n'],{type:'application/octet-stream'});
+            const href=URL.createObjectURL(blob);
+            const link=document.createElement('a');
+            link.href=href;link.download='wre-measured-sparse-depth-roi-native.ply';
+            document.body.appendChild(link);link.click();link.remove();
+            setTimeout(()=>URL.revokeObjectURL(href),1000);
+          });
           depthPreview.addEventListener('click',async event=>{
             if(localUrl!==null || !viewer.loaded){
               depthStatus.textContent='Restore the verified original 3D scene first.';
@@ -2087,6 +2129,90 @@ jobs:
             const ix=Math.floor(x),iy=Math.floor(y);
             const tile=4*Math.floor(iy/256)+Math.floor(ix/256);
             const key=tile+':'+(ix%256)+':'+(iy%256);
+            if(event.shiftKey){
+              try{
+                const index=await loadNativeIndex();
+                if(localUrl!==null) return;
+                if(index.depth_tile_resolution!==256 ||
+                   index.depth_tile_order!=='image_name_sorted_four_by_four' ||
+                   !index.depth_bin_to_point3d_id ||
+                   !index.depth_bin_to_camera_z_sfm_units){
+                  throw Error('Measured sparse-depth cells lack camera-Z provenance');
+                }
+                depthRoiReport=null;depthRoiDownload.disabled=true;
+                depthRoiPlyDownload.disabled=true;
+                const corner={tile,x:ix%256,y:iy%256};
+                if(!depthRoiCorner){
+                  depthRoiCorner=corner;
+                  depthRoiStatus.textContent='First ROI corner in camera '+tile+
+                    ' at ('+corner.x+','+corner.y+'). Shift-click the second corner.';
+                  return;
+                }
+                const start=depthRoiCorner;depthRoiCorner=null;
+                if(tile!==start.tile){
+                  depthRoiStatus.textContent='ROI must remain within one measured camera tile.';
+                  return;
+                }
+                const xmin=Math.min(start.x,corner.x),xmax=Math.max(start.x,corner.x);
+                const ymin=Math.min(start.y,corner.y),ymax=Math.max(start.y,corner.y);
+                const measurements=[];
+                for(let ry=ymin;ry<=ymax;ry++) for(let rx=xmin;rx<=xmax;rx++){
+                  const bin=tile+':'+rx+':'+ry;
+                  const id=index.depth_bin_to_point3d_id[bin];
+                  if(id===undefined) continue;
+                  const z=index.depth_bin_to_camera_z_sfm_units[bin];
+                  if(!Number.isFinite(z) || z<=0 || !index.points[String(id)]){
+                    throw Error('A measured depth bin lacks its native COLMAP Point3D');
+                  }
+                  const xyz=index.points[String(id)].xyz;
+                  if(!Array.isArray(xyz) || xyz.length!==3 ||
+                     !xyz.every(Number.isFinite)){
+                    throw Error('Measured COLMAP Point3D lacks finite native world XYZ');
+                  }
+                  measurements.push({
+                    tile_x:rx,tile_y:ry,point3d_id:String(id),
+                    camera_z_sfm_units:z,world_xyz_sfm_units:xyz
+                  });
+                }
+                measurements.sort((a,b)=>a.camera_z_sfm_units-b.camera_z_sfm_units);
+                if(measurements.length===0){
+                  depthRoiStatus.textContent='ROI has no measured positive camera-Z bins.';
+                  return;
+                }
+                const n=measurements.length;
+                const median=n%2
+                  ?measurements[(n-1)/2].camera_z_sfm_units
+                  :(measurements[n/2-1].camera_z_sfm_units+
+                    measurements[n/2].camera_z_sfm_units)/2;
+                const min=measurements[0].camera_z_sfm_units;
+                const max=measurements[n-1].camera_z_sfm_units;
+                depthRoiReport={
+                  schema:'wre.experimental.real16_measured_sparse_depth_roi.v1',
+                  source_dataset_commit:index.source_dataset_commit,
+                  license:index.license,
+                  camera_tile_index:tile,
+                  tile_coordinates_256:{xmin,xmax,ymin,ymax},
+                  measured_frontmost_bins:n,
+                  camera_z_min_sfm_units:min,
+                  camera_z_median_sfm_units:median,
+                  camera_z_max_sfm_units:max,
+                  dense_depth_inferred:false,
+                  metric_depth_verified:false,
+                  measurements
+                };
+                depthRoiDownload.disabled=false;
+                depthRoiPlyDownload.disabled=false;
+                depthRoiStatus.textContent='Camera '+tile+' ROI: '+n+
+                  ' observed frontmost SfM bins; camera-Z min '+min.toFixed(4)+
+                  ', median '+median.toFixed(4)+', max '+max.toFixed(4)+
+                  ' (arbitrary units). Empty cells excluded; NOT dense depth or meters.';
+              }catch(error){
+                depthRoiCorner=null;depthRoiReport=null;depthRoiDownload.disabled=true;
+                depthRoiPlyDownload.disabled=true;
+                depthRoiStatus.textContent='Measured ROI failed: '+String(error);
+              }
+              return;
+            }
             try {
               const index=await loadNativeIndex();
               if(localUrl!==null) return;
@@ -3532,6 +3658,115 @@ jobs:
               assert lookup["depth_tile_resolution"]==256
               assert lookup["depth_tile_order"]=="image_name_sorted_four_by_four"
               assert len(depth_bins)>100
+              depth_values=lookup["depth_bin_to_camera_z_sfm_units"]
+              assert set(depth_values)==set(depth_bins)
+              assert all(math.isfinite(v) and v>0 for v in depth_values.values())
+              real_first_tile_depths=[
+                  float(value) for key,value in depth_values.items()
+                  if key.startswith("0:")
+              ]
+              assert len(real_first_tile_depths)>5
+              # Exercise REAL measured-region selection in headless WebGL Chrome.
+              # The 256x256 ROI includes only occupied, frontmost camera-Z bins;
+              # unobserved cells must never be interpolated or called meters.
+              assert js("""
+                const preview=document.getElementById('wre-sparse-depth-preview');
+                const r=preview.getBoundingClientRect();
+                for(const [x,y] of [[0,0],[255,255]]) {
+                  preview.dispatchEvent(new MouseEvent('click',{
+                    bubbles:true,shiftKey:true,
+                    clientX:r.left+(x+0.5)/1024*r.width,
+                    clientY:r.top+(y+0.5)/1024*r.height
+                  }));
+                }
+                return true;
+              """)
+              for _ in range(60):
+                  roi_state=js("""
+                    const status=document.getElementById('wre-depth-roi-status').textContent;
+                    const download=document.getElementById('wre-depth-roi-download');
+                    return {status,enabled:!download.disabled};
+                  """)
+                  if roi_state["enabled"] and "observed frontmost SfM bins" in roi_state["status"]:
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("Real Chrome sparse SfM depth ROI selection failed")
+              assert f'{len(real_first_tile_depths)} observed frontmost SfM bins' in roi_state["status"]
+              assert f'{min(real_first_tile_depths):.4f}' in roi_state["status"]
+              assert f'{max(real_first_tile_depths):.4f}' in roi_state["status"]
+              assert "NOT dense depth or meters" in roi_state["status"]
+              # Actually download the measured ROI PLY through Chrome, inspect
+              # the Blob bytes, and compare each world XYZ to ORIGINAL COLMAP.
+              assert js("""
+                const button=document.getElementById('wre-depth-roi-ply-download');
+                if(button.disabled) return false;
+                window.__roiPlyActualText=null;
+                const original=URL.createObjectURL.bind(URL);
+                URL.createObjectURL=(blob)=>{
+                  blob.text().then(value=>window.__roiPlyActualText=value);
+                  return original(blob);
+                };
+                button.click();
+                return true;
+              """), "Real measured ROI PLY download button remained disabled"
+              for _ in range(40):
+                  roi_ply=js("return window.__roiPlyActualText;")
+                  if roi_ply is not None:
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("Native 3D ROI PLY bytes were not produced in Chrome")
+              ply_lines=roi_ply.splitlines()
+              assert ply_lines[:2]==["ply","format ascii 1.0"]
+              assert "comment source license CC BY-NC 4.0 NONCOMMERCIAL" in ply_lines
+              assert "property double x" in ply_lines
+              header_end=ply_lines.index("end_header")
+              expected_ids=list(dict.fromkeys(
+                  pid for _,pid in sorted(
+                      (float(depth_values[key]),str(depth_bins[key]))
+                      for key in depth_bins if key.startswith("0:")
+                  )
+              ))
+              assert f"element vertex {len(expected_ids)}" in ply_lines
+              actual_rows=ply_lines[header_end+1:]
+              assert len(actual_rows)==len(expected_ids)
+              for row,pid in zip(actual_rows,expected_ids,strict=True):
+                  coords=[float(value) for value in row.split()]
+                  expected=lookup["points"][pid]["xyz"]
+                  assert len(coords)==3
+                  assert all(
+                      math.isclose(x,y,rel_tol=1e-12,abs_tol=1e-12)
+                      for x,y in zip(coords,expected,strict=True)
+                  )
+              # A region across different original camera tiles must not
+              # silently combine unrelated SfM camera-Z coordinate frames.
+              assert js("""
+                const preview=document.getElementById('wre-sparse-depth-preview');
+                const r=preview.getBoundingClientRect();
+                for(const [x,y] of [[0,0],[257,0]]) {
+                  preview.dispatchEvent(new MouseEvent('click',{
+                    bubbles:true,shiftKey:true,
+                    clientX:r.left+(x+0.5)/1024*r.width,
+                    clientY:r.top+(y+0.5)/1024*r.height
+                  }));
+                }
+                return true;
+              """)
+              for _ in range(40):
+                  roi_state=js("""
+                    return {
+                      status:document.getElementById('wre-depth-roi-status').textContent,
+                      enabled:!document.getElementById('wre-depth-roi-download').disabled
+                    };
+                  """)
+                  if "within one measured camera tile" in roi_state["status"]:
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("Real Chrome mixed-camera sparse depth ROI was accepted")
+              assert not roi_state["enabled"]
+              assert js("return document.getElementById('wre-depth-roi-ply-download').disabled;")
               picked_key=min(depth_bins, key=lambda key:tuple(int(v) for v in key.split(":")))
               selected_tile,selected_x,selected_y=(int(v) for v in picked_key.split(":"))
               selected_depth_id=str(depth_bins[picked_key])
