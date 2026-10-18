@@ -1078,6 +1078,11 @@ jobs:
           html = """<!doctype html>
           <html lang="en"><head><meta charset="utf-8">
           <meta name="viewport" content="width=device-width,initial-scale=1">
+          <meta http-equiv="Content-Security-Policy"
+            content="default-src 'none'; script-src 'self' 'unsafe-inline' blob:;
+              style-src 'unsafe-inline'; connect-src 'self' blob: data:;
+              img-src 'self' blob: data:; worker-src 'self' blob:;
+              font-src 'self' data:">
           <title>WRE · Real 16-photo reconstructed 3D</title>
           <script type="module" src="./wre-model-viewer-4.1.0.min.js"
             integrity="sha512-PMy/x5h09gVKwc21Cdcgu/VWJwgmeJ7uivJkbTar3vh5t8uzYo3NQgTkZE0fsfUd+9vihkAcLNAh6mv9mEXkZQ=="></script>
@@ -1095,6 +1100,10 @@ jobs:
           #camera-navigation select,#camera-navigation button {background:#273950;
             border:1px solid #8097b2;border-radius:5px;color:#fff;padding:8px}
           #camera-details {font-size:13px;line-height:1.45;flex-basis:100%}
+          #local-model {display:flex;flex-wrap:wrap;align-items:center;gap:9px;
+            padding:10px 18px;background:#202b3d}
+          #local-model input,#local-model button {color:#fff;padding:7px}
+          #local-model-status {font-size:13px;flex-basis:100%}
           </style></head><body><main>
           <header><h1>WRE · Real 16-photograph SfM 3D</h1>
           <p>Orbit and zoom the actual reconstructed RGB point cloud,
@@ -1110,6 +1119,14 @@ jobs:
             <button id="wre-camera-reset" type="button">Reset orbit</button>
             <output id="camera-details" aria-live="polite">
               Choose a camera to inspect its SfM position (not an exact source photo view).
+            </output>
+          </section>
+          <section id="local-model" aria-label="Open your own 3D GLB">
+            <label for="wre-local-glb">Open your own 3D model (.glb, max 128 MiB)</label>
+            <input id="wre-local-glb" type="file" accept=".glb,model/gltf-binary">
+            <button id="wre-restore-demo" type="button">Restore 16-photo scene</button>
+            <output id="local-model-status" aria-live="polite">
+              Only the original scene is verified. Local files stay in this browser.
             </output>
           </section>
           <model-viewer id="wre-scene" camera-controls auto-rotate
@@ -1132,6 +1149,65 @@ jobs:
           const viewer=document.getElementById('wre-scene');
           const choice=document.getElementById('wre-camera-choice');
           const details=document.getElementById('camera-details');
+          const input=document.getElementById('wre-local-glb');
+          const importStatus=document.getElementById('local-model-status');
+          const originalScene='./wre-real16-viewable-scene.glb';
+          let localUrl=null;
+          const resetOrbit=()=>{
+            viewer.removeAttribute('camera-target');
+            viewer.removeAttribute('camera-orbit');
+            viewer.setAttribute('auto-rotate','');
+          };
+          document.getElementById('wre-restore-demo').addEventListener('click',()=>{
+            const oldUrl=localUrl;
+            localUrl=null;
+            input.value='';
+            viewer.setAttribute('src',originalScene);
+            if(oldUrl) URL.revokeObjectURL(oldUrl);
+            choice.disabled=choice.options.length!==17;
+            choice.value='';
+            resetOrbit();
+            details.textContent='Original 16-camera reconstruction restored.';
+            importStatus.textContent='Verified WRE source scene restored.';
+          });
+          input.addEventListener('change',async()=>{
+            const file=input.files && input.files[0];
+            if(!file) return;
+            try {
+              if(!file.name.toLowerCase().endsWith('.glb') ||
+                  file.size<12 || file.size>128*1024*1024) {
+                throw Error('Select a GLB file up to 128 MiB');
+              }
+              const header=new DataView(await file.slice(0,12).arrayBuffer());
+              if(header.getUint32(0,true)!==0x46546c67 ||
+                  header.getUint32(4,true)!==2 ||
+                  header.getUint32(8,true)!==file.size) {
+                throw Error('Invalid glTF 2.0 binary header or byte length');
+              }
+              const nextUrl=URL.createObjectURL(file);
+              const previousUrl=localUrl;
+              localUrl=nextUrl;
+              viewer.setAttribute('src',nextUrl);
+              if(previousUrl) URL.revokeObjectURL(previousUrl);
+              choice.disabled=true;
+              choice.value='';
+              resetOrbit();
+              details.textContent='Original COLMAP cameras only apply to the original scene.';
+              importStatus.textContent='Loading local GLB: '+file.name+
+                '. Unverified third-party scene; no WRE provenance or metric scale.';
+            } catch(error) {
+              input.value='';
+              importStatus.textContent='Local import rejected: '+String(error);
+            }
+          });
+          viewer.addEventListener('load',()=>{
+            if(localUrl) importStatus.textContent=
+              'Local GLB loaded (not WRE-verified). No file was uploaded.';
+          });
+          viewer.addEventListener('error',()=>{
+            if(localUrl) importStatus.textContent=
+              'Local GLB could not be rendered; restore the original scene.';
+          });
           document.getElementById('wre-camera-reset').addEventListener('click',()=>{
             viewer.removeAttribute('camera-target');
             viewer.removeAttribute('camera-orbit');
@@ -1809,6 +1885,75 @@ jobs:
                   document.getElementById('camera-details').textContent.includes(
                     'Approximate orbit'));
               """), "Camera selection did not navigate the real WebGL viewer"
+              # Real browser File API: use the actual generated 3D GLB as if
+              # selected locally. This is a real WebGL interaction, no GPU CUDA.
+              local_result = call("POST", f"/session/{session}/execute/async", {
+                  "script": """
+                    const done=arguments[arguments.length-1];
+                    fetch('./wre-real16-viewable-scene.glb')
+                      .then(response=>{
+                        if(!response.ok) throw Error('Missing actual RGB scene');
+                        return response.arrayBuffer();
+                      })
+                      .then(binary=>{
+                        const file=new File([binary], 'my-reconstruction.glb',
+                          {type:'model/gltf-binary'});
+                        const transfer=new DataTransfer();
+                        transfer.items.add(file);
+                        const input=document.getElementById('wre-local-glb');
+                        input.files=transfer.files;
+                        input.dispatchEvent(new Event('change',{bubbles:true}));
+                        done({ok:true,bytes:file.size});
+                      })
+                      .catch(error=>done({ok:false,error:String(error)}));
+                  """,
+                  "args": [],
+              })
+              assert local_result["ok"] and local_result["bytes"] == len(binary)
+              for _ in range(40):
+                  if js("""
+                    const viewer=document.getElementById('wre-scene');
+                    const camera=document.getElementById('wre-camera-choice');
+                    return viewer.loaded && viewer.getAttribute('src').startsWith('blob:') &&
+                      camera.disabled && document.getElementById('local-model-status')
+                        .textContent.includes('Local GLB loaded');
+                  """):
+                      break
+                  time.sleep(0.25)
+              else:
+                  raise RuntimeError("Real Chrome local GLB import did not render")
+              assert js("""
+                const input=document.getElementById('wre-local-glb');
+                const viewer=document.getElementById('wre-scene');
+                const original=viewer.getAttribute('src');
+                const file=new File([new Uint8Array([1,2,3])],'broken.glb');
+                const transfer=new DataTransfer();
+                transfer.items.add(file);
+                input.files=transfer.files;
+                input.dispatchEvent(new Event('change',{bubbles:true}));
+                return viewer.getAttribute('src')===original &&
+                  document.getElementById('local-model-status')
+                    .textContent.includes('Local import rejected');
+              """), "Corrupt local GLB unexpectedly replaced the loaded scene"
+              assert js("""
+                document.getElementById('wre-restore-demo').click();
+                const viewer=document.getElementById('wre-scene');
+                const camera=document.getElementById('wre-camera-choice');
+                return viewer.getAttribute('src')==='./wre-real16-viewable-scene.glb' &&
+                  !camera.disabled && viewer.hasAttribute('auto-rotate');
+              """), "Original real-photo viewer or camera control was not restored"
+              for _ in range(40):
+                  if js("""
+                    const viewer=document.getElementById('wre-scene');
+                    return viewer.loaded && viewer.getAttribute('src')===
+                      './wre-real16-viewable-scene.glb';
+                  """):
+                      break
+                  time.sleep(0.25)
+              else:
+                  raise RuntimeError("Original 16-camera GLB did not reload")
+              print("REAL CHROME LOCAL GLB PASS: real SfM GLB loaded via File, "
+                    "malformed rejected, source camera controls restored")
               png = base64.b64decode(
                   call("GET", f"/session/{session}/screenshot"), validate=True
               )
