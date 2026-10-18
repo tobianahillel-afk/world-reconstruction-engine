@@ -11,6 +11,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   combined-native-import:
@@ -272,3 +273,137 @@ jobs:
           print("REAL UPSTREAM CPU COLMAP DATASET PASS: 2 images, 1 track, train/test tensors.")
           print("No CUDA GPU, trainer optimization or real-photo geometry claimed.")
           PY
+
+      # Experimental bridge to the independently reconstructed real 16-photo
+      # COLMAP capture. The immutable GitHub artifact expires 2026-10-25:
+      # reconstitute the pinned source capture before treating this as mergeable.
+      - name: Retrieve exact previously reconstructed 16-photo undistorted COLMAP dataset
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          repository: tobianahillel-afk/world-reconstruction-engine
+          run-id: 39082307350
+          name: wre-real-photo-undistorted-colmap-capture
+          github-token: ${{ github.token }}
+          path: ${{ github.workspace }}/wre-common-real-photo-capture
+
+      - name: Decode ALL real-photo COLMAP data in the SAME pinned native trainer environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$COMMON_PYTHON" -I - <<'PY'
+          import hashlib
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          import numpy as np
+          import torch
+
+          sources = Path(os.environ["COMMON_SOURCES"])
+          sys.path.insert(0, str(sources / "gsplat" / "examples"))
+          from datasets.colmap import Dataset, Parser
+          from fused_ssim import fused_ssim
+          from gsplat.cuda._backend import _C
+          from nerfview import CameraState
+          from pycolmap import SceneManager
+          from simple_trainer import Config, main
+
+          assert torch.__version__ == "2.4.0+cu124"
+          assert not torch.cuda.is_available()
+          assert all(obj is not None for obj in (fused_ssim, _C, CameraState, SceneManager, Config, main))
+          capture = Path(os.environ["GITHUB_WORKSPACE"]) / "wre-common-real-photo-capture"
+          candidates = list(capture.rglob("wre-capture-manifest.json"))
+          assert len(candidates) == 1, f"Expected one source dataset manifest, found {len(candidates)}"
+          root = candidates[0].parent.resolve(strict=True)
+          assert root.is_relative_to(capture.resolve(strict=True))
+          manifest = json.loads(candidates[0].read_text(encoding="utf-8"))
+          assert manifest["schema"] == "wre.experimental.colmap_undistorted_capture.v1"
+          assert manifest["native_registered_views"] == manifest["undistorted_registered_views"] == 16
+          assert manifest["native_points3d"] == manifest["undistorted_points3d"]
+          assert manifest["native_points3d"] > 100
+          assert manifest["gpu_training_executed"] is False
+          assert manifest["gsplat_training_validated"] is False
+          assert manifest["metric_scale_known"] is False
+          assert manifest["license"].startswith("CC BY-NC 4.0")
+          hashes = manifest["file_sha256"]
+          assert len(hashes) >= 19
+          for relative, expected in hashes.items():
+              entry = root / relative
+              assert len(expected) == 64 and not entry.is_symlink() and entry.is_file(), relative
+              assert entry.resolve(strict=True).is_relative_to(root), relative
+              assert hashlib.sha256(entry.read_bytes()).hexdigest() == expected, relative
+
+          parser = Parser(str(root), factor=1, normalize=False, test_every=8)
+          assert len(parser.image_names) == 16
+          assert set(parser.image_names) == set(manifest["views"])
+          assert parser.camtoworlds.shape == (16, 4, 4)
+          assert parser.points.shape == (manifest["native_points3d"], 3)
+          assert parser.points_rgb.shape == (manifest["native_points3d"], 3)
+          assert np.isfinite(parser.camtoworlds).all()
+          assert np.isfinite(parser.points).all()
+          assert np.unique(parser.points_rgb, axis=0).shape[0] > 10
+          assert np.linalg.norm(np.ptp(parser.camtoworlds[:, :3, 3], axis=0)) > 0
+          assert all(len(params) == 0 for params in parser.params_dict.values())
+
+          train, validation = Dataset(parser, split="train"), Dataset(parser, split="val")
+          assert len(train) == 14 and len(validation) == 2
+          samples = []
+          for subset_name, subset in (("train", train), ("val", validation)):
+              for index in range(len(subset)):
+                  item = subset[index]
+                  image = item["image"]
+                  assert image.ndim == 3 and image.shape[2] == 3
+                  assert image.device.type == "cpu"
+                  assert tuple(item["K"].shape) == (3, 3)
+                  assert tuple(item["camtoworld"].shape) == (4, 4)
+                  assert torch.isfinite(image).all()
+                  assert torch.isfinite(item["K"]).all()
+                  assert torch.isfinite(item["camtoworld"]).all()
+                  samples.append({
+                      "split": subset_name,
+                      "height": int(image.shape[0]),
+                      "width": int(image.shape[1]),
+                      "rgb_sum": float(image.sum()),
+                  })
+          assert len(samples) == 16
+          assert len({sample["rgb_sum"] for sample in samples}) > 2
+          receipt = {
+              "kind": "wre-common-native-real-photo-colmap-cpu-v1",
+              "source_artifact_run": 39082307350,
+              "source_artifact_id": 12119207552,
+              "source_artifact_digest": "sha256:12ae04e73106f4ff929ed7dd6cebe1a2ca7bdc323cff9fcad78f9cb8087410e9",
+              "source_manifest_sha256": hashlib.sha256(candidates[0].read_bytes()).hexdigest(),
+              "native_environment": {
+                  "torch": torch.__version__,
+                  "torch_cuda_toolkit": torch.version.cuda,
+                  "gsplat_reference_sha": os.environ["GSPLAT_REVISION"],
+              },
+              "real_source_photo_count": 16,
+              "real_colmap_points": int(len(parser.points)),
+              "native_parser_cpu_train_views": len(train),
+              "native_parser_cpu_validation_views": len(validation),
+              "decoded_photo_shapes_and_rgb_sums": samples,
+              "cuda_gpu_available": False,
+              "training_executed": False,
+              "gpu_kernels_executed": False,
+              "quality_benchmark_executed": False,
+              "licence": manifest["license"],
+          }
+          out = Path(os.environ["GITHUB_WORKSPACE"]) / "wre-common-native-real-photo-receipt.json"
+          out.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          print(
+              "REAL 16-PHOTO COMMON NATIVE COLMAP PASS:",
+              len(parser.image_names), "authentic photographed frames,",
+              len(parser.points), "actual SfM points, 14/2 CPU dataset tensors."
+          )
+          print("GPU training NONE; native extensions were imported, never executed on GPU.")
+          PY
+
+      - name: Publish compact real-photo native-import receipt without redistributing photos
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wre-common-native-real-photo-receipt
+          path: wre-common-native-real-photo-receipt.json
+          if-no-files-found: error
+          retention-days: 7
