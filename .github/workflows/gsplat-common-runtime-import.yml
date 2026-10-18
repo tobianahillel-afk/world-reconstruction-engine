@@ -3003,6 +3003,17 @@ jobs:
           assert receipt["registered_cameras"] == 16
           quality = json.loads((root / "wre-real16-sfm-quality.json").read_text())
           geom_quality = quality["geometry_quality"]
+          colour = json.loads(
+              (root / "wre-real16-observed-rgb-agreement.json").read_text()
+          )
+          assert colour["schema"] == "wre.experimental.real16_observed_rgb_agreement.v1"
+          assert colour["source_dataset_commit"] == quality["source_dataset_commit"]
+          assert colour["image_count"] == 16
+          assert colour["sparse_points3d"] == geom_quality["sparse_points3d"]
+          assert colour["track_observations"] == geom_quality["track_observations"]
+          assert colour["points_with_cross_view_observations"] > 100
+          assert colour["held_out_image_quality_measured"] is False
+          assert colour["gpu_training_executed"] is False
           lookup = json.loads(
               (root / "wre-real16-native-landmark-lookup.json").read_text()
           )
@@ -3077,6 +3088,20 @@ jobs:
               """)
               assert str(geom_quality["sparse_points3d"]) in shown
               assert str(geom_quality["track_observations"]) in shown
+              observed_rgb_shown=js("""
+                const result=document.getElementById('wre-source-rgb-agreement-value');
+                return result && result.textContent;
+              """)
+              assert observed_rgb_shown is not None
+              assert str(colour["points_with_cross_view_observations"]) in observed_rgb_shown
+              assert str(colour["cross_view_pairs"]) in observed_rgb_shown
+              assert f'{colour["mean_rgb_difference_0_to_255"]:.2f}/255' in observed_rgb_shown
+              assert "NOT held-out reconstruction quality" in observed_rgb_shown
+              assert js("""
+                const href=[...document.querySelectorAll('a[download]')]
+                  .find(a=>a.href.endsWith('/wre-real16-observed-rgb-agreement.json'));
+                return Boolean(href);
+              """), "Observed RGB diagnostic was not downloadable in real Chrome"
               expected_error=f'{geom_quality["mean_reprojection_error_colmap_px"]:.3f}'
               assert expected_error+' px (COLMAP, in-sample;' in shown
               assert "NOT held-out image quality or trained 3DGS" in shown
