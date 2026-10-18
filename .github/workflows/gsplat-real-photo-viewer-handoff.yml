@@ -1,0 +1,150 @@
+name: gsplat-real-photo-viewer-handoff
+on:
+  pull_request:
+    paths:
+      - .github/workflows/gsplat-real-photo-viewer-handoff.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  viewer:
+    name: real-16-photo-COLMAP-Gaussian-viewer-bundle-no-GPU
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout audited WRE viewer source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Install pinned WRE Python
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.13"
+          python-version: "3.12"
+      - run: uv sync --frozen
+      - name: Download real 16-photo upstream Gaussian seed artifacts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          repository: tobianahillel-afk/world-reconstruction-engine
+          run-id: 39082307350
+          name: wre-real-photo-GAUSSIANS-UNTRAINED
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/real-photo-gaussians
+      - name: Export canonical WRE viewer ZIP from actual real-photo Gaussian PLY
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run --no-sync python - <<'PY'
+          import hashlib
+          import json
+          import os
+          import shutil
+          import struct
+          import zipfile
+          from collections import Counter
+          from pathlib import Path
+
+          from wre.domain.appearance import APPEARANCE_MODEL_ARTIFACT_KIND
+          from wre.domain.artifacts import ArtifactId, ArtifactRef
+          from wre.reconstruction.static_appearance_baseline import (
+              GsplatStaticAppearanceTrainingProfile,
+              export_verified_gsplat_viewer_bundle,
+          )
+
+          temp = Path(os.environ["RUNNER_TEMP"])
+          source = temp / "real-photo-gaussians"
+          def only(name):
+              matches = list(source.rglob(name))
+              assert len(matches) == 1, (name, len(matches))
+              return matches[0]
+
+          raw_ply = only("observed-GAUSSIANS-UNTRAINED.ply")
+          raw_splat = only("observed-GAUSSIANS-UNTRAINED.splat")
+          provenance = json.loads(only("untrained-gaussian-provenance.json").read_text())
+          n = provenance["gaussians_original_rgb_observed"]
+          assert n == 6917
+          assert provenance["training_steps"] == 0
+          assert provenance["gpu_kernel_executed"] is False
+          assert provenance["source_gsplat_commit"] == "937e29912570c372bed6747a5c9bf85fed877bae"
+          assert provenance["dataset_license"] == "CC BY-NC 4.0"
+          source_sha = provenance["upstream_exporter_ply_sha256"]
+          assert hashlib.sha256(raw_ply.read_bytes()).hexdigest() == source_sha
+          native = raw_splat.read_bytes()
+          assert len(native) == n * 32
+          assert hashlib.sha256(native).hexdigest() == provenance["upstream_exporter_splat_sha256"]
+
+          # max_steps=1 is used solely for the WRE *filename* point_cloud_0.ply.
+          # The source is explicitly UNTRAINED: 0 optimization iterations.
+          profile = GsplatStaticAppearanceTrainingProfile(max_steps=1)
+          staged = temp / "wre-verified-source"
+          ply = staged / profile.expected_ply_relative_path
+          ply.parent.mkdir(parents=True)
+          shutil.copyfile(raw_ply, ply)
+          result = temp / "wre-real-photo-viewer-result"
+          result.mkdir()
+          bundle = result / "16-real-photo-untrained-gaussians.zip"
+          digest = export_verified_gsplat_viewer_bundle(
+              artifact_ref=ArtifactRef(
+                  ArtifactId("appearance:gsplat:real-16photo-untrained"),
+                  APPEARANCE_MODEL_ARTIFACT_KIND,
+              ),
+              output_root=staged,
+              profile=profile,
+              bundle_path=bundle,
+          )
+          assert hashlib.sha256(bundle.read_bytes()).hexdigest() == str(digest)
+          with zipfile.ZipFile(bundle) as archive:
+              assert set(archive.namelist()) == {"scene.splat", "centers.glb", "manifest.json"}
+              derived = archive.read("scene.splat")
+              glb = archive.read("centers.glb")
+              manifest = json.loads(archive.read("manifest.json"))
+          assert len(derived) == n * 32
+          assert glb[:4] == b"glTF"
+          assert manifest["source_ply"]["sha256"] == source_sha
+          for name, value in (("scene.splat", derived), ("centers.glb", glb)):
+              assert manifest["outputs"][name]["sha256"] == hashlib.sha256(value).hexdigest()
+              assert manifest["outputs"][name]["size_bytes"] == len(value)
+          json_size, chunk_type = struct.unpack_from("<I4s", glb, 12)
+          assert chunk_type == b"JSON"
+          scene = json.loads(glb[20:20 + json_size])
+          assert scene["accessors"][0]["count"] == n
+          assert scene["meshes"][0]["primitives"][0]["mode"] == 0
+          def positions(data):
+              return Counter(
+                  struct.unpack_from("<3f", data, offset)
+                  for offset in range(0, len(data), 32)
+              )
+          assert positions(derived) == positions(native)
+          assert hashlib.sha256(ply.read_bytes()).hexdigest() == source_sha
+
+          evidence = {
+              "source_workflow_run": 39082307350,
+              "source_head_sha": "6e503dbff2c8df6dad0ecd82cbcddb9657ed5070",
+              "input": "16 genuine DJI photos -> actual CPU COLMAP -> pinned gsplat CPU export",
+              "gaussians": n,
+              "training_steps": 0,
+              "gpu_training_verified": False,
+              "viewer_zip_sha256": str(digest),
+              "input_ply_sha256": source_sha,
+              "original_splat_sha256": provenance["upstream_exporter_splat_sha256"],
+              "source_license": provenance["dataset_license"],
+              "source_credit": provenance["dataset_credit"],
+              "limits": "Untrained static SH0 Gaussian seeds; no 4D, real GPU training or held-out quality",
+          }
+          (result / "evidence.json").write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
+          (result / "LICENSE-NOTICE.txt").write_text(
+              "16 source DJI photos: Pierre Moulon, CC BY-NC 4.0 (noncommercial).\n"
+              "Generated WRE viewer ZIP: untrained Gaussian seeds (0 steps).\n"
+              "scene.splat: SH0 only. centers.glb: RGB point cloud, not radiance.\n"
+              "No GPU kernel/training, metric scale or 4D validated.\n"
+          )
+          print(f"REAL-PHOTO WRE VIEWER ZIP PASS: {n} Gaussians, 16 photos; SHA256 {digest}")
+          PY
+      - name: Upload WRE real-photo 3D viewer archive and evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wre-16-real-photos-viewer-handoff
+          path: ${{ runner.temp }}/wre-real-photo-viewer-result/
+          if-no-files-found: error
+          retention-days: 7
