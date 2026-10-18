@@ -541,7 +541,7 @@ jobs:
               replacement_png = base64.b64decode(
                   webdriver("GET", f"/session/{session}/screenshot")
               )
-              assert replacement_png[:8] == b"\\x89PNG\\r\\n\\x1a\\n"
+              assert replacement_png[:8] == b"\x89PNG\r\n\x1a\n"
               assert len(replacement_png) > 10_000
               (root / "WRE-local-splat-drop-WebGL.png").write_bytes(replacement_png)
               receipt["operator_local_splat_test"] = {
@@ -554,7 +554,7 @@ jobs:
                   "screenshot_sha256": hashlib.sha256(replacement_png).hexdigest(),
                   "cuda_training": False,
               }
-              receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\\n")
+              receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
               print("DIRECT FILE OPERATOR SPLAT PASS: 1024 real WRE Gaussian records")
           finally:
               webdriver("DELETE", f"/session/{session}")
