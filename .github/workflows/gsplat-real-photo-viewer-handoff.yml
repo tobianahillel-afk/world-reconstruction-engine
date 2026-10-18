@@ -1470,6 +1470,12 @@ jobs:
               frame2 = root / "snapshot-frame-02.splat"
               frame1.write_bytes(subset)
               frame2.write_bytes(picked_bytes)
+              # The timeline is deliberately collapsed by default. Open it
+              # through the actual operator-facing Chrome UI first.
+              timeline_summary = webdriver("POST", f"/session/{session}/element", {
+                  "using": "css selector", "value": "#wre-snapshot-series summary"
+              })["element-6066-11e4-a52e-4f735466cecf"]
+              webdriver("POST", f"/session/{session}/element/{timeline_summary}/click", {})
               series_el = webdriver("POST", f"/session/{session}/element", {
                   "using": "css selector", "value": "#wre-snapshot-files"
               })["element-6066-11e4-a52e-4f735466cecf"]
