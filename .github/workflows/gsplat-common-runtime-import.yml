@@ -1541,27 +1541,7 @@ jobs:
           const nativeCameraStatus=document.getElementById('wre-native-observation-status');
           const nativePhotoPixel=document.getElementById('wre-native-photo-pixel');
           let nativeLookup=null;
-          let nativePoint=null;
-          let nativeObservation=null;
-          const clearNativeLookupMarker=()=>{
-            viewer.querySelector('[slot="hotspot-native-lookup"]')?.remove();
-            nativePoint=null;nativeObservation=null;
-            nativeCameraChoice.replaceChildren(new Option('Find a point first',''));
-            nativeCameraChoice.disabled=true;nativeCameraOpen.disabled=true;
-            nativePhotoPixel.hidden=true;
-          };
-          lookupButton.addEventListener('click',async()=>{
-            clearNativeLookupMarker();
-            if(localUrl!==null){
-              lookupOutput.textContent='Native SfM lookup disabled for unverified GLB.';
-              return;
-            }
-            const id=Number(lookupInput.value);
-            if(!Number.isSafeInteger(id) || id<=0){
-              lookupOutput.textContent='Enter a positive native COLMAP point ID.';
-              return;
-            }
-            try {
+          const loadNativeIndex=()=>{
               if(nativeLookup===null){
                 nativeLookup=fetch('./wre-real16-native-landmark-lookup.json')
                   .then(response=>{
@@ -1579,7 +1559,30 @@ jobs:
                     return index;
                   });
               }
-              const index=await nativeLookup;
+            return nativeLookup;
+          };
+          let nativePoint=null;
+          let nativeObservation=null;
+          const clearNativeLookupMarker=()=>{
+            viewer.querySelector('[slot="hotspot-native-lookup"]')?.remove();
+            nativePoint=null;nativeObservation=null;
+            nativeCameraChoice.replaceChildren(new Option('Find a point first',''));
+            nativeCameraChoice.disabled=true;nativeCameraOpen.disabled=true;
+            nativePhotoPixel.hidden=true;
+          };
+          const findNativePoint=async()=>{
+            clearNativeLookupMarker();
+            if(localUrl!==null){
+              lookupOutput.textContent='Native SfM lookup disabled for unverified GLB.';
+              return;
+            }
+            const id=Number(lookupInput.value);
+            if(!Number.isSafeInteger(id) || id<=0){
+              lookupOutput.textContent='Enter a positive native COLMAP point ID.';
+              return;
+            }
+            try {
+              const index=await loadNativeIndex();
               if(localUrl!==null) return;
               const point=index.points[String(id)];
               if(!point){
@@ -1635,7 +1638,8 @@ jobs:
               lookupOutput.textContent='Native point lookup failed: '+String(error);
               nativeLookup=null;
             }
-          });
+          };
+          lookupButton.addEventListener('click',findNativePoint);
 
           nativeCameraOpen.addEventListener('click',()=>{
             if(localUrl!==null || !nativePoint || nativeCameraChoice.disabled) return;
@@ -1711,6 +1715,56 @@ jobs:
               marker.hidden=false;
             });
           };
+          // Reverse navigation searches ONLY measured native observations.
+          // Pixel proximity is an explicit selection aid, not new triangulation.
+          photoImage.addEventListener('click',async event=>{
+            if(localUrl!==null || photoImage.hidden || !photoImage.complete ||
+               choice.disabled || choice.value==='') return;
+            const selectedCamera=choice.value;
+            const camera=cameraEvidence.get(selectedCamera);
+            const rect=photoImage.getBoundingClientRect();
+            if(!camera || photoImage.naturalWidth!==camera.image_width ||
+               photoImage.naturalHeight!==camera.image_height ||
+               rect.width<=0 || rect.height<=0) return;
+            const u=(event.clientX-rect.left)*camera.image_width/rect.width;
+            const v=(event.clientY-rect.top)*camera.image_height/rect.height;
+            if(u<0 || v<0 || u>=camera.image_width || v>=camera.image_height) return;
+            try {
+              const index=await loadNativeIndex();
+              if(localUrl!==null || choice.value!==selectedCamera) return;
+              let nearest=null, bestDistance=64;
+              for(const [id,point] of Object.entries(index.points)){
+                if(!Array.isArray(point.observations)) continue;
+                for(const observed of point.observations){
+                  if(observed.image_id!==camera.image_id ||
+                     observed.image_name!==camera.image_name ||
+                     !Array.isArray(observed.pixel) || observed.pixel.length!==2 ||
+                     !observed.pixel.every(Number.isFinite)) continue;
+                  const dx=u-observed.pixel[0],dy=v-observed.pixel[1];
+                  const squaredDistance=dx*dx+dy*dy;
+                  if(squaredDistance<bestDistance){
+                    bestDistance=squaredDistance;nearest=id;
+                  }
+                }
+              }
+              if(nearest===null){
+                nativeCameraStatus.textContent='No measured SfM point within 8 pixels. '+
+                  'No 3D coordinate was invented.';
+                return;
+              }
+              lookupInput.value=nearest;
+              await findNativePoint();
+              if(localUrl!==null || choice.value!==selectedCamera ||
+                 !nativePoint || String(nativePoint.id)!==nearest) return;
+              const observation=nativePoint.observed.find(o=>o.index===selectedCamera);
+              if(!observation) return;
+              nativeCameraChoice.value=selectedCamera;
+              nativeCameraOpen.click();
+              nativeCameraStatus.textContent+=' Selected by clicking the local photograph.';
+            } catch(error){
+              nativeCameraStatus.textContent='Photo-to-3D navigation failed: '+String(error);
+            }
+          });
           photoImage.addEventListener('load',drawMeasuredPhotoPixels);
           photoImage.addEventListener('load',drawNativePhotoPixel);
           photoImageB.addEventListener('load',drawMeasuredPhotoPixels);
