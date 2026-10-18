@@ -1221,6 +1221,49 @@ def test_external_gsplat_runner_rejects_untrusted_lpips_cache_before_process(
     assert not (output / "wre-reference-training.log").exists()
 
 
+def test_external_gsplat_runner_requires_offline_lpips_before_cuda(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    request, source, staged, output, profile, ref, producer = _retained_gsplat_fixture(
+        tmp_path
+    )
+    (output / profile.expected_ply_relative_path).unlink()
+    (output / "ply").rmdir()
+    output.rmdir()
+    source_root = tmp_path / "pinned-source"
+    (source_root / "examples").mkdir(parents=True)
+    runtime = tmp_path / "external-python"
+    runtime.write_bytes(b"stub")
+    monkeypatch.setattr(
+        baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
+    )
+    monkeypatch.setattr(
+        baseline_module, "verify_gsplat_static_appearance_native_geometry", lambda *_a, **_kw: None
+    )
+    monkeypatch.setattr(
+        baseline_module.subprocess,
+        "run",
+        lambda *_a, **_kw: pytest.fail("CUDA process started without pinned LPIPS weights"),
+    )
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="LPIPS offline weights"):
+        run_gsplat_reference_training(
+            request=request,
+            source=source,
+            staged=staged,
+            profile=profile,
+            features=cast(ColmapFeatureExtractionResult, object()),
+            expected_environment=cast(ColmapEnvironmentIdentity, object()),
+            source_root=source_root,
+            python_executable=runtime,
+            output_root=output,
+            artifact_ref=ref,
+            producer=producer,
+            cuda_device_index=0,
+            timeout_seconds=30,
+        )
+    assert not output.exists()
+
+
 @pytest.mark.skipif(os.name != "posix", reason="smoke executable uses POSIX shebang")
 @pytest.mark.parametrize(
     ("runtime_version", "visible_cuda", "should_run"),
@@ -1306,6 +1349,9 @@ def test_external_gsplat_runner_spawns_real_process_and_assembles_appearance(
         encoding="utf-8",
     )
     runtime.chmod(0o700)
+    weights = tmp_path / "pinned-alexnet.pth"
+    weights.write_bytes(b"synthetic AlexNet cache fixture; no Torch imported")
+    digest = hashlib.sha256(weights.read_bytes()).hexdigest()
     monkeypatch.setattr(
         baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
     )
@@ -1328,6 +1374,8 @@ def test_external_gsplat_runner_spawns_real_process_and_assembles_appearance(
         producer=producer,
         cuda_device_index=0,
         timeout_seconds=15,
+        lpips_alexnet_weights=weights,
+        lpips_alexnet_sha256=digest,
     )
     assert result.candidate.artifact_ref == artifact_ref
     assert result.candidate.source_geometry is request.source_geometry
@@ -1431,6 +1479,9 @@ def test_external_gsplat_runner_rejects_failure_or_missing_output(
     (source_root / "examples").mkdir(parents=True)
     runtime = tmp_path / "external-python"
     runtime.write_bytes(b"stub")
+    weights = tmp_path / "pinned-alexnet.pth"
+    weights.write_bytes(b"synthetic AlexNet cache fixture; no Torch imported")
+    digest = hashlib.sha256(weights.read_bytes()).hexdigest()
     monkeypatch.setattr(
         baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
     )
@@ -1459,6 +1510,8 @@ def test_external_gsplat_runner_rejects_failure_or_missing_output(
             producer=producer,
             cuda_device_index=0,
             timeout_seconds=30,
+            lpips_alexnet_weights=weights,
+            lpips_alexnet_sha256=digest,
         )
     assert (output / "wre-reference-training.log").exists()
 
