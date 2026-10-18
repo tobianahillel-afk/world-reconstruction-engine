@@ -1056,9 +1056,29 @@ jobs:
           assert receipt["gpu_training_executed"] is False
           assert receipt["metric_scale_known"] is False
 
+          quality = json.loads(Path("wre-real16-sfm-quality.json").read_text())
+          geom = quality["geometry_quality"]
+          assert quality["schema"] == "wre.experimental.real_photo_sfm_quality.v1"
+          assert quality["source_dataset_commit"] == receipt["source_dataset_commit"]
+          assert geom["kind"] == "native_sparse_sfm_in_sample_geometry_v1"
+          assert geom["registered_views"] == 16
+          assert geom["sparse_points3d"] > 100
+          assert geom["track_observations"] >= 2 * geom["sparse_points3d"]
+          assert 0 <= geom["mean_reprojection_error_colmap_px"] < float("inf")
+          assert geom["held_out_image_quality_measured"] is False
+          assert geom["gpu_optimization_executed"] is False
+          assert geom["metric_scale_known"] is False
+          measured_quality = (
+              f'{geom["registered_views"]} registered cameras · '
+              f'{geom["sparse_points3d"]} real 3D points · '
+              f'{geom["track_observations"]} track observations · '
+              f'mean reprojection error {geom["mean_reprojection_error_colmap_px"]:.3f} px '
+              '(COLMAP, in-sample; NOT held-out image quality or trained 3DGS).'
+          )
           output = Path("wre-real16-offline-viewer")
           output.mkdir(exist_ok=False)
           shutil.copyfile(source, output / source.name)
+          shutil.copyfile("wre-real16-sfm-quality.json", output / "wre-real16-sfm-quality.json")
           for name in (
               "wre-real16-viewable-scene-receipt.json",
               "wre-real16-observed-rgb-LICENSE.txt",
@@ -1119,10 +1139,16 @@ jobs:
           #camera-navigation select,#camera-navigation button {background:#273950;
             border:1px solid #8097b2;border-radius:5px;color:#fff;padding:8px}
           #camera-details {font-size:13px;line-height:1.45;flex-basis:100%}
+          #wre-sfm-quality {padding:9px 18px;background:#162235;line-height:1.45}
           #local-model {display:flex;flex-wrap:wrap;align-items:center;gap:9px;
             padding:10px 18px;background:#202b3d}
           #local-model input,#local-model button {color:#fff;padding:7px}
           #local-model-status {font-size:13px;flex-basis:100%}
+          .wre-pair-hotspot {border:2px solid #eaf5ff;border-radius:50%;
+            width:30px;height:30px;display:grid;place-items:center;
+            font:bold 16px system-ui;box-shadow:0 0 0 2px #162236;
+            color:#162236;background:#ffc65a;pointer-events:none}
+          .wre-pair-hotspot.secondary {background:#70d7ff}
           </style></head><body><main>
           <header><h1>WRE · Real 16-photograph SfM 3D</h1>
           <p>Orbit and zoom the actual reconstructed RGB point cloud,
@@ -1130,6 +1156,10 @@ jobs:
           <p>Source: Pierre Moulon, OpenMVG Palm Desert Micro, CC BY-NC 4.0
           <strong>NONCOMMERCIAL</strong>. No original photographs are distributed.</p>
           </header>
+          <section id="wre-sfm-quality" aria-label="Measured real SfM geometry">
+            <strong>Measured CPU SfM quality (in-sample)</strong>
+            <output id="wre-sfm-quality-value">WRE_MEASURED_QUALITY</output>
+          </section>
           <section id="camera-navigation" aria-label="Inspect reconstructed cameras">
             <label for="wre-camera-choice">Reconstructed camera (filename order, not time)</label>
             <select id="wre-camera-choice" disabled>
@@ -1140,6 +1170,12 @@ jobs:
               <option>Loading camera poses...</option>
             </select>
             <button id="wre-camera-reset" type="button">Reset orbit</button>
+            <button id="wre-frame-baseline" type="button" disabled>
+              Frame selected camera pair in 3D
+            </button>
+            <button id="wre-nearest-camera" type="button" disabled>
+              Find nearest other reconstructed camera
+            </button>
             <output id="camera-details" aria-live="polite">
               Choose a camera to inspect its SfM position (not an exact source photo view).
             </output>
@@ -1166,6 +1202,7 @@ jobs:
           <p>Scene SHA-256: WRE_SCENE_SHA256</p>
           <p><a download href="./wre-real16-viewable-scene.glb">Download GLB</a>
           · <a download href="./wre-real16-camera-poses.json">Camera poses</a>
+          · <a download href="./wre-real16-sfm-quality.json">SfM quality evidence</a>
           · <a href="./wre-real16-viewable-scene-receipt.json">Provenance</a></p>
           <p>Offline: extract the archive and run
           <code>python3 -m http.server 8765 --bind 127.0.0.1</code>,
@@ -1177,7 +1214,34 @@ jobs:
           const choice=document.getElementById('wre-camera-choice');
           const baselineChoice=document.getElementById('wre-baseline-choice');
           const baselineOutput=document.getElementById('wre-camera-baseline');
+          const framePair=document.getElementById('wre-frame-baseline');
+          const nearestButton=document.getElementById('wre-nearest-camera');
           const details=document.getElementById('camera-details');
+          let focusCamera=null;
+          const clearPairMarkers=()=>{
+            viewer.querySelectorAll('[slot^="hotspot-pair-"]').forEach(node=>node.remove());
+          };
+          const showPairMarkers=(first,second,indices)=>{
+            clearPairMarkers();
+            [first,second].forEach((center,i)=>{
+              const hotspot=document.createElement('button');
+              hotspot.className='wre-pair-hotspot'+(i?' secondary':'');
+              hotspot.type='button';
+              hotspot.slot='hotspot-pair-'+(i?'second':'first');
+              hotspot.setAttribute('data-position',center.map(v=>v+'m').join(' '));
+              hotspot.setAttribute('data-normal','0 1 0');
+              hotspot.setAttribute('aria-label','Reconstructed SfM camera '+(i?'B':'A'));
+              hotspot.textContent=i?'B':'A';
+              hotspot.title='Inspect reconstructed SfM camera '+(i?'B':'A');
+              hotspot.addEventListener('click',()=>{
+                // Retain the measured A/B pair; navigate only on verified scene.
+                if(!localUrl && !choice.disabled && focusCamera){
+                  focusCamera(indices[i]);
+                }
+              });
+              viewer.appendChild(hotspot);
+            });
+          };
           const input=document.getElementById('wre-local-glb');
           const importStatus=document.getElementById('local-model-status');
           const originalScene='./wre-real16-viewable-scene.glb';
@@ -1214,12 +1278,16 @@ jobs:
             if(oldUrl) URL.revokeObjectURL(oldUrl);
             choice.disabled=choice.options.length!==17;
             baselineChoice.disabled=baselineChoice.options.length!==17;
+            framePair.disabled=true;
+            nearestButton.disabled=true;
+            clearPairMarkers();
             choice.value='';
             baselineChoice.value='';
             baselineOutput.textContent='Select two original cameras for a local SfM baseline.';
             resetOrbit();
             details.textContent='Original 16-camera reconstruction restored.';
             importStatus.textContent='Verified WRE source scene restored.';
+            document.getElementById('wre-sfm-quality').hidden=false;
           });
           input.addEventListener('change',async()=>{
             const file=input.files && input.files[0];
@@ -1242,11 +1310,15 @@ jobs:
               if(previousUrl) URL.revokeObjectURL(previousUrl);
               choice.disabled=true;
               baselineChoice.disabled=true;
+              framePair.disabled=true;
+              nearestButton.disabled=true;
+              clearPairMarkers();
               choice.value='';
               baselineChoice.value='';
               baselineOutput.textContent='Baseline unavailable for unverified local GLB.';
               resetOrbit();
               details.textContent='Original COLMAP cameras only apply to the original scene.';
+              document.getElementById('wre-sfm-quality').hidden=true;
               importStatus.textContent='Loading local GLB: '+file.name+
                 '. Unverified third-party scene; no WRE provenance or metric scale.';
             } catch(error) {
@@ -1268,6 +1340,9 @@ jobs:
             viewer.setAttribute('auto-rotate','');
             choice.value='';
             baselineChoice.value='';
+            framePair.disabled=true;
+            nearestButton.disabled=true;
+            clearPairMarkers();
             baselineOutput.textContent='Select two SfM cameras; distance is not in metres.';
             details.textContent='General orbit restored; filename order is not chronology.';
           });
@@ -1306,7 +1381,11 @@ jobs:
             choice.disabled=false;
             baselineChoice.disabled=false;
             const updateBaseline=()=>{
-              if(choice.value==='' || baselineChoice.value===''){
+              nearestButton.disabled=choice.value==='' || localUrl!==null;
+              framePair.disabled=choice.value==='' || baselineChoice.value==='' ||
+                localUrl!==null;
+              clearPairMarkers();
+              if(choice.value==='' || baselineChoice.value==='' || localUrl!==null){
                 baselineOutput.textContent='Select two SfM cameras to measure their baseline.';
                 return;
               }
@@ -1317,14 +1396,59 @@ jobs:
                 baselineOutput.textContent='Invalid reconstructed camera geometry.';
                 return;
               }
+              showPairMarkers(first,second,[Number(choice.value),Number(baselineChoice.value)]);
               baselineOutput.textContent='Camera baseline: '+distance.toFixed(6)+
-                ' local SfM units (not metres; no capture-time interpretation).';
+                ' local SfM units (not metres; no capture-time interpretation). '+
+                'A and B mark reconstructed camera centres in 3D.';
             };
             baselineChoice.addEventListener('change',updateBaseline);
-            choice.addEventListener('change',()=>{
+            nearestButton.addEventListener('click',()=>{
+              if(nearestButton.disabled || localUrl || choice.value==='') return;
+              const firstIndex=Number(choice.value);
+              const first=centers[firstIndex];
+              let nearestIndex=-1;
+              let bestDistance=Infinity;
+              centers.forEach((center,index)=>{
+                if(index===firstIndex) return;
+                const distance=Math.hypot(...first.map((v,axis)=>v-center[axis]));
+                // Equal-distance ties resolve by the already sorted image name.
+                if(Number.isFinite(distance) && distance<bestDistance) {
+                  nearestIndex=index;
+                  bestDistance=distance;
+                }
+              });
+              if(nearestIndex<0) return;
+              baselineChoice.value=String(nearestIndex);
               updateBaseline();
-              if(choice.value==='') return;
-              const c=cameras[Number(choice.value)];
+              framePair.click();
+              details.textContent='Nearest other reconstructed camera framed in 3D. '+
+                'Spatial proximity in local SfM coordinates; NOT capture time, '+
+                'source image overlap or physical metres.';
+            });
+            framePair.addEventListener('click',()=>{
+              if(framePair.disabled || localUrl) return;
+              const first=centers[Number(choice.value)];
+              const second=centers[Number(baselineChoice.value)];
+              const distance=Math.hypot(...first.map((v,i)=>v-second[i]));
+              if(!Number.isFinite(distance)) return;
+              const midpoint=first.map((v,i)=>(v+second[i])/2);
+              const viewingRadius=Math.max(distance*1.5,span*0.12);
+              if(!midpoint.every(Number.isFinite) ||
+                  !(viewingRadius>0 && Number.isFinite(viewingRadius))) return;
+              viewer.removeAttribute('auto-rotate');
+              viewer.setAttribute('camera-target',
+                midpoint.map(v=>v.toPrecision(9)+'m').join(' '));
+              viewer.setAttribute('camera-orbit',
+                '45deg 65deg '+viewingRadius.toPrecision(9)+'m');
+              viewer.jumpCameraToGoal();
+              details.textContent='Framed calibrated SfM camera pair in 3D; '+
+                'local reconstruction units, not metres or capture-time motion.';
+            });
+            focusCamera=(index)=>{
+              if(localUrl || !Number.isInteger(index) || index<0 || index>=cameras.length){
+                return;
+              }
+              const c=cameras[index];
               const center=c.camera_center_xyz;
               const m=c.world_from_camera_row_major_4x4;
               const forward=[m[0][2],m[1][2],m[2][2]];
@@ -1341,9 +1465,13 @@ jobs:
                 theta.toPrecision(9)+'rad '+phi.toPrecision(9)+'rad '+
                 radius.toPrecision(9)+'m');
               viewer.jumpCameraToGoal();
-              details.textContent='Camera '+(Number(choice.value)+1)+' · '+c.image_name+
+              details.textContent='Camera '+(index+1)+' · '+c.image_name+
                 ' · SfM XYZ ['+center.map(v=>v.toFixed(3)).join(', ')+
                 '] local units. Approximate orbit, not image-calibrated roll or 4D.';
+            };
+            choice.addEventListener('change',()=>{
+              updateBaseline();
+              if(choice.value!=='') focusCamera(Number(choice.value));
             });
           } catch(error) {
             details.textContent='Camera explorer unavailable: '+String(error);
@@ -1351,6 +1479,7 @@ jobs:
           </script>
           </body></html>"""
           html = html.replace("WRE_SCENE_SHA256", receipt["sha256"])
+          html = html.replace("WRE_MEASURED_QUALITY", measured_quality)
           (output / "wre-real16-viewer.html").write_text(html, encoding="utf-8")
           manifest = {
               "schema": "wre.experimental.real16_offline_viewer.v1",
@@ -1888,6 +2017,12 @@ jobs:
           assert struct.unpack_from("<4sII", binary) == (b"glTF", 2, len(binary))
           assert hashlib.sha256(binary).hexdigest() == receipt["sha256"]
           assert receipt["registered_cameras"] == 16
+          quality = json.loads((root / "wre-real16-sfm-quality.json").read_text())
+          geom_quality = quality["geometry_quality"]
+          assert quality["source_dataset_commit"] == receipt["source_dataset_commit"]
+          assert geom_quality["registered_views"] == 16
+          assert geom_quality["sparse_points3d"] > 100
+          assert geom_quality["held_out_image_quality_measured"] is False
           host = "http://127.0.0.1:9515"
           def call(method, route, body=None):
               payload = None if body is None else json.dumps(body).encode("utf-8")
@@ -1944,6 +2079,16 @@ jobs:
                 const c=document.createElement('canvas');
                 return Boolean(c.getContext('webgl2') || c.getContext('webgl'));
               """), "WebGL not available in Chrome"
+              shown=js("""
+                const panel=document.getElementById('wre-sfm-quality');
+                return !panel.hidden && document.getElementById('wre-sfm-quality-value')
+                  .textContent;
+              """)
+              assert str(geom_quality["sparse_points3d"]) in shown
+              assert str(geom_quality["track_observations"]) in shown
+              expected_error=f'{geom_quality["mean_reprojection_error_colmap_px"]:.3f}'
+              assert expected_error+' px (COLMAP, in-sample;' in shown
+              assert "NOT held-out image quality or trained 3DGS" in shown
               for _ in range(40):
                   if js("""
                     const c=document.getElementById('wre-camera-choice');
@@ -1989,6 +2134,158 @@ jobs:
               assert f"{expected_baseline:.6f}" in browser_baseline
               assert "local SfM units (not metres" in browser_baseline
               assert "no capture-time interpretation" in browser_baseline
+              # Real browser interaction, checked against independent recovered
+              # camera centres from the authentic 16-photo COLMAP JSON.
+              first_center=actual_cameras[0]["camera_center_xyz"]
+              second_center=actual_cameras[1]["camera_center_xyz"]
+              midpoint=[(a+b)/2 for a,b in zip(first_center,second_center)]
+              centers=[c["camera_center_xyz"] for c in actual_cameras]
+              spread=math.sqrt(sum(
+                  (max(c[axis] for c in centers)-min(c[axis] for c in centers))**2
+                  for axis in range(3)
+              ))
+              expected_radius=max(expected_baseline*1.5,spread*0.12)
+              markers=js("""
+                const viewer=document.getElementById('wre-scene');
+                return ['first','second'].map(name=>{
+                  const el=viewer.querySelector('[slot="hotspot-pair-'+name+'"]');
+                  const hotspot=viewer.queryHotspot('hotspot-pair-'+name);
+                  return {
+                    position:el?.getAttribute('data-position')||null,
+                    label:el?.textContent||null,
+                    projected:Boolean(hotspot && hotspot.canvasPosition &&
+                      Number.isFinite(hotspot.canvasPosition.x) &&
+                      Number.isFinite(hotspot.canvasPosition.y))
+                  };
+                });
+              """)
+              assert [mark["label"] for mark in markers] == ["A", "B"]
+              assert all(mark["projected"] for mark in markers)
+              for mark, center in zip(markers, (first_center,second_center)):
+                  actual=[float(value[:-1]) for value in mark["position"].split()]
+                  assert len(actual)==3 and all(
+                      math.isclose(a,b,rel_tol=1e-8,abs_tol=1e-6)
+                      for a,b in zip(actual,center)
+                  )
+              # Click actual projected WebGL hotspot buttons. Confirm that they
+              # navigate to their corresponding REAL reconstructed viewpoints
+              # without changing the two measured camera selections.
+              for slot,index in (("second",1),("first",0)):
+                  focused=js("""
+                    const v=document.getElementById('wre-scene');
+                    const marker=v.querySelector('[slot="hotspot-pair-SLOT"]');
+                    if(!marker) throw Error('Missing projected SfM camera marker');
+                    marker.click();
+                    return {
+                      target:v.getAttribute('camera-target'),
+                      orbit:v.getAttribute('camera-orbit'),
+                      label:document.getElementById('camera-details').textContent,
+                      first:document.getElementById('wre-camera-choice').value,
+                      second:document.getElementById('wre-baseline-choice').value,
+                      rotating:v.hasAttribute('auto-rotate')
+                    };
+                  """.replace("SLOT",slot))
+                  assert focused["first"]=="0" and focused["second"]=="1"
+                  assert not focused["rotating"]
+                  assert "Camera "+str(index+1)+" · " in focused["label"]
+                  camera=actual_cameras[index]
+                  world=camera["world_from_camera_row_major_4x4"]
+                  forward=[world[row][2] for row in range(3)]
+                  norm=math.sqrt(sum(value*value for value in forward))
+                  assert math.isfinite(norm) and norm>0
+                  radius=spread*0.18
+                  expected_target=[
+                      camera["camera_center_xyz"][i]+forward[i]*radius/norm
+                      for i in range(3)
+                  ]
+                  actual_target=[
+                      float(value[:-1]) for value in focused["target"].split()
+                  ]
+                  assert len(actual_target)==3 and all(
+                      math.isclose(a,b,rel_tol=1e-8,abs_tol=1e-6)
+                      for a,b in zip(actual_target,expected_target)
+                  )
+                  assert focused["orbit"].endswith("m")
+              # The clicked A/B hotspot must not consume the pair-framing action.
+              framed=js("""
+                const button=document.getElementById('wre-frame-baseline');
+                const viewer=document.getElementById('wre-scene');
+                if(button.disabled) throw Error('Measured pair framing not enabled');
+                button.click();
+                return {
+                  target:viewer.getAttribute('camera-target'),
+                  orbit:viewer.getAttribute('camera-orbit'),
+                  autoRotate:viewer.hasAttribute('auto-rotate'),
+                  message:document.getElementById('camera-details').textContent
+                };
+              """)
+              assert framed["target"] and framed["orbit"] and not framed["autoRotate"]
+              actual_midpoint=[float(value[:-1]) for value in framed["target"].split()]
+              assert len(actual_midpoint)==3
+              assert all(
+                  math.isclose(a,b,rel_tol=1e-8,abs_tol=1e-6)
+                  for a,b in zip(actual_midpoint,midpoint)
+              )
+              orbit=framed["orbit"].split()
+              assert orbit[:2]==["45deg","65deg"] and orbit[2].endswith("m")
+              assert math.isclose(
+                  float(orbit[2][:-1]),expected_radius,rel_tol=1e-8,abs_tol=1e-6
+              )
+              assert "local reconstruction units, not metres" in framed["message"]
+              # The nearest-camera action uses actual SfM world coordinates, not
+              # capture chronology or filename adjacency. Independently compute
+              # the closest OTHER recovered center in Python (stable tie order).
+              nearest_index=min(
+                  range(1, len(actual_cameras)),
+                  key=lambda index: (
+                      math.dist(first_center, actual_cameras[index]["camera_center_xyz"]),
+                      index,
+                  ),
+              )
+              nearest_center=actual_cameras[nearest_index]["camera_center_xyz"]
+              nearest_distance=math.dist(first_center,nearest_center)
+              assert math.isfinite(nearest_distance) and nearest_distance>0
+              nearest_evidence=js("""
+                const viewer=document.getElementById('wre-scene');
+                const button=document.getElementById('wre-nearest-camera');
+                if(button.disabled) throw Error('Nearest camera navigation disabled');
+                button.click();
+                const marker=viewer.querySelector('[slot="hotspot-pair-second"]');
+                const projected=viewer.queryHotspot('hotspot-pair-second');
+                return {
+                  choice:document.getElementById('wre-baseline-choice').value,
+                  baseline:document.getElementById('wre-camera-baseline').textContent,
+                  details:document.getElementById('camera-details').textContent,
+                  target:viewer.getAttribute('camera-target'),
+                  orbit:viewer.getAttribute('camera-orbit'),
+                  markPosition:marker?.getAttribute('data-position')||null,
+                  projected:Boolean(projected && projected.canvasPosition &&
+                    Number.isFinite(projected.canvasPosition.x) &&
+                    Number.isFinite(projected.canvasPosition.y))
+                };
+              """)
+              assert nearest_evidence["choice"]==str(nearest_index)
+              assert f"{nearest_distance:.6f}" in nearest_evidence["baseline"]
+              assert "NOT capture time" in nearest_evidence["details"]
+              assert nearest_evidence["projected"]
+              actual_nearest=[float(v[:-1]) for v in nearest_evidence["markPosition"].split()]
+              assert all(
+                  math.isclose(a,b,rel_tol=1e-8,abs_tol=1e-6)
+                  for a,b in zip(actual_nearest,nearest_center)
+              )
+              nearest_midpoint=[
+                  (a+b)/2 for a,b in zip(first_center,nearest_center)
+              ]
+              actual_target=[float(v[:-1]) for v in nearest_evidence["target"].split()]
+              assert all(
+                  math.isclose(a,b,rel_tol=1e-8,abs_tol=1e-6)
+                  for a,b in zip(actual_target,nearest_midpoint)
+              )
+              expected_nearest_radius=max(nearest_distance*1.5,spread*0.12)
+              assert math.isclose(
+                  float(nearest_evidence["orbit"].split()[2][:-1]),
+                  expected_nearest_radius,rel_tol=1e-8,abs_tol=1e-6
+              )
               same_camera=js("""
                 const second=document.getElementById('wre-baseline-choice');
                 second.value='0';
@@ -2028,10 +2325,14 @@ jobs:
                     return viewer.loaded && viewer.getAttribute('src').startsWith('blob:') &&
                       camera.disabled &&
                       document.getElementById('wre-baseline-choice').disabled &&
+                      document.getElementById('wre-frame-baseline').disabled &&
+                      document.getElementById('wre-nearest-camera').disabled &&
+                      !viewer.querySelector('[slot^="hotspot-pair-"]') &&
                       document.getElementById('wre-camera-baseline').textContent
                         .includes('unavailable for unverified') &&
                       document.getElementById('local-model-status')
-                        .textContent.includes('Local GLB loaded');
+                        .textContent.includes('Local GLB loaded') &&
+                      document.getElementById('wre-sfm-quality').hidden;
                   """):
                       break
                   time.sleep(0.25)
@@ -2076,7 +2377,11 @@ jobs:
                 const viewer=document.getElementById('wre-scene');
                 const camera=document.getElementById('wre-camera-choice');
                 return viewer.getAttribute('src')==='./wre-real16-viewable-scene.glb' &&
-                  !camera.disabled && viewer.hasAttribute('auto-rotate');
+                  !camera.disabled && viewer.hasAttribute('auto-rotate') &&
+                  document.getElementById('wre-frame-baseline').disabled &&
+                  document.getElementById('wre-nearest-camera').disabled &&
+                  !viewer.querySelector('[slot^="hotspot-pair-"]') &&
+                  !document.getElementById('wre-sfm-quality').hidden;
               """), "Original real-photo viewer or camera control was not restored"
               for _ in range(40):
                   if js("""
