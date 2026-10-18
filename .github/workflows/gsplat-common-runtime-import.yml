@@ -757,7 +757,7 @@ jobs:
           ).encode("utf-8")
           encoded += b" " * (-len(encoded) % 4)
           combined = (
-              struct.pack("<4sII", b"glTF", 2, 12 + 8 + len(encoded) + len(binary_chunk))
+              struct.pack("<4sII", b"glTF", 2, 12 + 8 + len(encoded) + len(extended_bin_chunk))
               + struct.pack("<I4s", len(encoded), b"JSON")
               + encoded + extended_bin_chunk
           )
