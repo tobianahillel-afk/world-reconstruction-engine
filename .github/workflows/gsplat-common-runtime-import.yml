@@ -2834,6 +2834,36 @@ jobs:
                   assert observation["image_name"] in result["text"]
                   assert "#"+str(observation["point2d_idx"]) in result["text"]
               assert "Not metric, held-out quality, time, GPU training or 4D" in result["text"]
+              # A real native 3D track must navigate to one of its ACTUAL
+              # observing cameras, not merely display an ID and XYZ.
+              native_navigation=js("""
+                const observed=document.getElementById('wre-native-observation-camera');
+                const button=document.getElementById('wre-native-observation-open');
+                if(observed.disabled || button.disabled) return null;
+                const count=observed.options.length-1;
+                observed.selectedIndex=1;
+                const selected=observed.selectedOptions[0];
+                button.click();
+                const chosen=document.getElementById('wre-camera-choice');
+                const nativeMarker=document.getElementById('wre-native-photo-pixel');
+                return {count, camera:chosen.selectedOptions[0].textContent,
+                  observation:selected.textContent, cameraIndex:chosen.value,
+                  overlayHidden:nativeMarker.hidden,
+                  status:document.getElementById('wre-native-observation-status')
+                    .textContent,
+                  navigated:Boolean(document.getElementById('wre-scene')
+                    .getAttribute('camera-orbit'))};
+              """)
+              assert native_navigation is not None
+              assert native_navigation["count"]==len(selected_point["observations"])
+              assert selected_point["observations"][0]["image_name"] in native_navigation["camera"]
+              assert selected_point["observations"][0]["image_name"] in native_navigation["observation"]
+              assert native_navigation["navigated"]
+              assert native_navigation["overlayHidden"], (
+                  "Do not draw an SfM pixel overlay without a matching local photograph"
+              )
+              assert str(selected_id) in native_navigation["status"]
+              assert "measured pixel" in native_navigation["status"]
               assert js("""
                 document.getElementById('wre-native-point-id').value='-1';
                 document.getElementById('wre-native-point-find').click();
@@ -2841,6 +2871,11 @@ jobs:
                   document.getElementById('wre-native-lookup-output').textContent
                     .includes('Enter a positive native COLMAP point ID');
               """), "Invalid point IDs must not leave a misleading hotspot"
+              assert js("""
+                return document.getElementById('wre-native-observation-camera').disabled &&
+                  document.getElementById('wre-native-observation-open').disabled &&
+                  document.getElementById('wre-native-photo-pixel').hidden;
+              """), "Invalid point lookup left stale measured-camera controls enabled"
               assert js("""
                 const c=document.getElementById('wre-camera-choice');
                 const v=document.getElementById('wre-scene');
