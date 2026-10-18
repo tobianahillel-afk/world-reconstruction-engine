@@ -2167,6 +2167,46 @@ jobs:
                       math.isclose(a,b,rel_tol=1e-8,abs_tol=1e-6)
                       for a,b in zip(actual,center)
                   )
+              # Click actual projected WebGL hotspot buttons. Confirm that they
+              # navigate to their corresponding REAL reconstructed viewpoints
+              # without changing the two measured camera selections.
+              for slot,index in (("second",1),("first",0)):
+                  focused=js("""
+                    const v=document.getElementById('wre-scene');
+                    const marker=v.querySelector('[slot="hotspot-pair-SLOT"]');
+                    if(!marker) throw Error('Missing projected SfM camera marker');
+                    marker.click();
+                    return {
+                      target:v.getAttribute('camera-target'),
+                      orbit:v.getAttribute('camera-orbit'),
+                      label:document.getElementById('camera-details').textContent,
+                      first:document.getElementById('wre-camera-choice').value,
+                      second:document.getElementById('wre-baseline-choice').value,
+                      rotating:v.hasAttribute('auto-rotate')
+                    };
+                  """.replace("SLOT",slot))
+                  assert focused["first"]=="0" and focused["second"]=="1"
+                  assert not focused["rotating"]
+                  assert "Camera "+str(index+1)+" · " in focused["label"]
+                  camera=actual_cameras[index]
+                  world=camera["world_from_camera_row_major_4x4"]
+                  forward=[world[row][2] for row in range(3)]
+                  norm=math.sqrt(sum(value*value for value in forward))
+                  assert math.isfinite(norm) and norm>0
+                  radius=spread*0.18
+                  expected_target=[
+                      camera["camera_center_xyz"][i]+forward[i]*radius/norm
+                      for i in range(3)
+                  ]
+                  actual_target=[
+                      float(value[:-1]) for value in focused["target"].split()
+                  ]
+                  assert len(actual_target)==3 and all(
+                      math.isclose(a,b,rel_tol=1e-8,abs_tol=1e-6)
+                      for a,b in zip(actual_target,expected_target)
+                  )
+                  assert focused["orbit"].endswith("m")
+              # The clicked A/B hotspot must not consume the pair-framing action.
               framed=js("""
                 const button=document.getElementById('wre-frame-baseline');
                 const viewer=document.getElementById('wre-scene');
