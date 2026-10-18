@@ -840,6 +840,83 @@ jobs:
               }
               receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
               print("DIRECT FILE PICKER PASS: 2048 WRE records, then RESTORE PASS: 6917")
+              # Real camera bookmark: WebGL view -> actual Chrome local JSON download ->
+              # alter camera -> read same downloaded file using a real file input.
+              save_view = webdriver("POST", f"/session/{session}/element", {
+                  "using": "css selector", "value": "#wre-save-view"
+              })["element-6066-11e4-a52e-4f735466cecf"]
+              webdriver("POST", f"/session/{session}/element/{save_view}/click", {})
+              bookmark = saved_scenes / "wre-camera-viewpoint.json"
+              for _ in range(80):
+                  if bookmark.is_file() and bookmark.stat().st_size > 0:
+                      break
+                  time.sleep(0.2)
+              else:
+                  raise RuntimeError("Browser did not download current camera view")
+              bookmark_data = bookmark.read_bytes()
+              pose = json.loads(bookmark_data)
+              assert pose["format"] == "wre-view-matrix-v1"
+              assert len(pose["matrix"]) == 16
+              changed = webdriver("POST", f"/session/{session}/execute/sync", {
+                  "script": """window.dispatchEvent(new KeyboardEvent('keydown',
+                        {key:'F13',code:'F13'}));
+                    window.dispatchEvent(new KeyboardEvent('keyup',{key:'F13',code:'F13'}));
+                    viewMatrix=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
+                    return Array.from(viewMatrix);""",
+                  "args": [],
+              })
+              assert changed == [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]
+              camera_picker = webdriver("POST", f"/session/{session}/element", {
+                  "using": "css selector", "value": "#wre-load-view"
+              })["element-6066-11e4-a52e-4f735466cecf"]
+              webdriver("POST", f"/session/{session}/element/{camera_picker}/value", {
+                  "text": str(bookmark)
+              })
+              for _ in range(80):
+                  camera = webdriver("POST", f"/session/{session}/execute/sync", {
+                      "script": """return {
+                        matrix:Array.from(viewMatrix),
+                        status:document.getElementById('wre-local-status').textContent,
+                        external:performance.getEntriesByType('resource')
+                          .filter(x=>/^https?:/.test(x.name)).map(x=>x.name)};""",
+                      "args": [],
+                  })
+                  if ("Loaded camera view" in camera["status"]
+                          and all(abs(x-y)<1e-5 for x,y in zip(camera["matrix"], pose["matrix"]))):
+                      break
+                  time.sleep(0.2)
+              else:
+                  raise RuntimeError("Actual browser did not restore downloaded camera")
+              assert camera["external"] == []
+              bad = root / "bad-viewpoint.json"
+              bad.write_text('{"format":"wre-view-matrix-v1","matrix":[0]}')
+              webdriver("POST", f"/session/{session}/element/{camera_picker}/value", {
+                  "text": str(bad)
+              })
+              for _ in range(80):
+                  check = webdriver("POST", f"/session/{session}/execute/sync", {
+                      "script": """return {
+                        matrix:Array.from(viewMatrix),
+                        status:document.getElementById('wre-local-status').textContent};""",
+                      "args": [],
+                  })
+                  if "Invalid camera JSON" in check["status"]:
+                      break
+                  time.sleep(0.2)
+              else:
+                  raise RuntimeError("Malformed bookmark was not rejected")
+              assert all(abs(x-y)<1e-5 for x,y in zip(check["matrix"],pose["matrix"]))
+              receipt["offline_camera_bookmark_test"] = {
+                  "actual_browser_download": True,
+                  "actual_browser_file_picker": True,
+                  "bookmark_sha256": hashlib.sha256(bookmark_data).hexdigest(),
+                  "restored_16_float_camera": True,
+                  "malformed_camera_rejected": True,
+                  "external_resource_requests": 0,
+                  "cuda_training": False,
+              }
+              receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
+              print("REAL OFFLINE CAMERA BOOKMARK PASS: downloaded/reloaded 16-float pose")
           finally:
               webdriver("DELETE", f"/session/{session}")
           PY
