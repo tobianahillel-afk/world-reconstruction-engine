@@ -292,7 +292,9 @@ jobs:
           import json
           import os
           import shutil
+          import struct
           import urllib.request
+          import zlib
           from datetime import UTC, datetime, timedelta
           from pathlib import Path
           
@@ -332,6 +334,30 @@ jobs:
               "DJI_0057.JPG": "2207d1b9b4117e7d47467f9ab7b9d6f809f89fc6",
           }
           assert pycolmap.__version__ == "4.2.0"
+
+          def png_chunk(kind: bytes, data: bytes) -> bytes:
+              return (
+                  struct.pack(">I", len(data)) + kind + data
+                  + struct.pack(">I", zlib.crc32(kind + data) & 0xffffffff)
+              )
+
+          def srgb_png(image: Image.Image) -> bytes:
+              width, height = image.size
+              assert 2 <= width <= 768 and 2 <= height <= 768
+              raster = image.tobytes()
+              stride = width * 3
+              scanlines = b"".join(
+                  b"\\x00" + raster[start : start + stride]
+                  for start in range(0, len(raster), stride)
+              )
+              return (
+                  b"\\x89PNG\\r\\n\\x1a\\n"
+                  + png_chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+                  + png_chunk(b"sRGB", b"\\x00")
+                  + png_chunk(b"IDAT", zlib.compress(scanlines, 6))
+                  + png_chunk(b"IEND", b"")
+              )
+
           root = Path(os.environ["RUNNER_TEMP"]) / "wre-regenerate-sixteen-views"
           images = root / "images"
           images.mkdir(parents=True, exist_ok=False)
@@ -351,7 +377,7 @@ jobs:
                   rgb = ImageOps.exif_transpose(original).convert("RGB")
               rgb.thumbnail((768, 768), Image.Resampling.LANCZOS)
               source_path = images / f"{Path(filename).stem}.png"
-              rgb.save(source_path, format="PNG")
+              source_path.write_bytes(srgb_png(rgb))
               obs = ImageObservation(
                   observation_id=ObservationId(f"obs:openmvg:{Path(filename).stem}"),
                   asset=MediaAssetRef(
@@ -431,7 +457,7 @@ jobs:
           capture = Path(os.environ["GITHUB_WORKSPACE"]) / "wre-common-real-photo-capture"
           undistorted = root / "undistorted"
           pycolmap.undistort_images(
-              output_path=str(undistorted), input_path=str(mapped.output_path),
+              output_path=str(undistorted), input_path=str(root / "native-sparse" / "0"),
               image_path=str(canonical), output_type="COLMAP", num_threads=1,
           )
           (capture / "sparse").mkdir(parents=True)
@@ -567,9 +593,10 @@ jobs:
           assert len({sample["rgb_sum"] for sample in samples}) > 2
           receipt = {
               "kind": "wre-common-native-real-photo-colmap-cpu-v1",
-              "source_artifact_run": 39082307350,
-              "source_artifact_id": 12119207552,
-              "source_artifact_digest": "sha256:12ae04e73106f4ff929ed7dd6cebe1a2ca7bdc323cff9fcad78f9cb8087410e9",
+              "source_method": "deterministic_native_pycolmap_4.2.0_regeneration",
+              "source_dataset_commit": manifest["dataset_commit"],
+              "source_credit": manifest["credit"],
+              "source_artifact_expiry_dependency": False,
               "source_manifest_sha256": hashlib.sha256(candidates[0].read_bytes()).hexdigest(),
               "native_environment": {
                   "torch": torch.__version__,
