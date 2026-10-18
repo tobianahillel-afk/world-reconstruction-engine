@@ -7,6 +7,10 @@ on:
     paths:
       - ".github/workflows/gsplat-common-runtime-import.yml"
       - "registry/dependencies.yaml"
+      # Real 16-photo CPU SfM must rerun when its geometry-verification
+      # semantics change, even without editing the optional workflow again.
+      - "src/wre/reconstruction/colmap_verification.py"
+      - "tests/test_colmap_geometric_verification.py"
   workflow_dispatch:
 
 permissions:
@@ -757,10 +761,12 @@ jobs:
           sys.path.insert(0, str(sources / "gsplat" / "examples"))
           from datasets.colmap import Dataset, Parser
           from fused_ssim import fused_ssim
+          from gsplat import export_splats
           from gsplat.cuda._backend import _C
           from nerfview import CameraState
           from pycolmap import SceneManager
           from simple_trainer import Config, main
+          from utils import rgb_to_sh
 
           assert torch.__version__ == "2.4.0+cu124"
           assert not torch.cuda.is_available()
@@ -835,6 +841,74 @@ jobs:
                   })
           assert len(samples) == 16
           assert len({sample["rgb_sum"] for sample in samples}) > 2
+
+          # Functional CPU-only handoff: real COLMAP XYZ + photo-derived RGB
+          # through the *upstream pinned* gsplat exporter into viewer-ready
+          # 32-byte records. These are untrained seeds, not an optimized model.
+          means_xyz = np.asarray(parser.points, dtype=np.float32)
+          rgb_observed = np.asarray(parser.points_rgb, dtype=np.float32)
+          n_points = len(means_xyz)
+          assert n_points == manifest["native_points3d"] > 100
+          assert np.isfinite(means_xyz).all()
+          assert np.isfinite(rgb_observed).all()
+          assert np.all((rgb_observed >= 0) & (rgb_observed <= 255))
+          spread = np.linalg.norm(
+              np.diff(np.quantile(means_xyz, [0.05, 0.95], axis=0), axis=0)
+          )
+          assert np.isfinite(spread) and spread > 0
+          # A deterministic scene-relative visualization radius, NOT
+          # learned covariance or physically calibrated Gaussian scale.
+          radius = float(np.clip(0.12 * spread / np.cbrt(n_points), 1e-4, 10.0))
+          means = torch.from_numpy(means_xyz.copy())
+          rgb = torch.from_numpy(rgb_observed.copy()) / 255.0
+          sh0 = rgb_to_sh(rgb).unsqueeze(1)
+          gaussians = {
+              "means": means,
+              "scales": torch.full((n_points, 3), float(np.log(radius))),
+              "quats": torch.tensor([[1.0, 0.0, 0.0, 0.0]]).repeat(n_points, 1),
+              "opacities": torch.zeros(n_points),
+              "sh0": sh0,
+              "shN": torch.zeros((n_points, 15, 3)),
+          }
+          preview_dir = Path(os.environ["GITHUB_WORKSPACE"]) / "wre-real16-gsplat-seeds"
+          (preview_dir / "ply").mkdir(parents=True, exist_ok=False)
+          seed_ply = preview_dir / "ply" / "point_cloud_0.ply"
+          seed_splat = preview_dir / "scene.splat"
+          ply_output = export_splats(**gaussians, format="ply", save_to=str(seed_ply))
+          splat_output = export_splats(**gaussians, format="splat", save_to=str(seed_splat))
+          assert seed_ply.read_bytes() == ply_output
+          assert seed_splat.read_bytes() == splat_output
+          assert b"element vertex " + str(n_points).encode() + b"\n" in ply_output
+          assert len(splat_output) == n_points * 32
+          # The viewer's official .splat exporter changes record order.
+          # Verify the full *set* of emitted positions, not just one point.
+          splat_rows = np.frombuffer(splat_output, dtype=np.uint8).reshape(-1, 32)
+          viewer_xyz = np.frombuffer(
+              splat_rows[:, :12].copy().tobytes(), dtype="<f4"
+          ).reshape(-1, 3)
+          order = lambda xyz: np.lexsort((xyz[:, 2], xyz[:, 1], xyz[:, 0]))
+          assert np.array_equal(viewer_xyz[order(viewer_xyz)], means_xyz[order(means_xyz)])
+          preview_evidence = {
+              "kind": "colmap_photo_observed_rgb_untrained_gsplat_seed_view",
+              "points": n_points,
+              "source_real_sfm_rgb_ply_sha256": hashlib.sha256(ply_bytes).hexdigest(),
+              "seed_ply_sha256": hashlib.sha256(ply_output).hexdigest(),
+              "seed_ply_bytes": len(ply_output),
+              "scene_splat_sha256": hashlib.sha256(splat_output).hexdigest(),
+              "scene_splat_bytes": len(splat_output),
+              "seed_radius_relative_scene_units": radius,
+              "gpu_training_executed": False,
+              "metric_scale_known": False,
+              "license": manifest["license"],
+          }
+          (preview_dir / "preview-manifest.json").write_text(
+              json.dumps(preview_evidence, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print(
+              "REAL PHOTOS -> COLMAP XYZ/RGB -> PINNED GSPLAT VIEWER PREVIEW:",
+              n_points, "UNTRAINED seeds,", len(splat_output), "viewer bytes"
+          )
           receipt = {
               "kind": "wre-common-native-real-photo-colmap-cpu-v1",
               "source_method": "pinned_photos_native_pycolmap_4.2.0_regeneration",
@@ -850,6 +924,7 @@ jobs:
               "real_source_photo_count": 16,
               "real_colmap_points": int(len(parser.points)),
               "measured_native_sparse_sfm_quality": quality,
+              "untrained_gsplat_viewer_preview": preview_evidence,
               "observed_rgb_geometry_ply": {
                   "filename": rgb_ply.name,
                   "sha256": hashlib.sha256(ply_bytes).hexdigest(),
@@ -884,6 +959,51 @@ jobs:
           print("GPU training NONE; native extensions were imported, never executed on GPU.")
           PY
 
+      - name: Verify genuine COLMAP-derived gsplat PLY with WRE artifact contracts (CPU)
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PYTHONPATH="$GITHUB_WORKSPACE/src"
+          "$GITHUB_WORKSPACE/.venv/bin/python" - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          from wre.domain.appearance import APPEARANCE_MODEL_ARTIFACT_KIND
+          from wre.domain.artifacts import ArtifactId, ArtifactRef
+          from wre.reconstruction.static_appearance_baseline import (
+              GsplatStaticAppearanceTrainingProfile,
+              materialize_verified_gsplat_ply,
+          )
+
+          root = Path(os.environ["GITHUB_WORKSPACE"]) / "wre-real16-gsplat-seeds"
+          manifest = json.loads((root / "preview-manifest.json").read_text())
+          assert manifest["gpu_training_executed"] is False
+          assert manifest["metric_scale_known"] is False
+          assert manifest["points"] > 100
+          output = materialize_verified_gsplat_ply(
+              artifact_ref=ArtifactRef(
+                  ArtifactId("appearance:gsplat:real16-untrained-seeds"),
+                  APPEARANCE_MODEL_ARTIFACT_KIND,
+              ),
+              output_root=root,
+              profile=GsplatStaticAppearanceTrainingProfile(max_steps=1),
+          )
+          assert len(output.entries) == 1
+          verified = output.entries[0]
+          ply = root / verified.relative_path
+          splat = root / "scene.splat"
+          assert verified.relative_path == "ply/point_cloud_0.ply"
+          assert verified.byte_length == manifest["seed_ply_bytes"] == ply.stat().st_size
+          assert verified.sha256.value == manifest["seed_ply_sha256"]
+          assert hashlib.sha256(ply.read_bytes()).hexdigest() == verified.sha256.value
+          assert splat.stat().st_size == manifest["scene_splat_bytes"] == manifest["points"] * 32
+          assert hashlib.sha256(splat.read_bytes()).hexdigest() == manifest["scene_splat_sha256"]
+          print("REAL 16-PHOTO WRE PLY MATERIALIZATION + VIEWABLE SPLAT VERIFIED")
+          print("UNTRAINED initialization: 0 CUDA kernels, 0 optimization steps, no 4D.")
+          PY
+
       - name: Publish real 16-photo SfM RGB PLY and attribution without source photographs
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
@@ -893,5 +1013,8 @@ jobs:
             wre-real16-observed-rgb.ply
             wre-real16-sfm-quality.json
             wre-real16-observed-rgb-LICENSE.txt
+            wre-real16-gsplat-seeds/ply/point_cloud_0.ply
+            wre-real16-gsplat-seeds/scene.splat
+            wre-real16-gsplat-seeds/preview-manifest.json
           if-no-files-found: error
           retention-days: 7
