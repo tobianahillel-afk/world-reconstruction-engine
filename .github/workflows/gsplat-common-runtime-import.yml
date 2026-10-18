@@ -3183,6 +3183,7 @@ jobs:
           import math
           import struct
           import time
+          import zipfile
           from pathlib import Path
           from urllib.request import Request, urlopen
 
@@ -3197,6 +3198,26 @@ jobs:
           assert receipt["registered_cameras"] == 16
           quality = json.loads((root / "wre-real16-sfm-quality.json").read_text())
           geom_quality = quality["geometry_quality"]
+          depth_report = json.loads(
+              (root / "wre-real16-native-sparse-depth.json").read_text()
+          )
+          assert depth_report["schema"] == "wre.experimental.real16_native_observed_sparse_depth.v1"
+          assert depth_report["source_dataset_commit"] == quality["source_dataset_commit"]
+          assert depth_report["registered_views"] == len(depth_report["per_camera"]) == 16
+          assert depth_report["input_native_track_observations"] == geom_quality["track_observations"]
+          assert depth_report["positive_depth_observations"] > 100
+          assert depth_report["depth_units"].endswith("NOT_METERS")
+          assert depth_report["dense_depth"] is False
+          assert depth_report["gpu_training_executed"] is False
+          assert depth_report["temporal_reconstruction_executed"] is False
+          assert all(c["occupied_depth_bins"] > 0 for c in depth_report["per_camera"])
+          with zipfile.ZipFile(root / "wre-real16-native-sparse-depth.npz") as archive:
+              assert len(archive.namelist()) == 16
+              assert all(n.startswith("camera_") and n.endswith(".npy") for n in archive.namelist())
+              assert all(archive.read(n)[:6] == b"\x93NUMPY" for n in archive.namelist())
+          png = (root / "wre-real16-native-sparse-depth-preview.png").read_bytes()
+          assert png[:8] == b"\x89PNG\r\n\x1a\n"
+          assert struct.unpack_from(">II", png, 16) == (1024, 1024)
           colour = json.loads(
               (root / "wre-real16-observed-rgb-agreement.json").read_text()
           )
@@ -3307,6 +3328,16 @@ jobs:
                   .find(a=>a.href.endsWith('/wre-real16-observed-rgb-agreement.json'));
                 return Boolean(href);
               """), "Observed RGB diagnostic was not downloadable in real Chrome"
+              assert js("""
+                const img=document.getElementById('wre-sparse-depth-preview');
+                return img && img.complete && img.naturalWidth===1024 &&
+                  img.naturalHeight===1024;
+              """), "Chrome did not decode the measured 16-camera sparse depth PNG"
+              assert js("""
+                const links=[...document.querySelectorAll('a[download]')].map(a=>a.href);
+                return links.some(h=>h.endsWith('/wre-real16-native-sparse-depth.npz')) &&
+                  links.some(h=>h.endsWith('/wre-real16-native-sparse-depth.json'));
+              """), "Native sparse depth files were not downloadable in Chrome"
               expected_error=f'{geom_quality["mean_reprojection_error_colmap_px"]:.3f}'
               assert expected_error+' px (COLMAP, in-sample;' in shown
               assert "NOT held-out image quality or trained 3DGS" in shown
