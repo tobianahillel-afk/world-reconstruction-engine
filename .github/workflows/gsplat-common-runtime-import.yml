@@ -1809,7 +1809,9 @@ jobs:
             <p>16 registered views. Bright = nearer tracked 3D landmarks; black = no observed depth.
             NOT dense depth, meters, held-out, or GPU.</p>
             <img id="wre-sparse-depth-preview" alt="Sixteen real COLMAP sparse depth tiles"
-              src="./wre-real16-native-sparse-depth-preview.png" style="max-width:100%;height:auto">
+              src="./wre-real16-native-sparse-depth-preview.png"
+              style="max-width:100%;height:auto;cursor:crosshair">
+            <output id="wre-depth-selection-status">Click a bright depth cell to select its measured COLMAP 3D point. Black is unobserved.</output>
             <p><a download href="./wre-real16-native-sparse-depth.npz">Sparse camera depth maps (NPZ)</a>
             · <a download href="./wre-real16-native-sparse-depth.json">Depth scale and observation metadata</a>
             · <a download href="./wre-real16-native-sparse-depth-observations.csv">Original-resolution measured depths (CSV)</a></p>
@@ -2066,6 +2068,50 @@ jobs:
             }
           };
           lookupButton.addEventListener('click',findNativePoint);
+
+          // Native frontmost sparse-depth sample -> exact SfM Point3D lookup.
+          // Do not project any unobserved black bin or infer dense depth.
+          const depthPreview=document.getElementById('wre-sparse-depth-preview');
+          const depthStatus=document.getElementById('wre-depth-selection-status');
+          depthPreview.addEventListener('click',async event=>{
+            if(localUrl!==null || !viewer.loaded){
+              depthStatus.textContent='Restore the verified original 3D scene first.';
+              return;
+            }
+            const box=depthPreview.getBoundingClientRect();
+            if(depthPreview.naturalWidth!==1024 || depthPreview.naturalHeight!==1024 ||
+               box.width<=0 || box.height<=0) return;
+            const x=(event.clientX-box.left)/box.width*1024;
+            const y=(event.clientY-box.top)/box.height*1024;
+            if(x<0 || x>=1024 || y<0 || y>=1024) return;
+            const ix=Math.floor(x),iy=Math.floor(y);
+            const tile=4*Math.floor(iy/256)+Math.floor(ix/256);
+            const key=tile+':'+(ix%256)+':'+(iy%256);
+            try {
+              const index=await loadNativeIndex();
+              if(localUrl!==null) return;
+              if(index.depth_tile_resolution!==256 ||
+                 index.depth_tile_order!=='image_name_sorted_four_by_four' ||
+                 !index.depth_bin_to_point3d_id){
+                throw Error('Missing measured sparse-depth provenance');
+              }
+              const pid=index.depth_bin_to_point3d_id[key];
+              if(pid===undefined){
+                clearNativeLookupMarker();
+                lookupOutput.textContent='No real COLMAP 3D point in this sparse depth cell.';
+                depthStatus.textContent='Black cell: no measured positive camera-Z depth.';
+                return;
+              }
+              lookupInput.value=String(pid);
+              await findNativePoint();
+              if(nativePoint && String(nativePoint.id)===String(pid)){
+                depthStatus.textContent='Selected real COLMAP point '+pid+
+                  ' from positive camera-Z in arbitrary SfM units; no dense or GPU inference.';
+              }
+            } catch(error){
+              depthStatus.textContent='Sparse depth lookup failed: '+String(error);
+            }
+          });
 
           nativeCameraOpen.addEventListener('click',()=>{
             if(localUrl!==null || !nativePoint || nativeCameraChoice.disabled) return;
