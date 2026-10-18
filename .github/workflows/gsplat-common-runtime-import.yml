@@ -700,6 +700,7 @@ jobs:
           doc["cameras"] = cameras
           doc["nodes"].extend(nodes)
           doc["scenes"][0]["nodes"].extend(range(1, len(nodes) + 1))
+          doc.setdefault("extras", {})
           doc["extras"]["registered_colmap_cameras"] = 16
           doc["extras"]["source_dataset_commit"] = manifest["dataset_commit"]
           doc["extras"]["license"] = manifest["license"]
