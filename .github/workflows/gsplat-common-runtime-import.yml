@@ -264,82 +264,82 @@ jobs:
                   points.extend(struct.pack("<II", image_id, pid - 1))
           (sparse / "points3D.bin").write_bytes(points)
 
-              parsed = Parser(str(dataset), factor=1, normalize=False, test_every=8)
-              train = Dataset(parsed, split="train")
-              test = Dataset(parsed, split="test")
-              assert parsed.image_names == [
-                  "frame-01.png", "frame-02.png", "frame-03.png"
-              ]
-              assert parsed.points.shape == (n, 3)
-              expected = np.array(cube, dtype=np.float64)
-              actual_order = np.lexsort(
-                  (parsed.points[:, 2], parsed.points[:, 1], parsed.points[:, 0])
-              )
-              source_order = np.lexsort(
-                  (expected[:, 2], expected[:, 1], expected[:, 0])
+          parsed = Parser(str(dataset), factor=1, normalize=False, test_every=8)
+          train = Dataset(parsed, split="train")
+          test = Dataset(parsed, split="test")
+          assert parsed.image_names == [
+              "frame-01.png", "frame-02.png", "frame-03.png"
+          ]
+          assert parsed.points.shape == (n, 3)
+          expected = np.array(cube, dtype=np.float64)
+          actual_order = np.lexsort(
+              (parsed.points[:, 2], parsed.points[:, 1], parsed.points[:, 0])
+          )
+          source_order = np.lexsort(
+              (expected[:, 2], expected[:, 1], expected[:, 0])
+          )
+          np.testing.assert_allclose(
+              parsed.points[actual_order], expected[source_order, :3], atol=1e-6
+          )
+          np.testing.assert_array_equal(
+              parsed.points_rgb[actual_order], expected[source_order, 3:]
+          )
+          assert len(train) == 2 and len(test) == 1
+          for batch in (train[0], train[1], test[0]):
+              assert isinstance(batch["image"], torch.Tensor)
+              assert batch["image"].shape == (64, 64, 3)
+              assert batch["image"].device.type == "cpu"
+              assert batch["K"].shape == (3, 3)
+              assert batch["camtoworld"].shape == (4, 4)
+              assert torch.isfinite(batch["K"]).all()
+              assert torch.isfinite(batch["camtoworld"]).all()
+          # Actual end-to-end COLMAP points and RGB -> pinned gsplat
+          # exporter -> portable viewer files. These are initialized
+          # (UNTRAINED) Gaussians, not photorealistic reconstructions.
+          assert parsed.points.shape == (n, 3)
+          assert parsed.points_rgb.shape == (n, 3)
+          export_root = Path(os.environ["RUNNER_TEMP"]) / "wre-colmap-derived-splats"
+          (export_root / "ply").mkdir(parents=True, exist_ok=False)
+          means = torch.from_numpy(parsed.points.copy()).float()
+          rgb = torch.from_numpy(parsed.points_rgb.copy()).float() / 255.0
+          sh0 = rgb_to_sh(rgb).unsqueeze(1)
+          gaussians = dict(
+              means=means,
+              scales=torch.full((n, 3), -2.0),
+              quats=torch.tensor([[1.0, 0.0, 0.0, 0.0]]).repeat(n, 1),
+              opacities=torch.zeros(n),
+              sh0=sh0,
+              shN=torch.zeros((n, 15, 3)),
+          )
+          ply_file = export_root / "ply" / "point_cloud_0.ply"
+          splat_file = export_root / "point_cloud_0.splat"
+          ply_bytes = export_splats(**gaussians, format="ply", save_to=str(ply_file))
+          splat_bytes = export_splats(
+              **gaussians, format="splat", save_to=str(splat_file)
+          )
+          assert ply_file.read_bytes() == ply_bytes
+          assert splat_file.read_bytes() == splat_bytes
+          assert f"element vertex {n}\n".encode("ascii") in ply_bytes
+          assert b"property float f_rest_44\n" in ply_bytes
+          assert len(splat_bytes) == n * 32
+          for idx in range(n):
+              splat = splat_bytes[idx * 32 : (idx + 1) * 32]
+              np.testing.assert_allclose(
+                  struct.unpack("<3f", splat[:12]), parsed.points[idx], atol=1e-6
               )
               np.testing.assert_allclose(
-                  parsed.points[actual_order], expected[source_order, :3], atol=1e-6
+                  struct.unpack("<3f", splat[12:24]), [np.exp(-2.)] * 3, atol=1e-6
               )
-              np.testing.assert_array_equal(
-                  parsed.points_rgb[actual_order], expected[source_order, 3:]
+              assert all(
+                  abs(actual - expected) <= 1
+                  for actual, expected in zip(splat[24:27], parsed.points_rgb[idx])
               )
-              assert len(train) == 2 and len(test) == 1
-              for batch in (train[0], train[1], test[0]):
-                  assert isinstance(batch["image"], torch.Tensor)
-                  assert batch["image"].shape == (64, 64, 3)
-                  assert batch["image"].device.type == "cpu"
-                  assert batch["K"].shape == (3, 3)
-                  assert batch["camtoworld"].shape == (4, 4)
-                  assert torch.isfinite(batch["K"]).all()
-                  assert torch.isfinite(batch["camtoworld"]).all()
-              # Actual end-to-end COLMAP points and RGB -> pinned gsplat
-              # exporter -> portable viewer files. These are initialized
-              # (UNTRAINED) Gaussians, not photorealistic reconstructions.
-              assert parsed.points.shape == (n, 3)
-              assert parsed.points_rgb.shape == (n, 3)
-              export_root = Path(os.environ["RUNNER_TEMP"]) / "wre-colmap-derived-splats"
-              (export_root / "ply").mkdir(parents=True, exist_ok=False)
-              means = torch.from_numpy(parsed.points.copy()).float()
-              rgb = torch.from_numpy(parsed.points_rgb.copy()).float() / 255.0
-              sh0 = rgb_to_sh(rgb).unsqueeze(1)
-              gaussians = dict(
-                  means=means,
-                  scales=torch.full((n, 3), -2.0),
-                  quats=torch.tensor([[1.0, 0.0, 0.0, 0.0]]).repeat(n, 1),
-                  opacities=torch.zeros(n),
-                  sh0=sh0,
-                  shN=torch.zeros((n, 15, 3)),
-              )
-              ply_file = export_root / "ply" / "point_cloud_0.ply"
-              splat_file = export_root / "point_cloud_0.splat"
-              ply_bytes = export_splats(**gaussians, format="ply", save_to=str(ply_file))
-              splat_bytes = export_splats(
-                  **gaussians, format="splat", save_to=str(splat_file)
-              )
-              assert ply_file.read_bytes() == ply_bytes
-              assert splat_file.read_bytes() == splat_bytes
-              assert f"element vertex {n}\n".encode("ascii") in ply_bytes
-              assert b"property float f_rest_44\n" in ply_bytes
-              assert len(splat_bytes) == n * 32
-              for idx in range(n):
-                  splat = splat_bytes[idx * 32 : (idx + 1) * 32]
-                  np.testing.assert_allclose(
-                      struct.unpack("<3f", splat[:12]), parsed.points[idx], atol=1e-6
-                  )
-                  np.testing.assert_allclose(
-                      struct.unpack("<3f", splat[12:24]), [np.exp(-2.)] * 3, atol=1e-6
-                  )
-                  assert all(
-                      abs(actual - expected) <= 1
-                      for actual, expected in zip(splat[24:27], parsed.points_rgb[idx])
-                  )
-                  assert splat[27] == 127
-              print("Eight tracked COLMAP 3D points+RGB exported by pinned gsplat as PLY and .splat.")
-              print("Viewable initialization, not SfM execution or trained appearance.")
+              assert splat[27] == 127
+          print("Eight tracked COLMAP 3D points+RGB exported by pinned gsplat as PLY and .splat.")
+          print("Viewable initialization, not SfM execution or trained appearance.")
 
-              print("Three REAL binary COLMAP views and 24 tracks decoded with upstream Parser/Dataset.")
-              print("CPU tensor generation verified; no CUDA kernel or training occurred.")
+          print("Three REAL binary COLMAP views and 24 tracks decoded with upstream Parser/Dataset.")
+          print("CPU tensor generation verified; no CUDA kernel or training occurred.")
           PY
 
       - name: Materialize COLMAP-derived gsplat PLY with canonical WRE
