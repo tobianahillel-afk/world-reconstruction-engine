@@ -955,6 +955,61 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      # Make the genuine 16-camera glTF scene directly discoverable without
+      # extracting the full SfM experiment bundle or building CUDA extensions.
+      - name: Package standalone real-photo 3D scene and verified receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv/bin/python -I - <<'PY'
+          import hashlib
+          import json
+          import shutil
+          from pathlib import Path
+
+          source = Path("wre-real16-early-gltf/viewable-scene-with-cameras.glb")
+          manifest = json.loads(Path("wre-real16-early-gltf/manifest.json").read_text())
+          expected = manifest["files"]["viewable-scene-with-cameras.glb"]
+          payload = source.read_bytes()
+          digest = hashlib.sha256(payload).hexdigest()
+          assert len(payload) == expected["bytes"]
+          assert digest == expected["sha256"]
+          assert payload[:4] == b"glTF"
+          destination = Path("wre-real16-viewable-scene.glb")
+          shutil.copyfile(source, destination)
+          assert hashlib.sha256(destination.read_bytes()).hexdigest() == digest
+          receipt = {
+              "schema": "wre.experimental.real16_standalone_scene.v1",
+              "scene_file": destination.name,
+              "sha256": digest,
+              "bytes": destination.stat().st_size,
+              "source_dataset_commit": manifest["source_dataset_commit"],
+              "license": manifest["license"],
+              "registered_cameras": manifest["registered_camera_nodes"],
+              "camera_center_connections": manifest["camera_center_connections"],
+              "connection_order": "filename_only_not_capture_time",
+              "gpu_training_executed": False,
+              "metric_scale_known": False,
+              "temporal_reconstruction_executed": False,
+          }
+          Path("wre-real16-viewable-scene-receipt.json").write_text(
+              json.dumps(receipt, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Publish standalone real-photo 3D scene independently of CUDA
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wre-real16-viewable-3d-scene
+          path: |
+            wre-real16-viewable-scene.glb
+            wre-real16-viewable-scene-receipt.json
+            wre-real16-observed-rgb-LICENSE.txt
+            wre-real16-camera-poses.json
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Build BOTH upstream CUDA extensions into the SAME Python interpreter
         shell: bash
         run: |
