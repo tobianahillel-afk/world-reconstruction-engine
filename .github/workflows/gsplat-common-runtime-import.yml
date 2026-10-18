@@ -3289,6 +3289,7 @@ jobs:
                       int(track["point2d_idx"]),
                   ))
           observed = set()
+          depth_by_native_observation = {}
           csv_path = root / depth_report["depth_observations_csv"]
           with csv_path.open(newline="") as stream:
               for row in csv.DictReader(stream):
@@ -3309,7 +3310,9 @@ jobs:
                       measured = float(row["camera_" + axis_name + "_sfm_units"])
                       assert math.isfinite(measured)
                       assert math.isclose(measured, expected, rel_tol=1e-9, abs_tol=1e-8)
-                  assert float(row["camera_z_sfm_units"]) > 0
+                  z = float(row["camera_z_sfm_units"])
+                  assert math.isfinite(z) and z > 0
+                  depth_by_native_observation[key] = z
           assert len(observed) == depth_report["depth_observations_csv_records"]
           assert len(observed) == depth_report["positive_depth_observations"]
           with zipfile.ZipFile(root / "wre-real16-native-sparse-depth.npz") as archive:
@@ -3348,6 +3351,19 @@ jobs:
           assert lookup["observation_count"] == geom_quality["track_observations"]
           assert len(lookup["points"]) == lookup["point_count"]
           assert set(point_rgb) <= set(lookup["points"])
+          matched_depths = {}
+          for point_id, point in lookup["points"].items():
+              for obs in point["observations"]:
+                  key = (int(obs["image_id"]), int(point_id), int(obs["point2d_idx"]))
+                  if key in depth_by_native_observation:
+                      actual = float(obs["positive_camera_z_sfm_units"])
+                      expected = depth_by_native_observation[key]
+                      assert math.isfinite(actual) and actual > 0
+                      assert math.isclose(actual, expected, rel_tol=1e-12, abs_tol=1e-10)
+                      matched_depths[key] = actual
+                  else:
+                      assert "positive_camera_z_sfm_units" not in obs
+          assert matched_depths == depth_by_native_observation
           assert quality["source_dataset_commit"] == receipt["source_dataset_commit"]
           assert geom_quality["registered_views"] == 16
           assert geom_quality["sparse_points3d"] > 100
@@ -3454,7 +3470,13 @@ jobs:
                   raise RuntimeError("Sixteen actual SfM camera choices never loaded")
               # Search a REAL native COLMAP landmark from the full 3D index,
               # not just the first 8 sampled points per selected camera pair.
-              selected_id=min(int(pid) for pid in point_rgb)
+              selected_id=min(
+                  int(pid) for pid in point_rgb
+                  if any(
+                      "positive_camera_z_sfm_units" in o
+                      for o in lookup["points"][pid]["observations"]
+                  )
+              )
               selected_point=lookup["points"][str(selected_id)]
               assert len(selected_point["observations"]) >= 2
               assert js("""
@@ -3497,6 +3519,14 @@ jobs:
                   'RGB disagreement'
               ) in result["text"]
               assert str(len(selected_point["observations"]))+" measured camera observations" in result["text"]
+              measured_depths = [
+                  o["positive_camera_z_sfm_units"]
+                  for o in selected_point["observations"]
+                  if "positive_camera_z_sfm_units" in o
+              ]
+              assert measured_depths
+              for depth in measured_depths:
+                  assert f"camera-Z {depth:.5f} arbitrary SfM units" in result["text"]
               for observation in selected_point["observations"][:3]:
                   assert observation["image_name"] in result["text"]
                   assert "#"+str(observation["point2d_idx"]) in result["text"]
