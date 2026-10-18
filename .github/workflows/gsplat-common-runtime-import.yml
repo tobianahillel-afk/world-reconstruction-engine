@@ -1257,6 +1257,12 @@ jobs:
             font:bold 16px system-ui;box-shadow:0 0 0 2px #162236;
             color:#162236;background:#ffc65a;pointer-events:none}
           .wre-pair-hotspot.secondary {background:#70d7ff}
+          .wre-photo-frame {position:relative;display:inline-block;line-height:0}
+          .wre-measured-pixel {position:absolute;width:13px;height:13px;
+            border:2px solid #fff;border-radius:50%;background:#ff7733;
+            box-shadow:0 0 0 2px #242424;pointer-events:none;
+            transform:translate(-50%,-50%);z-index:2}
+          .wre-measured-pixel[hidden] {display:none}
           .wre-track-hotspot {border:1px solid #fff;border-radius:50%;
             width:13px;height:13px;padding:0;background:#92ffad;
             box-shadow:0 0 0 2px #123225;pointer-events:auto;cursor:pointer}
@@ -1318,12 +1324,16 @@ jobs:
               they stay in this browser, with no upload or calibration claim.
             </output>
             <div class="wre-photo-pair">
-              <figure><img id="wre-photo-image" hidden
+              <figure><div class="wre-photo-frame"><img id="wre-photo-image" hidden
                 alt="Locally provided first reconstructed camera photograph">
-                <figcaption>Camera A · local operator photograph</figcaption></figure>
-              <figure><img id="wre-photo-image-b" hidden
+                <span id="wre-measured-pixel-a" class="wre-measured-pixel" hidden
+                  aria-label="Measured SfM observation in camera A"></span></div>
+                <figcaption>Camera A · operator-supplied, unverified</figcaption></figure>
+              <figure><div class="wre-photo-frame"><img id="wre-photo-image-b" hidden
                 alt="Locally provided second reconstructed camera photograph">
-                <figcaption>Camera B · local operator photograph</figcaption></figure>
+                <span id="wre-measured-pixel-b" class="wre-measured-pixel" hidden
+                  aria-label="Measured SfM observation in camera B"></span></div>
+                <figcaption>Camera B · operator-supplied, unverified</figcaption></figure>
             </div>
           </section>
           <model-viewer id="wre-scene" camera-controls auto-rotate
@@ -1357,8 +1367,38 @@ jobs:
           const photoStatus=document.getElementById('wre-photo-status');
           const photoImage=document.getElementById('wre-photo-image');
           const photoImageB=document.getElementById('wre-photo-image-b');
+          const photoMarkerA=document.getElementById('wre-measured-pixel-a');
+          const photoMarkerB=document.getElementById('wre-measured-pixel-b');
           const photoUrls=new Map();
           const cameraNames=new Set();
+          const cameraEvidence=new Map();
+          let selectedPhotoPoint=null;
+          const drawMeasuredPhotoPixels=()=>{
+            photoMarkerA.hidden=true;photoMarkerB.hidden=true;
+            if(!selectedPhotoPoint || localUrl!==null) return;
+            if(choice.value!==String(selectedPhotoPoint.first) ||
+                baselineChoice.value!==String(selectedPhotoPoint.second)) return;
+            [
+              [photoImage,photoMarkerA,selectedPhotoPoint.first,selectedPhotoPoint.a],
+              [photoImageB,photoMarkerB,selectedPhotoPoint.second,selectedPhotoPoint.b]
+            ].forEach(([img,marker,index,xy])=>{
+              const camera=cameraEvidence.get(String(index));
+              // Matching filename and dimensions never authenticate a local photograph.
+              if(!camera || img.hidden || !img.complete ||
+                  img.naturalWidth!==camera.image_width ||
+                  img.naturalHeight!==camera.image_height ||
+                  !xy.every(Number.isFinite) || xy[0]<0 || xy[1]<0 ||
+                  xy[0]>=camera.image_width || xy[1]>=camera.image_height) return;
+              marker.style.left=(100*xy[0]/camera.image_width)+'%';
+              marker.style.top=(100*xy[1]/camera.image_height)+'%';
+              marker.dataset.pixelX=String(xy[0]);
+              marker.dataset.pixelY=String(xy[1]);
+              marker.title='Measured in-sample SfM pixel; local photo not authenticated';
+              marker.hidden=false;
+            });
+          };
+          photoImage.addEventListener('load',drawMeasuredPhotoPixels);
+          photoImageB.addEventListener('load',drawMeasuredPhotoPixels);
           const showLocalPhoto=()=>{
             for(const img of [photoImage,photoImageB]){
               img.hidden=true;
@@ -1400,6 +1440,7 @@ jobs:
                 photoStatus.textContent+=' No local photograph supplied for camera B '+secondName+'.';
               }
             }
+            drawMeasuredPhotoPixels();
           };
           photoInput.addEventListener('change',()=>{
             const files=Array.from(photoInput.files||[]);
@@ -1432,6 +1473,8 @@ jobs:
           let focusCamera=null;
           const clearPairMarkers=()=>{
             viewer.querySelectorAll('[slot^="hotspot-pair-"]').forEach(node=>node.remove());
+            selectedPhotoPoint=null;
+            drawMeasuredPhotoPixels();
             landmarkInspection.textContent=
               'Select a green shared 3D landmark to inspect its real SfM support.';
           };
@@ -1626,6 +1669,7 @@ jobs:
             baselineChoice.replaceChildren(new Option('Select second camera',''));
             cameras.forEach((c,i)=>{
               cameraNames.add(c.image_name);
+              cameraEvidence.set(String(i),c);
               const label=(i+1)+' · '+c.image_name;
               choice.add(new Option(label,String(i)));
               baselineChoice.add(new Option(label,String(i)));
@@ -1671,6 +1715,8 @@ jobs:
                   const reversed=firstIndex>secondIndex;
                   const a=(reversed?point.slice(8,10):point.slice(6,8));
                   const b=(reversed?point.slice(6,8):point.slice(8,10));
+                  selectedPhotoPoint={first:firstIndex,second:secondIndex,a,b};
+                  drawMeasuredPhotoPixels();
                   landmarkInspection.textContent=
                     'Real 3D landmark '+point[0]+': XYZ ('+
                     point.slice(1,4).map(v=>v.toFixed(5)).join(', ')+
