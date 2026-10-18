@@ -1,7 +1,7 @@
 name: gsplat-native-rasterizer-build
 
-# Audited gsplat v1.5.3 rasterizer native build/import on a CPU-hosted CUDA toolkit.
-# This is NOT GPU execution, training, image quality, or shipping approval.
+# Full pinned gsplat + fused-ssim native co-import and upstream trainer import.
+# CPU-hosted CUDA toolkit: NO GPU execution, training, or quality proof.
 on:
   pull_request:
     paths:
@@ -36,6 +36,11 @@ jobs:
       GSPLAT_GLM_REVISION: 33b4a621a697a305bc3a7610d290677b96beb181
       GSPLAT_GLM_TREE: e57f342f0fb63852d65e0da2090528fdca9b0117
       GSPLAT_GLM_LICENSE_BLOB: 779c32fb9afef1180798d46f08b4373e427ac693
+      FUSED_SSIM_REVISION: 328dc9836f513d00c4b5bc38fe30478b4435cbb5
+      FUSED_SSIM_TREE: ac5f1d8fe5d519f9c44b220d235bf1f198463da7
+      NERFVIEW_REVISION: 4538024fe0d15fd1a0e4d760f3695fc44ca72787
+      NERFVIEW_TREE: e333400e39605978a3d1f9cf6d73ddf577a8c8e3
+      LEGACY_PYCOLMAP_REVISION: cc7ea4b7301720ac29287dbe450952511b32125e
       PYTHONPATH: ""
 
     steps:
@@ -88,7 +93,8 @@ jobs:
           assert len(packages) == len(lock["packages"]) == 76
           assert packages["torch"]["version"] == "2.4.0+cu124"
 
-          pending = {"torch", "numpy", "ninja", "setuptools", "wheel", "jaxtyping", "rich"}
+          # Lock EVERY runtime wheel for real same-environment trainer import.
+          pending = set(packages)
           selected: set[str] = set()
           while pending:
               name = pending.pop()
@@ -221,6 +227,106 @@ jobs:
           print(f"Built and imported exact gsplat v1.5.3 rasterizer: {path.name}. No CUDA kernel was executed.")
           PY
 
+      - name: Pin exact fused-ssim, nerfview and historical COLMAP reader in same environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          fetch_exact() {
+            local folder="$1" url="$2" revision="$3" tree="$4"
+            test ! -e "$RUNNER_TEMP/$folder"
+            git init -q "$RUNNER_TEMP/$folder"
+            git -C "$RUNNER_TEMP/$folder" remote add origin "$url"
+            git -C "$RUNNER_TEMP/$folder" fetch --quiet --depth=1 origin "$revision"
+            git -C "$RUNNER_TEMP/$folder" checkout --quiet --detach FETCH_HEAD
+            test "$(git -C "$RUNNER_TEMP/$folder" rev-parse HEAD)" = "$revision"
+            if test -n "$tree"; then
+              test "$(git -C "$RUNNER_TEMP/$folder" rev-parse HEAD^{tree})" = "$tree"
+            fi
+          }
+          fetch_exact fused-ssim-source https://github.com/rahul-goel/fused-ssim.git "$FUSED_SSIM_REVISION" "$FUSED_SSIM_TREE"
+          fetch_exact nerfview-source https://github.com/nerfstudio-project/nerfview.git "$NERFVIEW_REVISION" "$NERFVIEW_TREE"
+          fetch_exact gsplat-legacy-pycolmap https://github.com/rmbrualla/pycolmap.git "$LEGACY_PYCOLMAP_REVISION" ""
+          "$NATIVE_PYTHON" - <<'PY'
+          import os
+          import sys
+          from pathlib import Path
+
+          sys.path.insert(0, str(Path("src").resolve()))
+          from wre.reconstruction.static_appearance_baseline import (
+              verify_gsplat_static_appearance_reference_sources,
+              verify_gsplat_fused_ssim_reference_sources,
+              verify_gsplat_nerfview_reference_sources,
+              verify_gsplat_reference_pycolmap_sources,
+          )
+          root = Path(os.environ["RUNNER_TEMP"])
+          assert len(verify_gsplat_static_appearance_reference_sources(root / "gsplat-source")) == 10
+          assert len(verify_gsplat_fused_ssim_reference_sources(root / "fused-ssim-source")) == 7
+          assert len(verify_gsplat_nerfview_reference_sources(root / "nerfview-source")) == 7
+          assert len(verify_gsplat_reference_pycolmap_sources(root / "gsplat-legacy-pycolmap")) == 9
+          print("All pinned trainer, viewer, fused-ssim and COLMAP reader source bytes verified.")
+          PY
+
+      - name: Compile fused-ssim and import the complete gsplat trainer with both native extensions
+        shell: bash
+        run: |
+          set -euo pipefail
+          export MAX_JOBS=1
+          export TORCH_CUDA_ARCH_LIST=7.5
+          "$NATIVE_PYTHON" -m pip install --no-deps --no-build-isolation --no-cache-dir \
+            "$RUNNER_TEMP/fused-ssim-source"
+          "$NATIVE_PYTHON" -m pip install --no-deps --no-build-isolation --no-cache-dir \
+            "$RUNNER_TEMP/nerfview-source"
+          "$NATIVE_PYTHON" -m pip check
+          "$NATIVE_PYTHON" - <<'PY'
+          import hashlib
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          import torch
+          import gsplat
+          import fused_ssim_cuda
+          import nerfview
+          from gsplat.cuda._backend import _C
+
+          assert torch.__version__ == "2.4.0+cu124"
+          assert torch.version.cuda == "12.4"
+          assert gsplat.__version__ == "1.5.3"
+          assert not torch.cuda.is_available(), "CPU-hosted integration cannot claim GPU"
+          root = Path(os.environ["RUNNER_TEMP"])
+          sys.path.insert(0, str(root / "gsplat-legacy-pycolmap"))
+          sys.path.insert(0, str(root / "gsplat-source" / "examples"))
+          from pycolmap import SceneManager
+          from simple_trainer import Config, main
+
+          assert callable(main) and callable(SceneManager)
+          assert Config(max_steps=20, disable_viewer=True).max_steps == 20
+          assert Path(_C.__file__).is_file()
+          assert Path(fused_ssim_cuda.__file__).is_file()
+          evidence = {
+              "kind": "gsplat_reference_full_trainer_same_native_environment_import",
+              "gsplat_revision": os.environ["GSPLAT_REVISION"],
+              "fused_ssim_revision": os.environ["FUSED_SSIM_REVISION"],
+              "nerfview_revision": os.environ["NERFVIEW_REVISION"],
+              "legacy_pycolmap_revision": os.environ["LEGACY_PYCOLMAP_REVISION"],
+              "torch": torch.__version__,
+              "cuda": torch.version.cuda,
+              "gsplat_native_sha256": hashlib.sha256(Path(_C.__file__).read_bytes()).hexdigest(),
+              "fused_ssim_native_sha256": hashlib.sha256(
+                  Path(fused_ssim_cuda.__file__).read_bytes()
+              ).hexdigest(),
+              "full_reference_trainer_imported": True,
+              "native_coimport": True,
+              "gpu_execution": False,
+              "training_execution": False,
+          }
+          (Path(os.environ["GITHUB_WORKSPACE"]) / "gsplat-unified-trainer-import.json").write_text(
+              json.dumps(evidence, sort_keys=True, indent=2) + "\n", encoding="utf-8"
+          )
+          print("Full upstream gsplat trainer and both native extensions imported; GPU NOT run.")
+          PY
+
       - name: Retain exact native rasterizer build/import evidence
         shell: bash
         run: |
@@ -272,6 +378,8 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: v2l18-3-gsplat-rasterizer-native-build-import
-          path: gsplat-rasterizer-native-evidence.json
+          path: |
+            gsplat-rasterizer-native-evidence.json
+            gsplat-unified-trainer-import.json
           if-no-files-found: error
           retention-days: 30
