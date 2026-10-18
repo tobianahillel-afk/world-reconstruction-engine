@@ -354,6 +354,10 @@ jobs:
               'Save displayed .splat</button>'
               '<button id="wre-compare-scene" type="button" disabled>'
               'Compare original / local</button>'
+              '<button id="wre-save-view" type="button">Save camera viewpoint</button>'
+              '<label for="wre-load-view">Load camera viewpoint JSON: </label>'
+              '<input id="wre-load-view" type="file" accept=".json" '
+              'aria-label="Load saved camera viewpoint">'
               '<output id="wre-local-status" aria-live="polite"></output>'
               '</section>'
           )
@@ -363,6 +367,8 @@ jobs:
             const reset = document.getElementById('wre-restore-original');
             const save = document.getElementById('wre-save-current');
             const compare = document.getElementById('wre-compare-scene');
+            const saveView = document.getElementById('wre-save-view');
+            const loadView = document.getElementById('wre-load-view');
             const status = document.getElementById('wre-local-status');
             const originalFile = new File([window.__wreEmbeddedSplat],
               'WRE-16-photos.splat', {type: 'application/octet-stream'});
@@ -427,6 +433,50 @@ jobs:
               if (!localFile) return;
               show(activeFile === originalFile ? localFile : originalFile);
             });
+            // A camera pose is a view in a coordinate frame, not model registration.
+            saveView.addEventListener('click', () => {
+              const pose = {format: 'wre-view-matrix-v1', matrix: Array.from(viewMatrix)};
+              const url = URL.createObjectURL(new Blob([JSON.stringify(pose)],
+                {type: 'application/json'}));
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = 'wre-camera-viewpoint.json';
+              link.click();
+              setTimeout(() => URL.revokeObjectURL(url), 30000);
+              status.textContent = 'Saved camera view; no alignment inferred.';
+            });
+            loadView.addEventListener('change', async () => {
+              const file = loadView.files?.[0];
+              if (!file || file.size > 4096) {
+                status.textContent = 'Invalid viewpoint: max 4 KiB JSON.';
+                return;
+              }
+              try {
+                const pose = JSON.parse(await file.text());
+                const m = pose?.matrix;
+                if (pose.format !== 'wre-view-matrix-v1' || !Array.isArray(m) ||
+                    m.length !== 16 || !m.every(Number.isFinite) ||
+                    Math.abs(m[3]) > 1e-5 || Math.abs(m[7]) > 1e-5 ||
+                    Math.abs(m[11]) > 1e-5 || Math.abs(m[15] - 1) > 1e-5) {
+                  throw Error('Invalid affine camera matrix');
+                }
+                const det = m[0]*(m[5]*m[10]-m[6]*m[9]) -
+                  m[1]*(m[4]*m[10]-m[6]*m[8]) +
+                  m[2]*(m[4]*m[9]-m[5]*m[8]);
+                if (!Number.isFinite(det) || Math.abs(det) < 1e-6) {
+                  throw Error('Non-invertible camera matrix');
+                }
+                // The upstream carousel must not overwrite a restored view.
+                window.dispatchEvent(new KeyboardEvent('keydown',
+                  {key:'Escape',code:'Escape'}));
+                window.dispatchEvent(new KeyboardEvent('keyup',
+                  {key:'Escape',code:'Escape'}));
+                viewMatrix = m.slice();
+                status.textContent = 'Loaded camera view; scene frames may differ.';
+              } catch (error) {
+                status.textContent = 'Invalid camera JSON; current view unchanged.';
+              }
+            });
           })();
           </script>"""
           assert vendor_html.count("</body>") == 1
@@ -452,6 +502,8 @@ jobs:
               "Choose a local .splat using the file picker, or drag one onto the page.\n"
               "Use Restore 16-photo scene to return to the included example.\n"
               "Use Compare original / local to toggle without reselecting the local file.\n"
+              "Save camera viewpoint as JSON, then load to revisit the same view.\n"
+              "Camera viewpoint does not align unrelated scenes or infer metric scale.\n"
               "Different scenes may not share geometry, metric scale or camera registration.\n"
               "Use Save displayed .splat to download the currently shown scene locally.\n"
               "The example scene comes from CC BY-NC 4.0 NONCOMMERCIAL photos.\n"
@@ -788,6 +840,83 @@ jobs:
               }
               receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
               print("DIRECT FILE PICKER PASS: 2048 WRE records, then RESTORE PASS: 6917")
+              # Real camera bookmark: WebGL view -> actual Chrome local JSON download ->
+              # alter camera -> read same downloaded file using a real file input.
+              save_view = webdriver("POST", f"/session/{session}/element", {
+                  "using": "css selector", "value": "#wre-save-view"
+              })["element-6066-11e4-a52e-4f735466cecf"]
+              webdriver("POST", f"/session/{session}/element/{save_view}/click", {})
+              bookmark = saved_scenes / "wre-camera-viewpoint.json"
+              for _ in range(80):
+                  if bookmark.is_file() and bookmark.stat().st_size > 0:
+                      break
+                  time.sleep(0.2)
+              else:
+                  raise RuntimeError("Browser did not download current camera view")
+              bookmark_data = bookmark.read_bytes()
+              pose = json.loads(bookmark_data)
+              assert pose["format"] == "wre-view-matrix-v1"
+              assert len(pose["matrix"]) == 16
+              changed = webdriver("POST", f"/session/{session}/execute/sync", {
+                  "script": """window.dispatchEvent(new KeyboardEvent('keydown',
+                        {key:'Escape',code:'Escape'}));
+                    window.dispatchEvent(new KeyboardEvent('keyup',{key:'Escape',code:'Escape'}));
+                    viewMatrix=[1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
+                    return Array.from(viewMatrix);""",
+                  "args": [],
+              })
+              assert changed == [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1]
+              camera_picker = webdriver("POST", f"/session/{session}/element", {
+                  "using": "css selector", "value": "#wre-load-view"
+              })["element-6066-11e4-a52e-4f735466cecf"]
+              webdriver("POST", f"/session/{session}/element/{camera_picker}/value", {
+                  "text": str(bookmark)
+              })
+              for _ in range(80):
+                  camera = webdriver("POST", f"/session/{session}/execute/sync", {
+                      "script": """return {
+                        matrix:Array.from(viewMatrix),
+                        status:document.getElementById('wre-local-status').textContent,
+                        external:performance.getEntriesByType('resource')
+                          .filter(x=>/^https?:/.test(x.name)).map(x=>x.name)};""",
+                      "args": [],
+                  })
+                  if ("Loaded camera view" in camera["status"]
+                          and all(abs(x-y)<1e-5 for x,y in zip(camera["matrix"], pose["matrix"]))):
+                      break
+                  time.sleep(0.2)
+              else:
+                  raise RuntimeError("Actual browser did not restore downloaded camera")
+              assert camera["external"] == []
+              bad = root / "bad-viewpoint.json"
+              bad.write_text('{"format":"wre-view-matrix-v1","matrix":[0]}')
+              webdriver("POST", f"/session/{session}/element/{camera_picker}/value", {
+                  "text": str(bad)
+              })
+              for _ in range(80):
+                  check = webdriver("POST", f"/session/{session}/execute/sync", {
+                      "script": """return {
+                        matrix:Array.from(viewMatrix),
+                        status:document.getElementById('wre-local-status').textContent};""",
+                      "args": [],
+                  })
+                  if "Invalid camera JSON" in check["status"]:
+                      break
+                  time.sleep(0.2)
+              else:
+                  raise RuntimeError("Malformed bookmark was not rejected")
+              assert all(abs(x-y)<1e-5 for x,y in zip(check["matrix"],pose["matrix"]))
+              receipt["offline_camera_bookmark_test"] = {
+                  "actual_browser_download": True,
+                  "actual_browser_file_picker": True,
+                  "bookmark_sha256": hashlib.sha256(bookmark_data).hexdigest(),
+                  "restored_16_float_camera": True,
+                  "malformed_camera_rejected": True,
+                  "external_resource_requests": 0,
+                  "cuda_training": False,
+              }
+              receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
+              print("REAL OFFLINE CAMERA BOOKMARK PASS: downloaded/reloaded 16-float pose")
           finally:
               webdriver("DELETE", f"/session/{session}")
           PY
