@@ -580,6 +580,19 @@ jobs:
                   for j in members:
                       by_track[i][j] += 1
           assert by_track == shared_tracks
+          # Only real PyCOLMAP 3D points observed by BOTH cameras are sampled.
+          # Sorted point IDs make a bounded, deterministic spatial overlay.
+          sampled_shared_points = {}
+          for i in range(16):
+              for j in range(i + 1, 16):
+                  shared_ids = sorted(observed_ids[i] & observed_ids[j])
+                  assert len(shared_ids) == shared_tracks[i][j]
+                  samples = []
+                  for point_id in shared_ids[:8]:
+                      xyz = np.asarray(model.points3D[point_id].xyz, dtype=np.float64)
+                      assert xyz.shape == (3,) and np.isfinite(xyz).all()
+                      samples.append([int(point_id), *(float(value) for value in xyz)])
+                  sampled_shared_points[f"{i}:{j}"] = samples
           centers = np.asarray([frame["camera_center_xyz"] for frame in frames])
           assert np.linalg.norm(np.ptp(centers, axis=0)) > 0
           descriptor = {
@@ -597,6 +610,8 @@ jobs:
               "pairwise_shared_sfm_tracks": {
                   "camera_names": [f["image_name"] for f in ordered_frames],
                   "counts": shared_tracks,
+                  "samples": sampled_shared_points,
+                  "sample_limit_per_distinct_pair": 8,
                   "measurement": "common_triangulated_3d_point_ids_in_sample",
               },
           }
@@ -1211,6 +1226,9 @@ jobs:
             font:bold 16px system-ui;box-shadow:0 0 0 2px #162236;
             color:#162236;background:#ffc65a;pointer-events:none}
           .wre-pair-hotspot.secondary {background:#70d7ff}
+          .wre-track-hotspot {border:1px solid #fff;border-radius:50%;
+            width:13px;height:13px;padding:0;background:#92ffad;
+            box-shadow:0 0 0 2px #123225;pointer-events:none}
           </style></head><body><main>
           <header><h1>WRE · Real 16-photograph SfM 3D</h1>
           <p>Orbit and zoom the actual reconstructed RGB point cloud,
@@ -1535,6 +1553,21 @@ jobs:
                     n===overlap.counts[j]?.[i]))) {
               throw Error('Missing or invalid measured SfM shared-track evidence');
             }
+            const sampled=overlap.samples;
+            if(overlap.sample_limit_per_distinct_pair!==8 ||
+                !sampled || Object.keys(sampled).length!==120) {
+              throw Error('Missing sampled real SfM common landmarks');
+            }
+            for(let i=0;i<16;i++) for(let j=i+1;j<16;j++) {
+              const points=sampled[i+':'+j];
+              if(!Array.isArray(points) ||
+                  points.length!==Math.min(overlap.counts[i][j],8) ||
+                  !points.every(point=>Array.isArray(point) && point.length===4 &&
+                    Number.isSafeInteger(point[0]) && point[0]>0 &&
+                    point.slice(1).every(Number.isFinite))) {
+                throw Error('Invalid measured shared 3D point positions');
+              }
+            }
             const centers=cameras.map(c=>c.camera_center_xyz);
             if (!cameras.every((c,i)=>typeof c.image_name==='string' &&
                 centers[i].length===3 && centers[i].every(Number.isFinite) &&
@@ -1576,14 +1609,32 @@ jobs:
                 baselineOutput.textContent='Invalid reconstructed camera geometry.';
                 return;
               }
-              showPairMarkers(first,second,[Number(choice.value),Number(baselineChoice.value)]);
-              const shared=overlap.counts[Number(choice.value)][
+              const firstIndex=Number(choice.value);
+              const secondIndex=Number(baselineChoice.value);
+              showPairMarkers(first,second,[firstIndex,secondIndex]);
+              const sampledPoints=overlap.samples[
+                [firstIndex,secondIndex].sort((a,b)=>a-b).join(':')] || [];
+              sampledPoints.forEach((point,i)=>{
+                const marker=document.createElement('button');
+                marker.type='button';
+                marker.className='wre-track-hotspot';
+                marker.slot='hotspot-pair-shared-'+i;
+                marker.setAttribute('data-position',point.slice(1).map(v=>v+'m').join(' '));
+                marker.setAttribute('data-normal','0 1 0');
+                marker.setAttribute('aria-label',
+                  'Shared reconstructed 3D landmark '+point[0]+' (in-sample)');
+                marker.title='Real COLMAP triangulated point '+point[0]+
+                  ', observed in both cameras; no time or GPU inference';
+                viewer.appendChild(marker);
+              });
+              const shared=overlap.counts[firstIndex][
                 Number(baselineChoice.value)];
               baselineOutput.textContent='Camera baseline: '+distance.toFixed(6)+
                 ' local SfM units (not metres; no capture-time interpretation). '+
                 'A and B mark reconstructed camera centres in 3D. '+
                 shared+' shared triangulated 3D tracks observed in BOTH real cameras '+
-                '(in-sample; NOT GPU training, image similarity or 4D motion).';
+                '(in-sample; NOT GPU training, image similarity or 4D motion). '+
+                sampledPoints.length+' of those real 3D points marked in green.';
             };
             baselineChoice.addEventListener('change',updateBaseline);
             nearestButton.addEventListener('click',()=>{
@@ -2689,6 +2740,38 @@ jobs:
               assert "Most overlapping SfM camera" in shared_evidence["details"]
               assert "NOT chronology or GPU training" in shared_evidence["details"]
               assert shared_evidence["framed"] and shared_evidence["projected"]
+              # Assert real Chrome has actual model-viewer hotspots at the
+              # exported triangulated XYZ locations, not merely status text.
+              expected_landmarks=overlap["samples"][f"0:{best_overlap_index}"]
+              assert 0 < len(expected_landmarks) <= 8
+              landmarks=js("""
+                const viewer=document.getElementById('wre-scene');
+                return [...viewer.querySelectorAll('[slot^="hotspot-pair-shared-"]')]
+                  .map(marker=>{
+                    const projected=viewer.queryHotspot(marker.slot);
+                    return {
+                      slot:marker.slot,
+                      position:marker.getAttribute('data-position'),
+                      label:marker.getAttribute('aria-label'),
+                      projected:Boolean(projected && projected.canvasPosition &&
+                        Number.isFinite(projected.canvasPosition.x) &&
+                        Number.isFinite(projected.canvasPosition.y))
+                    };
+                  });
+              """)
+              assert len(landmarks)==len(expected_landmarks)
+              for i,(marker,point) in enumerate(zip(
+                  landmarks, expected_landmarks, strict=True
+              )):
+                  assert marker["slot"]==f"hotspot-pair-shared-{i}"
+                  xyz=[float(value[:-1]) for value in marker["position"].split()]
+                  assert len(xyz)==3
+                  assert all(
+                      math.isclose(actual,expected,rel_tol=1e-6,abs_tol=1e-6)
+                      for actual,expected in zip(xyz,point[1:],strict=True)
+                  )
+                  assert str(point[0]) in marker["label"]
+                  assert marker["projected"]
               same_camera=js("""
                 const second=document.getElementById('wre-baseline-choice');
                 second.value='0';
@@ -2696,6 +2779,9 @@ jobs:
                 return document.getElementById('wre-camera-baseline').textContent;
               """)
               assert "0.000000 local SfM units" in same_camera
+              assert js("""
+                return !document.querySelector('[slot^="hotspot-pair-shared-"]');
+              """), "Shared 3D hotspots were not cleared on same-camera selection"
               # Real browser File API: use the actual generated 3D GLB as if
               # selected locally. This is a real WebGL interaction, no GPU CUDA.
               local_result = call("POST", f"/session/{session}/execute/async", {
