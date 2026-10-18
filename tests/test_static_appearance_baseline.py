@@ -1760,9 +1760,12 @@ def test_verified_gsplat_bundle_contains_usable_viewer_files_and_provenance(
     assert not (viewer / "centers.glb").exists()
 
     second = viewer / "another.zip"
-    assert export_verified_gsplat_viewer_bundle(
-        artifact_ref=ref, output_root=root, profile=profile, bundle_path=second
-    ) == archive_sha
+    assert (
+        export_verified_gsplat_viewer_bundle(
+            artifact_ref=ref, output_root=root, profile=profile, bundle_path=second
+        )
+        == archive_sha
+    )
     assert second.read_bytes() == bundle.read_bytes()
     from wre import reconstruction
 
