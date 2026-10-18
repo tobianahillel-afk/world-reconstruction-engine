@@ -290,6 +290,7 @@ jobs:
           import hashlib
           import io
           import json
+          import math
           import os
           import shutil
           import struct
@@ -461,6 +462,29 @@ jobs:
           native_model_path = root / "native-sparse" / "0"
           colored_model = pycolmap.Reconstruction(str(native_model_path))
           colored_model.extract_colors_for_all_images(str(canonical))
+          colored_model.update_point_3d_errors()
+          # Real reconstruction geometry measurements from native PyCOLMAP,
+          # not synthetic checks or a 3DGS/GPU training-quality benchmark.
+          sfm_quality = {
+              "kind": "native_sparse_sfm_in_sample_geometry_v1",
+              "registered_views": int(colored_model.num_reg_images()),
+              "sparse_points3d": int(colored_model.num_points3D()),
+              "track_observations": int(colored_model.compute_num_observations()),
+              "mean_track_length_observations": float(colored_model.compute_mean_track_length()),
+              "mean_reprojection_error_colmap_px": float(
+                  colored_model.compute_mean_reprojection_error()
+              ),
+              "held_out_image_quality_measured": False,
+              "gpu_optimization_executed": False,
+              "metric_scale_known": False,
+          }
+          assert sfm_quality["registered_views"] == 16
+          assert sfm_quality["sparse_points3d"] > 100
+          assert sfm_quality["track_observations"] >= 2 * sfm_quality["sparse_points3d"]
+          assert math.isfinite(sfm_quality["mean_track_length_observations"])
+          assert sfm_quality["mean_track_length_observations"] >= 2.0
+          assert math.isfinite(sfm_quality["mean_reprojection_error_colmap_px"])
+          assert sfm_quality["mean_reprojection_error_colmap_px"] >= 0.0
           colored_model.write(str(native_model_path))
           # Reuse PyCOLMAP's real XYZ/RGB exporter: this is observed SfM,
           # not a trained Gaussian field or an estimated metric-scale scene.
@@ -515,6 +539,7 @@ jobs:
               "schema": "wre.experimental.colmap_undistorted_capture.v1",
               "native_registered_views": 16, "undistorted_registered_views": 16,
               "native_points3d": points, "undistorted_points3d": points,
+              "sfm_quality": sfm_quality,
               "views": views, "file_sha256": file_hashes,
               "license": "CC BY-NC 4.0 Attribution-NonCommercial; experimental use only",
               "credit": credit, "dataset_commit": UPSTREAM,
@@ -524,6 +549,23 @@ jobs:
           (capture / "wre-capture-manifest.json").write_text(
               json.dumps(manifest, sort_keys=True, indent=2) + "\n", encoding="utf-8",
           )
+          quality_path = Path(os.environ["GITHUB_WORKSPACE"]) / "wre-real16-sfm-quality.json"
+          quality_path.write_text(
+              json.dumps(
+                  {
+                      "schema": "wre.experimental.real_photo_sfm_quality.v1",
+                      "source_dataset_commit": UPSTREAM,
+                      "source_credit": credit,
+                      "license": "CC BY-NC 4.0, experimental NONCOMMERCIAL use only",
+                      "geometry_quality": sfm_quality,
+                  },
+                  indent=2,
+                  sort_keys=True,
+              ) + "\n",
+              encoding="utf-8",
+          )
+          print("REAL SFM REPROJECTION ERROR (COLMAP px):",
+                sfm_quality["mean_reprojection_error_colmap_px"])
           print("REGENERATED AUTHENTIC 16-PHOTO COLMAP:", len(views), "registered,", points, "3D points")
           print("Noncommercial photos; GPU kernels and trainer optimization NOT executed")
           PY
@@ -564,6 +606,16 @@ jobs:
           assert manifest["native_registered_views"] == manifest["undistorted_registered_views"] == 16
           assert manifest["native_points3d"] == manifest["undistorted_points3d"]
           assert manifest["native_points3d"] > 100
+          quality = manifest["sfm_quality"]
+          assert quality["kind"] == "native_sparse_sfm_in_sample_geometry_v1"
+          assert quality["registered_views"] == 16
+          assert quality["sparse_points3d"] == manifest["native_points3d"]
+          assert quality["track_observations"] >= 2 * quality["sparse_points3d"]
+          assert 2 <= quality["mean_track_length_observations"] <= 16
+          assert np.isfinite(quality["mean_reprojection_error_colmap_px"])
+          assert quality["mean_reprojection_error_colmap_px"] >= 0
+          assert quality["held_out_image_quality_measured"] is False
+          assert quality["gpu_optimization_executed"] is False
           assert manifest["gpu_training_executed"] is False
           assert manifest["gsplat_training_validated"] is False
           assert manifest["metric_scale_known"] is False
@@ -628,6 +680,7 @@ jobs:
               },
               "real_source_photo_count": 16,
               "real_colmap_points": int(len(parser.points)),
+              "measured_native_sparse_sfm_quality": quality,
               "observed_rgb_geometry_ply": {
                   "filename": rgb_ply.name,
                   "sha256": hashlib.sha256(ply_bytes).hexdigest(),
@@ -669,6 +722,7 @@ jobs:
           path: |
             wre-common-native-real-photo-receipt.json
             wre-real16-observed-rgb.ply
+            wre-real16-sfm-quality.json
             wre-real16-observed-rgb-LICENSE.txt
           if-no-files-found: error
           retention-days: 7
