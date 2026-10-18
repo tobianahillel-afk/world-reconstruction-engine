@@ -591,7 +591,16 @@ jobs:
                   for point_id in shared_ids[:8]:
                       xyz = np.asarray(model.points3D[point_id].xyz, dtype=np.float64)
                       assert xyz.shape == (3,) and np.isfinite(xyz).all()
-                      samples.append([int(point_id), *(float(value) for value in xyz)])
+                      reprojection_error = float(model.points3D[point_id].error)
+                      supporting_images = len(model.points3D[point_id].track.elements)
+                      assert np.isfinite(reprojection_error) and reprojection_error >= 0
+                      assert 2 <= supporting_images <= 16
+                      samples.append([
+                          int(point_id),
+                          *(float(value) for value in xyz),
+                          reprojection_error,
+                          supporting_images,
+                      ])
                   sampled_shared_points[f"{i}:{j}"] = samples
           centers = np.asarray([frame["camera_center_xyz"] for frame in frames])
           assert np.linalg.norm(np.ptp(centers, axis=0)) > 0
@@ -1228,7 +1237,7 @@ jobs:
           .wre-pair-hotspot.secondary {background:#70d7ff}
           .wre-track-hotspot {border:1px solid #fff;border-radius:50%;
             width:13px;height:13px;padding:0;background:#92ffad;
-            box-shadow:0 0 0 2px #123225;pointer-events:none}
+            box-shadow:0 0 0 2px #123225;pointer-events:auto;cursor:pointer}
           </style></head><body><main>
           <header><h1>WRE · Real 16-photograph SfM 3D</h1>
           <p>Orbit and zoom the actual reconstructed RGB point cloud,
@@ -1264,6 +1273,9 @@ jobs:
             </output>
             <output id="wre-camera-baseline" aria-live="polite">
               Select two cameras to measure their SfM baseline; no metric scale.
+            </output>
+            <output id="wre-landmark-inspection" aria-live="polite">
+              Select a green shared 3D landmark to inspect its real SfM support.
             </output>
           </section>
           <section id="local-model" aria-label="Open your own 3D GLB">
@@ -1314,6 +1326,7 @@ jobs:
           const choice=document.getElementById('wre-camera-choice');
           const baselineChoice=document.getElementById('wre-baseline-choice');
           const baselineOutput=document.getElementById('wre-camera-baseline');
+          const landmarkInspection=document.getElementById('wre-landmark-inspection');
           const framePair=document.getElementById('wre-frame-baseline');
           const nearestButton=document.getElementById('wre-nearest-camera');
           const sharedButton=document.getElementById('wre-most-shared-camera');
@@ -1397,6 +1410,8 @@ jobs:
           let focusCamera=null;
           const clearPairMarkers=()=>{
             viewer.querySelectorAll('[slot^="hotspot-pair-"]').forEach(node=>node.remove());
+            landmarkInspection.textContent=
+              'Select a green shared 3D landmark to inspect its real SfM support.';
           };
           const showPairMarkers=(first,second,indices)=>{
             clearPairMarkers();
@@ -1562,9 +1577,12 @@ jobs:
               const points=sampled[i+':'+j];
               if(!Array.isArray(points) ||
                   points.length!==Math.min(overlap.counts[i][j],8) ||
-                  !points.every(point=>Array.isArray(point) && point.length===4 &&
+                  !points.every(point=>Array.isArray(point) && point.length===6 &&
                     Number.isSafeInteger(point[0]) && point[0]>0 &&
-                    point.slice(1).every(Number.isFinite))) {
+                    point.slice(1,5).every(Number.isFinite) &&
+                    point[4]>=0 &&
+                    Number.isSafeInteger(point[5]) && point[5]>=2 &&
+                    point[5]<=16)) {
                 throw Error('Invalid measured shared 3D point positions');
               }
             }
@@ -1619,12 +1637,22 @@ jobs:
                 marker.type='button';
                 marker.className='wre-track-hotspot';
                 marker.slot='hotspot-pair-shared-'+i;
-                marker.setAttribute('data-position',point.slice(1).map(v=>v+'m').join(' '));
+                marker.setAttribute('data-position',point.slice(1,4).map(v=>v+'m').join(' '));
                 marker.setAttribute('data-normal','0 1 0');
                 marker.setAttribute('aria-label',
                   'Shared reconstructed 3D landmark '+point[0]+' (in-sample)');
                 marker.title='Real COLMAP triangulated point '+point[0]+
                   ', observed in both cameras; no time or GPU inference';
+                marker.addEventListener('click',()=>{
+                  if(localUrl!==null || !viewer.contains(marker)) return;
+                  landmarkInspection.textContent=
+                    'Real 3D landmark '+point[0]+': XYZ ('+
+                    point.slice(1,4).map(v=>v.toFixed(5)).join(', ')+
+                    ') in arbitrary SfM units; '+point[5]+
+                    ' source-image observations; native COLMAP in-sample '+
+                    'reprojection error '+point[4].toFixed(4)+
+                    ' px (NOT held-out quality, metres, time, 4D or GPU training).';
+                });
                 viewer.appendChild(marker);
               });
               const shared=overlap.counts[firstIndex][
