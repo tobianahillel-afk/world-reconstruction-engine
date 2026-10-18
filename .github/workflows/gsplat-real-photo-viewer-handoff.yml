@@ -868,6 +868,73 @@ jobs:
               receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n")
               print("REAL OFFLINE WEBGL PNG EXPORT PASS: operator clicked, PNG downloaded")
 
+              # REAL browser: record actual canvas frames while the camera
+              # translates laterally; verify a downloaded WebM, not a mock.
+              baseline_pose = webdriver("POST", f"/session/{session}/execute/sync", {
+                  "script": """return {
+                    pose:Array.from(viewMatrix),
+                    media:typeof MediaRecorder !== 'undefined' &&
+                      MediaRecorder.isTypeSupported('video/webm;codecs=vp8'),
+                    stream:typeof document.getElementById('canvas').captureStream === 'function'
+                  };""",
+                  "args": [],
+              })
+              assert baseline_pose["media"] and baseline_pose["stream"]
+              video_button = webdriver("POST", f"/session/{session}/element", {
+                  "using": "css selector", "value": "#wre-record-video"
+              })["element-6066-11e4-a52e-4f735466cecf"]
+              webdriver("POST", f"/session/{session}/element/{video_button}/click", {})
+              moved = False
+              for _ in range(45):
+                  moving = webdriver("POST", f"/session/{session}/execute/sync", {
+                      "script": """return {
+                        pose:Array.from(viewMatrix),
+                        status:document.getElementById('wre-local-status').textContent
+                      };""",
+                      "args": [],
+                  })
+                  if abs(moving["pose"][12] - baseline_pose["pose"][12]) > 0.04:
+                      moved = True
+                      break
+                  time.sleep(0.1)
+              assert moved, "Actual WebGL camera did not move during the recording"
+              video_path = saved_scenes / "wre-3d-camera-move.webm"
+              for _ in range(120):
+                  if video_path.is_file() and video_path.stat().st_size > 8192:
+                      break
+                  time.sleep(0.15)
+              else:
+                  raise RuntimeError("Chrome did not download a real WebM camera clip")
+              webm = video_path.read_bytes()
+              assert webm[:4] == bytes((0x1a, 0x45, 0xdf, 0xa3))
+              assert bytes((0x1f, 0x43, 0xb6, 0x75)) in webm
+              after_clip = webdriver("POST", f"/session/{session}/execute/sync", {
+                  "script": """return {
+                    pose:Array.from(viewMatrix),
+                    status:document.getElementById('wre-local-status').textContent,
+                    enabled:!document.getElementById('wre-record-video').disabled,
+                    external:performance.getEntriesByType('resource')
+                      .filter(x=>/^https?:/.test(x.name)).map(x=>x.name)
+                  };""",
+                  "args": [],
+              })
+              assert after_clip["enabled"] and "Saved WebM" in after_clip["status"]
+              assert all(abs(x - y) < 1e-5
+                         for x, y in zip(after_clip["pose"], baseline_pose["pose"]))
+              assert after_clip["external"] == []
+              receipt["offline_camera_video_test"] = {
+                  "actual_chrome_mediarecorder": True,
+                  "actual_browser_webm_download": True,
+                  "observed_viewpoint_motion": True,
+                  "restored_starting_camera": True,
+                  "webm_bytes": len(webm),
+                  "webm_sha256": hashlib.sha256(webm).hexdigest(),
+                  "scene_is_static": True,
+                  "cuda_training": False,
+                  "external_resource_requests": 0,
+              }
+              receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\\n")
+              print("REAL OFFLINE WEBM CAMERA PASS: actual WebGL clip with moving viewpoint")
               # Real browser export: source XYZ + RGB from the displayed
               # scene, not a canvas approximation or a PLY fixture.
               point_button = webdriver("POST", f"/session/{session}/element", {
