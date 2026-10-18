@@ -585,6 +585,21 @@ jobs:
                   for j in members:
                       by_track[i][j] += 1
           assert by_track == shared_tracks
+          # Real native 2D feature measurements for each 3D point/camera.
+          # These are IN-SAMPLE image pixels, not rendered/reprojected pixels.
+          pixels_by_camera = []
+          for frame in ordered_frames:
+              measured = {}
+              for observation in model.image(frame["image_id"]).points2D:
+                  if not observation.has_point3D():
+                      continue
+                  point_id = int(observation.point3D_id)
+                  xy = np.asarray(observation.xy, dtype=np.float64)
+                  assert xy.shape == (2,) and np.isfinite(xy).all()
+                  assert point_id not in measured
+                  measured[point_id] = [float(v) for v in xy]
+              assert set(measured) == observed_ids[len(pixels_by_camera)]
+              pixels_by_camera.append(measured)
           # Only real PyCOLMAP 3D points observed by BOTH cameras are sampled.
           # Sorted point IDs make a bounded, deterministic spatial overlay.
           sampled_shared_points = {}
@@ -605,6 +620,8 @@ jobs:
                           *(float(value) for value in xyz),
                           reprojection_error,
                           supporting_images,
+                          *pixels_by_camera[i][point_id],
+                          *pixels_by_camera[j][point_id],
                       ])
                   sampled_shared_points[f"{i}:{j}"] = samples
           centers = np.asarray([frame["camera_center_xyz"] for frame in frames])
@@ -1240,6 +1257,12 @@ jobs:
             font:bold 16px system-ui;box-shadow:0 0 0 2px #162236;
             color:#162236;background:#ffc65a;pointer-events:none}
           .wre-pair-hotspot.secondary {background:#70d7ff}
+          .wre-photo-frame {position:relative;display:inline-block;line-height:0}
+          .wre-measured-pixel {position:absolute;width:13px;height:13px;
+            border:2px solid #fff;border-radius:50%;background:#ff7733;
+            box-shadow:0 0 0 2px #242424;pointer-events:none;
+            transform:translate(-50%,-50%);z-index:2}
+          .wre-measured-pixel[hidden] {display:none}
           .wre-track-hotspot {border:1px solid #fff;border-radius:50%;
             width:13px;height:13px;padding:0;background:#92ffad;
             box-shadow:0 0 0 2px #123225;pointer-events:auto;cursor:pointer}
@@ -1301,12 +1324,16 @@ jobs:
               they stay in this browser, with no upload or calibration claim.
             </output>
             <div class="wre-photo-pair">
-              <figure><img id="wre-photo-image" hidden
+              <figure><div class="wre-photo-frame"><img id="wre-photo-image" hidden
                 alt="Locally provided first reconstructed camera photograph">
-                <figcaption>Camera A · local operator photograph</figcaption></figure>
-              <figure><img id="wre-photo-image-b" hidden
+                <span id="wre-measured-pixel-a" class="wre-measured-pixel" hidden
+                  aria-label="Measured SfM observation in camera A"></span></div>
+                <figcaption>Camera A · operator-supplied, unverified</figcaption></figure>
+              <figure><div class="wre-photo-frame"><img id="wre-photo-image-b" hidden
                 alt="Locally provided second reconstructed camera photograph">
-                <figcaption>Camera B · local operator photograph</figcaption></figure>
+                <span id="wre-measured-pixel-b" class="wre-measured-pixel" hidden
+                  aria-label="Measured SfM observation in camera B"></span></div>
+                <figcaption>Camera B · operator-supplied, unverified</figcaption></figure>
             </div>
           </section>
           <model-viewer id="wre-scene" camera-controls auto-rotate
@@ -1340,8 +1367,38 @@ jobs:
           const photoStatus=document.getElementById('wre-photo-status');
           const photoImage=document.getElementById('wre-photo-image');
           const photoImageB=document.getElementById('wre-photo-image-b');
+          const photoMarkerA=document.getElementById('wre-measured-pixel-a');
+          const photoMarkerB=document.getElementById('wre-measured-pixel-b');
           const photoUrls=new Map();
           const cameraNames=new Set();
+          const cameraEvidence=new Map();
+          let selectedPhotoPoint=null;
+          const drawMeasuredPhotoPixels=()=>{
+            photoMarkerA.hidden=true;photoMarkerB.hidden=true;
+            if(!selectedPhotoPoint || localUrl!==null) return;
+            if(choice.value!==String(selectedPhotoPoint.first) ||
+                baselineChoice.value!==String(selectedPhotoPoint.second)) return;
+            [
+              [photoImage,photoMarkerA,selectedPhotoPoint.first,selectedPhotoPoint.a],
+              [photoImageB,photoMarkerB,selectedPhotoPoint.second,selectedPhotoPoint.b]
+            ].forEach(([img,marker,index,xy])=>{
+              const camera=cameraEvidence.get(String(index));
+              // Matching filename and dimensions never authenticate a local photograph.
+              if(!camera || img.hidden || !img.complete ||
+                  img.naturalWidth!==camera.image_width ||
+                  img.naturalHeight!==camera.image_height ||
+                  !xy.every(Number.isFinite) || xy[0]<0 || xy[1]<0 ||
+                  xy[0]>=camera.image_width || xy[1]>=camera.image_height) return;
+              marker.style.left=(100*xy[0]/camera.image_width)+'%';
+              marker.style.top=(100*xy[1]/camera.image_height)+'%';
+              marker.dataset.pixelX=String(xy[0]);
+              marker.dataset.pixelY=String(xy[1]);
+              marker.title='Measured in-sample SfM pixel; local photo not authenticated';
+              marker.hidden=false;
+            });
+          };
+          photoImage.addEventListener('load',drawMeasuredPhotoPixels);
+          photoImageB.addEventListener('load',drawMeasuredPhotoPixels);
           const showLocalPhoto=()=>{
             for(const img of [photoImage,photoImageB]){
               img.hidden=true;
@@ -1383,6 +1440,7 @@ jobs:
                 photoStatus.textContent+=' No local photograph supplied for camera B '+secondName+'.';
               }
             }
+            drawMeasuredPhotoPixels();
           };
           photoInput.addEventListener('change',()=>{
             const files=Array.from(photoInput.files||[]);
@@ -1415,6 +1473,8 @@ jobs:
           let focusCamera=null;
           const clearPairMarkers=()=>{
             viewer.querySelectorAll('[slot^="hotspot-pair-"]').forEach(node=>node.remove());
+            selectedPhotoPoint=null;
+            drawMeasuredPhotoPixels();
             landmarkInspection.textContent=
               'Select a green shared 3D landmark to inspect its real SfM support.';
           };
@@ -1582,9 +1642,10 @@ jobs:
               const points=sampled[i+':'+j];
               if(!Array.isArray(points) ||
                   points.length!==Math.min(overlap.counts[i][j],8) ||
-                  !points.every(point=>Array.isArray(point) && point.length===6 &&
+                  !points.every(point=>Array.isArray(point) && point.length===10 &&
                     Number.isSafeInteger(point[0]) && point[0]>0 &&
                     point.slice(1,5).every(Number.isFinite) &&
+                    point.slice(6,10).every(Number.isFinite) &&
                     point[4]>=0 &&
                     Number.isSafeInteger(point[5]) && point[5]>=2 &&
                     point[5]<=16)) {
@@ -1608,6 +1669,7 @@ jobs:
             baselineChoice.replaceChildren(new Option('Select second camera',''));
             cameras.forEach((c,i)=>{
               cameraNames.add(c.image_name);
+              cameraEvidence.set(String(i),c);
               const label=(i+1)+' · '+c.image_name;
               choice.add(new Option(label,String(i)));
               baselineChoice.add(new Option(label,String(i)));
@@ -1650,12 +1712,21 @@ jobs:
                   ', observed in both cameras; no time or GPU inference';
                 marker.addEventListener('click',()=>{
                   if(localUrl!==null || !viewer.contains(marker)) return;
+                  const reversed=firstIndex>secondIndex;
+                  const a=(reversed?point.slice(8,10):point.slice(6,8));
+                  const b=(reversed?point.slice(6,8):point.slice(8,10));
+                  selectedPhotoPoint={first:firstIndex,second:secondIndex,a,b};
+                  drawMeasuredPhotoPixels();
                   landmarkInspection.textContent=
                     'Real 3D landmark '+point[0]+': XYZ ('+
                     point.slice(1,4).map(v=>v.toFixed(5)).join(', ')+
                     ') in arbitrary SfM units; '+point[5]+
-                    ' source-image observations; native COLMAP in-sample '+
-                    'reprojection error '+point[4].toFixed(4)+
+                    ' source-image observations; camera A measured pixel ('+
+                    a.map(v=>v.toFixed(2)).join(', ')+
+                    '), camera B measured pixel ('+
+                    b.map(v=>v.toFixed(2)).join(', ')+
+                    '); native COLMAP in-sample reprojection error '+
+                    point[4].toFixed(4)+
                     ' px (NOT held-out quality, metres, time, 4D or GPU training).';
                 });
                 viewer.appendChild(marker);
@@ -2823,7 +2894,93 @@ jobs:
               assert f"Real 3D landmark {point[0]}" in inspected["text"]
               assert str(point[5])+" source-image observations" in inspected["text"]
               assert f"{point[4]:.4f} px" in inspected["text"]
+              assert "camera A measured pixel (" in inspected["text"]
+              assert "camera B measured pixel (" in inspected["text"]
+              assert ", ".join(f"{value:.2f}" for value in point[6:8]) in inspected["text"]
+              assert ", ".join(f"{value:.2f}" for value in point[8:10]) in inspected["text"]
               assert "NOT held-out quality, metres, time, 4D or GPU training" in inspected["text"]
+              # A previously supplied 8x8 operator photo is not aligned to the
+              # native reconstructed image size. Do NOT draw a false marker.
+              assert js("""
+                return ['wre-measured-pixel-a','wre-measured-pixel-b']
+                  .every(id=>document.getElementById(id).hidden);
+              """), "Mismatched local image dimensions exposed misleading SfM pixels"
+              # Test actual browser pixel-to-image overlay geometry with local
+              # synthetic SAME-SIZE files, clearly NOT original source photos.
+              overlay_cameras=[
+                  actual_cameras[0], actual_cameras[best_overlap_index]
+              ]
+              browser_overlay=js("""
+                const cameras=__CAMERAS__;
+                const transfer=new DataTransfer();
+                for(const c of cameras){
+                  const canvas=document.createElement('canvas');
+                  canvas.width=c.image_width;
+                  canvas.height=c.image_height;
+                  const ctx=canvas.getContext('2d');
+                  ctx.fillStyle='rgb(28,82,145)';
+                  ctx.fillRect(0,0,canvas.width,canvas.height);
+                  const b64=canvas.toDataURL('image/png').split(',')[1];
+                  const bytes=Uint8Array.from(atob(b64),v=>v.charCodeAt(0));
+                  transfer.items.add(new File([bytes],c.image_name,{type:'image/png'}));
+                }
+                const input=document.getElementById('wre-source-files');
+                input.files=transfer.files;
+                input.dispatchEvent(new Event('change',{bubbles:true}));
+                return transfer.files.length;
+              """.replace("__CAMERAS__",json.dumps(overlay_cameras)))
+              assert browser_overlay==2
+              for _ in range(50):
+                  if js("""
+                    return ['wre-measured-pixel-a','wre-measured-pixel-b']
+                      .every(id=>!document.getElementById(id).hidden);
+                  """):
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("Measured SfM pixels were not displayed on local photos")
+              measured_overlays=js("""
+                return ['wre-measured-pixel-a','wre-measured-pixel-b']
+                  .map(id=>{
+                    const marker=document.getElementById(id);
+                    return {x:Number(marker.dataset.pixelX),
+                            y:Number(marker.dataset.pixelY),
+                            left:parseFloat(marker.style.left),
+                            top:parseFloat(marker.style.top),
+                            title:marker.title};
+                  });
+              """)
+              for marker,cam,xy in zip(
+                  measured_overlays,overlay_cameras,(point[6:8],point[8:10]),strict=True
+              ):
+                  assert math.isclose(marker["x"],xy[0],abs_tol=1e-7)
+                  assert math.isclose(marker["y"],xy[1],abs_tol=1e-7)
+                  assert math.isclose(marker["left"],100*xy[0]/cam["image_width"],abs_tol=1e-4)
+                  assert math.isclose(marker["top"],100*xy[1]/cam["image_height"],abs_tol=1e-4)
+                  assert "local photo not authenticated" in marker["title"]
+              # The very same native 3D track must display the opposite
+              # measured pixels when camera A and B are reversed.
+              reversed_text=js("""
+                const a=document.getElementById('wre-camera-choice');
+                const b=document.getElementById('wre-baseline-choice');
+                const previousB=b.value;
+                a.value=previousB;
+                a.dispatchEvent(new Event('change',{bubbles:true}));
+                b.value='0';
+                b.dispatchEvent(new Event('change',{bubbles:true}));
+                const marker=document.querySelector('[slot="hotspot-pair-shared-0"]');
+                if(!marker) throw Error('Measured shared landmark missing after pair reversal');
+                marker.click();
+                const text=document.getElementById('wre-landmark-inspection').textContent;
+                a.value='0';
+                a.dispatchEvent(new Event('change',{bubbles:true}));
+                b.value=previousB;
+                b.dispatchEvent(new Event('change',{bubbles:true}));
+                return text;
+              """)
+              assert "camera A measured pixel (" in reversed_text
+              assert ", ".join(f"{value:.2f}" for value in point[8:10]) in reversed_text
+              assert ", ".join(f"{value:.2f}" for value in point[6:8]) in reversed_text
               same_camera=js("""
                 const second=document.getElementById('wre-baseline-choice');
                 second.value='0';
