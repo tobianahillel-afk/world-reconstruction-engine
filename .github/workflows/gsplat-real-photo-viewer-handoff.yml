@@ -67,7 +67,7 @@ jobs:
           assert provenance["training_steps"] == 0
           assert provenance["gpu_kernel_executed"] is False
           assert provenance["source_gsplat_commit"] == "937e29912570c372bed6747a5c9bf85fed877bae"
-          assert provenance["dataset_license"] == "CC BY-NC 4.0"
+          assert provenance["dataset_license"].startswith("CC BY-NC 4.0: Attribution-NonCommercial")
           source_sha = provenance["upstream_exporter_ply_sha256"]
           assert hashlib.sha256(raw_ply.read_bytes()).hexdigest() == source_sha
           native = raw_splat.read_bytes()
