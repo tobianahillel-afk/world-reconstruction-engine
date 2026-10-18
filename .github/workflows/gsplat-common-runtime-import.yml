@@ -1717,21 +1717,21 @@ jobs:
           };
           // Reverse navigation searches ONLY measured native observations.
           // Pixel proximity is an explicit selection aid, not new triangulation.
-          photoImage.addEventListener('click',async event=>{
-            if(localUrl!==null || photoImage.hidden || !photoImage.complete ||
-               choice.disabled || choice.value==='') return;
-            const selectedCamera=choice.value;
+          const selectNativePointFromPhoto=async (event,img,cameraControl)=>{
+            if(localUrl!==null || img.hidden || !img.complete ||
+               cameraControl.disabled || cameraControl.value==='') return;
+            const selectedCamera=cameraControl.value;
             const camera=cameraEvidence.get(selectedCamera);
-            const rect=photoImage.getBoundingClientRect();
-            if(!camera || photoImage.naturalWidth!==camera.image_width ||
-               photoImage.naturalHeight!==camera.image_height ||
+            const rect=img.getBoundingClientRect();
+            if(!camera || img.naturalWidth!==camera.image_width ||
+               img.naturalHeight!==camera.image_height ||
                rect.width<=0 || rect.height<=0) return;
             const u=(event.clientX-rect.left)*camera.image_width/rect.width;
             const v=(event.clientY-rect.top)*camera.image_height/rect.height;
             if(u<0 || v<0 || u>=camera.image_width || v>=camera.image_height) return;
             try {
               const index=await loadNativeIndex();
-              if(localUrl!==null || choice.value!==selectedCamera) return;
+              if(localUrl!==null || cameraControl.value!==selectedCamera) return;
               let nearest=null, bestDistance=64;
               for(const [id,point] of Object.entries(index.points)){
                 if(!Array.isArray(point.observations)) continue;
@@ -1754,7 +1754,7 @@ jobs:
               }
               lookupInput.value=nearest;
               await findNativePoint();
-              if(localUrl!==null || choice.value!==selectedCamera ||
+              if(localUrl!==null || cameraControl.value!==selectedCamera ||
                  !nativePoint || String(nativePoint.id)!==nearest) return;
               const observation=nativePoint.observed.find(o=>o.index===selectedCamera);
               if(!observation) return;
@@ -1764,7 +1764,11 @@ jobs:
             } catch(error){
               nativeCameraStatus.textContent='Photo-to-3D navigation failed: '+String(error);
             }
-          });
+          };
+          photoImage.addEventListener('click',event=>
+            selectNativePointFromPhoto(event,photoImage,choice));
+          photoImageB.addEventListener('click',event=>
+            selectNativePointFromPhoto(event,photoImageB,baselineChoice));
           photoImage.addEventListener('load',drawMeasuredPhotoPixels);
           photoImage.addEventListener('load',drawNativePhotoPixel);
           photoImageB.addEventListener('load',drawMeasuredPhotoPixels);
