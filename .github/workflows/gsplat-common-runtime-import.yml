@@ -1438,6 +1438,7 @@ jobs:
           <p>Scene SHA-256: WRE_SCENE_SHA256</p>
           <p><a download href="./wre-real16-viewable-scene.glb">Download GLB</a>
           · <a download href="./wre-real16-camera-poses.json">Camera poses</a>
+          · <a download href="./wre-real16-native-2d3d-tracks.csv">All measured 2D/3D tracks (CSV)</a>
           · <a download href="./wre-real16-sfm-quality.json">SfM quality evidence</a>
           · <a href="./wre-real16-viewable-scene-receipt.json">Provenance</a></p>
           <p>Offline: extract the archive and run
