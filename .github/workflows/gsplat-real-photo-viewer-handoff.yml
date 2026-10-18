@@ -1156,17 +1156,24 @@ jobs:
                   "script": "document.getElementById('wre-video-preview').pause();",
                   "args": [],
               })
-              after_clip = webdriver("POST", f"/session/{session}/execute/sync", {
-                  "script": """return {
-                    pose:Array.from(viewMatrix),
-                    status:document.getElementById('wre-local-status').textContent,
-                    enabled:!document.getElementById('wre-record-video').disabled,
-                    external:performance.getEntriesByType('resource')
-                      .filter(x=>/^https?:/.test(x.name)).map(x=>x.name)
-                  };""",
-                  "args": [],
-              })
-              assert after_clip["enabled"] and "Saved WebM" in after_clip["status"]
+              # File download and MediaRecorder onstop are asynchronous; a
+              # downloaded WebM can exist before the UI's final status updates.
+              for _ in range(75):
+                  after_clip = webdriver("POST", f"/session/{session}/execute/sync", {
+                      "script": """return {
+                        pose:Array.from(viewMatrix),
+                        status:document.getElementById('wre-local-status').textContent,
+                        enabled:!document.getElementById('wre-record-video').disabled,
+                        external:performance.getEntriesByType('resource')
+                          .filter(x=>/^https?:/.test(x.name)).map(x=>x.name)
+                      };""",
+                      "args": [],
+                  })
+                  if after_clip["enabled"] and "Saved WebM" in after_clip["status"]:
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("WebM completed but UI not ready: " + str(after_clip))
               assert all(abs(x - y) < 1e-5
                          for x, y in zip(after_clip["pose"], baseline_pose["pose"]))
               assert after_clip["external"] == []
