@@ -1,16 +1,21 @@
 name: gsplat-common-runtime-import
 
 # One exact Python/Torch/CUDA environment for the pinned trainer's *eager imports*.
-# CPU-hosted CUDA toolkit only: no GPU kernels, reconstruction, or training.
+# CPU-hosted CUDA toolkit: real-photo PyCOLMAP SfM on CPU, no GPU kernels or training.
 on:
   pull_request:
     paths:
       - ".github/workflows/gsplat-common-runtime-import.yml"
       - "registry/dependencies.yaml"
+      # Real 16-photo CPU SfM must rerun when its geometry-verification
+      # semantics change, even without editing the optional workflow again.
+      - "src/wre/reconstruction/colmap_verification.py"
+      - "tests/test_colmap_geometric_verification.py"
   workflow_dispatch:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   combined-native-import:
@@ -144,6 +149,1185 @@ jobs:
           test "$(git -C "$glm" rev-parse HEAD^{tree})" = "$GLM_TREE"
           echo "COMMON_SOURCES=$root" >> "$GITHUB_ENV"
 
+      # Reconstruct genuine openMVG photographs at an immutable git revision.
+      # No cross-run expiring GitHub artifact, invented poses, or GPU requirement.
+      - name: Reconstruct and undistort sixteen genuine pinned photos on CPU
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Keep the WRE/native PyCOLMAP 4.2 reconstruction distinct from the
+          # gsplat trainer's older legacy SceneManager and pinned Python 3.10 ABI.
+          uv python install 3.12.10
+          uv sync --frozen --group dev --python 3.12.10
+          uv pip install --python .venv/bin/python "numpy==2.5.3" "pycolmap==4.2.0" "pillow==11.3.0"
+          .venv/bin/python - <<'PY'
+          from __future__ import annotations
+          import hashlib
+          import io
+          import json
+          import math
+          import os
+          import shutil
+          import struct
+          import urllib.request
+          import zlib
+          from datetime import UTC, datetime, timedelta
+          from pathlib import Path
+          
+          import pycolmap
+          from PIL import Image, ImageOps
+          from wre.domain import (
+              ImageObservation, MediaAssetRef, ObservationId, Sha256Digest, SourceId, SourceRef,
+          )
+          from wre.domain.runs import ProducerRef, ReconstructionRun, ReconstructionRunId
+          from wre.reconstruction import (
+              ColmapFeatureExtractionConfig, ColmapFeatureExtractionRequest, ColmapFeatureInput,
+              ColmapPairMatchingConfig, ColmapPairMatchingRequest,
+              ColmapGeometricVerificationConfig, ColmapGeometricVerificationRequest,
+              ColmapIncrementalReconstructionConfig, ColmapIncrementalReconstructionRequest,
+              ColmapReconstructionInput, extract_colmap_features, match_colmap_pairs,
+              verify_colmap_geometry, reconstruct_colmap_incrementally,
+          )
+          
+          # These are upstream Git blob SHA-1 values (not hash-of-URL trust).
+          UPSTREAM = "323989164b1ea003aade5bf49480630ffc64acde"
+          PHOTOS = {
+              "DJI_0042.JPG": "7b799d410074a779dddbe840ec0d249889d25d8e",
+              "DJI_0043.JPG": "82398bb391df8625cc99d2cb08a7f917ca34f9a6",
+              "DJI_0044.JPG": "3b8067e31ceee8d6610e9eb43a225dd46eb0caf6",
+              "DJI_0045.JPG": "c422351723436e3f15fb5fe739d85341eaddbee9",
+              "DJI_0046.JPG": "7bbda14acbeb4ea76cc74927bb8ae3d70e459c42",
+              "DJI_0047.JPG": "a4a0385521c135cab13148b18ddecb51ae546c95",
+              "DJI_0048.JPG": "d3d255c466ff6df0ee85f2c21f0bd652937e010a",
+              "DJI_0049.JPG": "acb27dc2c21646f0abc21ca3d09c3b182c8008a5",
+              "DJI_0050.JPG": "c9731630136f635d2f38afab83be2e818b67df6e",
+              "DJI_0051.JPG": "23981f24c6ed624371a31f8403e57b2fc85c95ce",
+              "DJI_0052.JPG": "c5ef06a73fcca26c9eff5ffc724e1306ea5f882f",
+              "DJI_0053.JPG": "776550a6c1495c1b9780f211c34d769857e6fd10",
+              "DJI_0054.JPG": "bfbf63975b987e424859f9f0f6dd4a07438213e4",
+              "DJI_0055.JPG": "a0b1e76b2cf4b08c5dba71e9b32329388735351a",
+              "DJI_0056.JPG": "7883e696175adea52012a17a310a7504d141f1c0",
+              "DJI_0057.JPG": "2207d1b9b4117e7d47467f9ab7b9d6f809f89fc6",
+          }
+          assert pycolmap.__version__ == "4.2.0"
+
+          def png_chunk(kind: bytes, data: bytes) -> bytes:
+              return (
+                  struct.pack(">I", len(data)) + kind + data
+                  + struct.pack(">I", zlib.crc32(kind + data) & 0xffffffff)
+              )
+
+          def srgb_png(image: Image.Image) -> bytes:
+              width, height = image.size
+              assert 2 <= width <= 768 and 2 <= height <= 768
+              raster = image.tobytes()
+              stride = width * 3
+              scanlines = b"".join(
+                  b"\x00" + raster[start : start + stride]
+                  for start in range(0, len(raster), stride)
+              )
+              return (
+                  b"\x89PNG\r\n\x1a\n"
+                  + png_chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+                  + png_chunk(b"sRGB", b"\x00")
+                  + png_chunk(b"IDAT", zlib.compress(scanlines, 6))
+                  + png_chunk(b"IEND", b"")
+              )
+
+          root = Path(os.environ["RUNNER_TEMP"]) / "wre-regenerate-sixteen-views"
+          images = root / "images"
+          images.mkdir(parents=True, exist_ok=False)
+          inputs = []
+          credit = "Copyright 2021 Pierre MOULON; openMVG/Image_datasets"
+          for filename, pin in sorted(PHOTOS.items()):
+              url = (f"https://raw.githubusercontent.com/openMVG/Image_datasets/"
+                     f"{UPSTREAM}/Drone/Palm_Desert_Micro/{filename}")
+              with urllib.request.urlopen(url, timeout=60) as response:
+                  payload = response.read(8_000_001)
+              assert 0 < len(payload) <= 8_000_000, filename
+              digest = hashlib.sha1(
+                  f"blob {len(payload)}\0".encode() + payload
+              ).hexdigest()
+              assert digest == pin, f"unpinned real photograph: {filename}"
+              with Image.open(io.BytesIO(payload)) as original:
+                  rgb = ImageOps.exif_transpose(original).convert("RGB")
+              rgb.thumbnail((768, 768), Image.Resampling.LANCZOS)
+              source_path = images / f"{Path(filename).stem}.png"
+              source_path.write_bytes(srgb_png(rgb))
+              obs = ImageObservation(
+                  observation_id=ObservationId(f"obs:openmvg:{Path(filename).stem}"),
+                  asset=MediaAssetRef(
+                      uri=source_path.as_uri(),
+                      sha256=Sha256Digest(hashlib.sha256(source_path.read_bytes()).hexdigest()),
+                      byte_length=source_path.stat().st_size,
+                      mime_type="image/png",
+                  ),
+                  source=SourceRef(
+                      source_id=SourceId("openmvg:palm-desert-micro"),
+                      locator=filename,
+                  ),
+                  received_at=datetime(2026, 10, 17, tzinfo=UTC),
+              )
+              inputs.append(ColmapReconstructionInput(
+                  observation=obs, source_path=source_path, image_name=source_path.name,
+              ))
+          inputs = tuple(inputs)
+          observation_ids = tuple(item.observation.observation_id for item in inputs)
+          revision = str(pycolmap.COLMAP_build)
+          def run(kind: str, sha: Sha256Digest, minute: int) -> ReconstructionRun:
+              return ReconstructionRun(
+                  run_id=ReconstructionRunId(f"run:real-sixteen:{kind}"),
+                  producer=ProducerRef(
+                      implementation={
+                          "features": "pycolmap.extract_features",
+                          "matching": "pycolmap.match_exhaustive",
+                          "verification": "pycolmap.geometric_verification",
+                          "mapping": "pycolmap.incremental_mapping",
+                      }[kind],
+                      version="4.2.0", revision=revision,
+                  ),
+                  input_observation_ids=observation_ids,
+                  started_at=datetime(2026, 10, 17, tzinfo=UTC) + timedelta(minutes=minute),
+                  configuration_sha256=sha,
+              )
+          
+          feature_config = ColmapFeatureExtractionConfig()
+          features = extract_colmap_features(ColmapFeatureExtractionRequest(
+              run=run("features", feature_config.sha256, 0),
+              inputs=tuple(ColmapFeatureInput(
+                  observation=x.observation, source_path=x.source_path
+              ) for x in inputs),
+              database_path=root / "features.db", config=feature_config,
+          ), module=pycolmap)
+          names = {x.observation_id: x.image_name for x in features.images}
+          canonical = root / "canonical-images"
+          canonical.mkdir()
+          native_inputs = []
+          for entry in inputs:
+              name = names[entry.observation.observation_id]
+              target = canonical / name
+              target.write_bytes(entry.source_path.read_bytes())
+              native_inputs.append(ColmapReconstructionInput(
+                  observation=entry.observation, source_path=target, image_name=name,
+              ))
+          match_config = ColmapPairMatchingConfig()
+          matched = match_colmap_pairs(ColmapPairMatchingRequest(
+              run=run("matching", match_config.sha256, 1),
+              features=features, database_path=root / "matches.db", config=match_config,
+          ), module=pycolmap)
+          verify_config = ColmapGeometricVerificationConfig()
+          verified = verify_colmap_geometry(ColmapGeometricVerificationRequest(
+              run=run("verification", verify_config.sha256, 2),
+              matching=matched, database_path=root / "verified.db", config=verify_config,
+          ), module=pycolmap)
+          map_config = ColmapIncrementalReconstructionConfig(
+              min_model_size=2, max_num_models=1, max_runtime_seconds=900,
+          )
+          mapped = reconstruct_colmap_incrementally(ColmapIncrementalReconstructionRequest(
+              run=run("mapping", map_config.sha256, 3), verification=verified,
+              inputs=tuple(native_inputs), output_path=root / "native-sparse",
+              config=map_config,
+          ), module=pycolmap)
+          models = [m for m in mapped.models if m.num_registered_images == 16 and m.num_points3d > 100]
+          assert len(models) == 1, "the pinned genuine 16-view reconstruction was not reproduced"
+          # The gsplat Parser seeds SH0 appearance from native points3D RGB.
+          # Pure SfM can leave those RGB values black: extract observed colors
+          # from the REAL registered source photographs before undistortion.
+          # This uses COLMAP's own track-based color extraction, no new solver.
+          native_model_path = root / "native-sparse" / "0"
+          colored_model = pycolmap.Reconstruction(str(native_model_path))
+          colored_model.extract_colors_for_all_images(str(canonical))
+          colored_model.update_point_3d_errors()
+          # Real reconstruction geometry measurements from native PyCOLMAP,
+          # not synthetic checks or a 3DGS/GPU training-quality benchmark.
+          sfm_quality = {
+              "kind": "native_sparse_sfm_in_sample_geometry_v1",
+              "registered_views": int(colored_model.num_reg_images()),
+              "sparse_points3d": int(colored_model.num_points3D()),
+              "track_observations": int(colored_model.compute_num_observations()),
+              "mean_track_length_observations": float(colored_model.compute_mean_track_length()),
+              "mean_reprojection_error_colmap_px": float(
+                  colored_model.compute_mean_reprojection_error()
+              ),
+              "held_out_image_quality_measured": False,
+              "gpu_optimization_executed": False,
+              "metric_scale_known": False,
+          }
+          assert sfm_quality["registered_views"] == 16
+          assert sfm_quality["sparse_points3d"] > 100
+          assert sfm_quality["track_observations"] >= 2 * sfm_quality["sparse_points3d"]
+          assert math.isfinite(sfm_quality["mean_track_length_observations"])
+          assert sfm_quality["mean_track_length_observations"] >= 2.0
+          assert math.isfinite(sfm_quality["mean_reprojection_error_colmap_px"])
+          assert sfm_quality["mean_reprojection_error_colmap_px"] >= 0.0
+          colored_model.write(str(native_model_path))
+          # Reuse PyCOLMAP's real XYZ/RGB exporter: this is observed SfM,
+          # not a trained Gaussian field or an estimated metric-scale scene.
+          display_ply = Path(os.environ["GITHUB_WORKSPACE"]) / "wre-real16-observed-rgb.ply"
+          colored_model.export_PLY(str(display_ply))
+          rgb_bytes = display_ply.read_bytes()
+          ply_header = rgb_bytes.split(b"end_header\n", 1)[0]
+          assert rgb_bytes.startswith(b"ply\n")
+          assert b"element vertex " + str(colored_model.num_points3D()).encode() + b"\n" in ply_header
+          assert all(b"property uchar " + channel in ply_header for channel in (b"red", b"green", b"blue"))
+          print("REAL 16-PHOTO RGB 3D PLY EXPORTED:", len(rgb_bytes), "bytes")
+          print("NATIVE PHOTO-OBSERVED 3D POINT RGB EXTRACTED")
+          capture = Path(os.environ["GITHUB_WORKSPACE"]) / "wre-common-real-photo-capture"
+          undistorted = root / "undistorted"
+          pycolmap.undistort_images(
+              output_path=str(undistorted), input_path=str(root / "native-sparse" / "0"),
+              image_path=str(canonical), output_type="COLMAP", num_threads=1,
+          )
+          (capture / "sparse").mkdir(parents=True)
+          shutil.copytree(undistorted / "sparse", capture / "sparse" / "0")
+          shutil.copytree(undistorted / "images", capture / "images")
+          reloaded = pycolmap.Reconstruction(str(capture / "sparse" / "0"))
+          assert reloaded.num_reg_images() == 16
+          points = reloaded.num_points3D()
+          assert points == models[0].num_points3d
+          views = {}
+          for image_id in sorted(int(i) for i in reloaded.reg_image_ids()):
+              registered = reloaded.image(image_id)
+              camera = reloaded.camera(registered.camera_id)
+              name = registered.name
+              assert Path(name).name == name
+              photo = capture / "images" / name
+              assert photo.is_file()
+              with Image.open(photo) as decoded:
+                  decoded.load()
+                  assert decoded.size == (camera.width, camera.height)
+              camera_model = camera.model.name if hasattr(camera.model, "name") else str(camera.model)
+              assert camera_model in ("PINHOLE", "SIMPLE_PINHOLE")
+              views[name] = {
+                  "camera_id": int(registered.camera_id),
+                  "camera_model": camera_model,
+                  "rgb_asset_sha256": hashlib.sha256(photo.read_bytes()).hexdigest(),
+                  "width": camera.width, "height": camera.height,
+              }
+          assert len(views) == 16
+          files = sorted(p for p in capture.rglob("*") if p.is_file())
+          file_hashes = {
+              p.relative_to(capture).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+              for p in files
+          }
+          manifest = {
+              "schema": "wre.experimental.colmap_undistorted_capture.v1",
+              "native_registered_views": 16, "undistorted_registered_views": 16,
+              "native_points3d": points, "undistorted_points3d": points,
+              "sfm_quality": sfm_quality,
+              "views": views, "file_sha256": file_hashes,
+              "license": "CC BY-NC 4.0 Attribution-NonCommercial; experimental use only",
+              "credit": credit, "dataset_commit": UPSTREAM,
+              "metric_scale_known": False, "color_radiometry_calibrated": False,
+              "gpu_training_executed": False, "gsplat_training_validated": False,
+          }
+          (capture / "wre-capture-manifest.json").write_text(
+              json.dumps(manifest, sort_keys=True, indent=2) + "\n", encoding="utf-8",
+          )
+          quality_path = Path(os.environ["GITHUB_WORKSPACE"]) / "wre-real16-sfm-quality.json"
+          quality_path.write_text(
+              json.dumps(
+                  {
+                      "schema": "wre.experimental.real_photo_sfm_quality.v1",
+                      "source_dataset_commit": UPSTREAM,
+                      "source_credit": credit,
+                      "license": "CC BY-NC 4.0, experimental NONCOMMERCIAL use only",
+                      "geometry_quality": sfm_quality,
+                  },
+                  indent=2,
+                  sort_keys=True,
+              ) + "\n",
+              encoding="utf-8",
+          )
+          print("REAL SFM REPROJECTION ERROR (COLMAP px):",
+                sfm_quality["mean_reprojection_error_colmap_px"])
+          print("REGENERATED AUTHENTIC 16-PHOTO COLMAP:", len(views), "registered,", points, "3D points")
+          print("Noncommercial photos; GPU kernels and trainer optimization NOT executed")
+          PY
+
+      - name: Export actual SfM camera positions and poses on CPU before CUDA build
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv/bin/python - <<'PY'
+          import hashlib
+          import json
+          import math
+          import os
+          import struct
+          from pathlib import Path
+
+          import numpy as np
+          import pycolmap
+
+          capture = Path(os.environ["GITHUB_WORKSPACE"]) / "wre-common-real-photo-capture"
+          model = pycolmap.Reconstruction(str(capture / "sparse" / "0"))
+          manifest = json.loads((capture / "wre-capture-manifest.json").read_text())
+          assert manifest["native_registered_views"] == 16
+          assert model.num_reg_images() == 16
+          frames = []
+          for image_id in sorted(int(value) for value in model.reg_image_ids()):
+              image = model.image(image_id)
+              camera = model.camera(image.camera_id)
+              pose = image.cam_from_world()
+              world_to_camera_rotation = np.asarray(pose.rotation.matrix(), dtype=np.float64)
+              world_to_camera_translation = np.asarray(pose.translation, dtype=np.float64)
+              assert world_to_camera_rotation.shape == (3, 3)
+              assert world_to_camera_translation.shape == (3,)
+              assert np.isfinite(world_to_camera_rotation).all()
+              assert np.isfinite(world_to_camera_translation).all()
+              assert np.allclose(
+                  world_to_camera_rotation @ world_to_camera_rotation.T,
+                  np.eye(3), atol=1e-6,
+              )
+              camera_to_world_rotation = world_to_camera_rotation.T
+              center = -(camera_to_world_rotation @ world_to_camera_translation)
+              assert np.isfinite(center).all()
+              assert max(abs(float(value)) for value in center) < 1e20
+              world_to_camera = np.eye(4)
+              world_to_camera[:3, :3] = world_to_camera_rotation
+              world_to_camera[:3, 3] = world_to_camera_translation
+              camera_to_world = np.eye(4)
+              camera_to_world[:3, :3] = camera_to_world_rotation
+              camera_to_world[:3, 3] = center
+              assert np.allclose(world_to_camera @ camera_to_world, np.eye(4), atol=1e-6)
+              image_path = capture / "images" / image.name
+              assert image_path.is_file()
+              image_hash = hashlib.sha256(image_path.read_bytes()).hexdigest()
+              assert image_hash == manifest["file_sha256"]["images/" + image.name]
+              params = np.asarray(camera.params, dtype=np.float64)
+              assert np.isfinite(params).all()
+              frames.append({
+                  "image_id": image_id,
+                  "image_name": image.name,
+                  "camera_id": int(image.camera_id),
+                  "model": camera.model.name if hasattr(camera.model, "name") else str(camera.model),
+                  "image_width": int(camera.width),
+                  "image_height": int(camera.height),
+                  "intrinsic_parameters": params.tolist(),
+                  "image_sha256": image_hash,
+                  "camera_center_xyz": center.tolist(),
+                  "camera_from_world_row_major_4x4": world_to_camera.tolist(),
+                  "world_from_camera_row_major_4x4": camera_to_world.tolist(),
+              })
+          assert len(frames) == 16
+          assert len({frame["image_name"] for frame in frames}) == 16
+          centers = np.asarray([frame["camera_center_xyz"] for frame in frames])
+          assert np.linalg.norm(np.ptp(centers, axis=0)) > 0
+          descriptor = {
+              "schema": "wre.experimental.native_cpu_colmap_registered_cameras.v1",
+              "source_dataset_commit": manifest["dataset_commit"],
+              "source_credit": manifest["credit"],
+              "license": manifest["license"],
+              "coordinate_system": "native_colmap_arbitrary_scale",
+              "metric_scale_known": False,
+              "capture_time_axis_verified": False,
+              "reconstructed_world_motion": False,
+              "training_gpu_executed": False,
+              "registered_views": len(frames),
+              "cameras": frames,
+          }
+          out = Path(os.environ["GITHUB_WORKSPACE"])
+          (out / "wre-real16-camera-poses.json").write_text(
+              json.dumps(descriptor, indent=2, sort_keys=True, allow_nan=False) + "\n"
+          )
+          header = (
+              "ply\nformat binary_little_endian 1.0\n"
+              f"element vertex {len(frames)}\n"
+              "property float x\nproperty float y\nproperty float z\n"
+              "property uchar red\nproperty uchar green\nproperty uchar blue\n"
+              "end_header\n"
+          ).encode("ascii")
+          payload = b"".join(
+              struct.pack("<fffBBB", *frame["camera_center_xyz"], 255, 190, 30)
+              for frame in frames
+          )
+          (out / "wre-real16-camera-centers.ply").write_bytes(header + payload)
+          assert len(payload) == len(frames) * struct.calcsize("<fffBBB")
+          print("REAL 16-PHOTO CAMERA POSES AND XYZ CENTERS EXPORTED:", len(frames))
+          print("Native SfM scale only; no temporal motion, metric scale or GPU training")
+          PY
+
+      # Genuine real-photo RGB GLB is available before slow CUDA compilation.
+      - name: Publish-ready real SfM RGB glTF on CPU before native CUDA build
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PYTHONPATH="$GITHUB_WORKSPACE/src"
+          .venv/bin/python - <<'PY'
+          import hashlib
+          import json
+          import math
+          import os
+          import struct
+          from pathlib import Path
+
+          import numpy as np
+          import pycolmap
+          from wre.domain.appearance import APPEARANCE_MODEL_ARTIFACT_KIND
+          from wre.domain.artifacts import ArtifactId, ArtifactRef
+          from wre.reconstruction.static_appearance_baseline import (
+              GsplatStaticAppearanceTrainingProfile,
+              materialize_verified_gsplat_ply,
+              export_verified_gsplat_rgb_centers_glb,
+          )
+
+          base = Path(os.environ["GITHUB_WORKSPACE"])
+          capture = base / "wre-common-real-photo-capture"
+          manifest = json.loads((capture / "wre-capture-manifest.json").read_text())
+          model = pycolmap.Reconstruction(str(capture / "sparse" / "0"))
+          assert model.num_reg_images() == manifest["native_registered_views"] == 16
+          assert model.num_points3D() == manifest["native_points3d"] > 100
+          points = [p for _, p in sorted(model.points3D.items())]
+          xyz = np.asarray([p.xyz for p in points], dtype=np.float64)
+          rgb = np.asarray([p.color for p in points], dtype=np.uint8)
+          assert xyz.shape == rgb.shape == (len(points), 3)
+          assert np.isfinite(xyz).all() and np.max(np.abs(xyz)) < 1e20
+          spread = float(np.linalg.norm(np.ptp(np.quantile(xyz, [0.05, 0.95], axis=0), axis=0)))
+          assert np.isfinite(spread) and spread > 0
+          radius = float(np.clip(0.12 * spread / np.cbrt(len(points)), 1e-4, 10.0))
+          log_radius = math.log(radius)
+          root = base / "wre-real16-early-gltf"
+          (root / "ply").mkdir(parents=True, exist_ok=False)
+          ply = root / "ply" / "point_cloud_0.ply"
+          fields = (
+              ["x", "y", "z", "f_dc_0", "f_dc_1", "f_dc_2"]
+              + [f"f_rest_{i}" for i in range(45)]
+              + ["opacity", "scale_0", "scale_1", "scale_2",
+                 "rot_0", "rot_1", "rot_2", "rot_3"]
+          )
+          assert len(fields) == 59
+          header = (
+              "ply\nformat binary_little_endian 1.0\n"
+              f"element vertex {len(points)}\n"
+              + "".join(f"property float {name}\n" for name in fields)
+              + "end_header\n"
+          ).encode("ascii")
+          with ply.open("xb") as output:
+              output.write(header)
+              for pos, color in zip(xyz, rgb, strict=True):
+                  sh0 = [(float(v) / 255.0 - 0.5) / 0.28209479177387814 for v in color]
+                  floats = (
+                      *map(float, pos), *sh0, *([0.0] * 45),
+                      0.0, log_radius, log_radius, log_radius, 1.0, 0.0, 0.0, 0.0
+                  )
+                  assert len(floats) == 59
+                  output.write(struct.pack("<59f", *floats))
+          profile = GsplatStaticAppearanceTrainingProfile(max_steps=1)
+          ref = ArtifactRef(
+              ArtifactId("appearance:gsplat:real16-early-untrained"),
+              APPEARANCE_MODEL_ARTIFACT_KIND,
+          )
+          verified = materialize_verified_gsplat_ply(
+              artifact_ref=ref, output_root=root, profile=profile
+          )
+          glb = root / "viewable-rgb-centers.glb"
+          digest = export_verified_gsplat_rgb_centers_glb(
+              artifact_ref=ref, output_root=root, profile=profile, preview_path=glb
+          )
+          payload = glb.read_bytes()
+          assert payload[:4] == b"glTF"
+          assert struct.unpack_from("<II", payload, 4) == (2, len(payload))
+          chunk_len, chunk_type = struct.unpack_from("<I4s", payload, 12)
+          assert chunk_type == b"JSON"
+          doc = json.loads(payload[20:20 + chunk_len])
+          prim = doc["meshes"][0]["primitives"][0]
+          assert prim["mode"] == 0
+          assert prim["attributes"] == {"POSITION": 0, "COLOR_0": 1}
+          assert doc["accessors"][0]["count"] == doc["accessors"][1]["count"] == len(points)
+          assert hashlib.sha256(payload).hexdigest() == digest.value
+
+          # Retain the existing WRE-generated glTF points + binary attributes,
+          # and add actual registered COLMAP camera nodes in the SAME scene.
+          # glTF cameras look down -Z with +Y up; COLMAP is +Z/+Y down.
+          poses = json.loads((base / "wre-real16-camera-poses.json").read_text())
+          assert poses["registered_views"] == len(poses["cameras"]) == 16
+          assert poses["source_dataset_commit"] == manifest["dataset_commit"]
+          assert poses["coordinate_system"] == "native_colmap_arbitrary_scale"
+          frames = sorted(poses["cameras"], key=lambda frame: frame["image_id"])
+          assert len({frame["image_id"] for frame in frames}) == 16
+          flip = np.diag([1.0, -1.0, -1.0, 1.0])
+          cameras = []
+          nodes = []
+          frustum_nodes = []
+          for index, frame in enumerate(frames):
+              params = np.asarray(frame["intrinsic_parameters"], dtype=np.float64)
+              model_name = str(frame["model"]).upper().split(".")[-1]
+              if model_name == "PINHOLE":
+                  assert params.shape == (4,)
+                  fy = float(params[1])
+              elif model_name == "SIMPLE_PINHOLE":
+                  assert params.shape == (3,)
+                  fy = float(params[0])
+              else:
+                  raise AssertionError("unexpected undistorted COLMAP camera model: " + model_name)
+              height, width = frame["image_height"], frame["image_width"]
+              assert width > 0 and height > 0 and np.isfinite(fy) and fy > 0
+              yfov = 2.0 * math.atan(height / (2.0 * fy))
+              assert 0.0 < yfov < math.pi
+              c2w = np.asarray(frame["world_from_camera_row_major_4x4"], dtype=np.float64)
+              assert c2w.shape == (4, 4) and np.isfinite(c2w).all()
+              assert np.allclose(c2w[3], [0, 0, 0, 1], rtol=0, atol=1e-9)
+              assert np.allclose(c2w[:3, 3], frame["camera_center_xyz"], atol=1e-8)
+              gltf_pose = c2w @ flip
+              assert np.allclose(gltf_pose[:3, :3].T @ gltf_pose[:3, :3], np.eye(3), atol=1e-6)
+              assert np.linalg.det(gltf_pose[:3, :3]) > 0.999
+              cameras.append({
+                  "type": "perspective",
+                  "perspective": {
+                      "yfov": yfov, "aspectRatio": width / height,
+                      "znear": max(radius * 0.02, 1e-6),
+                  },
+              })
+              nodes.append({
+                  "name": f"COLMAP view {index + 1}: {frame['image_name']}",
+                  "camera": index,
+                  "children": [17 + index],
+                  "matrix": [float(value) for value in gltf_pose.flatten(order="F")],
+                  "extras": {
+                      "colmap_image_id": frame["image_id"],
+                      "image_sha256": frame["image_sha256"],
+                  },
+              })
+              # Field of view is calibrated; LINE length is chosen only for
+              # visibility in arbitrary COLMAP reconstruction units.
+              visual_depth = max(spread * 0.035, radius * 4.0)
+              half_height = visual_depth * math.tan(yfov / 2.0)
+              frustum_nodes.append({
+                  "name": f"Visible COLMAP frustum {index + 1}",
+                  "mesh": 1,
+                  "scale": [half_height * width / height, half_height, visual_depth],
+                  "extras": {"visual_depth_only_nonmetric": True},
+              })
+          assert len(cameras) == len(nodes) == len(frustum_nodes) == 16
+          # Spatial connections are ordered by source filename only: this is
+          # NOT verified capture time, temporal tracking or moving-scene 4D.
+          path_frames = sorted(frames, key=lambda frame: frame["image_name"])
+          assert len({frame["image_name"] for frame in path_frames}) == 16
+          path_centers = np.asarray(
+              [frame["camera_center_xyz"] for frame in path_frames], dtype=np.float64
+          )
+          assert path_centers.shape == (16, 3) and np.isfinite(path_centers).all()
+          path_xyz = path_centers.astype("<f4").tobytes()
+          # Vertex colors distinguish the ends of the non-temporal ordering,
+          # without any implication of elapsed time or metric travel distance.
+          path_rgb = bytes(
+              channel
+              for index in range(len(path_frames))
+              for channel in (
+                  round(255 * index / (len(path_frames) - 1)),
+                  128,
+                  round(255 * (len(path_frames) - 1 - index) / (len(path_frames) - 1)),
+              )
+          )
+          assert len(path_xyz) == 16 * 12 and len(path_rgb) == 16 * 3
+          # Preserve WRE's validated XYZ/RGB GLB binary POINTS prefix.
+          original_bin_offset = 20 + chunk_len
+          binary_length, binary_kind = struct.unpack_from("<I4s", payload, original_bin_offset)
+          assert binary_kind == b"BIN\x00"
+          assert original_bin_offset + 8 + binary_length == len(payload)
+          binary_chunk = payload[original_bin_offset:]
+          assert doc["buffers"][0]["byteLength"] == binary_length
+          # Reuse one 5-vertex, 8-edge unit frustum mesh for all cameras.
+          # Camera node matrices orient it; child node scale gives true FOV.
+          # No fabricated metric frustum depth or inferred image pixels.
+          frustum_xyz = struct.pack(
+              "<15f", 0, 0, 0, -1, -1, -1, 1, -1, -1, 1, 1, -1, -1, 1, -1
+          )
+          frustum_edges = struct.pack(
+              "<16H", 0, 1, 0, 2, 0, 3, 0, 4, 1, 2, 2, 3, 3, 4, 4, 1
+          )
+          assert len(frustum_xyz) == 60 and len(frustum_edges) == 32
+          edge_offset = binary_length + len(frustum_xyz)
+          path_offset = edge_offset + len(frustum_edges)
+          color_offset = path_offset + len(path_xyz)
+          doc["buffers"][0]["byteLength"] = color_offset + len(path_rgb)
+          doc["bufferViews"].extend([
+              {"buffer": 0, "byteOffset": binary_length,
+               "byteLength": len(frustum_xyz), "target": 34962},
+              {"buffer": 0, "byteOffset": edge_offset,
+               "byteLength": len(frustum_edges), "target": 34963},
+              {"buffer": 0, "byteOffset": path_offset,
+               "byteLength": len(path_xyz), "target": 34962},
+              {"buffer": 0, "byteOffset": color_offset,
+               "byteLength": len(path_rgb), "target": 34962},
+          ])
+          doc["accessors"].extend([
+              {"bufferView": 1, "componentType": 5126, "count": 5,
+               "type": "VEC3", "min": [-1, -1, -1], "max": [1, 1, 0]},
+              {"bufferView": 2, "componentType": 5123, "count": 16,
+               "type": "SCALAR", "min": [0], "max": [4]},
+              {"bufferView": 3, "componentType": 5126, "count": 16,
+               "type": "VEC3", "min": path_centers.min(axis=0).astype("<f4").tolist(),
+               "max": path_centers.max(axis=0).astype("<f4").tolist()},
+              {"bufferView": 4, "componentType": 5121, "count": 16,
+               "type": "VEC3", "normalized": True},
+          ])
+          doc["meshes"].append({
+              "name": "Registered COLMAP visible camera frustums",
+              "primitives": [{"attributes": {"POSITION": 2}, "indices": 3, "mode": 1}],
+          })
+          doc["meshes"].append({
+              "name": "Registered COLMAP camera-center filename-order connections",
+              "primitives": [{
+                  "attributes": {"POSITION": 4, "COLOR_0": 5},
+                  "mode": 3,
+              }],
+          })
+          extended_bin = (
+              binary_chunk[8:] + frustum_xyz + frustum_edges + path_xyz + path_rgb
+          )
+          extended_bin_chunk = struct.pack(
+              "<I4s", len(extended_bin), b"BIN\x00"
+          ) + extended_bin
+          doc["asset"]["copyright"] = (
+              f'{manifest["credit"]}; {manifest["license"]}; NONCOMMERCIAL use only'
+          )
+          doc["cameras"] = cameras
+          doc["nodes"].extend(nodes)
+          doc["nodes"].extend(frustum_nodes)
+          doc["nodes"].append({
+              "name": "COLMAP camera-center connections (not time or 4D)",
+              "mesh": 2,
+          })
+          doc["scenes"][0]["nodes"].extend(range(1, len(nodes) + 1))
+          doc["scenes"][0]["nodes"].append(33)
+          doc.setdefault("extras", {})
+          doc["extras"]["registered_colmap_cameras"] = 16
+          doc["extras"]["source_dataset_commit"] = manifest["dataset_commit"]
+          doc["extras"]["license"] = manifest["license"]
+          doc["extras"]["camera_pose_basis"] = "COLMAP camera +Z/+Ydown to glTF -Z/+Yup"
+          doc["extras"]["camera_motion_or_time_reconstruction"] = False
+          doc["extras"]["camera_center_path_order"] = "source_filename_not_capture_time"
+          doc["extras"]["camera_center_path_image_ids"] = [
+              frame["image_id"] for frame in path_frames
+          ]
+          encoded = json.dumps(
+              doc, sort_keys=True, separators=(",", ":"), allow_nan=False
+          ).encode("utf-8")
+          encoded += b" " * (-len(encoded) % 4)
+          combined = (
+              struct.pack("<4sII", b"glTF", 2, 12 + 8 + len(encoded) + len(extended_bin_chunk))
+              + struct.pack("<I4s", len(encoded), b"JSON")
+              + encoded + extended_bin_chunk
+          )
+          scene_glb = root / "viewable-scene-with-cameras.glb"
+          scene_glb.write_bytes(combined)
+          assert struct.unpack_from("<II", combined, 4) == (2, len(combined))
+          final_bin = combined[20 + len(encoded):]
+          assert final_bin[:8] == struct.pack(
+              "<I4s", len(extended_bin), b"BIN\x00"
+          )
+          assert final_bin[8:8 + binary_length] == binary_chunk[8:]
+          assert final_bin[8 + binary_length:] == (
+              frustum_xyz + frustum_edges + path_xyz + path_rgb
+          )
+          scene_doc = json.loads(combined[20:20 + len(encoded)])
+          assert len(scene_doc["cameras"]) == 16
+          assert len(scene_doc["nodes"]) == 34
+          assert len(scene_doc["scenes"][0]["nodes"]) == 18
+          assert len(scene_doc["meshes"]) == 3
+          assert scene_doc["nodes"][33]["mesh"] == 2
+          assert scene_doc["meshes"][2]["primitives"][0] == {
+              "attributes": {"POSITION": 4, "COLOR_0": 5}, "mode": 3
+          }
+          assert scene_doc["accessors"][4]["count"] == 16
+          assert scene_doc["accessors"][5]["count"] == 16
+          assert np.allclose(
+              np.frombuffer(extended_bin, dtype="<f4", count=48, offset=path_offset)
+              .reshape(16, 3), path_centers, atol=1e-5
+          )
+          assert extended_bin[color_offset:color_offset + len(path_rgb)] == path_rgb
+          assert scene_doc["meshes"][1]["primitives"][0]["mode"] == 1
+          assert all(
+              node["children"] == [17 + idx]
+              for idx, node in enumerate(scene_doc["nodes"][1:17])
+          )
+          assert scene_doc["accessors"][0]["count"] == len(points)
+          scene_digest = hashlib.sha256(combined).hexdigest()
+          report = {
+              "schema": "wre.experimental.real16_early_cpu_rgb_glb.v1",
+              "kind": "real_photo_observed_rgb_untrained_sfm_points",
+              "points": len(points),
+              "source_dataset_commit": manifest["dataset_commit"],
+              "license": manifest["license"],
+              "gpu_training_executed": False,
+              "cuda_build_required": False,
+              "metric_scale_known": False,
+              "visualization_radius_untrained_scene_units": radius,
+              "files": {
+                  "ply/point_cloud_0.ply": {
+                      "bytes": ply.stat().st_size,
+                      "sha256": verified.entries[0].sha256.value,
+                  },
+                  "viewable-rgb-centers.glb": {
+                      "bytes": len(payload), "sha256": digest.value,
+                  },
+                  "viewable-scene-with-cameras.glb": {
+                      "bytes": len(combined), "sha256": scene_digest,
+                  },
+              },
+              "registered_camera_nodes": len(cameras),
+              "visible_camera_frustums": len(frustum_nodes),
+              "camera_center_connections": len(path_frames) - 1,
+              "camera_center_connection_order": "filename_only_not_capture_time",
+              "camera_frustum_depth": "visual-only arbitrary COLMAP units",
+              "camera_reconstruction": "native registered COLMAP, not dynamic scene 4D",
+          }
+          (root / "manifest.json").write_text(
+              json.dumps(report, indent=2, sort_keys=True, allow_nan=False) + "\n"
+          )
+          print("EARLY REAL-PHOTO CPU 3D GLB:", len(points), "observed RGB points.")
+          print("UNTRAINED; no CUDA build, GPU kernel, metric scale or 4D.")
+          PY
+
+      # Produce an independently reusable genuine SfM artifact before the
+      # host-only CUDA native compilation, which can be slow or fail.
+      # This has NO CUDA kernel execution or 3DGS optimization.
+      - name: Retain noncommercial source attribution for CPU SfM outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' \
+            'Photographs by Pierre Moulon, OpenMVG Palm Desert Micro DJI, CC BY-NC 4.0.' \
+            'Derived native sparse XYZ/RGB PLY is NONCOMMERCIAL experimental data only.' \
+            'No metric scale, 3DGS training, GPU execution or world-time 4D verified.' \
+            > wre-real16-observed-rgb-LICENSE.txt
+          test -s wre-real16-observed-rgb.ply
+          test -s wre-real16-sfm-quality.json
+          .venv/bin/python -I - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          quality = json.loads(Path("wre-real16-sfm-quality.json").read_text(encoding="utf-8"))
+          assert quality["schema"] == "wre.experimental.real_photo_sfm_quality.v1"
+          assert quality["source_dataset_commit"] == "323989164b1ea003aade5bf49480630ffc64acde"
+          poses = json.loads(Path("wre-real16-camera-poses.json").read_text())
+          assert poses["schema"] == "wre.experimental.native_cpu_colmap_registered_cameras.v1"
+          assert poses["registered_views"] == quality["geometry_quality"]["registered_views"]
+          assert poses["source_dataset_commit"] == quality["source_dataset_commit"]
+          files = (
+              "wre-real16-observed-rgb.ply",
+              "wre-real16-sfm-quality.json",
+              "wre-real16-camera-poses.json",
+              "wre-real16-camera-centers.ply",
+              "wre-real16-observed-rgb-LICENSE.txt",
+              "wre-real16-early-gltf/ply/point_cloud_0.ply",
+              "wre-real16-early-gltf/viewable-rgb-centers.glb",
+              "wre-real16-early-gltf/viewable-scene-with-cameras.glb",
+              "wre-real16-early-gltf/manifest.json",
+          )
+          manifest = {
+              "schema": "wre.experimental.native_cpu_sfm_delivery.v1",
+              "source_dataset_commit": quality["source_dataset_commit"],
+              "license": quality["license"],
+              "gpu_training_executed": False,
+              "real_photo_count": quality["geometry_quality"]["registered_views"],
+              "files": {
+                  name: {
+                      "bytes": Path(name).stat().st_size,
+                      "sha256": hashlib.sha256(Path(name).read_bytes()).hexdigest(),
+                  }
+                  for name in files
+              },
+          }
+          Path("wre-real16-native-cpu-sfm-manifest.json").write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          PY
+
+      - name: Publish genuine CPU SfM RGB PLY and in-sample quality independently of CUDA
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wre-real16-native-cpu-sfm-independent
+          path: |
+            wre-real16-observed-rgb.ply
+            wre-real16-sfm-quality.json
+            wre-real16-camera-poses.json
+            wre-real16-camera-centers.ply
+            wre-real16-observed-rgb-LICENSE.txt
+            wre-real16-early-gltf/ply/point_cloud_0.ply
+            wre-real16-early-gltf/viewable-rgb-centers.glb
+            wre-real16-early-gltf/viewable-scene-with-cameras.glb
+            wre-real16-early-gltf/manifest.json
+            wre-real16-native-cpu-sfm-manifest.json
+          if-no-files-found: error
+          retention-days: 7
+
+      # Make the genuine 16-camera glTF scene directly discoverable without
+      # extracting the full SfM experiment bundle or building CUDA extensions.
+      - name: Package standalone real-photo 3D scene and verified receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv/bin/python -I - <<'PY'
+          import hashlib
+          import json
+          import shutil
+          from pathlib import Path
+
+          source = Path("wre-real16-early-gltf/viewable-scene-with-cameras.glb")
+          manifest = json.loads(Path("wre-real16-early-gltf/manifest.json").read_text())
+          expected = manifest["files"]["viewable-scene-with-cameras.glb"]
+          payload = source.read_bytes()
+          digest = hashlib.sha256(payload).hexdigest()
+          assert len(payload) == expected["bytes"]
+          assert digest == expected["sha256"]
+          assert payload[:4] == b"glTF"
+          destination = Path("wre-real16-viewable-scene.glb")
+          shutil.copyfile(source, destination)
+          assert hashlib.sha256(destination.read_bytes()).hexdigest() == digest
+          receipt = {
+              "schema": "wre.experimental.real16_standalone_scene.v1",
+              "scene_file": destination.name,
+              "sha256": digest,
+              "bytes": destination.stat().st_size,
+              "source_dataset_commit": manifest["source_dataset_commit"],
+              "license": manifest["license"],
+              "registered_cameras": manifest["registered_camera_nodes"],
+              "camera_center_connections": manifest["camera_center_connections"],
+              "connection_order": "filename_only_not_capture_time",
+              "gpu_training_executed": False,
+              "metric_scale_known": False,
+              "temporal_reconstruction_executed": False,
+          }
+          Path("wre-real16-viewable-scene-receipt.json").write_text(
+              json.dumps(receipt, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Publish standalone real-photo 3D scene independently of CUDA
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wre-real16-viewable-3d-scene
+          path: |
+            wre-real16-viewable-scene.glb
+            wre-real16-viewable-scene-receipt.json
+            wre-real16-observed-rgb-LICENSE.txt
+            wre-real16-camera-poses.json
+          if-no-files-found: error
+          retention-days: 7
+
+      # One usable, self-contained browser presentation of the real 16-camera
+      # SfM scene. Reuses the vetted model-viewer 4.1.0 bundle from WRE #281.
+      # Publication happens BEFORE slow CUDA compilation; no GPU is needed.
+      - name: Package offline interactive 16-camera scene (CPU)
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv/bin/python -I - <<'PY'
+          import hashlib
+          import json
+          import shutil
+          import struct
+          from pathlib import Path
+          from urllib.request import urlopen
+
+          source = Path("wre-real16-viewable-scene.glb")
+          receipt = json.loads(
+              Path("wre-real16-viewable-scene-receipt.json").read_text(encoding="utf-8")
+          )
+          content = source.read_bytes()
+          assert struct.unpack_from("<4sII", content) == (b"glTF", 2, len(content))
+          assert receipt["sha256"] == hashlib.sha256(content).hexdigest()
+          assert receipt["bytes"] == len(content)
+          assert receipt["registered_cameras"] == 16
+          assert receipt["gpu_training_executed"] is False
+          assert receipt["metric_scale_known"] is False
+
+          output = Path("wre-real16-offline-viewer")
+          output.mkdir(exist_ok=False)
+          shutil.copyfile(source, output / source.name)
+          for name in (
+              "wre-real16-viewable-scene-receipt.json",
+              "wre-real16-observed-rgb-LICENSE.txt",
+              "wre-real16-camera-poses.json",
+          ):
+              shutil.copyfile(name, output / name)
+
+          # Hash-bound Apache-2.0 viewer already used by WRE's working Chrome
+          # real-photo browser smoke; NOT a new 3D viewer implementation.
+          js_url = (
+              "https://cdnjs.cloudflare.com/ajax/libs/model-viewer/4.1.0/"
+              "model-viewer.min.js"
+          )
+          expected_sha512 = (
+              "PMy/x5h09gVKwc21Cdcgu/VWJwgmeJ7uivJkbTar3vh5t8uz"
+              "Yo3NQgTkZE0fsfUd+9vihkAcLNAh6mv9mEXkZQ=="
+          )
+          import base64
+          with urlopen(js_url, timeout=30) as response:
+              vendor = response.read(5_000_001)
+          assert 100_000 < len(vendor) <= 5_000_000
+          assert (
+              base64.b64encode(hashlib.sha512(vendor).digest()).decode("ascii")
+              == expected_sha512
+          )
+          (output / "wre-model-viewer-4.1.0.min.js").write_bytes(vendor)
+          with urlopen(
+              "https://raw.githubusercontent.com/google/model-viewer/v4.1.0/LICENSE",
+              timeout=30,
+          ) as response:
+              vendor_license = response.read(20_001)
+          assert 11_000 < len(vendor_license) <= 20_000
+          assert b"Apache License" in vendor_license[:110]
+          (output / "wre-model-viewer-4.1.0-LICENSE.txt").write_bytes(vendor_license)
+
+          html = """<!doctype html>
+          <html lang="en"><head><meta charset="utf-8">
+          <meta name="viewport" content="width=device-width,initial-scale=1">
+          <meta http-equiv="Content-Security-Policy"
+            content="default-src 'none'; script-src 'self' 'unsafe-inline' blob:;
+              style-src 'unsafe-inline'; connect-src 'self' blob: data:;
+              img-src 'self' blob: data:; worker-src 'self' blob:;
+              font-src 'self' data:">
+          <title>WRE · Real 16-photo reconstructed 3D</title>
+          <script type="module" src="./wre-model-viewer-4.1.0.min.js"
+            integrity="sha512-PMy/x5h09gVKwc21Cdcgu/VWJwgmeJ7uivJkbTar3vh5t8uzYo3NQgTkZE0fsfUd+9vihkAcLNAh6mv9mEXkZQ=="></script>
+          <style>
+          html,body {height:100%;margin:0;background:#101721;color:#e5effb;
+            font:15px system-ui,sans-serif}
+          main {height:100%;display:flex;flex-direction:column}
+          header,footer {padding:12px 18px;background:#202b3d}
+          h1 {font-size:20px;margin:0 0 6px}
+          p {margin:5px 0;line-height:1.4}
+          model-viewer {width:100%;flex:1;min-height:330px}
+          a {color:#9bdeff}
+          #camera-navigation {display:flex;flex-wrap:wrap;gap:9px;align-items:center;
+            padding:10px 18px;background:#182437}
+          #camera-navigation select,#camera-navigation button {background:#273950;
+            border:1px solid #8097b2;border-radius:5px;color:#fff;padding:8px}
+          #camera-details {font-size:13px;line-height:1.45;flex-basis:100%}
+          #local-model {display:flex;flex-wrap:wrap;align-items:center;gap:9px;
+            padding:10px 18px;background:#202b3d}
+          #local-model input,#local-model button {color:#fff;padding:7px}
+          #local-model-status {font-size:13px;flex-basis:100%}
+          </style></head><body><main>
+          <header><h1>WRE · Real 16-photograph SfM 3D</h1>
+          <p>Orbit and zoom the actual reconstructed RGB point cloud,
+          16 calibrated camera frustums and filename-ordered camera connections.</p>
+          <p>Source: Pierre Moulon, OpenMVG Palm Desert Micro, CC BY-NC 4.0
+          <strong>NONCOMMERCIAL</strong>. No original photographs are distributed.</p>
+          </header>
+          <section id="camera-navigation" aria-label="Inspect reconstructed cameras">
+            <label for="wre-camera-choice">Reconstructed camera (filename order, not time)</label>
+            <select id="wre-camera-choice" disabled>
+              <option>Loading camera poses...</option>
+            </select>
+            <button id="wre-camera-reset" type="button">Reset orbit</button>
+            <output id="camera-details" aria-live="polite">
+              Choose a camera to inspect its SfM position (not an exact source photo view).
+            </output>
+          </section>
+          <section id="local-model" aria-label="Open your own 3D GLB">
+            <label for="wre-local-glb">Open your own 3D model (.glb, max 128 MiB)</label>
+            <input id="wre-local-glb" type="file" accept=".glb,model/gltf-binary">
+            <button id="wre-restore-demo" type="button">Restore 16-photo scene</button>
+          <button id="wre-export-png" type="button">Save current 3D view as PNG</button>
+            <output id="local-model-status" aria-live="polite">
+              Only the original scene is verified. Local files stay in this browser.
+            </output>
+          </section>
+          <model-viewer id="wre-scene" camera-controls auto-rotate
+            interaction-prompt="auto"
+            alt="Sparse CPU 3D reconstruction of 16 real photographs"
+            src="./wre-real16-viewable-scene.glb"></model-viewer>
+          <footer><p>SfM RGB geometry from real photographs. No metric scale,
+          no verified capture-time order, no 4D, no CUDA GPU training,
+          no Gaussian appearance optimization.</p>
+          <p>Scene SHA-256: WRE_SCENE_SHA256</p>
+          <p><a download href="./wre-real16-viewable-scene.glb">Download GLB</a>
+          · <a download href="./wre-real16-camera-poses.json">Camera poses</a>
+          · <a href="./wre-real16-viewable-scene-receipt.json">Provenance</a></p>
+          <p>Offline: extract the archive and run
+          <code>python3 -m http.server 8765 --bind 127.0.0.1</code>,
+          then open <code>http://127.0.0.1:8765/wre-real16-viewer.html</code>.
+          No internet access is required at viewing time.</p></footer>
+          </main>
+          <script type="module">
+          const viewer=document.getElementById('wre-scene');
+          const choice=document.getElementById('wre-camera-choice');
+          const details=document.getElementById('camera-details');
+          const input=document.getElementById('wre-local-glb');
+          const importStatus=document.getElementById('local-model-status');
+          const originalScene='./wre-real16-viewable-scene.glb';
+          let localUrl=null;
+          // Use model-viewer's WebGL canvas screenshot, not a new renderer.
+          // A screenshot is local and never inherits the GLB's provenance.
+          document.getElementById('wre-export-png').addEventListener('click',()=>{
+            try {
+              if(!viewer.loaded) throw Error('Wait until the 3D model is loaded');
+              const png=viewer.toDataURL('image/png');
+              if(!png.startsWith('data:image/png;base64,')) {
+                throw Error('The WebGL scene did not yield a PNG');
+              }
+              const link=document.createElement('a');
+              link.href=png;
+              link.download=localUrl?'wre-local-3d-view.png':'wre-real16-sfm-view.png';
+              document.body.append(link);
+              try { link.click(); } finally { link.remove(); }
+              importStatus.textContent='PNG view saved locally; no upload performed.';
+            } catch(error) {
+              importStatus.textContent='PNG export unavailable: '+String(error);
+            }
+          });
+          const resetOrbit=()=>{
+            viewer.removeAttribute('camera-target');
+            viewer.removeAttribute('camera-orbit');
+            viewer.setAttribute('auto-rotate','');
+          };
+          document.getElementById('wre-restore-demo').addEventListener('click',()=>{
+            const oldUrl=localUrl;
+            localUrl=null;
+            input.value='';
+            viewer.setAttribute('src',originalScene);
+            if(oldUrl) URL.revokeObjectURL(oldUrl);
+            choice.disabled=choice.options.length!==17;
+            choice.value='';
+            resetOrbit();
+            details.textContent='Original 16-camera reconstruction restored.';
+            importStatus.textContent='Verified WRE source scene restored.';
+          });
+          input.addEventListener('change',async()=>{
+            const file=input.files && input.files[0];
+            if(!file) return;
+            try {
+              if(!file.name.toLowerCase().endsWith('.glb') ||
+                  file.size<12 || file.size>128*1024*1024) {
+                throw Error('Select a GLB file up to 128 MiB');
+              }
+              const header=new DataView(await file.slice(0,12).arrayBuffer());
+              if(header.getUint32(0,true)!==0x46546c67 ||
+                  header.getUint32(4,true)!==2 ||
+                  header.getUint32(8,true)!==file.size) {
+                throw Error('Invalid glTF 2.0 binary header or byte length');
+              }
+              const nextUrl=URL.createObjectURL(file);
+              const previousUrl=localUrl;
+              localUrl=nextUrl;
+              viewer.setAttribute('src',nextUrl);
+              if(previousUrl) URL.revokeObjectURL(previousUrl);
+              choice.disabled=true;
+              choice.value='';
+              resetOrbit();
+              details.textContent='Original COLMAP cameras only apply to the original scene.';
+              importStatus.textContent='Loading local GLB: '+file.name+
+                '. Unverified third-party scene; no WRE provenance or metric scale.';
+            } catch(error) {
+              input.value='';
+              importStatus.textContent='Local import rejected: '+String(error);
+            }
+          });
+          viewer.addEventListener('load',()=>{
+            if(localUrl) importStatus.textContent=
+              'Local GLB loaded (not WRE-verified). No file was uploaded.';
+          });
+          viewer.addEventListener('error',()=>{
+            if(localUrl) importStatus.textContent=
+              'Local GLB could not be rendered; restore the original scene.';
+          });
+          document.getElementById('wre-camera-reset').addEventListener('click',()=>{
+            viewer.removeAttribute('camera-target');
+            viewer.removeAttribute('camera-orbit');
+            viewer.setAttribute('auto-rotate','');
+            choice.value='';
+            details.textContent='General orbit restored; filename order is not chronology.';
+          });
+          try {
+            const response=await fetch('./wre-real16-camera-poses.json');
+            if (!response.ok) throw Error('Missing actual COLMAP camera poses');
+            const poses=await response.json();
+            if (poses.schema!=='wre.experimental.native_cpu_colmap_registered_cameras.v1'
+                || poses.registered_views!==16 || poses.cameras.length!==16
+                || poses.metric_scale_known!==false
+                || poses.capture_time_axis_verified!==false) {
+              throw Error('Unexpected camera provenance');
+            }
+            const cameras=poses.cameras.slice().sort((a,b)=>
+              a.image_name<b.image_name?-1:a.image_name>b.image_name?1:0);
+            const centers=cameras.map(c=>c.camera_center_xyz);
+            if (!cameras.every((c,i)=>typeof c.image_name==='string' &&
+                centers[i].length===3 && centers[i].every(Number.isFinite) &&
+                c.world_from_camera_row_major_4x4.length===4 &&
+                c.world_from_camera_row_major_4x4.every(row=>
+                  row.length===4 && row.every(Number.isFinite)))) {
+              throw Error('Invalid camera center or transform');
+            }
+            const span=Math.hypot(...[0,1,2].map(axis=>
+              Math.max(...centers.map(p=>p[axis])) -
+              Math.min(...centers.map(p=>p[axis]))));
+            if (!(span>0 && Number.isFinite(span))) throw Error('Zero camera spread');
+            const radius=span*0.18;
+            choice.replaceChildren(new Option('Select camera',''));
+            cameras.forEach((c,i)=>choice.add(
+              new Option((i+1)+' · '+c.image_name,String(i))));
+            choice.disabled=false;
+            choice.addEventListener('change',()=>{
+              if(choice.value==='') return;
+              const c=cameras[Number(choice.value)];
+              const center=c.camera_center_xyz;
+              const m=c.world_from_camera_row_major_4x4;
+              const forward=[m[0][2],m[1][2],m[2][2]];
+              const norm=Math.hypot(...forward);
+              if(!(norm>0 && Number.isFinite(norm))) return;
+              const look=forward.map(v=>v*radius/norm);
+              const target=center.map((v,i)=>v+look[i]);
+              const theta=Math.atan2(-look[0],-look[2]);
+              const phi=Math.acos(Math.max(-1,Math.min(1,-look[1]/radius)));
+              viewer.removeAttribute('auto-rotate');
+              viewer.setAttribute('camera-target',
+                target.map(v=>v.toPrecision(9)+'m').join(' '));
+              viewer.setAttribute('camera-orbit',
+                theta.toPrecision(9)+'rad '+phi.toPrecision(9)+'rad '+
+                radius.toPrecision(9)+'m');
+              viewer.jumpCameraToGoal();
+              details.textContent='Camera '+(Number(choice.value)+1)+' · '+c.image_name+
+                ' · SfM XYZ ['+center.map(v=>v.toFixed(3)).join(', ')+
+                '] local units. Approximate orbit, not image-calibrated roll or 4D.';
+            });
+          } catch(error) {
+            details.textContent='Camera explorer unavailable: '+String(error);
+          }
+          </script>
+          </body></html>"""
+          html = html.replace("WRE_SCENE_SHA256", receipt["sha256"])
+          (output / "wre-real16-viewer.html").write_text(html, encoding="utf-8")
+          manifest = {
+              "schema": "wre.experimental.real16_offline_viewer.v1",
+              "source_dataset_commit": receipt["source_dataset_commit"],
+              "license": receipt["license"],
+              "scene_sha256": receipt["sha256"],
+              "registered_cameras": 16,
+              "metric_scale_known": False,
+              "gpu_training_executed": False,
+              "model_viewer_version": "4.1.0",
+              "files": {
+                  p.name: {
+                      "sha256": hashlib.sha256(p.read_bytes()).hexdigest(),
+                      "bytes": p.stat().st_size,
+                  }
+                  for p in sorted(output.iterdir())
+                  if p.is_file()
+              },
+          }
+          (output / "viewer-manifest.json").write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          assert (output / "wre-real16-viewable-scene.glb").read_bytes() == content
+          print("Packaged genuine 16-camera GLB with pinned offline viewer, no CUDA.")
+          PY
+
+      - name: Publish portable offline real-photo 3D viewer before CUDA
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wre-real16-offline-3d-viewer
+          path: wre-real16-offline-viewer/
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Build BOTH upstream CUDA extensions into the SAME Python interpreter
         shell: bash
         run: |
@@ -272,3 +1456,590 @@ jobs:
           print("REAL UPSTREAM CPU COLMAP DATASET PASS: 2 images, 1 track, train/test tensors.")
           print("No CUDA GPU, trainer optimization or real-photo geometry claimed.")
           PY
+
+      - name: Decode ALL real-photo COLMAP data in the SAME pinned native trainer environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$COMMON_PYTHON" -I - <<'PY'
+          import hashlib
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          import numpy as np
+          import torch
+
+          sources = Path(os.environ["COMMON_SOURCES"])
+          sys.path.insert(0, str(sources / "gsplat" / "examples"))
+          from datasets.colmap import Dataset, Parser
+          from fused_ssim import fused_ssim
+          from gsplat import export_splats
+          from gsplat.cuda._backend import _C
+          from nerfview import CameraState
+          from pycolmap import SceneManager
+          from simple_trainer import Config, main
+          from utils import rgb_to_sh
+
+          assert torch.__version__ == "2.4.0+cu124"
+          assert not torch.cuda.is_available()
+          assert all(obj is not None for obj in (fused_ssim, _C, CameraState, SceneManager, Config, main))
+          capture = Path(os.environ["GITHUB_WORKSPACE"]) / "wre-common-real-photo-capture"
+          candidates = list(capture.rglob("wre-capture-manifest.json"))
+          assert len(candidates) == 1, f"Expected one source dataset manifest, found {len(candidates)}"
+          root = candidates[0].parent.resolve(strict=True)
+          assert root.is_relative_to(capture.resolve(strict=True))
+          manifest = json.loads(candidates[0].read_text(encoding="utf-8"))
+          assert manifest["schema"] == "wre.experimental.colmap_undistorted_capture.v1"
+          assert manifest["native_registered_views"] == manifest["undistorted_registered_views"] == 16
+          assert manifest["native_points3d"] == manifest["undistorted_points3d"]
+          assert manifest["native_points3d"] > 100
+          quality = manifest["sfm_quality"]
+          assert quality["kind"] == "native_sparse_sfm_in_sample_geometry_v1"
+          assert quality["registered_views"] == 16
+          assert quality["sparse_points3d"] == manifest["native_points3d"]
+          assert quality["track_observations"] >= 2 * quality["sparse_points3d"]
+          assert 2 <= quality["mean_track_length_observations"] <= 16
+          assert np.isfinite(quality["mean_reprojection_error_colmap_px"])
+          assert quality["mean_reprojection_error_colmap_px"] >= 0
+          assert quality["held_out_image_quality_measured"] is False
+          assert quality["gpu_optimization_executed"] is False
+          assert manifest["gpu_training_executed"] is False
+          assert manifest["gsplat_training_validated"] is False
+          assert manifest["metric_scale_known"] is False
+          assert manifest["license"].startswith("CC BY-NC 4.0")
+          hashes = manifest["file_sha256"]
+          assert len(hashes) >= 19
+          for relative, expected in hashes.items():
+              entry = root / relative
+              assert len(expected) == 64 and not entry.is_symlink() and entry.is_file(), relative
+              assert entry.resolve(strict=True).is_relative_to(root), relative
+              assert hashlib.sha256(entry.read_bytes()).hexdigest() == expected, relative
+
+          parser = Parser(str(root), factor=1, normalize=False, test_every=8)
+          assert len(parser.image_names) == 16
+          assert set(parser.image_names) == set(manifest["views"])
+          assert parser.camtoworlds.shape == (16, 4, 4)
+          assert parser.points.shape == (manifest["native_points3d"], 3)
+          assert parser.points_rgb.shape == (manifest["native_points3d"], 3)
+          assert np.isfinite(parser.camtoworlds).all()
+          assert np.isfinite(parser.points).all()
+          assert np.unique(parser.points_rgb, axis=0).shape[0] > 10
+          rgb_ply = Path(os.environ["GITHUB_WORKSPACE"]) / "wre-real16-observed-rgb.ply"
+          ply_bytes = rgb_ply.read_bytes()
+          assert ply_bytes.startswith(b"ply\n")
+          assert b"element vertex " + str(len(parser.points)).encode() + b"\n" in ply_bytes.split(b"end_header\n", 1)[0]
+          assert np.linalg.norm(np.ptp(parser.camtoworlds[:, :3, 3], axis=0)) > 0
+          assert all(len(params) == 0 for params in parser.params_dict.values())
+
+          train, validation = Dataset(parser, split="train"), Dataset(parser, split="val")
+          assert len(train) == 14 and len(validation) == 2
+          samples = []
+          for subset_name, subset in (("train", train), ("val", validation)):
+              for index in range(len(subset)):
+                  item = subset[index]
+                  image = item["image"]
+                  assert image.ndim == 3 and image.shape[2] == 3
+                  assert image.device.type == "cpu"
+                  assert tuple(item["K"].shape) == (3, 3)
+                  assert tuple(item["camtoworld"].shape) == (4, 4)
+                  assert torch.isfinite(image).all()
+                  assert torch.isfinite(item["K"]).all()
+                  assert torch.isfinite(item["camtoworld"]).all()
+                  samples.append({
+                      "split": subset_name,
+                      "height": int(image.shape[0]),
+                      "width": int(image.shape[1]),
+                      "rgb_sum": float(image.sum()),
+                  })
+          assert len(samples) == 16
+          assert len({sample["rgb_sum"] for sample in samples}) > 2
+
+          # Functional CPU-only handoff: real COLMAP XYZ + photo-derived RGB
+          # through the *upstream pinned* gsplat exporter into viewer-ready
+          # 32-byte records. These are untrained seeds, not an optimized model.
+          means_xyz = np.asarray(parser.points, dtype=np.float32)
+          rgb_observed = np.asarray(parser.points_rgb, dtype=np.float32)
+          n_points = len(means_xyz)
+          assert n_points == manifest["native_points3d"] > 100
+          assert np.isfinite(means_xyz).all()
+          assert np.isfinite(rgb_observed).all()
+          assert np.all((rgb_observed >= 0) & (rgb_observed <= 255))
+          spread = np.linalg.norm(
+              np.diff(np.quantile(means_xyz, [0.05, 0.95], axis=0), axis=0)
+          )
+          assert np.isfinite(spread) and spread > 0
+          # A deterministic scene-relative visualization radius, NOT
+          # learned covariance or physically calibrated Gaussian scale.
+          radius = float(np.clip(0.12 * spread / np.cbrt(n_points), 1e-4, 10.0))
+          means = torch.from_numpy(means_xyz.copy())
+          rgb = torch.from_numpy(rgb_observed.copy()) / 255.0
+          sh0 = rgb_to_sh(rgb).unsqueeze(1)
+          gaussians = {
+              "means": means,
+              "scales": torch.full((n_points, 3), float(np.log(radius))),
+              "quats": torch.tensor([[1.0, 0.0, 0.0, 0.0]]).repeat(n_points, 1),
+              "opacities": torch.zeros(n_points),
+              "sh0": sh0,
+              "shN": torch.zeros((n_points, 15, 3)),
+          }
+          preview_dir = Path(os.environ["GITHUB_WORKSPACE"]) / "wre-real16-gsplat-seeds"
+          (preview_dir / "ply").mkdir(parents=True, exist_ok=False)
+          seed_ply = preview_dir / "ply" / "point_cloud_0.ply"
+          seed_splat = preview_dir / "scene.splat"
+          ply_output = export_splats(**gaussians, format="ply", save_to=str(seed_ply))
+          splat_output = export_splats(**gaussians, format="splat", save_to=str(seed_splat))
+          assert seed_ply.read_bytes() == ply_output
+          assert seed_splat.read_bytes() == splat_output
+          assert b"element vertex " + str(n_points).encode() + b"\n" in ply_output
+          assert len(splat_output) == n_points * 32
+          # The viewer's official .splat exporter changes record order.
+          # Verify the full *set* of emitted positions, not just one point.
+          splat_rows = np.frombuffer(splat_output, dtype=np.uint8).reshape(-1, 32)
+          viewer_xyz = np.frombuffer(
+              splat_rows[:, :12].copy().tobytes(), dtype="<f4"
+          ).reshape(-1, 3)
+          order = lambda xyz: np.lexsort((xyz[:, 2], xyz[:, 1], xyz[:, 0]))
+          assert np.array_equal(viewer_xyz[order(viewer_xyz)], means_xyz[order(means_xyz)])
+          preview_evidence = {
+              "kind": "colmap_photo_observed_rgb_untrained_gsplat_seed_view",
+              "points": n_points,
+              "source_real_sfm_rgb_ply_sha256": hashlib.sha256(ply_bytes).hexdigest(),
+              "seed_ply_sha256": hashlib.sha256(ply_output).hexdigest(),
+              "seed_ply_bytes": len(ply_output),
+              "scene_splat_sha256": hashlib.sha256(splat_output).hexdigest(),
+              "scene_splat_bytes": len(splat_output),
+              "seed_radius_relative_scene_units": radius,
+              "gpu_training_executed": False,
+              "metric_scale_known": False,
+              "license": manifest["license"],
+          }
+          (preview_dir / "preview-manifest.json").write_text(
+              json.dumps(preview_evidence, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          print(
+              "REAL PHOTOS -> COLMAP XYZ/RGB -> PINNED GSPLAT VIEWER PREVIEW:",
+              n_points, "UNTRAINED seeds,", len(splat_output), "viewer bytes"
+          )
+          receipt = {
+              "kind": "wre-common-native-real-photo-colmap-cpu-v1",
+              "source_method": "pinned_photos_native_pycolmap_4.2.0_regeneration",
+              "source_dataset_commit": manifest["dataset_commit"],
+              "source_credit": manifest["credit"],
+              "source_artifact_expiry_dependency": False,
+              "source_manifest_sha256": hashlib.sha256(candidates[0].read_bytes()).hexdigest(),
+              "native_environment": {
+                  "torch": torch.__version__,
+                  "torch_cuda_toolkit": torch.version.cuda,
+                  "gsplat_reference_sha": os.environ["GSPLAT_REVISION"],
+              },
+              "real_source_photo_count": 16,
+              "real_colmap_points": int(len(parser.points)),
+              "measured_native_sparse_sfm_quality": quality,
+              "untrained_gsplat_viewer_preview": preview_evidence,
+              "observed_rgb_geometry_ply": {
+                  "filename": rgb_ply.name,
+                  "sha256": hashlib.sha256(ply_bytes).hexdigest(),
+                  "bytes": len(ply_bytes),
+                  "vertices": int(len(parser.points)),
+                  "kind": "untrained_native_sfm_photo_observed_rgb_xyz",
+                  "metric_scale_known": False,
+              },
+              "native_parser_cpu_train_views": len(train),
+              "native_parser_cpu_validation_views": len(validation),
+              "decoded_photo_shapes_and_rgb_sums": samples,
+              "cuda_gpu_available": False,
+              "training_executed": False,
+              "gpu_kernels_executed": False,
+              "quality_benchmark_executed": False,
+              "licence": manifest["license"],
+          }
+          out = Path(os.environ["GITHUB_WORKSPACE"]) / "wre-common-native-real-photo-receipt.json"
+          out.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          (Path(os.environ["GITHUB_WORKSPACE"]) / "wre-real16-observed-rgb-LICENSE.txt").write_text(
+              "Photographs by Pierre Moulon, OpenMVG Palm Desert Micro DJI, "
+              "CC BY-NC 4.0 (https://creativecommons.org/licenses/by-nc/4.0/).\n"
+              "Derived RGB 3D is for NONCOMMERCIAL experimental reuse only.\n"
+              "Sparse SfM reconstruction, NOT trained gsplat, metric scale or 4D.\n",
+              encoding="utf-8",
+          )
+          print(
+              "REAL 16-PHOTO COMMON NATIVE COLMAP PASS:",
+              len(parser.image_names), "authentic photographed frames,",
+              len(parser.points), "actual SfM points, 14/2 CPU dataset tensors."
+          )
+          print("GPU training NONE; native extensions were imported, never executed on GPU.")
+          PY
+
+      - name: Verify genuine COLMAP-derived gsplat PLY with WRE artifact contracts (CPU)
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PYTHONPATH="$GITHUB_WORKSPACE/src"
+          "$GITHUB_WORKSPACE/.venv/bin/python" - <<'PY'
+          import hashlib
+          import json
+          import os
+          import struct
+          from pathlib import Path
+
+          from wre.domain.appearance import APPEARANCE_MODEL_ARTIFACT_KIND
+          from wre.domain.artifacts import ArtifactId, ArtifactRef
+          from wre.reconstruction.static_appearance_baseline import (
+              GsplatStaticAppearanceTrainingProfile,
+              export_verified_gsplat_rgb_centers_glb,
+              materialize_verified_gsplat_ply,
+          )
+
+          root = Path(os.environ["GITHUB_WORKSPACE"]) / "wre-real16-gsplat-seeds"
+          manifest = json.loads((root / "preview-manifest.json").read_text())
+          assert manifest["gpu_training_executed"] is False
+          assert manifest["metric_scale_known"] is False
+          assert manifest["points"] > 100
+          output = materialize_verified_gsplat_ply(
+              artifact_ref=ArtifactRef(
+                  ArtifactId("appearance:gsplat:real16-untrained-seeds"),
+                  APPEARANCE_MODEL_ARTIFACT_KIND,
+              ),
+              output_root=root,
+              profile=GsplatStaticAppearanceTrainingProfile(max_steps=1),
+          )
+          assert len(output.entries) == 1
+          verified = output.entries[0]
+          ply = root / verified.relative_path
+          splat = root / "scene.splat"
+          assert verified.relative_path == "ply/point_cloud_0.ply"
+          assert verified.byte_length == manifest["seed_ply_bytes"] == ply.stat().st_size
+          assert verified.sha256.value == manifest["seed_ply_sha256"]
+          assert hashlib.sha256(ply.read_bytes()).hexdigest() == verified.sha256.value
+          assert splat.stat().st_size == manifest["scene_splat_bytes"] == manifest["points"] * 32
+          assert hashlib.sha256(splat.read_bytes()).hexdigest() == manifest["scene_splat_sha256"]
+
+          # Reuse the WRE-reviewed CPU exporter: real observed RGB -> a portable,
+          # self-contained glTF 2.0 POINTS cloud. No Gaussian shader or training.
+          glb = root / "viewable-rgb-centers.glb"
+          digest = export_verified_gsplat_rgb_centers_glb(
+              artifact_ref=output.artifact_ref,
+              output_root=root,
+              profile=GsplatStaticAppearanceTrainingProfile(max_steps=1),
+              preview_path=glb,
+          )
+          glb_data = glb.read_bytes()
+          assert glb_data[:4] == b"glTF"
+          assert struct.unpack_from("<II", glb_data, 4) == (2, len(glb_data))
+          json_chunk_length, json_chunk_type = struct.unpack_from("<I4s", glb_data, 12)
+          assert json_chunk_type == b"JSON"
+          document = json.loads(glb_data[20 : 20 + json_chunk_length])
+          primitive = document["meshes"][0]["primitives"][0]
+          assert primitive["mode"] == 0
+          assert primitive["attributes"] == {"POSITION": 0, "COLOR_0": 1}
+          assert document["accessors"][0]["count"] == manifest["points"]
+          assert document["accessors"][1]["count"] == manifest["points"]
+          assert hashlib.sha256(glb_data).hexdigest() == digest.value
+          assert glb.stat().st_size == len(glb_data)
+
+          manifest["rgb_centers_glb"] = {
+              "relative_path": glb.name,
+              "bytes": len(glb_data),
+              "sha256": digest.value,
+              "representation": "gltf2_untrained_real_photo_rgb_points",
+          }
+          (root / "preview-manifest.json").write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          receipt_path = Path(os.environ["GITHUB_WORKSPACE"]) / "wre-common-native-real-photo-receipt.json"
+          receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+          receipt["untrained_gsplat_viewer_preview"]["rgb_centers_glb"] = manifest[
+              "rgb_centers_glb"
+          ]
+          receipt_path.write_text(
+              json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          print("REAL 16-PHOTO WRE PLY MATERIALIZATION + VIEWABLE SPLAT VERIFIED")
+          print("VIEWER-READY REAL-PHOTO GLTF 2.0 RGB POINTS:", manifest["points"])
+          print("UNTRAINED initialization: 0 CUDA kernels, 0 optimization steps, no 4D.")
+          PY
+
+      - name: Publish real 16-photo SfM RGB PLY and attribution without source photographs
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wre-common-native-real-photo-sfm-rgb
+          path: |
+            wre-common-native-real-photo-receipt.json
+            wre-real16-observed-rgb.ply
+            wre-real16-sfm-quality.json
+            wre-real16-observed-rgb-LICENSE.txt
+            wre-real16-gsplat-seeds/ply/point_cloud_0.ply
+            wre-real16-gsplat-seeds/scene.splat
+            wre-real16-gsplat-seeds/viewable-rgb-centers.glb
+            wre-real16-gsplat-seeds/preview-manifest.json
+          if-no-files-found: error
+          retention-days: 7
+
+  # Reuse WRE's independently CI-proven Chrome/WebGL browser pattern (#281).
+  browser-real16-scene:
+    name: Actual Chrome WebGL 16-camera scene (CPU SwiftShader)
+    if: ${{ always() }}
+    needs: combined-native-import
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - name: Download this exact run's offline 16-camera 3D bundle
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: wre-real16-offline-3d-viewer
+          path: wre-real16-browser-input
+
+      - name: Load genuine 16-camera SfM GLB in headless Chrome
+        shell: bash
+        run: |
+          set -euo pipefail
+          google-chrome --version
+          driver="$CHROMEWEBDRIVER/chromedriver"
+          test -x "$driver"
+          test -s wre-real16-browser-input/wre-real16-viewer.html
+          test -s wre-real16-browser-input/wre-real16-viewable-scene.glb
+          test -s wre-real16-browser-input/wre-model-viewer-4.1.0.min.js
+          mkdir -p wre-real16-browser-proof
+          python3 -m http.server 8765 --bind 127.0.0.1 \
+            --directory wre-real16-browser-input > wre-real16-browser-proof/http.log 2>&1 &
+          http_pid="$!"
+          "$driver" --port=9515 --allowed-ips=127.0.0.1 \
+            > wre-real16-browser-proof/chromedriver.log 2>&1 &
+          driver_pid="$!"
+          trap 'kill "$http_pid" "$driver_pid" 2>/dev/null || true' EXIT
+          python3 - <<'PY'
+          import base64
+          import hashlib
+          import json
+          import struct
+          import time
+          from pathlib import Path
+          from urllib.request import Request, urlopen
+
+          root = Path("wre-real16-browser-input")
+          proof = Path("wre-real16-browser-proof")
+          binary = (root / "wre-real16-viewable-scene.glb").read_bytes()
+          receipt = json.loads(
+              (root / "wre-real16-viewable-scene-receipt.json").read_text()
+          )
+          assert struct.unpack_from("<4sII", binary) == (b"glTF", 2, len(binary))
+          assert hashlib.sha256(binary).hexdigest() == receipt["sha256"]
+          assert receipt["registered_cameras"] == 16
+          host = "http://127.0.0.1:9515"
+          def call(method, route, body=None):
+              payload = None if body is None else json.dumps(body).encode("utf-8")
+              req = Request(
+                  host + route, data=payload, method=method,
+                  headers={"Content-Type": "application/json"},
+              )
+              with urlopen(req, timeout=40) as response:
+                  raw = response.read()
+              return json.loads(raw)["value"] if raw else None
+
+          for _ in range(50):
+              try:
+                  if call("GET", "/status")["ready"]:
+                      break
+              except (OSError, KeyError):
+                  pass
+              time.sleep(0.2)
+          else:
+              raise RuntimeError("ChromeDriver did not start")
+          session = call("POST", "/session", {
+              "capabilities": {"alwaysMatch": {
+                  "browserName": "chrome",
+                  "goog:chromeOptions": {"args": [
+                      "--headless=new", "--no-sandbox", "--disable-dev-shm-usage",
+                      "--enable-unsafe-swiftshader", "--use-gl=angle",
+                      "--use-angle=swiftshader", "--window-size=1280,900",
+                      "--disable-background-networking",
+                      "--host-resolver-rules=MAP * 0.0.0.0, EXCLUDE localhost",
+                  ]},
+              }}
+          })["sessionId"]
+          def js(script):
+              return call(
+                  "POST", f"/session/{session}/execute/sync",
+                  {"script": script, "args": []}
+              )
+          try:
+              call("POST", f"/session/{session}/url", {
+                  "url": "http://127.0.0.1:8765/wre-real16-viewer.html"
+              })
+              for _ in range(180):
+                  if js("""
+                    const v=document.getElementById('wre-scene');
+                    return Boolean(customElements.get('model-viewer') &&
+                      v && v.loaded === true && v.model &&
+                      v.getAttribute('src') === './wre-real16-viewable-scene.glb');
+                  """):
+                      break
+                  time.sleep(0.5)
+              else:
+                  raise RuntimeError("actual Chrome model-viewer GLB load failed")
+              assert js("""
+                const c=document.createElement('canvas');
+                return Boolean(c.getContext('webgl2') || c.getContext('webgl'));
+              """), "WebGL not available in Chrome"
+              for _ in range(40):
+                  if js("""
+                    const c=document.getElementById('wre-camera-choice');
+                    return c && !c.disabled && c.options.length === 17;
+                  """):
+                      break
+                  time.sleep(0.25)
+              else:
+                  raise RuntimeError("Sixteen actual SfM camera choices never loaded")
+              assert js("""
+                const c=document.getElementById('wre-camera-choice');
+                const v=document.getElementById('wre-scene');
+                c.value='0';
+                c.dispatchEvent(new Event('change',{bubbles:true}));
+                return Boolean(v.getAttribute('camera-target') &&
+                  v.getAttribute('camera-orbit') && !v.hasAttribute('auto-rotate') &&
+                  document.getElementById('camera-details').textContent.includes(
+                    'Approximate orbit'));
+              """), "Camera selection did not navigate the real WebGL viewer"
+              # Real browser File API: use the actual generated 3D GLB as if
+              # selected locally. This is a real WebGL interaction, no GPU CUDA.
+              local_result = call("POST", f"/session/{session}/execute/async", {
+                  "script": """
+                    const done=arguments[arguments.length-1];
+                    fetch('./wre-real16-viewable-scene.glb')
+                      .then(response=>{
+                        if(!response.ok) throw Error('Missing actual RGB scene');
+                        return response.arrayBuffer();
+                      })
+                      .then(binary=>{
+                        const file=new File([binary], 'my-reconstruction.glb',
+                          {type:'model/gltf-binary'});
+                        const transfer=new DataTransfer();
+                        transfer.items.add(file);
+                        const input=document.getElementById('wre-local-glb');
+                        input.files=transfer.files;
+                        input.dispatchEvent(new Event('change',{bubbles:true}));
+                        done({ok:true,bytes:file.size});
+                      })
+                      .catch(error=>done({ok:false,error:String(error)}));
+                  """,
+                  "args": [],
+              })
+              assert local_result["ok"] and local_result["bytes"] == len(binary)
+              for _ in range(40):
+                  if js("""
+                    const viewer=document.getElementById('wre-scene');
+                    const camera=document.getElementById('wre-camera-choice');
+                    return viewer.loaded && viewer.getAttribute('src').startsWith('blob:') &&
+                      camera.disabled && document.getElementById('local-model-status')
+                        .textContent.includes('Local GLB loaded');
+                  """):
+                      break
+                  time.sleep(0.25)
+              else:
+                  raise RuntimeError("Real Chrome local GLB import did not render")
+              # A real Chrome/WebGL PNG is generated from the selected
+              # LOCAL file, without exporting the original SfM provenance.
+              assert js("""
+                const click=HTMLAnchorElement.prototype.click;
+                let saved=null;
+                try {
+                  HTMLAnchorElement.prototype.click=function(){
+                    saved={name:this.download,data:this.href};
+                  };
+                  document.getElementById('wre-export-png').click();
+                } finally {
+                  HTMLAnchorElement.prototype.click=click;
+                }
+                if(!saved || saved.name!=='wre-local-3d-view.png' ||
+                    !saved.data.startsWith('data:image/png;base64,')) return false;
+                const raw=atob(saved.data.split(',')[1]);
+                return raw.length>1000 && raw.charCodeAt(0)===137 &&
+                  raw.slice(1,4)==='PNG' &&
+                  document.getElementById('local-model-status').textContent
+                    .includes('PNG view saved locally');
+              """), "Real Chrome local GLB failed to export its WebGL PNG"
+              assert js("""
+                const input=document.getElementById('wre-local-glb');
+                const viewer=document.getElementById('wre-scene');
+                const original=viewer.getAttribute('src');
+                const file=new File([new Uint8Array([1,2,3])],'broken.glb');
+                const transfer=new DataTransfer();
+                transfer.items.add(file);
+                input.files=transfer.files;
+                input.dispatchEvent(new Event('change',{bubbles:true}));
+                return viewer.getAttribute('src')===original &&
+                  document.getElementById('local-model-status')
+                    .textContent.includes('Local import rejected');
+              """), "Corrupt local GLB unexpectedly replaced the loaded scene"
+              assert js("""
+                document.getElementById('wre-restore-demo').click();
+                const viewer=document.getElementById('wre-scene');
+                const camera=document.getElementById('wre-camera-choice');
+                return viewer.getAttribute('src')==='./wre-real16-viewable-scene.glb' &&
+                  !camera.disabled && viewer.hasAttribute('auto-rotate');
+              """), "Original real-photo viewer or camera control was not restored"
+              for _ in range(40):
+                  if js("""
+                    const viewer=document.getElementById('wre-scene');
+                    return viewer.loaded && viewer.getAttribute('src')===
+                      './wre-real16-viewable-scene.glb';
+                  """):
+                      break
+                  time.sleep(0.25)
+              else:
+                  raise RuntimeError("Original 16-camera GLB did not reload")
+              assert js("""
+                const click=HTMLAnchorElement.prototype.click;
+                let saved=null;
+                try {
+                  HTMLAnchorElement.prototype.click=function(){
+                    saved={name:this.download,data:this.href};
+                  };
+                  document.getElementById('wre-export-png').click();
+                } finally {
+                  HTMLAnchorElement.prototype.click=click;
+                }
+                return Boolean(saved && saved.name==='wre-real16-sfm-view.png' &&
+                  saved.data.startsWith('data:image/png;base64,') &&
+                  atob(saved.data.split(',')[1]).length>1000);
+              """), "Restored genuine SfM GLB failed to export its WebGL PNG"
+              print("REAL CHROME LOCAL GLB PASS: real SfM GLB loaded via File, "
+                    "malformed rejected, source camera controls restored")
+              png = base64.b64decode(
+                  call("GET", f"/session/{session}/screenshot"), validate=True
+              )
+              assert png.startswith(bytes.fromhex("89504e470d0a1a0a"))
+              assert len(png) > 10000
+              (proof / "real16-browser-render.png").write_bytes(png)
+              (proof / "browser-verification.json").write_text(
+                  json.dumps({
+                      "source_glb_sha256": receipt["sha256"],
+                      "registered_cameras": 16,
+                      "browser": "Chrome headless",
+                      "backend": "CPU SwiftShader WebGL",
+                      "real_gltf_loaded": True,
+                      "webgl_context": True,
+                      "screenshot_sha256": hashlib.sha256(png).hexdigest(),
+                      "metric_scale_known": False,
+                      "gpu_training_executed": False,
+                      "temporal_reconstruction_executed": False,
+                  }, indent=2, sort_keys=True) + "\n"
+              )
+              print("Real Chrome CPU WebGL loaded the 16-camera SfM GLB.")
+          finally:
+              call("DELETE", f"/session/{session}")
+          PY
+
+      - name: Retain real Chrome 3D rendering evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wre-real16-browser-render-proof
+          path: wre-real16-browser-proof/
+          if-no-files-found: warn
+          retention-days: 7
