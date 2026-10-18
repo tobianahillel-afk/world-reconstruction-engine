@@ -300,16 +300,16 @@ jobs:
           )
 
           instructions = (
-              "WRE — 16 genuine DJI photos -> native CPU COLMAP -> 6917 untrained Gaussians.\\n"
-              "UNTRAINED, zero CUDA steps, unknown metric scale; NOT a GPU-trained radiance scene.\\n"
-              "Photos: Pierre Moulon, CC BY-NC 4.0; NONCOMMERCIAL use only.\\n"
-              "Unzip all contents, then run inside the extracted directory:\\n"
-              "  python3 -m http.server 8767 --bind 127.0.0.1\\n"
-              "Open http://127.0.0.1:8767/offline-viewer/index.html in a WebGL2 browser.\\n"
-              "Mouse orbit/zoom and keyboard 0-9 / +/- for recovered cameras.\\n"
-              "No internet, paid API, Torch, CUDA, installation or server upload is required.\\n"
-              "The inner ZIP contains canonical WRE scene.splat, centers.glb, manifest.json.\\n"
-              "The screenshot and evidence.json record actual headless Chrome CPU/WebGL proof.\\n"
+              "WRE — 16 genuine DJI photos -> native CPU COLMAP -> 6917 untrained Gaussians.\n"
+              "UNTRAINED, zero CUDA steps, unknown metric scale; NOT a GPU-trained radiance scene.\n"
+              "Photos: Pierre Moulon, CC BY-NC 4.0; NONCOMMERCIAL use only.\n"
+              "Unzip all contents, then run inside the extracted directory:\n"
+              "  python3 -m http.server 8767 --bind 127.0.0.1\n"
+              "Open http://127.0.0.1:8767/offline-viewer/index.html in a WebGL2 browser.\n"
+              "Mouse orbit/zoom and keyboard 0-9 / +/- for recovered cameras.\n"
+              "No internet, paid API, Torch, CUDA, installation or server upload is required.\n"
+              "The inner ZIP contains canonical WRE scene.splat, centers.glb, manifest.json.\n"
+              "The screenshot and evidence.json record actual headless Chrome CPU/WebGL proof.\n"
           ).encode("utf-8")
           contents = {
               "START_HERE.txt": instructions,
@@ -355,7 +355,7 @@ jobs:
               "files": sorted(contents),
           }
           (root / "portable-viewer-receipt.json").write_text(
-              json.dumps(receipt, sort_keys=True, indent=2) + "\\n",
+              json.dumps(receipt, sort_keys=True, indent=2) + "\n",
               encoding="utf-8",
           )
           print(f"PORTABLE REAL-PHOTO VIEWER ZIP PASS: {portable.name} sha256={portable_hash}")
