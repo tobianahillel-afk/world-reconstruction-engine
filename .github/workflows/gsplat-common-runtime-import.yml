@@ -2198,6 +2198,19 @@ jobs:
                     measurements[n/2].camera_z_sfm_units)/2;
                 const min=measurements[0].camera_z_sfm_units;
                 const max=measurements[n-1].camera_z_sfm_units;
+                // Measure only distinct, actually triangulated native SfM points.
+                // Multiple depth bins of one Point3D must not inflate the 3D count.
+                const uniqueWorldPoints=[...new Map(measurements.map(
+                  m=>[m.point3d_id,m.world_xyz_sfm_units]
+                )).values()];
+                const xyzMin=[0,1,2].map(axis=>Math.min(
+                  ...uniqueWorldPoints.map(xyz=>xyz[axis])
+                ));
+                const xyzMax=[0,1,2].map(axis=>Math.max(
+                  ...uniqueWorldPoints.map(xyz=>xyz[axis])
+                ));
+                const xyzExtent=xyzMax.map((value,axis)=>value-xyzMin[axis]);
+                const xyzDiagonal=Math.hypot(...xyzExtent);
                 depthRoiReport={
                   schema:'wre.experimental.real16_measured_sparse_depth_roi.v1',
                   source_dataset_commit:index.source_dataset_commit,
@@ -2208,6 +2221,11 @@ jobs:
                   camera_z_min_sfm_units:min,
                   camera_z_median_sfm_units:median,
                   camera_z_max_sfm_units:max,
+                  native_unique_point3d_count:uniqueWorldPoints.length,
+                  native_sparse_xyz_bounds_sfm_units:{
+                    min_xyz:xyzMin,max_xyz:xyzMax,
+                    extent_xyz:xyzExtent,diagonal:xyzDiagonal
+                  },
                   dense_depth_inferred:false,
                   metric_depth_verified:false,
                   measurements
@@ -2218,7 +2236,10 @@ jobs:
                 depthRoiStatus.textContent='Camera '+tile+' ROI: '+n+
                   ' observed frontmost SfM bins; camera-Z min '+min.toFixed(4)+
                   ', median '+median.toFixed(4)+', max '+max.toFixed(4)+
-                  ' (arbitrary units). Empty cells excluded; NOT dense depth or meters.';
+                  ' (arbitrary units). Empty cells excluded; NOT dense depth or meters. '+
+                  'Native 3D bounds over '+uniqueWorldPoints.length+' distinct SfM points: '+
+                  'XYZ extent '+xyzExtent.map(x=>x.toFixed(4)).join(', ')+
+                  '; diagonal '+xyzDiagonal.toFixed(4)+' (arbitrary SfM units).';
               }catch(error){
                 depthRoiCorner=null;depthRoiReport=null;depthRoiDownload.disabled=true;
                 depthRoiPlyDownload.disabled=true;
