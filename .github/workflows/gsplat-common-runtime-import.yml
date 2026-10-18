@@ -1125,6 +1125,7 @@ jobs:
             <label for="wre-local-glb">Open your own 3D model (.glb, max 128 MiB)</label>
             <input id="wre-local-glb" type="file" accept=".glb,model/gltf-binary">
             <button id="wre-restore-demo" type="button">Restore 16-photo scene</button>
+          <button id="wre-export-png" type="button">Save current 3D view as PNG</button>
             <output id="local-model-status" aria-live="polite">
               Only the original scene is verified. Local files stay in this browser.
             </output>
@@ -1153,6 +1154,25 @@ jobs:
           const importStatus=document.getElementById('local-model-status');
           const originalScene='./wre-real16-viewable-scene.glb';
           let localUrl=null;
+          // Use model-viewer's WebGL canvas screenshot, not a new renderer.
+          // A screenshot is local and never inherits the GLB's provenance.
+          document.getElementById('wre-export-png').addEventListener('click',()=>{
+            try {
+              if(!viewer.loaded) throw Error('Wait until the 3D model is loaded');
+              const png=viewer.toDataURL('image/png');
+              if(!png.startsWith('data:image/png;base64,')) {
+                throw Error('The WebGL scene did not yield a PNG');
+              }
+              const link=document.createElement('a');
+              link.href=png;
+              link.download=localUrl?'wre-local-3d-view.png':'wre-real16-sfm-view.png';
+              document.body.append(link);
+              try { link.click(); } finally { link.remove(); }
+              importStatus.textContent='PNG view saved locally; no upload performed.';
+            } catch(error) {
+              importStatus.textContent='PNG export unavailable: '+String(error);
+            }
+          });
           const resetOrbit=()=>{
             viewer.removeAttribute('camera-target');
             viewer.removeAttribute('camera-orbit');
@@ -1922,6 +1942,27 @@ jobs:
                   time.sleep(0.25)
               else:
                   raise RuntimeError("Real Chrome local GLB import did not render")
+              # A real Chrome/WebGL PNG is generated from the selected
+              # LOCAL file, without exporting the original SfM provenance.
+              assert js("""
+                const click=HTMLAnchorElement.prototype.click;
+                let saved=null;
+                try {
+                  HTMLAnchorElement.prototype.click=function(){
+                    saved={name:this.download,data:this.href};
+                  };
+                  document.getElementById('wre-export-png').click();
+                } finally {
+                  HTMLAnchorElement.prototype.click=click;
+                }
+                if(!saved || saved.name!=='wre-local-3d-view.png' ||
+                    !saved.data.startsWith('data:image/png;base64,')) return false;
+                const raw=atob(saved.data.split(',')[1]);
+                return raw.length>1000 && raw.charCodeAt(0)===137 &&
+                  raw.slice(1,4)==='PNG' &&
+                  document.getElementById('local-model-status').textContent
+                    .includes('PNG view saved locally');
+              """), "Real Chrome local GLB failed to export its WebGL PNG"
               assert js("""
                 const input=document.getElementById('wre-local-glb');
                 const viewer=document.getElementById('wre-scene');
@@ -1952,6 +1993,21 @@ jobs:
                   time.sleep(0.25)
               else:
                   raise RuntimeError("Original 16-camera GLB did not reload")
+              assert js("""
+                const click=HTMLAnchorElement.prototype.click;
+                let saved=null;
+                try {
+                  HTMLAnchorElement.prototype.click=function(){
+                    saved={name:this.download,data:this.href};
+                  };
+                  document.getElementById('wre-export-png').click();
+                } finally {
+                  HTMLAnchorElement.prototype.click=click;
+                }
+                return Boolean(saved && saved.name==='wre-real16-sfm-view.png' &&
+                  saved.data.startsWith('data:image/png;base64,') &&
+                  atob(saved.data.split(',')[1]).length>1000);
+              """), "Restored genuine SfM GLB failed to export its WebGL PNG"
               print("REAL CHROME LOCAL GLB PASS: real SfM GLB loaded via File, "
                     "malformed rejected, source camera controls restored")
               png = base64.b64decode(
