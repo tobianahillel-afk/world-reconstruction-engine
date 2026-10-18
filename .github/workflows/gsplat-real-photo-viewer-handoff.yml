@@ -352,6 +352,8 @@ jobs:
               'Restore 16-photo scene</button>'
               '<button id="wre-save-current" type="button">'
               'Save displayed .splat</button>'
+              '<button id="wre-export-centers" type="button">'
+              'Export 3D RGB points (PLY)</button>'
               '<button id="wre-compare-scene" type="button" disabled>'
               'Compare original / local</button>'
               '<button id="wre-save-view" type="button">Save camera viewpoint</button>'
@@ -367,6 +369,7 @@ jobs:
             const picker = document.getElementById('wre-local-splat');
             const reset = document.getElementById('wre-restore-original');
             const save = document.getElementById('wre-save-current');
+            const exportCenters = document.getElementById('wre-export-centers');
             const compare = document.getElementById('wre-compare-scene');
             const saveView = document.getElementById('wre-save-view');
             const savePng = document.getElementById('wre-save-png');
@@ -423,6 +426,62 @@ jobs:
               setTimeout(() => URL.revokeObjectURL(url), 30000);
               status.textContent = 'Saving ' + link.download + ': ' +
                 (activeFile.size / 32) + ' Gaussian records';
+            });
+            // Operator handoff: preserve actual local .splat XYZ and RGB as a
+            // standard binary PLY point cloud. Gaussian scales, rotations,
+            // opacity and radiance are NOT a physical mesh or metric proof.
+            let pointCloudSaving = false;
+            exportCenters.addEventListener('click', async () => {
+              if (pointCloudSaving) return;
+              const scene = activeFile;
+              if (!valid(scene) || scene.size > 32 * 1024 * 1024) {
+                status.textContent = 'PLY point export requires <=32 MiB of .splat data.';
+                return;
+              }
+              pointCloudSaving = true;
+              try {
+                const input = new DataView(await scene.arrayBuffer());
+                const count = input.byteLength / 32;
+                const body = new DataView(new ArrayBuffer(count * 15));
+                for (let i = 0; i < count; i++) {
+                  for (let axis = 0; axis < 3; axis++) {
+                    const coordinate = input.getFloat32(i * 32 + axis * 4, true);
+                    if (!Number.isFinite(coordinate)) {
+                      throw Error('Non-finite 3D Gaussian center');
+                    }
+                    body.setFloat32(i * 15 + axis * 4, coordinate, true);
+                  }
+                  for (let channel = 0; channel < 3; channel++) {
+                    body.setUint8(i * 15 + 12 + channel,
+                      input.getUint8(i * 32 + 24 + channel));
+                  }
+                }
+                const header = [
+                  'ply', 'format binary_little_endian 1.0',
+                  'comment WRE RGB Gaussian centers only; not mesh or metric evidence',
+                  scene === originalFile ?
+                    'comment Source photos: Pierre Moulon DJI CC BY-NC 4.0 NONCOMMERCIAL' :
+                    'comment Operator scene: verify original license independently',
+                  'element vertex ' + count,
+                  'property float x', 'property float y', 'property float z',
+                  'property uchar red', 'property uchar green', 'property uchar blue',
+                  'end_header', ''
+                ].join('\\n');
+                const blob = new Blob([new TextEncoder().encode(header), body.buffer],
+                  {type: 'application/octet-stream'});
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'wre-' + count + '-rgb-centers.ply';
+                link.click();
+                setTimeout(() => URL.revokeObjectURL(url), 30000);
+                status.textContent = 'Saved ' + count +
+                  ' real RGB centers (not optimized Gaussian appearance).';
+              } catch (error) {
+                status.textContent = 'Could not export 3D centers from this .splat.';
+              } finally {
+                pointCloudSaving = false;
+              }
             });
             picker.addEventListener('change', () => {
               if (picker.files && picker.files.length === 1) show(picker.files[0]);
