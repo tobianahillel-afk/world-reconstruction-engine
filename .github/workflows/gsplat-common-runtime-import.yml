@@ -1090,6 +1090,11 @@ jobs:
           p {margin:5px 0;line-height:1.4}
           model-viewer {width:100%;flex:1;min-height:330px}
           a {color:#9bdeff}
+          #camera-navigation {display:flex;flex-wrap:wrap;gap:9px;align-items:center;
+            padding:10px 18px;background:#182437}
+          #camera-navigation select,#camera-navigation button {background:#273950;
+            border:1px solid #8097b2;border-radius:5px;color:#fff;padding:8px}
+          #camera-details {font-size:13px;line-height:1.45;flex-basis:100%}
           </style></head><body><main>
           <header><h1>WRE · Real 16-photograph SfM 3D</h1>
           <p>Orbit and zoom the actual reconstructed RGB point cloud,
@@ -1097,6 +1102,16 @@ jobs:
           <p>Source: Pierre Moulon, OpenMVG Palm Desert Micro, CC BY-NC 4.0
           <strong>NONCOMMERCIAL</strong>. No original photographs are distributed.</p>
           </header>
+          <section id="camera-navigation" aria-label="Inspect reconstructed cameras">
+            <label for="wre-camera-choice">Reconstructed camera (filename order, not time)</label>
+            <select id="wre-camera-choice" disabled>
+              <option>Loading camera poses...</option>
+            </select>
+            <button id="wre-camera-reset" type="button">Reset orbit</button>
+            <output id="camera-details" aria-live="polite">
+              Choose a camera to inspect its SfM position (not an exact source photo view).
+            </output>
+          </section>
           <model-viewer id="wre-scene" camera-controls auto-rotate
             interaction-prompt="auto"
             alt="Sparse CPU 3D reconstruction of 16 real photographs"
@@ -1112,7 +1127,75 @@ jobs:
           <code>python3 -m http.server 8765 --bind 127.0.0.1</code>,
           then open <code>http://127.0.0.1:8765/wre-real16-viewer.html</code>.
           No internet access is required at viewing time.</p></footer>
-          </main></body></html>"""
+          </main>
+          <script type="module">
+          const viewer=document.getElementById('wre-scene');
+          const choice=document.getElementById('wre-camera-choice');
+          const details=document.getElementById('camera-details');
+          document.getElementById('wre-camera-reset').addEventListener('click',()=>{
+            viewer.removeAttribute('camera-target');
+            viewer.removeAttribute('camera-orbit');
+            viewer.setAttribute('auto-rotate','');
+            choice.value='';
+            details.textContent='General orbit restored; filename order is not chronology.';
+          });
+          try {
+            const response=await fetch('./wre-real16-camera-poses.json');
+            if (!response.ok) throw Error('Missing actual COLMAP camera poses');
+            const poses=await response.json();
+            if (poses.schema!=='wre.experimental.native_cpu_colmap_registered_cameras.v1'
+                || poses.registered_views!==16 || poses.cameras.length!==16
+                || poses.metric_scale_known!==false
+                || poses.capture_time_axis_verified!==false) {
+              throw Error('Unexpected camera provenance');
+            }
+            const cameras=poses.cameras.slice().sort((a,b)=>
+              a.image_name<b.image_name?-1:a.image_name>b.image_name?1:0);
+            const centers=cameras.map(c=>c.camera_center_xyz);
+            if (!cameras.every((c,i)=>typeof c.image_name==='string' &&
+                centers[i].length===3 && centers[i].every(Number.isFinite) &&
+                c.world_from_camera_row_major_4x4.length===4 &&
+                c.world_from_camera_row_major_4x4.every(row=>
+                  row.length===4 && row.every(Number.isFinite)))) {
+              throw Error('Invalid camera center or transform');
+            }
+            const span=Math.hypot(...[0,1,2].map(axis=>
+              Math.max(...centers.map(p=>p[axis])) -
+              Math.min(...centers.map(p=>p[axis]))));
+            if (!(span>0 && Number.isFinite(span))) throw Error('Zero camera spread');
+            const radius=span*0.18;
+            choice.replaceChildren(new Option('Select camera',''));
+            cameras.forEach((c,i)=>choice.add(
+              new Option((i+1)+' · '+c.image_name,String(i))));
+            choice.disabled=false;
+            choice.addEventListener('change',()=>{
+              if(choice.value==='') return;
+              const c=cameras[Number(choice.value)];
+              const center=c.camera_center_xyz;
+              const m=c.world_from_camera_row_major_4x4;
+              const forward=[m[0][2],m[1][2],m[2][2]];
+              const norm=Math.hypot(...forward);
+              if(!(norm>0 && Number.isFinite(norm))) return;
+              const look=forward.map(v=>v*radius/norm);
+              const target=center.map((v,i)=>v+look[i]);
+              const theta=Math.atan2(-look[0],-look[2]);
+              const phi=Math.acos(Math.max(-1,Math.min(1,-look[1]/radius)));
+              viewer.removeAttribute('auto-rotate');
+              viewer.setAttribute('camera-target',
+                target.map(v=>v.toPrecision(9)+'m').join(' '));
+              viewer.setAttribute('camera-orbit',
+                theta.toPrecision(9)+'rad '+phi.toPrecision(9)+'rad '+
+                radius.toPrecision(9)+'m');
+              viewer.jumpCameraToGoal();
+              details.textContent='Camera '+(Number(choice.value)+1)+' · '+c.image_name+
+                ' · SfM XYZ ['+center.map(v=>v.toFixed(3)).join(', ')+
+                '] local units. Approximate orbit, not image-calibrated roll or 4D.';
+            });
+          } catch(error) {
+            details.textContent='Camera explorer unavailable: '+String(error);
+          }
+          </script>
+          </body></html>"""
           html = html.replace("WRE_SCENE_SHA256", receipt["sha256"])
           (output / "wre-real16-viewer.html").write_text(html, encoding="utf-8")
           manifest = {
@@ -1707,6 +1790,25 @@ jobs:
                 const c=document.createElement('canvas');
                 return Boolean(c.getContext('webgl2') || c.getContext('webgl'));
               """), "WebGL not available in Chrome"
+              for _ in range(40):
+                  if js("""
+                    const c=document.getElementById('wre-camera-choice');
+                    return c && !c.disabled && c.options.length === 17;
+                  """):
+                      break
+                  time.sleep(0.25)
+              else:
+                  raise RuntimeError("Sixteen actual SfM camera choices never loaded")
+              assert js("""
+                const c=document.getElementById('wre-camera-choice');
+                const v=document.getElementById('wre-scene');
+                c.value='0';
+                c.dispatchEvent(new Event('change',{bubbles:true}));
+                return Boolean(v.getAttribute('camera-target') &&
+                  v.getAttribute('camera-orbit') && !v.hasAttribute('auto-rotate') &&
+                  document.getElementById('camera-details').textContent.includes(
+                    'Approximate orbit'));
+              """), "Camera selection did not navigate the real WebGL viewer"
               png = base64.b64decode(
                   call("GET", f"/session/{session}/screenshot"), validate=True
               )
