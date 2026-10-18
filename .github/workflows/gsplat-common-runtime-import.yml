@@ -2179,6 +2179,60 @@ jobs:
                   float(orbit[2][:-1]),expected_radius,rel_tol=1e-8,abs_tol=1e-6
               )
               assert "local reconstruction units, not metres" in framed["message"]
+              # The nearest-camera action uses actual SfM world coordinates, not
+              # capture chronology or filename adjacency. Independently compute
+              # the closest OTHER recovered center in Python (stable tie order).
+              nearest_index=min(
+                  range(1, len(actual_cameras)),
+                  key=lambda index: (
+                      math.dist(first_center, actual_cameras[index]["camera_center_xyz"]),
+                      index,
+                  ),
+              )
+              nearest_center=actual_cameras[nearest_index]["camera_center_xyz"]
+              nearest_distance=math.dist(first_center,nearest_center)
+              assert math.isfinite(nearest_distance) and nearest_distance>0
+              nearest_evidence=js("""
+                const viewer=document.getElementById('wre-scene');
+                const button=document.getElementById('wre-nearest-camera');
+                if(button.disabled) throw Error('Nearest camera navigation disabled');
+                button.click();
+                const marker=viewer.querySelector('[slot="hotspot-pair-second"]');
+                const projected=viewer.queryHotspot('hotspot-pair-second');
+                return {
+                  choice:document.getElementById('wre-baseline-choice').value,
+                  baseline:document.getElementById('wre-camera-baseline').textContent,
+                  details:document.getElementById('camera-details').textContent,
+                  target:viewer.getAttribute('camera-target'),
+                  orbit:viewer.getAttribute('camera-orbit'),
+                  markPosition:marker?.getAttribute('data-position')||null,
+                  projected:Boolean(projected && projected.canvasPosition &&
+                    Number.isFinite(projected.canvasPosition.x) &&
+                    Number.isFinite(projected.canvasPosition.y))
+                };
+              """)
+              assert nearest_evidence["choice"]==str(nearest_index)
+              assert f"{nearest_distance:.6f}" in nearest_evidence["baseline"]
+              assert "NOT capture time" in nearest_evidence["details"]
+              assert nearest_evidence["projected"]
+              actual_nearest=[float(v[:-1]) for v in nearest_evidence["markPosition"].split()]
+              assert all(
+                  math.isclose(a,b,rel_tol=1e-8,abs_tol=1e-6)
+                  for a,b in zip(actual_nearest,nearest_center)
+              )
+              nearest_midpoint=[
+                  (a+b)/2 for a,b in zip(first_center,nearest_center)
+              ]
+              actual_target=[float(v[:-1]) for v in nearest_evidence["target"].split()]
+              assert all(
+                  math.isclose(a,b,rel_tol=1e-8,abs_tol=1e-6)
+                  for a,b in zip(actual_target,nearest_midpoint)
+              )
+              expected_nearest_radius=max(nearest_distance*1.5,spread*0.12)
+              assert math.isclose(
+                  float(nearest_evidence["orbit"].split()[2][:-1]),
+                  expected_nearest_radius,rel_tol=1e-8,abs_tol=1e-6
+              )
               same_camera=js("""
                 const second=document.getElementById('wre-baseline-choice');
                 second.value='0';
