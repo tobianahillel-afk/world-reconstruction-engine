@@ -1883,6 +1883,15 @@ jobs:
             <button id="wre-native-distance-export" type="button" disabled>
               Save measured landmark pair as JSON
             </button>
+            <label for="wre-native-reference-metres">Optional independently known reference separation (metres)</label>
+            <input id="wre-native-reference-metres" type="number" min="0" step="any"
+              placeholder="e.g. measured with a tape; not inferred by SfM">
+            <button id="wre-native-reference-calibrate" type="button">
+              Use currently selected landmark pair as scale reference
+            </button>
+            <output id="wre-native-calibration-status" aria-live="polite">
+              Scale not calibrated. Reference lengths are user supplied, not verified by WRE.
+            </output>
             <output id="wre-native-distance-result" aria-live="polite">
               Two distinct native points; arbitrary SfM units, NOT meters.
             </output>
@@ -2096,7 +2105,26 @@ jobs:
           const distanceB=document.getElementById('wre-native-distance-b');
           const distanceOutput=document.getElementById('wre-native-distance-result');
           const distanceExport=document.getElementById('wre-native-distance-export');
-          let distanceEvidence=null;
+          const referenceMetres=document.getElementById('wre-native-reference-metres');
+          const calibrationStatus=document.getElementById('wre-native-calibration-status');
+          let distanceEvidence=null,userMetricReference=null;
+          const clearMetricReference=()=>{
+            userMetricReference=null;
+            calibrationStatus.textContent=
+              'Scale not calibrated. User measurements are not verified by WRE.';
+          };
+          const applyMetricReference=evidence=>{
+            if(!userMetricReference) return null;
+            const estimated=evidence.euclidean_distance_sfm_units*
+              userMetricReference.metres_per_sfm_unit;
+            if(!Number.isFinite(estimated) || estimated<=0)
+              throw Error('User-referenced estimated distance is not finite');
+            evidence.user_supplied_metric_reference={...userMetricReference};
+            evidence.estimated_distance_m_user_calibrated=estimated;
+            // Never label an externally asserted reference as machine-verified.
+            evidence.metric_scale_known=false;
+            return estimated;
+          };
           const clearDistanceMarkers=()=>{
             distanceEvidence=null;
             distanceExport.disabled=true;
@@ -2151,11 +2179,52 @@ jobs:
                   gpu_training_executed:false,
                   source_photo_license:'CC BY-NC 4.0 (noncommercial)'
                 };
+                if(userMetricReference){
+                  const estimated=applyMetricReference(distanceEvidence);
+                  distanceOutput.textContent+=' Estimated '+estimated.toFixed(6)+
+                    ' metres IF the user-provided reference is accurate; NOT WRE-verified.';
+                }
                 distanceExport.disabled=false;
               }catch(error){
                 clearDistanceMarkers();
                 distanceOutput.textContent='Native 3D distance failed: '+String(error);
               }
+            });
+
+          document.getElementById('wre-native-reference-calibrate')
+            .addEventListener('click',()=>{
+              if(!distanceEvidence || localUrl!==null || !viewer.loaded ||
+                 !Number.isFinite(distanceEvidence.euclidean_distance_sfm_units) ||
+                 distanceEvidence.euclidean_distance_sfm_units<=0){
+                calibrationStatus.textContent=
+                  'First measure two distinct 3D points on the verified source scene.';
+                return;
+              }
+              const known=Number(referenceMetres.value);
+              const factor=known/distanceEvidence.euclidean_distance_sfm_units;
+              if(!referenceMetres.value.trim() || !Number.isFinite(known) ||
+                 known<=0 || !Number.isFinite(factor) || factor<=0){
+                calibrationStatus.textContent=
+                  'Enter a finite positive independently measured reference in metres.';
+                return;
+              }
+              userMetricReference={
+                source_scene_glb_sha256:'WRE_SCENE_SHA256',
+                reference_point3d_ids:[
+                  distanceEvidence.first.point3d_id,
+                  distanceEvidence.second.point3d_id
+                ],
+                reference_distance_sfm_units:distanceEvidence.euclidean_distance_sfm_units,
+                reference_length_m_user_supplied:known,
+                metres_per_sfm_unit:factor,
+                reference_verified_by_wre:false
+              };
+              const estimated=applyMetricReference(distanceEvidence);
+              distanceOutput.textContent+=' Estimated '+estimated.toFixed(6)+
+                ' metres from user reference; NOT WRE-verified.';
+              calibrationStatus.textContent=
+                'User-supplied scale: '+factor.toPrecision(8)+
+                ' metres per SfM unit. Accuracy depends on external measurement.';
             });
 
           distanceExport.addEventListener('click',()=>{
@@ -2726,6 +2795,7 @@ jobs:
             sharedButton.disabled=true;
             clearPairMarkers();
             clearDistanceMarkers();
+            clearMetricReference();
             distanceOutput.textContent='Choose two native COLMAP points in the restored scene.';
             choice.value='';
             baselineChoice.value='';
@@ -2763,6 +2833,7 @@ jobs:
               clearPairMarkers();
               clearNativeLookupMarker();
               clearDistanceMarkers();
+              clearMetricReference();
               distanceOutput.textContent='Distance unavailable for unverified local GLB.';
               lookupOutput.textContent='Native SfM points unavailable for third-party GLB.';
               choice.value='';
