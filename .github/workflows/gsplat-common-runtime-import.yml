@@ -1,7 +1,7 @@
 name: gsplat-common-runtime-import
 
 # One exact Python/Torch/CUDA environment for the pinned trainer's *eager imports*.
-# CPU-hosted CUDA toolkit only: no GPU kernels, reconstruction, or training.
+# CPU-hosted CUDA toolkit: real-photo PyCOLMAP SfM on CPU, no GPU kernels or training.
 on:
   pull_request:
     paths:
@@ -593,7 +593,7 @@ jobs:
           assert len({sample["rgb_sum"] for sample in samples}) > 2
           receipt = {
               "kind": "wre-common-native-real-photo-colmap-cpu-v1",
-              "source_method": "deterministic_native_pycolmap_4.2.0_regeneration",
+              "source_method": "pinned_photos_native_pycolmap_4.2.0_regeneration",
               "source_dataset_commit": manifest["dataset_commit"],
               "source_credit": manifest["credit"],
               "source_artifact_expiry_dependency": False,
