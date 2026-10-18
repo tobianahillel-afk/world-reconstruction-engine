@@ -2646,6 +2646,49 @@ jobs:
                   float(nearest_evidence["orbit"].split()[2][:-1]),
                   expected_nearest_radius,rel_tol=1e-8,abs_tol=1e-6
               )
+              # Browser pair selection is checked against the original 16-camera
+              # PyCOLMAP-derived common 3D point-ID matrix, not invented pixels.
+              overlap=camera_data["pairwise_shared_sfm_tracks"]
+              assert overlap["measurement"]=="common_triangulated_3d_point_ids_in_sample"
+              assert overlap["camera_names"]==[c["image_name"] for c in actual_cameras]
+              counts=overlap["counts"]
+              assert len(counts)==16 and all(len(row)==16 for row in counts)
+              assert all(
+                  counts[i][j]==counts[j][i] and
+                  counts[i][j]<=min(
+                      actual_cameras[i]["triangulated_2d_observations"],
+                      actual_cameras[j]["triangulated_2d_observations"]
+                  )
+                  for i in range(16) for j in range(16)
+              )
+              best_overlap_index=max(range(1,16),key=lambda i:(counts[0][i],-i))
+              assert counts[0][best_overlap_index]>0
+              expected_overlap_distance=math.dist(
+                  first_center,actual_cameras[best_overlap_index]["camera_center_xyz"]
+              )
+              shared_evidence=js("""
+                const viewer=document.getElementById('wre-scene');
+                const button=document.getElementById('wre-most-shared-camera');
+                if(button.disabled) throw Error('Measured 3D shared-track action disabled');
+                button.click();
+                const b=document.getElementById('wre-baseline-choice');
+                const projected=viewer.queryHotspot('hotspot-pair-second');
+                return {
+                  choice:b.value,
+                  text:document.getElementById('wre-camera-baseline').textContent,
+                  details:document.getElementById('camera-details').textContent,
+                  framed:!viewer.hasAttribute('auto-rotate') &&
+                    Boolean(viewer.getAttribute('camera-target')),
+                  projected:Boolean(projected && projected.canvasPosition &&
+                    Number.isFinite(projected.canvasPosition.x))
+                };
+              """)
+              assert shared_evidence["choice"]==str(best_overlap_index)
+              assert str(counts[0][best_overlap_index])+" shared triangulated 3D tracks" in shared_evidence["text"]
+              assert f"{expected_overlap_distance:.6f}" in shared_evidence["text"]
+              assert "Most overlapping SfM camera" in shared_evidence["details"]
+              assert "NOT chronology or GPU training" in shared_evidence["details"]
+              assert shared_evidence["framed"] and shared_evidence["projected"]
               same_camera=js("""
                 const second=document.getElementById('wre-baseline-choice');
                 second.value='0';
@@ -2687,6 +2730,7 @@ jobs:
                       document.getElementById('wre-baseline-choice').disabled &&
                       document.getElementById('wre-frame-baseline').disabled &&
                       document.getElementById('wre-nearest-camera').disabled &&
+                      document.getElementById('wre-most-shared-camera').disabled &&
                       !viewer.querySelector('[slot^="hotspot-pair-"]') &&
                       document.getElementById('wre-camera-baseline').textContent
                         .includes('unavailable for unverified') &&
