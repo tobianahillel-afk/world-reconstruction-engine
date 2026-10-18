@@ -6,6 +6,7 @@ import json
 import math
 import os
 import shutil
+import sqlite3
 import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -464,15 +465,28 @@ def _read_geometry_evidence(
     database = pycolmap.Database.open(database_path)
     try:
         images = database.read_all_images()
-        pair_ids, raw_counts = database.read_num_matches()
         geometry_pair_ids, geometries = database.read_two_view_geometries()
     finally:
         database.close()
 
+    # L3.3 enumerates the canonical raw matches table directly. Some native
+    # read_num_matches() views omit raw pairs, which must not silently erase
+    # real L3.3 identities after geometric verification.
+    try:
+        with sqlite3.connect(f"file:{database_path}?mode=ro", uri=True) as connection:
+            raw_rows = connection.execute(
+                "SELECT pair_id, rows, cols FROM matches ORDER BY pair_id"
+            ).fetchall()
+    except sqlite3.Error as exc:
+        raise ColmapGeometricVerificationError(
+            "COLMAP verified database raw match table cannot be inspected"
+        ) from exc
+    if any(int(rows) < 0 or int(cols) != 2 for _, rows, cols in raw_rows):
+        raise ColmapGeometricVerificationError(
+            "COLMAP verified database has invalid raw match row dimensions"
+        )
     name_by_id = {int(image.image_id): str(image.name) for image in images}
-    raw_count_by_pair_id = {
-        int(pair_id): int(count) for pair_id, count in zip(pair_ids, raw_counts, strict=True)
-    }
+    raw_count_by_pair_id = {int(pair_id): int(rows) for pair_id, rows, _ in raw_rows}
     geometry_by_pair_id = {
         int(pair_id): geometry
         for pair_id, geometry in zip(geometry_pair_ids, geometries, strict=True)
