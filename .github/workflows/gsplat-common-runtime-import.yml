@@ -1598,3 +1598,145 @@ jobs:
             wre-real16-gsplat-seeds/preview-manifest.json
           if-no-files-found: error
           retention-days: 7
+
+  # Reuse WRE's independently CI-proven Chrome/WebGL browser pattern (#281).
+  browser-real16-scene:
+    name: Actual Chrome WebGL 16-camera scene (CPU SwiftShader)
+    if: ${{ always() }}
+    needs: combined-native-import
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - name: Download this exact run's offline 16-camera 3D bundle
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: wre-real16-offline-3d-viewer
+          path: wre-real16-browser-input
+
+      - name: Load genuine 16-camera SfM GLB in headless Chrome
+        shell: bash
+        run: |
+          set -euo pipefail
+          google-chrome --version
+          driver="$CHROMEWEBDRIVER/chromedriver"
+          test -x "$driver"
+          test -s wre-real16-browser-input/wre-real16-viewer.html
+          test -s wre-real16-browser-input/wre-real16-viewable-scene.glb
+          test -s wre-real16-browser-input/wre-model-viewer-4.1.0.min.js
+          mkdir -p wre-real16-browser-proof
+          python3 -m http.server 8765 --bind 127.0.0.1 \
+            --directory wre-real16-browser-input > wre-real16-browser-proof/http.log 2>&1 &
+          http_pid="$!"
+          "$driver" --port=9515 --allowed-ips=127.0.0.1 \
+            > wre-real16-browser-proof/chromedriver.log 2>&1 &
+          driver_pid="$!"
+          trap 'kill "$http_pid" "$driver_pid" 2>/dev/null || true' EXIT
+          python3 - <<'PY'
+          import base64
+          import hashlib
+          import json
+          import struct
+          import time
+          from pathlib import Path
+          from urllib.request import Request, urlopen
+
+          root = Path("wre-real16-browser-input")
+          proof = Path("wre-real16-browser-proof")
+          binary = (root / "wre-real16-viewable-scene.glb").read_bytes()
+          receipt = json.loads(
+              (root / "wre-real16-viewable-scene-receipt.json").read_text()
+          )
+          assert struct.unpack_from("<4sII", binary) == (b"glTF", 2, len(binary))
+          assert hashlib.sha256(binary).hexdigest() == receipt["sha256"]
+          assert receipt["registered_cameras"] == 16
+          host = "http://127.0.0.1:9515"
+          def call(method, route, body=None):
+              payload = None if body is None else json.dumps(body).encode("utf-8")
+              req = Request(
+                  host + route, data=payload, method=method,
+                  headers={"Content-Type": "application/json"},
+              )
+              with urlopen(req, timeout=40) as response:
+                  raw = response.read()
+              return json.loads(raw)["value"] if raw else None
+
+          for _ in range(50):
+              try:
+                  if call("GET", "/status")["ready"]:
+                      break
+              except (OSError, KeyError):
+                  pass
+              time.sleep(0.2)
+          else:
+              raise RuntimeError("ChromeDriver did not start")
+          session = call("POST", "/session", {
+              "capabilities": {"alwaysMatch": {
+                  "browserName": "chrome",
+                  "goog:chromeOptions": {"args": [
+                      "--headless=new", "--no-sandbox", "--disable-dev-shm-usage",
+                      "--enable-unsafe-swiftshader", "--use-gl=angle",
+                      "--use-angle=swiftshader", "--window-size=1280,900",
+                      "--disable-background-networking",
+                      "--host-resolver-rules=MAP * 0.0.0.0, EXCLUDE localhost",
+                  ]},
+              }}
+          })["sessionId"]
+          def js(script):
+              return call(
+                  "POST", f"/session/{session}/execute/sync",
+                  {"script": script, "args": []}
+              )
+          try:
+              call("POST", f"/session/{session}/url", {
+                  "url": "http://127.0.0.1:8765/wre-real16-viewer.html"
+              })
+              for _ in range(180):
+                  if js("""
+                    const v=document.getElementById('wre-scene');
+                    return Boolean(customElements.get('model-viewer') &&
+                      v && v.loaded === true && v.model &&
+                      v.getAttribute('src') === './wre-real16-viewable-scene.glb');
+                  """):
+                      break
+                  time.sleep(0.5)
+              else:
+                  raise RuntimeError("actual Chrome model-viewer GLB load failed")
+              assert js("""
+                const c=document.createElement('canvas');
+                return Boolean(c.getContext('webgl2') || c.getContext('webgl'));
+              """), "WebGL not available in Chrome"
+              png = base64.b64decode(
+                  call("GET", f"/session/{session}/screenshot"), validate=True
+              )
+              assert png.startswith(bytes.fromhex("89504e470d0a1a0a"))
+              assert len(png) > 10000
+              (proof / "real16-browser-render.png").write_bytes(png)
+              (proof / "browser-verification.json").write_text(
+                  json.dumps({
+                      "source_glb_sha256": receipt["sha256"],
+                      "registered_cameras": 16,
+                      "browser": "Chrome headless",
+                      "backend": "CPU SwiftShader WebGL",
+                      "real_gltf_loaded": True,
+                      "webgl_context": True,
+                      "screenshot_sha256": hashlib.sha256(png).hexdigest(),
+                      "metric_scale_known": False,
+                      "gpu_training_executed": False,
+                      "temporal_reconstruction_executed": False,
+                  }, indent=2, sort_keys=True) + "\n"
+              )
+              print("Real Chrome CPU WebGL loaded the 16-camera SfM GLB.")
+          finally:
+              call("DELETE", f"/session/{session}")
+          PY
+
+      - name: Retain real Chrome 3D rendering evidence
+        if: ${{ always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wre-real16-browser-render-proof
+          path: wre-real16-browser-proof/
+          if-no-files-found: warn
+          retention-days: 7
