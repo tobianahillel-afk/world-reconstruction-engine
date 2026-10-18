@@ -1,7 +1,7 @@
 name: gsplat-common-runtime-import
 
 # One exact Python/Torch/CUDA environment for the pinned trainer's *eager imports*.
-# CPU-hosted CUDA toolkit only: no GPU kernels, reconstruction, or training.
+# CPU-hosted CUDA toolkit: real-photo PyCOLMAP SfM on CPU, no GPU kernels or training.
 on:
   pull_request:
     paths:
@@ -274,17 +274,259 @@ jobs:
           print("No CUDA GPU, trainer optimization or real-photo geometry claimed.")
           PY
 
-      # Experimental bridge to the independently reconstructed real 16-photo
-      # COLMAP capture. The immutable GitHub artifact expires 2026-10-25:
-      # reconstitute the pinned source capture before treating this as mergeable.
-      - name: Retrieve exact previously reconstructed 16-photo undistorted COLMAP dataset
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
-        with:
-          repository: tobianahillel-afk/world-reconstruction-engine
-          run-id: 39082307350
-          name: wre-real-photo-undistorted-colmap-capture
-          github-token: ${{ github.token }}
-          path: ${{ github.workspace }}/wre-common-real-photo-capture
+      # Reconstruct genuine openMVG photographs at an immutable git revision.
+      # No cross-run expiring GitHub artifact, invented poses, or GPU requirement.
+      - name: Reconstruct and undistort sixteen genuine pinned photos on CPU
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Keep the WRE/native PyCOLMAP 4.2 reconstruction distinct from the
+          # gsplat trainer's older legacy SceneManager and pinned Python 3.10 ABI.
+          uv python install 3.12.10
+          uv sync --frozen --group dev --python 3.12.10
+          uv pip install --python .venv/bin/python "numpy==2.5.3" "pycolmap==4.2.0" "pillow==11.3.0"
+          .venv/bin/python - <<'PY'
+          from __future__ import annotations
+          import hashlib
+          import io
+          import json
+          import os
+          import shutil
+          import struct
+          import urllib.request
+          import zlib
+          from datetime import UTC, datetime, timedelta
+          from pathlib import Path
+          
+          import pycolmap
+          from PIL import Image, ImageOps
+          from wre.domain import (
+              ImageObservation, MediaAssetRef, ObservationId, Sha256Digest, SourceId, SourceRef,
+          )
+          from wre.domain.runs import ProducerRef, ReconstructionRun, ReconstructionRunId
+          from wre.reconstruction import (
+              ColmapFeatureExtractionConfig, ColmapFeatureExtractionRequest, ColmapFeatureInput,
+              ColmapPairMatchingConfig, ColmapPairMatchingRequest,
+              ColmapGeometricVerificationConfig, ColmapGeometricVerificationRequest,
+              ColmapIncrementalReconstructionConfig, ColmapIncrementalReconstructionRequest,
+              ColmapReconstructionInput, extract_colmap_features, match_colmap_pairs,
+              verify_colmap_geometry, reconstruct_colmap_incrementally,
+          )
+          
+          # These are upstream Git blob SHA-1 values (not hash-of-URL trust).
+          UPSTREAM = "323989164b1ea003aade5bf49480630ffc64acde"
+          PHOTOS = {
+              "DJI_0042.JPG": "7b799d410074a779dddbe840ec0d249889d25d8e",
+              "DJI_0043.JPG": "82398bb391df8625cc99d2cb08a7f917ca34f9a6",
+              "DJI_0044.JPG": "3b8067e31ceee8d6610e9eb43a225dd46eb0caf6",
+              "DJI_0045.JPG": "c422351723436e3f15fb5fe739d85341eaddbee9",
+              "DJI_0046.JPG": "7bbda14acbeb4ea76cc74927bb8ae3d70e459c42",
+              "DJI_0047.JPG": "a4a0385521c135cab13148b18ddecb51ae546c95",
+              "DJI_0048.JPG": "d3d255c466ff6df0ee85f2c21f0bd652937e010a",
+              "DJI_0049.JPG": "acb27dc2c21646f0abc21ca3d09c3b182c8008a5",
+              "DJI_0050.JPG": "c9731630136f635d2f38afab83be2e818b67df6e",
+              "DJI_0051.JPG": "23981f24c6ed624371a31f8403e57b2fc85c95ce",
+              "DJI_0052.JPG": "c5ef06a73fcca26c9eff5ffc724e1306ea5f882f",
+              "DJI_0053.JPG": "776550a6c1495c1b9780f211c34d769857e6fd10",
+              "DJI_0054.JPG": "bfbf63975b987e424859f9f0f6dd4a07438213e4",
+              "DJI_0055.JPG": "a0b1e76b2cf4b08c5dba71e9b32329388735351a",
+              "DJI_0056.JPG": "7883e696175adea52012a17a310a7504d141f1c0",
+              "DJI_0057.JPG": "2207d1b9b4117e7d47467f9ab7b9d6f809f89fc6",
+          }
+          assert pycolmap.__version__ == "4.2.0"
+
+          def png_chunk(kind: bytes, data: bytes) -> bytes:
+              return (
+                  struct.pack(">I", len(data)) + kind + data
+                  + struct.pack(">I", zlib.crc32(kind + data) & 0xffffffff)
+              )
+
+          def srgb_png(image: Image.Image) -> bytes:
+              width, height = image.size
+              assert 2 <= width <= 768 and 2 <= height <= 768
+              raster = image.tobytes()
+              stride = width * 3
+              scanlines = b"".join(
+                  b"\x00" + raster[start : start + stride]
+                  for start in range(0, len(raster), stride)
+              )
+              return (
+                  b"\x89PNG\r\n\x1a\n"
+                  + png_chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+                  + png_chunk(b"sRGB", b"\x00")
+                  + png_chunk(b"IDAT", zlib.compress(scanlines, 6))
+                  + png_chunk(b"IEND", b"")
+              )
+
+          root = Path(os.environ["RUNNER_TEMP"]) / "wre-regenerate-sixteen-views"
+          images = root / "images"
+          images.mkdir(parents=True, exist_ok=False)
+          inputs = []
+          credit = "Copyright 2021 Pierre MOULON; openMVG/Image_datasets"
+          for filename, pin in sorted(PHOTOS.items()):
+              url = (f"https://raw.githubusercontent.com/openMVG/Image_datasets/"
+                     f"{UPSTREAM}/Drone/Palm_Desert_Micro/{filename}")
+              with urllib.request.urlopen(url, timeout=60) as response:
+                  payload = response.read(8_000_001)
+              assert 0 < len(payload) <= 8_000_000, filename
+              digest = hashlib.sha1(
+                  f"blob {len(payload)}\0".encode() + payload
+              ).hexdigest()
+              assert digest == pin, f"unpinned real photograph: {filename}"
+              with Image.open(io.BytesIO(payload)) as original:
+                  rgb = ImageOps.exif_transpose(original).convert("RGB")
+              rgb.thumbnail((768, 768), Image.Resampling.LANCZOS)
+              source_path = images / f"{Path(filename).stem}.png"
+              source_path.write_bytes(srgb_png(rgb))
+              obs = ImageObservation(
+                  observation_id=ObservationId(f"obs:openmvg:{Path(filename).stem}"),
+                  asset=MediaAssetRef(
+                      uri=source_path.as_uri(),
+                      sha256=Sha256Digest(hashlib.sha256(source_path.read_bytes()).hexdigest()),
+                      byte_length=source_path.stat().st_size,
+                      mime_type="image/png",
+                  ),
+                  source=SourceRef(
+                      source_id=SourceId("openmvg:palm-desert-micro"),
+                      locator=filename,
+                  ),
+                  received_at=datetime(2026, 10, 17, tzinfo=UTC),
+              )
+              inputs.append(ColmapReconstructionInput(
+                  observation=obs, source_path=source_path, image_name=source_path.name,
+              ))
+          inputs = tuple(inputs)
+          observation_ids = tuple(item.observation.observation_id for item in inputs)
+          revision = str(pycolmap.COLMAP_build)
+          def run(kind: str, sha: Sha256Digest, minute: int) -> ReconstructionRun:
+              return ReconstructionRun(
+                  run_id=ReconstructionRunId(f"run:real-sixteen:{kind}"),
+                  producer=ProducerRef(
+                      implementation={
+                          "features": "pycolmap.extract_features",
+                          "matching": "pycolmap.match_exhaustive",
+                          "verification": "pycolmap.geometric_verification",
+                          "mapping": "pycolmap.incremental_mapping",
+                      }[kind],
+                      version="4.2.0", revision=revision,
+                  ),
+                  input_observation_ids=observation_ids,
+                  started_at=datetime(2026, 10, 17, tzinfo=UTC) + timedelta(minutes=minute),
+                  configuration_sha256=sha,
+              )
+          
+          feature_config = ColmapFeatureExtractionConfig()
+          features = extract_colmap_features(ColmapFeatureExtractionRequest(
+              run=run("features", feature_config.sha256, 0),
+              inputs=tuple(ColmapFeatureInput(
+                  observation=x.observation, source_path=x.source_path
+              ) for x in inputs),
+              database_path=root / "features.db", config=feature_config,
+          ), module=pycolmap)
+          names = {x.observation_id: x.image_name for x in features.images}
+          canonical = root / "canonical-images"
+          canonical.mkdir()
+          native_inputs = []
+          for entry in inputs:
+              name = names[entry.observation.observation_id]
+              target = canonical / name
+              target.write_bytes(entry.source_path.read_bytes())
+              native_inputs.append(ColmapReconstructionInput(
+                  observation=entry.observation, source_path=target, image_name=name,
+              ))
+          match_config = ColmapPairMatchingConfig()
+          matched = match_colmap_pairs(ColmapPairMatchingRequest(
+              run=run("matching", match_config.sha256, 1),
+              features=features, database_path=root / "matches.db", config=match_config,
+          ), module=pycolmap)
+          verify_config = ColmapGeometricVerificationConfig()
+          verified = verify_colmap_geometry(ColmapGeometricVerificationRequest(
+              run=run("verification", verify_config.sha256, 2),
+              matching=matched, database_path=root / "verified.db", config=verify_config,
+          ), module=pycolmap)
+          map_config = ColmapIncrementalReconstructionConfig(
+              min_model_size=2, max_num_models=1, max_runtime_seconds=900,
+          )
+          mapped = reconstruct_colmap_incrementally(ColmapIncrementalReconstructionRequest(
+              run=run("mapping", map_config.sha256, 3), verification=verified,
+              inputs=tuple(native_inputs), output_path=root / "native-sparse",
+              config=map_config,
+          ), module=pycolmap)
+          models = [m for m in mapped.models if m.num_registered_images == 16 and m.num_points3d > 100]
+          assert len(models) == 1, "the pinned genuine 16-view reconstruction was not reproduced"
+          # The gsplat Parser seeds SH0 appearance from native points3D RGB.
+          # Pure SfM can leave those RGB values black: extract observed colors
+          # from the REAL registered source photographs before undistortion.
+          # This uses COLMAP's own track-based color extraction, no new solver.
+          native_model_path = root / "native-sparse" / "0"
+          colored_model = pycolmap.Reconstruction(str(native_model_path))
+          colored_model.extract_colors_for_all_images(str(canonical))
+          colored_model.write(str(native_model_path))
+          # Reuse PyCOLMAP's real XYZ/RGB exporter: this is observed SfM,
+          # not a trained Gaussian field or an estimated metric-scale scene.
+          display_ply = Path(os.environ["GITHUB_WORKSPACE"]) / "wre-real16-observed-rgb.ply"
+          colored_model.export_PLY(str(display_ply))
+          rgb_bytes = display_ply.read_bytes()
+          ply_header = rgb_bytes.split(b"end_header\n", 1)[0]
+          assert rgb_bytes.startswith(b"ply\n")
+          assert b"element vertex " + str(colored_model.num_points3D()).encode() + b"\n" in ply_header
+          assert all(b"property uchar " + channel in ply_header for channel in (b"red", b"green", b"blue"))
+          print("REAL 16-PHOTO RGB 3D PLY EXPORTED:", len(rgb_bytes), "bytes")
+          print("NATIVE PHOTO-OBSERVED 3D POINT RGB EXTRACTED")
+          capture = Path(os.environ["GITHUB_WORKSPACE"]) / "wre-common-real-photo-capture"
+          undistorted = root / "undistorted"
+          pycolmap.undistort_images(
+              output_path=str(undistorted), input_path=str(root / "native-sparse" / "0"),
+              image_path=str(canonical), output_type="COLMAP", num_threads=1,
+          )
+          (capture / "sparse").mkdir(parents=True)
+          shutil.copytree(undistorted / "sparse", capture / "sparse" / "0")
+          shutil.copytree(undistorted / "images", capture / "images")
+          reloaded = pycolmap.Reconstruction(str(capture / "sparse" / "0"))
+          assert reloaded.num_reg_images() == 16
+          points = reloaded.num_points3D()
+          assert points == models[0].num_points3d
+          views = {}
+          for image_id in sorted(int(i) for i in reloaded.reg_image_ids()):
+              registered = reloaded.image(image_id)
+              camera = reloaded.camera(registered.camera_id)
+              name = registered.name
+              assert Path(name).name == name
+              photo = capture / "images" / name
+              assert photo.is_file()
+              with Image.open(photo) as decoded:
+                  decoded.load()
+                  assert decoded.size == (camera.width, camera.height)
+              camera_model = camera.model.name if hasattr(camera.model, "name") else str(camera.model)
+              assert camera_model in ("PINHOLE", "SIMPLE_PINHOLE")
+              views[name] = {
+                  "camera_id": int(registered.camera_id),
+                  "camera_model": camera_model,
+                  "rgb_asset_sha256": hashlib.sha256(photo.read_bytes()).hexdigest(),
+                  "width": camera.width, "height": camera.height,
+              }
+          assert len(views) == 16
+          files = sorted(p for p in capture.rglob("*") if p.is_file())
+          file_hashes = {
+              p.relative_to(capture).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+              for p in files
+          }
+          manifest = {
+              "schema": "wre.experimental.colmap_undistorted_capture.v1",
+              "native_registered_views": 16, "undistorted_registered_views": 16,
+              "native_points3d": points, "undistorted_points3d": points,
+              "views": views, "file_sha256": file_hashes,
+              "license": "CC BY-NC 4.0 Attribution-NonCommercial; experimental use only",
+              "credit": credit, "dataset_commit": UPSTREAM,
+              "metric_scale_known": False, "color_radiometry_calibrated": False,
+              "gpu_training_executed": False, "gsplat_training_validated": False,
+          }
+          (capture / "wre-capture-manifest.json").write_text(
+              json.dumps(manifest, sort_keys=True, indent=2) + "\n", encoding="utf-8",
+          )
+          print("REGENERATED AUTHENTIC 16-PHOTO COLMAP:", len(views), "registered,", points, "3D points")
+          print("Noncommercial photos; GPU kernels and trainer optimization NOT executed")
+          PY
 
       - name: Decode ALL real-photo COLMAP data in the SAME pinned native trainer environment
         shell: bash
@@ -343,6 +585,10 @@ jobs:
           assert np.isfinite(parser.camtoworlds).all()
           assert np.isfinite(parser.points).all()
           assert np.unique(parser.points_rgb, axis=0).shape[0] > 10
+          rgb_ply = Path(os.environ["GITHUB_WORKSPACE"]) / "wre-real16-observed-rgb.ply"
+          ply_bytes = rgb_ply.read_bytes()
+          assert ply_bytes.startswith(b"ply\n")
+          assert b"element vertex " + str(len(parser.points)).encode() + b"\n" in ply_bytes.split(b"end_header\n", 1)[0]
           assert np.linalg.norm(np.ptp(parser.camtoworlds[:, :3, 3], axis=0)) > 0
           assert all(len(params) == 0 for params in parser.params_dict.values())
 
@@ -370,9 +616,10 @@ jobs:
           assert len({sample["rgb_sum"] for sample in samples}) > 2
           receipt = {
               "kind": "wre-common-native-real-photo-colmap-cpu-v1",
-              "source_artifact_run": 39082307350,
-              "source_artifact_id": 12119207552,
-              "source_artifact_digest": "sha256:12ae04e73106f4ff929ed7dd6cebe1a2ca7bdc323cff9fcad78f9cb8087410e9",
+              "source_method": "pinned_photos_native_pycolmap_4.2.0_regeneration",
+              "source_dataset_commit": manifest["dataset_commit"],
+              "source_credit": manifest["credit"],
+              "source_artifact_expiry_dependency": False,
               "source_manifest_sha256": hashlib.sha256(candidates[0].read_bytes()).hexdigest(),
               "native_environment": {
                   "torch": torch.__version__,
@@ -381,6 +628,14 @@ jobs:
               },
               "real_source_photo_count": 16,
               "real_colmap_points": int(len(parser.points)),
+              "observed_rgb_geometry_ply": {
+                  "filename": rgb_ply.name,
+                  "sha256": hashlib.sha256(ply_bytes).hexdigest(),
+                  "bytes": len(ply_bytes),
+                  "vertices": int(len(parser.points)),
+                  "kind": "untrained_native_sfm_photo_observed_rgb_xyz",
+                  "metric_scale_known": False,
+              },
               "native_parser_cpu_train_views": len(train),
               "native_parser_cpu_validation_views": len(validation),
               "decoded_photo_shapes_and_rgb_sums": samples,
@@ -392,6 +647,13 @@ jobs:
           }
           out = Path(os.environ["GITHUB_WORKSPACE"]) / "wre-common-native-real-photo-receipt.json"
           out.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          (Path(os.environ["GITHUB_WORKSPACE"]) / "wre-real16-observed-rgb-LICENSE.txt").write_text(
+              "Photographs by Pierre Moulon, OpenMVG Palm Desert Micro DJI, "
+              "CC BY-NC 4.0 (https://creativecommons.org/licenses/by-nc/4.0/).\n"
+              "Derived RGB 3D is for NONCOMMERCIAL experimental reuse only.\n"
+              "Sparse SfM reconstruction, NOT trained gsplat, metric scale or 4D.\n",
+              encoding="utf-8",
+          )
           print(
               "REAL 16-PHOTO COMMON NATIVE COLMAP PASS:",
               len(parser.image_names), "authentic photographed frames,",
@@ -400,10 +662,13 @@ jobs:
           print("GPU training NONE; native extensions were imported, never executed on GPU.")
           PY
 
-      - name: Publish compact real-photo native-import receipt without redistributing photos
+      - name: Publish real 16-photo SfM RGB PLY and attribution without source photographs
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: wre-common-native-real-photo-receipt
-          path: wre-common-native-real-photo-receipt.json
+          name: wre-common-native-real-photo-sfm-rgb
+          path: |
+            wre-common-native-real-photo-receipt.json
+            wre-real16-observed-rgb.ply
+            wre-real16-observed-rgb-LICENSE.txt
           if-no-files-found: error
           retention-days: 7
