@@ -1604,6 +1604,21 @@ jobs:
           # measurement, not only eight sampled landmarks in a camera pair.
           poses = json.loads(Path("wre-real16-camera-poses.json").read_text())
           cameras_by_id = {int(c["image_id"]): c for c in poses["cameras"]}
+          # Join actual positive camera-Z observations to native 3D tracks.
+          # No re-triangulation: unmeasured/negative depths remain absent.
+          positive_depths = {}
+          with Path("wre-real16-native-sparse-depth-observations.csv").open(
+              encoding="utf-8", newline=""
+          ) as stream:
+              for row in csv.DictReader(stream):
+                  key = (
+                      int(row["image_id"]), int(row["point3d_id"]),
+                      int(row["point2d_idx"]),
+                  )
+                  z = float(row["camera_z_sfm_units"])
+                  assert key not in positive_depths and math.isfinite(z) and z > 0
+                  positive_depths[key] = (row, z)
+          assert len(positive_depths) > 100
           points = {}
           seen_pixels = set()
           with Path("wre-real16-native-2d3d-tracks.csv").open(
@@ -1628,10 +1643,28 @@ jobs:
                       "xyz": xyz, "in_sample_error_px": error, "observations": [],
                   })
                   assert point["xyz"] == xyz and point["in_sample_error_px"] == error
-                  point["observations"].append({
+                  observation = {
                       "image_id": image_id, "image_name": row["image_name"],
                       "point2d_idx": pixel_id, "pixel": uv,
-                  })
+                  }
+                  measured = positive_depths.pop((image_id, pid, pixel_id), None)
+                  if measured is not None:
+                      depth_row, z = measured
+                      assert depth_row["image_name"] == row["image_name"]
+                      assert depth_row["image_sha256"] == row["image_sha256"]
+                      assert all(
+                          math.isclose(float(depth_row["world_" + axis]), value,
+                                       rel_tol=1e-9, abs_tol=1e-8)
+                          for axis, value in zip(("x", "y", "z"), xyz, strict=True)
+                      )
+                      assert all(
+                          math.isclose(float(depth_row["pixel_" + axis]), value,
+                                       rel_tol=1e-9, abs_tol=1e-8)
+                          for axis, value in zip(("x", "y"), uv, strict=True)
+                      )
+                      observation["positive_camera_z_sfm_units"] = z
+                  point["observations"].append(observation)
+          assert not positive_depths
           assert len(points) == geom["sparse_points3d"]
           assert len(seen_pixels) == geom["track_observations"]
           for point in points.values():
@@ -1978,7 +2011,11 @@ jobs:
                 const match=[...cameraEvidence.entries()].find(([,camera])=>
                   camera.image_id===o.image_id && camera.image_name===o.image_name);
                 if(!match) throw Error('Native observation has no registered camera');
-                return {index:match[0],pixel:o.pixel,image_name:o.image_name};
+                const z=o.positive_camera_z_sfm_units;
+                if(z!==undefined && (!Number.isFinite(z) || z<=0)){
+                  throw Error('Invalid measured camera-Z for this native landmark');
+                }
+                return {index:match[0],pixel:o.pixel,image_name:o.image_name,depth:z};
               });
               nativePoint={id,observed};
               nativeCameraChoice.replaceChildren(new Option('Choose measured camera',''));
@@ -2007,8 +2044,10 @@ jobs:
                 'native in-sample reprojection error '+
                 point.in_sample_error_px.toFixed(4)+' px. '+
                 rgbDescription+
-                observations.map(o=>o.image_name+' #'+o.point2d_idx+
-                  ' ('+o.pixel.map(v=>v.toFixed(1)).join(', ')+')').join(' · ')+
+                observed.map((o,i)=>o.image_name+' #'+observations[i].point2d_idx+
+                  ' ('+o.pixel.map(v=>v.toFixed(1)).join(', ')+')'+
+                  (o.depth===undefined ? ' (no positive camera-Z sample)' :
+                   ' camera-Z '+o.depth.toFixed(5)+' arbitrary SfM units')).join(' · ')+
                 '. Not metric, held-out quality, time, GPU training or 4D.';
             } catch(error){
               clearNativeLookupMarker();
@@ -3250,6 +3289,7 @@ jobs:
                       int(track["point2d_idx"]),
                   ))
           observed = set()
+          depth_by_native_observation = {}
           csv_path = root / depth_report["depth_observations_csv"]
           with csv_path.open(newline="") as stream:
               for row in csv.DictReader(stream):
@@ -3270,7 +3310,9 @@ jobs:
                       measured = float(row["camera_" + axis_name + "_sfm_units"])
                       assert math.isfinite(measured)
                       assert math.isclose(measured, expected, rel_tol=1e-9, abs_tol=1e-8)
-                  assert float(row["camera_z_sfm_units"]) > 0
+                  z = float(row["camera_z_sfm_units"])
+                  assert math.isfinite(z) and z > 0
+                  depth_by_native_observation[key] = z
           assert len(observed) == depth_report["depth_observations_csv_records"]
           assert len(observed) == depth_report["positive_depth_observations"]
           with zipfile.ZipFile(root / "wre-real16-native-sparse-depth.npz") as archive:
@@ -3309,6 +3351,19 @@ jobs:
           assert lookup["observation_count"] == geom_quality["track_observations"]
           assert len(lookup["points"]) == lookup["point_count"]
           assert set(point_rgb) <= set(lookup["points"])
+          matched_depths = {}
+          for point_id, point in lookup["points"].items():
+              for obs in point["observations"]:
+                  key = (int(obs["image_id"]), int(point_id), int(obs["point2d_idx"]))
+                  if key in depth_by_native_observation:
+                      actual = float(obs["positive_camera_z_sfm_units"])
+                      expected = depth_by_native_observation[key]
+                      assert math.isfinite(actual) and actual > 0
+                      assert math.isclose(actual, expected, rel_tol=1e-12, abs_tol=1e-10)
+                      matched_depths[key] = actual
+                  else:
+                      assert "positive_camera_z_sfm_units" not in obs
+          assert matched_depths == depth_by_native_observation
           assert quality["source_dataset_commit"] == receipt["source_dataset_commit"]
           assert geom_quality["registered_views"] == 16
           assert geom_quality["sparse_points3d"] > 100
@@ -3415,7 +3470,13 @@ jobs:
                   raise RuntimeError("Sixteen actual SfM camera choices never loaded")
               # Search a REAL native COLMAP landmark from the full 3D index,
               # not just the first 8 sampled points per selected camera pair.
-              selected_id=min(int(pid) for pid in point_rgb)
+              selected_id=min(
+                  int(pid) for pid in point_rgb
+                  if any(
+                      "positive_camera_z_sfm_units" in o
+                      for o in lookup["points"][pid]["observations"]
+                  )
+              )
               selected_point=lookup["points"][str(selected_id)]
               assert len(selected_point["observations"]) >= 2
               assert js("""
@@ -3458,6 +3519,14 @@ jobs:
                   'RGB disagreement'
               ) in result["text"]
               assert str(len(selected_point["observations"]))+" measured camera observations" in result["text"]
+              measured_depths = [
+                  o["positive_camera_z_sfm_units"]
+                  for o in selected_point["observations"]
+                  if "positive_camera_z_sfm_units" in o
+              ]
+              assert measured_depths
+              for depth in measured_depths:
+                  assert f"camera-Z {depth:.5f} arbitrary SfM units" in result["text"]
               for observation in selected_point["observations"][:3]:
                   assert observation["image_name"] in result["text"]
                   assert "#"+str(observation["point2d_idx"]) in result["text"]
