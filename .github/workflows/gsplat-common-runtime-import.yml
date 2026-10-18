@@ -2191,6 +2191,19 @@ jobs:
               }
             });
 
+          referenceMetres.addEventListener('input',()=>{
+            clearMetricReference();
+            if(distanceEvidence){
+              delete distanceEvidence.user_supplied_metric_reference;
+              delete distanceEvidence.estimated_distance_m_user_calibrated;
+              distanceOutput.textContent='Native COLMAP points '+
+                distanceEvidence.first.point3d_id+' and '+
+                distanceEvidence.second.point3d_id+': distance '+
+                distanceEvidence.euclidean_distance_sfm_units.toFixed(6)+
+                ' arbitrary SfM units. Previous metric estimate cleared.';
+            }
+          });
+
           document.getElementById('wre-native-reference-calibrate')
             .addEventListener('click',()=>{
               if(!distanceEvidence || localUrl!==null || !viewer.loaded ||
