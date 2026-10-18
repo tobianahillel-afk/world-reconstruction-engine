@@ -1151,6 +1151,11 @@ jobs:
             padding:10px 18px;background:#202b3d}
           #local-model input,#local-model button {color:#fff;padding:7px}
           #local-model-status {font-size:13px;flex-basis:100%}
+          #wre-source-photo {padding:8px 18px;background:#152238;
+            display:flex;align-items:center;flex-wrap:wrap;gap:10px}
+          #wre-source-photo input {color:#fff}
+          #wre-photo-status {font-size:13px;flex-basis:100%}
+          #wre-photo-image {max-height:180px;max-width:100%;object-fit:contain}
           .wre-pair-hotspot {border:2px solid #eaf5ff;border-radius:50%;
             width:30px;height:30px;display:grid;place-items:center;
             font:bold 16px system-ui;box-shadow:0 0 0 2px #162236;
@@ -1199,6 +1204,16 @@ jobs:
               Only the original scene is verified. Local files stay in this browser.
             </output>
           </section>
+          <section id="wre-source-photo" aria-label="Compare locally supplied source photograph">
+            <label for="wre-source-files">Compare original camera photographs (local only)</label>
+            <input id="wre-source-files" type="file" multiple
+              accept="image/jpeg,image/png,image/webp">
+            <output id="wre-photo-status" aria-live="polite">
+              Source photos are not bundled. Supply files matching reconstructed camera names;
+              they stay in this browser, with no upload or calibration claim.
+            </output>
+            <img id="wre-photo-image" hidden alt="Locally provided camera photograph">
+          </section>
           <model-viewer id="wre-scene" camera-controls auto-rotate
             interaction-prompt="auto"
             alt="Sparse CPU 3D reconstruction of 16 real photographs"
@@ -1224,6 +1239,65 @@ jobs:
           const framePair=document.getElementById('wre-frame-baseline');
           const nearestButton=document.getElementById('wre-nearest-camera');
           const details=document.getElementById('camera-details');
+          const photoInput=document.getElementById('wre-source-files');
+          const photoStatus=document.getElementById('wre-photo-status');
+          const photoImage=document.getElementById('wre-photo-image');
+          const photoUrls=new Map();
+          const cameraNames=new Set();
+          const showLocalPhoto=()=>{
+            photoImage.hidden=true;
+            photoImage.removeAttribute('src');
+            if(localUrl){
+              photoStatus.textContent='Original source-photo comparison is disabled for '+
+                'an unverified local GLB.';
+              return;
+            }
+            if(choice.value===''){
+              photoStatus.textContent='Select a reconstructed camera to compare a '+
+                'locally supplied source photograph (not a calibrated rendering).';
+              return;
+            }
+            const name=choice.selectedOptions[0]?.textContent?.split(' · ').slice(1).join(' · ');
+            const url=photoUrls.get(name);
+            if(!url){
+              photoStatus.textContent='No local photograph supplied for '+name+
+                '. Images are never uploaded.';
+              return;
+            }
+            photoImage.alt='Locally provided photo matching reconstructed camera '+name;
+            photoImage.src=url;
+            photoImage.hidden=false;
+            photoStatus.textContent='Local photo: '+name+
+              ' (user supplied; not verified WRE image evidence or GPU render).';
+          };
+          photoInput.addEventListener('change',()=>{
+            const files=Array.from(photoInput.files||[]);
+            if(!files.length) return;
+            try {
+              if(cameraNames.size!==16 || files.length>16){
+                throw Error('Load the 16 camera names first; select at most 16 photos');
+              }
+              const replacements=new Map();
+              for(const file of files){
+                if(!cameraNames.has(file.name) || replacements.has(file.name) ||
+                    file.size<1 || file.size>12*1024*1024 ||
+                    !['image/jpeg','image/png','image/webp'].includes(file.type)){
+                  throw Error('Use distinct matching camera filenames, JPEG/PNG/WebP, up to 12 MiB');
+                }
+                replacements.set(file.name,file);
+              }
+              const newUrls=new Map();
+              for(const [name,file] of replacements){
+                newUrls.set(name,URL.createObjectURL(file));
+              }
+              for(const url of photoUrls.values()) URL.revokeObjectURL(url);
+              photoUrls.clear();
+              for(const [name,url] of newUrls) photoUrls.set(name,url);
+              showLocalPhoto();
+            } catch(error) {
+              photoStatus.textContent='Local photo selection rejected: '+String(error);
+            }
+          });
           let focusCamera=null;
           const clearPairMarkers=()=>{
             viewer.querySelectorAll('[slot^="hotspot-pair-"]').forEach(node=>node.remove());
@@ -1285,6 +1359,7 @@ jobs:
             if(oldUrl) URL.revokeObjectURL(oldUrl);
             choice.disabled=choice.options.length!==17;
             baselineChoice.disabled=baselineChoice.options.length!==17;
+            showLocalPhoto();
             framePair.disabled=true;
             nearestButton.disabled=true;
             clearPairMarkers();
@@ -1318,6 +1393,7 @@ jobs:
               choice.disabled=true;
               baselineChoice.disabled=true;
               framePair.disabled=true;
+              showLocalPhoto();
               nearestButton.disabled=true;
               clearPairMarkers();
               choice.value='';
@@ -1352,6 +1428,7 @@ jobs:
             clearPairMarkers();
             baselineOutput.textContent='Select two SfM cameras; distance is not in metres.';
             details.textContent='General orbit restored; filename order is not chronology.';
+            showLocalPhoto();
           });
           try {
             const response=await fetch('./wre-real16-camera-poses.json');
@@ -1381,6 +1458,7 @@ jobs:
             choice.replaceChildren(new Option('Select camera',''));
             baselineChoice.replaceChildren(new Option('Select second camera',''));
             cameras.forEach((c,i)=>{
+              cameraNames.add(c.image_name);
               const label=(i+1)+' · '+c.image_name;
               choice.add(new Option(label,String(i)));
               baselineChoice.add(new Option(label,String(i)));
@@ -1478,6 +1556,7 @@ jobs:
                 c.detected_2d_keypoints+' measured 2D keypoints linked to 3D SfM tracks '+
                 '(in-sample, NOT a novel-view accuracy score). '+
                 'Approximate orbit, not image-calibrated roll or 4D.';
+              showLocalPhoto();
             };
             choice.addEventListener('change',()=>{
               updateBaseline();
