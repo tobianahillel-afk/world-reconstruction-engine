@@ -1695,6 +1695,9 @@ jobs:
               "depth_bin_to_point3d_id": {
                   key: value[1] for key, value in sorted(depth_bins.items())
               },
+              "depth_bin_to_camera_z_sfm_units": {
+                  key: value[0] for key, value in sorted(depth_bins.items())
+              },
               "points": points,
           }
           (output / "wre-real16-native-landmark-lookup.json").write_text(
