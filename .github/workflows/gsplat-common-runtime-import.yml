@@ -1056,9 +1056,29 @@ jobs:
           assert receipt["gpu_training_executed"] is False
           assert receipt["metric_scale_known"] is False
 
+          quality = json.loads(Path("wre-real16-sfm-quality.json").read_text())
+          geom = quality["geometry_quality"]
+          assert quality["schema"] == "wre.experimental.real_photo_sfm_quality.v1"
+          assert quality["source_dataset_commit"] == receipt["source_dataset_commit"]
+          assert geom["kind"] == "native_sparse_sfm_in_sample_geometry_v1"
+          assert geom["registered_views"] == 16
+          assert geom["sparse_points3d"] > 100
+          assert geom["track_observations"] >= 2 * geom["sparse_points3d"]
+          assert 0 <= geom["mean_reprojection_error_colmap_px"] < float("inf")
+          assert geom["held_out_image_quality_measured"] is False
+          assert geom["gpu_optimization_executed"] is False
+          assert geom["metric_scale_known"] is False
+          measured_quality = (
+              f'{geom["registered_views"]} registered cameras · '
+              f'{geom["sparse_points3d"]} real 3D points · '
+              f'{geom["track_observations"]} track observations · '
+              f'mean reprojection error {geom["mean_reprojection_error_colmap_px"]:.3f} px '
+              '(COLMAP, in-sample; NOT held-out image quality or trained 3DGS).'
+          )
           output = Path("wre-real16-offline-viewer")
           output.mkdir(exist_ok=False)
           shutil.copyfile(source, output / source.name)
+          shutil.copyfile("wre-real16-sfm-quality.json", output / "wre-real16-sfm-quality.json")
           for name in (
               "wre-real16-viewable-scene-receipt.json",
               "wre-real16-observed-rgb-LICENSE.txt",
@@ -1119,6 +1139,7 @@ jobs:
           #camera-navigation select,#camera-navigation button {background:#273950;
             border:1px solid #8097b2;border-radius:5px;color:#fff;padding:8px}
           #camera-details {font-size:13px;line-height:1.45;flex-basis:100%}
+          #wre-sfm-quality {padding:9px 18px;background:#162235;line-height:1.45}
           #local-model {display:flex;flex-wrap:wrap;align-items:center;gap:9px;
             padding:10px 18px;background:#202b3d}
           #local-model input,#local-model button {color:#fff;padding:7px}
@@ -1135,6 +1156,10 @@ jobs:
           <p>Source: Pierre Moulon, OpenMVG Palm Desert Micro, CC BY-NC 4.0
           <strong>NONCOMMERCIAL</strong>. No original photographs are distributed.</p>
           </header>
+          <section id="wre-sfm-quality" aria-label="Measured real SfM geometry">
+            <strong>Measured CPU SfM quality (in-sample)</strong>
+            <output id="wre-sfm-quality-value">WRE_MEASURED_QUALITY</output>
+          </section>
           <section id="camera-navigation" aria-label="Inspect reconstructed cameras">
             <label for="wre-camera-choice">Reconstructed camera (filename order, not time)</label>
             <select id="wre-camera-choice" disabled>
@@ -1174,6 +1199,7 @@ jobs:
           <p>Scene SHA-256: WRE_SCENE_SHA256</p>
           <p><a download href="./wre-real16-viewable-scene.glb">Download GLB</a>
           · <a download href="./wre-real16-camera-poses.json">Camera poses</a>
+          · <a download href="./wre-real16-sfm-quality.json">SfM quality evidence</a>
           · <a href="./wre-real16-viewable-scene-receipt.json">Provenance</a></p>
           <p>Offline: extract the archive and run
           <code>python3 -m http.server 8765 --bind 127.0.0.1</code>,
@@ -1248,6 +1274,7 @@ jobs:
             resetOrbit();
             details.textContent='Original 16-camera reconstruction restored.';
             importStatus.textContent='Verified WRE source scene restored.';
+            document.getElementById('wre-sfm-quality').hidden=false;
           });
           input.addEventListener('change',async()=>{
             const file=input.files && input.files[0];
@@ -1277,6 +1304,7 @@ jobs:
               baselineOutput.textContent='Baseline unavailable for unverified local GLB.';
               resetOrbit();
               details.textContent='Original COLMAP cameras only apply to the original scene.';
+              document.getElementById('wre-sfm-quality').hidden=true;
               importStatus.textContent='Loading local GLB: '+file.name+
                 '. Unverified third-party scene; no WRE provenance or metric scale.';
             } catch(error) {
@@ -1407,6 +1435,7 @@ jobs:
           </script>
           </body></html>"""
           html = html.replace("WRE_SCENE_SHA256", receipt["sha256"])
+          html = html.replace("WRE_MEASURED_QUALITY", measured_quality)
           (output / "wre-real16-viewer.html").write_text(html, encoding="utf-8")
           manifest = {
               "schema": "wre.experimental.real16_offline_viewer.v1",
@@ -1944,6 +1973,12 @@ jobs:
           assert struct.unpack_from("<4sII", binary) == (b"glTF", 2, len(binary))
           assert hashlib.sha256(binary).hexdigest() == receipt["sha256"]
           assert receipt["registered_cameras"] == 16
+          quality = json.loads((root / "wre-real16-sfm-quality.json").read_text())
+          geom_quality = quality["geometry_quality"]
+          assert quality["source_dataset_commit"] == receipt["source_dataset_commit"]
+          assert geom_quality["registered_views"] == 16
+          assert geom_quality["sparse_points3d"] > 100
+          assert geom_quality["held_out_image_quality_measured"] is False
           host = "http://127.0.0.1:9515"
           def call(method, route, body=None):
               payload = None if body is None else json.dumps(body).encode("utf-8")
@@ -2000,6 +2035,16 @@ jobs:
                 const c=document.createElement('canvas');
                 return Boolean(c.getContext('webgl2') || c.getContext('webgl'));
               """), "WebGL not available in Chrome"
+              shown=js("""
+                const panel=document.getElementById('wre-sfm-quality');
+                return !panel.hidden && document.getElementById('wre-sfm-quality-value')
+                  .textContent;
+              """)
+              assert str(geom_quality["sparse_points3d"]) in shown
+              assert str(geom_quality["track_observations"]) in shown
+              expected_error=f'{geom_quality["mean_reprojection_error_colmap_px"]:.3f}'
+              assert expected_error+' px (COLMAP, in-sample;' in shown
+              assert "NOT held-out image quality or trained 3DGS" in shown
               for _ in range(40):
                   if js("""
                     const c=document.getElementById('wre-camera-choice');
@@ -2147,7 +2192,8 @@ jobs:
                       document.getElementById('wre-camera-baseline').textContent
                         .includes('unavailable for unverified') &&
                       document.getElementById('local-model-status')
-                        .textContent.includes('Local GLB loaded');
+                        .textContent.includes('Local GLB loaded') &&
+                      document.getElementById('wre-sfm-quality').hidden;
                   """):
                       break
                   time.sleep(0.25)
@@ -2194,7 +2240,8 @@ jobs:
                 return viewer.getAttribute('src')==='./wre-real16-viewable-scene.glb' &&
                   !camera.disabled && viewer.hasAttribute('auto-rotate') &&
                   document.getElementById('wre-frame-baseline').disabled &&
-                  !viewer.querySelector('[slot^="hotspot-pair-"]');
+                  !viewer.querySelector('[slot^="hotspot-pair-"]') &&
+                  !document.getElementById('wre-sfm-quality').hidden;
               """), "Original real-photo viewer or camera control was not restored"
               for _ in range(40):
                   if js("""
