@@ -694,10 +694,15 @@ jobs:
           assert binary_kind == b"BIN\x00"
           assert original_bin_offset + 8 + binary_length == len(payload)
           binary_chunk = payload[original_bin_offset:]
+          doc["asset"]["copyright"] = (
+              f'{manifest["credit"]}; {manifest["license"]}; NONCOMMERCIAL use only'
+          )
           doc["cameras"] = cameras
           doc["nodes"].extend(nodes)
           doc["scenes"][0]["nodes"].extend(range(1, len(nodes) + 1))
           doc["extras"]["registered_colmap_cameras"] = 16
+          doc["extras"]["source_dataset_commit"] = manifest["dataset_commit"]
+          doc["extras"]["license"] = manifest["license"]
           doc["extras"]["camera_pose_basis"] = "COLMAP camera +Z/+Ydown to glTF -Z/+Yup"
           doc["extras"]["camera_motion_or_time_reconstruction"] = False
           encoded = json.dumps(
