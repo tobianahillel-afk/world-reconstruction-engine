@@ -2108,7 +2108,7 @@ jobs:
               'property double x','property double y','property double z','end_header'
             ];
             for(const xyz of positions.values()) lines.push(xyz.join(' '));
-            const blob=new Blob([lines.join('\n')+'\n'],{type:'application/octet-stream'});
+            const blob=new Blob([lines.join('\\n')+'\\n'],{type:'application/octet-stream'});
             const href=URL.createObjectURL(blob);
             const link=document.createElement('a');
             link.href=href;link.download='wre-measured-sparse-depth-roi-native.ply';
