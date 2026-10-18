@@ -3643,17 +3643,21 @@ jobs:
                  .replace("__V__",repr(second_obs["pixel"][1])))
               for _ in range(60):
                   second_state=js("""
-                    const marker=document.getElementById('wre-native-photo-pixel');
+                    const marker=document.getElementById('wre-native-photo-pixel-b');
                     return {
                       point:document.getElementById('wre-native-point-id').value,
-                      camera:document.getElementById('wre-camera-choice').value,
+                      cameraA:document.getElementById('wre-camera-choice').value,
+                      cameraB:document.getElementById('wre-baseline-choice').value,
                       overlay:!marker.hidden,
                       pixel:[Number(marker.dataset.pixelX),Number(marker.dataset.pixelY)],
+                      left:parseFloat(marker.style.left),
+                      top:parseFloat(marker.style.top),
                       status:document.getElementById('wre-native-observation-status').textContent
                     };
                   """)
                   if (second_state["point"]==str(second_id)
-                      and second_state["camera"]==str(best_overlap_index)
+                      and second_state["cameraA"]=="0"
+                      and second_state["cameraB"]==str(best_overlap_index)
                       and second_state["overlay"]
                       and "Selected by clicking" in second_state["status"]):
                       break
@@ -3665,6 +3669,16 @@ jobs:
                   for actual,expected in zip(
                       second_state["pixel"],second_obs["pixel"],strict=True
                   )
+              )
+              assert math.isclose(
+                  second_state["left"],
+                  100*second_obs["pixel"][0]/second_camera["image_width"],
+                  abs_tol=1e-4,
+              )
+              assert math.isclose(
+                  second_state["top"],
+                  100*second_obs["pixel"][1]/second_camera["image_height"],
+                  abs_tol=1e-4,
               )
               # Restore original camera pair for the existing A/B point and
               # screenshot tests. Its SfM pixel evidence remains unchanged.
