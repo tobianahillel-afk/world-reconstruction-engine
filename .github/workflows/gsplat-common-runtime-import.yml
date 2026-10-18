@@ -968,12 +968,14 @@ jobs:
           import hashlib
           import json
           import os
+          import struct
           from pathlib import Path
 
           from wre.domain.appearance import APPEARANCE_MODEL_ARTIFACT_KIND
           from wre.domain.artifacts import ArtifactId, ArtifactRef
           from wre.reconstruction.static_appearance_baseline import (
               GsplatStaticAppearanceTrainingProfile,
+              export_verified_gsplat_rgb_centers_glb,
               materialize_verified_gsplat_ply,
           )
 
@@ -1000,7 +1002,49 @@ jobs:
           assert hashlib.sha256(ply.read_bytes()).hexdigest() == verified.sha256.value
           assert splat.stat().st_size == manifest["scene_splat_bytes"] == manifest["points"] * 32
           assert hashlib.sha256(splat.read_bytes()).hexdigest() == manifest["scene_splat_sha256"]
+
+          # Reuse the WRE-reviewed CPU exporter: real observed RGB -> a portable,
+          # self-contained glTF 2.0 POINTS cloud. No Gaussian shader or training.
+          glb = root / "viewable-rgb-centers.glb"
+          digest = export_verified_gsplat_rgb_centers_glb(
+              artifact_ref=output.artifact_ref,
+              output_root=root,
+              profile=GsplatStaticAppearanceTrainingProfile(max_steps=1),
+              preview_path=glb,
+          )
+          glb_data = glb.read_bytes()
+          assert glb_data[:4] == b"glTF"
+          assert struct.unpack_from("<II", glb_data, 4) == (2, len(glb_data))
+          json_chunk_length, json_chunk_type = struct.unpack_from("<I4s", glb_data, 12)
+          assert json_chunk_type == b"JSON"
+          document = json.loads(glb_data[20 : 20 + json_chunk_length])
+          primitive = document["meshes"][0]["primitives"][0]
+          assert primitive["mode"] == 0
+          assert primitive["attributes"] == {"POSITION": 0, "COLOR_0": 1}
+          assert document["accessors"][0]["count"] == manifest["points"]
+          assert document["accessors"][1]["count"] == manifest["points"]
+          assert hashlib.sha256(glb_data).hexdigest() == digest.value
+          assert glb.stat().st_size == len(glb_data)
+
+          manifest["rgb_centers_glb"] = {
+              "relative_path": glb.name,
+              "bytes": len(glb_data),
+              "sha256": digest.value,
+              "representation": "gltf2_untrained_real_photo_rgb_points",
+          }
+          (root / "preview-manifest.json").write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          receipt_path = Path(os.environ["GITHUB_WORKSPACE"]) / "wre-common-native-real-photo-receipt.json"
+          receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+          receipt["untrained_gsplat_viewer_preview"]["rgb_centers_glb"] = manifest[
+              "rgb_centers_glb"
+          ]
+          receipt_path.write_text(
+              json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
           print("REAL 16-PHOTO WRE PLY MATERIALIZATION + VIEWABLE SPLAT VERIFIED")
+          print("VIEWER-READY REAL-PHOTO GLTF 2.0 RGB POINTS:", manifest["points"])
           print("UNTRAINED initialization: 0 CUDA kernels, 0 optimization steps, no 4D.")
           PY
 
@@ -1015,6 +1059,7 @@ jobs:
             wre-real16-observed-rgb-LICENSE.txt
             wre-real16-gsplat-seeds/ply/point_cloud_0.ply
             wre-real16-gsplat-seeds/scene.splat
+            wre-real16-gsplat-seeds/viewable-rgb-centers.glb
             wre-real16-gsplat-seeds/preview-manifest.json
           if-no-files-found: error
           retention-days: 7
