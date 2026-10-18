@@ -170,7 +170,7 @@ jobs:
           # Official NVIDIA CUDA runtime image lacks Git; this package is only a
           # source-fetch helper and is not distributed with the gsplat extension.
           apt-get update -qq
-          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git ca-certificates
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git ca-certificates libgl1
           git --version
 
       - name: Materialize exact gsplat v1.5.3 source with the sole pinned GLM submodule
