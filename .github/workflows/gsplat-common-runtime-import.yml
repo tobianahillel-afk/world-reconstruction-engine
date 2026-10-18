@@ -3939,6 +3939,66 @@ jobs:
                   math.isclose(actual,expected,rel_tol=1e-7,abs_tol=1e-6)
                   for actual,expected in zip(actual_xyz,selected_world_xyz,strict=True)
               )
+              # Real Chrome interaction: measure two DISTINCT genuine SfM 3D
+              # landmarks and compare against independent Python math.dist.
+              real_point_ids=sorted(lookup["points"],key=int)
+              first_point_id=real_point_ids[0]
+              first_point_xyz=lookup["points"][first_point_id]["xyz"]
+              second_point_id=next(
+                  pid for pid in real_point_ids[1:]
+                  if math.dist(first_point_xyz,lookup["points"][pid]["xyz"])>1e-6
+              )
+              second_point_xyz=lookup["points"][second_point_id]["xyz"]
+              expected_separation=math.dist(first_point_xyz,second_point_xyz)
+              assert js("""
+                const a=document.getElementById('wre-native-distance-a');
+                const b=document.getElementById('wre-native-distance-b');
+                const button=document.getElementById('wre-native-distance-measure');
+                a.value='__FIRST_ID__';b.value='__SECOND_ID__';
+                button.click();
+                return true;
+              """.replace("__FIRST_ID__",first_point_id).replace(
+                  "__SECOND_ID__",second_point_id
+              ))
+              for _ in range(60):
+                  actual_separation=js("""
+                    return {
+                      text:document.getElementById('wre-native-distance-result').textContent,
+                      first:document.querySelector('[slot="hotspot-native-distance-a"]')
+                        ?.getAttribute('data-position')||'',
+                      second:document.querySelector('[slot="hotspot-native-distance-b"]')
+                        ?.getAttribute('data-position')||''
+                    };
+                  """)
+                  if actual_separation["first"] and actual_separation["second"]:
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("Real native two-point SfM measurement was not rendered")
+              assert "Native COLMAP points "+first_point_id+" and "+second_point_id in (
+                  actual_separation["text"]
+              )
+              assert f"{expected_separation:.6f}" in actual_separation["text"]
+              assert "arbitrary SfM units; NOT meters" in actual_separation["text"]
+              for marker,xyz in (
+                  (actual_separation["first"],first_point_xyz),
+                  (actual_separation["second"],second_point_xyz),
+              ):
+                  actual=[float(value[:-1]) for value in marker.split()]
+                  assert len(actual)==3
+                  assert all(
+                      math.isclose(x,y,rel_tol=1e-7,abs_tol=1e-6)
+                      for x,y in zip(actual,xyz,strict=True)
+                  )
+              # Input IDs are selectors, never authority to invent a 3D point.
+              assert js("""
+                document.getElementById('wre-native-distance-b').value=
+                  document.getElementById('wre-native-distance-a').value;
+                document.getElementById('wre-native-distance-measure').click();
+                return !document.querySelector('[slot^="hotspot-native-distance-"]') &&
+                  document.getElementById('wre-native-distance-result')
+                    .textContent.includes('Choose two distinct positive');
+              """), "Repeated native point ID must not leave stale measured markers"
               # A region across different original camera tiles must not
               # silently combine unrelated SfM camera-Z coordinate frames.
               assert js("""
