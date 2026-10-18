@@ -1238,6 +1238,9 @@ jobs:
             <button id="wre-nearest-camera" type="button" disabled>
               Find nearest other reconstructed camera
             </button>
+            <button id="wre-most-shared-camera" type="button" disabled>
+              Find camera sharing most triangulated 3D tracks
+            </button>
             <output id="camera-details" aria-live="polite">
               Choose a camera to inspect its SfM position (not an exact source photo view).
             </output>
@@ -1295,6 +1298,7 @@ jobs:
           const baselineOutput=document.getElementById('wre-camera-baseline');
           const framePair=document.getElementById('wre-frame-baseline');
           const nearestButton=document.getElementById('wre-nearest-camera');
+          const sharedButton=document.getElementById('wre-most-shared-camera');
           const details=document.getElementById('camera-details');
           const photoInput=document.getElementById('wre-source-files');
           const photoStatus=document.getElementById('wre-photo-status');
@@ -1436,6 +1440,7 @@ jobs:
             showLocalPhoto();
             framePair.disabled=true;
             nearestButton.disabled=true;
+            sharedButton.disabled=true;
             clearPairMarkers();
             choice.value='';
             baselineChoice.value='';
@@ -1469,6 +1474,7 @@ jobs:
               framePair.disabled=true;
               showLocalPhoto();
               nearestButton.disabled=true;
+              sharedButton.disabled=true;
               clearPairMarkers();
               choice.value='';
               baselineChoice.value='';
@@ -1499,6 +1505,7 @@ jobs:
             baselineChoice.value='';
             framePair.disabled=true;
             nearestButton.disabled=true;
+            sharedButton.disabled=true;
             clearPairMarkers();
             baselineOutput.textContent='Select two SfM cameras; distance is not in metres.';
             details.textContent='General orbit restored; filename order is not chronology.';
@@ -1516,6 +1523,18 @@ jobs:
             }
             const cameras=poses.cameras.slice().sort((a,b)=>
               a.image_name<b.image_name?-1:a.image_name>b.image_name?1:0);
+            const overlap=poses.pairwise_shared_sfm_tracks;
+            if(!overlap || overlap.measurement!=='common_triangulated_3d_point_ids_in_sample'
+                || overlap.camera_names?.length!==16 || overlap.counts?.length!==16
+                || !cameras.every((c,i)=>c.image_name===overlap.camera_names[i])
+                || !overlap.counts.every((row,i)=>
+                  Array.isArray(row) && row.length===16 &&
+                  row.every((n,j)=>Number.isSafeInteger(n) && n>=0 &&
+                    n<=Math.min(cameras[i].triangulated_2d_observations,
+                      cameras[j].triangulated_2d_observations) &&
+                    n===overlap.counts[j]?.[i]))) {
+              throw Error('Missing or invalid measured SfM shared-track evidence');
+            }
             const centers=cameras.map(c=>c.camera_center_xyz);
             if (!cameras.every((c,i)=>typeof c.image_name==='string' &&
                 centers[i].length===3 && centers[i].every(Number.isFinite) &&
@@ -1541,6 +1560,7 @@ jobs:
             baselineChoice.disabled=false;
             const updateBaseline=()=>{
               nearestButton.disabled=choice.value==='' || localUrl!==null;
+              sharedButton.disabled=choice.value==='' || localUrl!==null;
               framePair.disabled=choice.value==='' || baselineChoice.value==='' ||
                 localUrl!==null;
               clearPairMarkers();
@@ -1557,9 +1577,13 @@ jobs:
                 return;
               }
               showPairMarkers(first,second,[Number(choice.value),Number(baselineChoice.value)]);
+              const shared=overlap.counts[Number(choice.value)][
+                Number(baselineChoice.value)];
               baselineOutput.textContent='Camera baseline: '+distance.toFixed(6)+
                 ' local SfM units (not metres; no capture-time interpretation). '+
-                'A and B mark reconstructed camera centres in 3D.';
+                'A and B mark reconstructed camera centres in 3D. '+
+                shared+' shared triangulated 3D tracks observed in BOTH real cameras '+
+                '(in-sample; NOT GPU training, image similarity or 4D motion).';
             };
             baselineChoice.addEventListener('change',updateBaseline);
             nearestButton.addEventListener('click',()=>{
@@ -1584,6 +1608,28 @@ jobs:
               details.textContent='Nearest other reconstructed camera framed in 3D. '+
                 'Spatial proximity in local SfM coordinates; NOT capture time, '+
                 'source image overlap or physical metres.';
+            });
+            sharedButton.addEventListener('click',()=>{
+              if(sharedButton.disabled || localUrl || choice.value==='') return;
+              const firstIndex=Number(choice.value);
+              let best=-1;
+              let bestCount=0;
+              // Equal counts resolve by already sorted original image names.
+              overlap.counts[firstIndex].forEach((count,index)=>{
+                if(index!==firstIndex && count>bestCount){
+                  best=index;
+                  bestCount=count;
+                }
+              });
+              if(best<0) {
+                details.textContent='No shared triangulated 3D tracks for camera A.';
+                return;
+              }
+              baselineChoice.value=String(best);
+              updateBaseline();
+              framePair.click();
+              details.textContent='Most overlapping SfM camera: '+bestCount+
+                ' shared observed 3D tracks (in-sample, NOT chronology or GPU training).';
             });
             framePair.addEventListener('click',()=>{
               if(framePair.disabled || localUrl) return;
