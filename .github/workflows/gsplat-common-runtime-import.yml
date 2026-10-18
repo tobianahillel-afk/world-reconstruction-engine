@@ -841,6 +841,144 @@ jobs:
                 "across", len(errors), "actual 3D points and", pair_count, "camera pairs")
           PY
 
+      - name: Export real 16-camera sparse SfM depth previews on CPU
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv/bin/python -I - <<'PY'
+          import csv
+          import json
+          import math
+          from pathlib import Path
+
+          import numpy as np
+          from PIL import Image
+
+          root = Path.cwd()
+          poses = json.loads((root / "wre-real16-camera-poses.json").read_text())
+          quality = json.loads((root / "wre-real16-sfm-quality.json").read_text())
+          assert poses["schema"] == "wre.experimental.native_cpu_colmap_registered_cameras.v1"
+          assert poses["registered_views"] == 16
+          assert poses["source_dataset_commit"] == quality["source_dataset_commit"]
+          frames = sorted(poses["cameras"], key=lambda frame: frame["image_name"])
+          cameras = {int(frame["image_id"]): frame for frame in frames}
+          assert len(cameras) == 16
+          # Measured source Point2D tracks rather than guessed camera pixels.
+          # Keep one deterministic sample for each (3D landmark, camera).
+          selected = {}
+          total_native_observations = 0
+          with (root / "wre-real16-native-2d3d-tracks.csv").open(
+              encoding="utf-8", newline=""
+          ) as stream:
+              for row in csv.DictReader(stream):
+                  total_native_observations += 1
+                  image_id, point_id = int(row["image_id"]), int(row["point3d_id"])
+                  frame = cameras[image_id]
+                  assert row["image_name"] == frame["image_name"]
+                  assert row["image_sha256"] == frame["image_sha256"]
+                  xy = [float(row["pixel_x"]), float(row["pixel_y"])]
+                  xyz = [float(row[name]) for name in ("x", "y", "z")]
+                  assert all(math.isfinite(value) for value in xy + xyz)
+                  assert 0 <= xy[0] < frame["image_width"]
+                  assert 0 <= xy[1] < frame["image_height"]
+                  index = int(row["point2d_idx"])
+                  key = (image_id, point_id)
+                  if key not in selected or index < selected[key][0]:
+                      selected[key] = (index, xy, xyz)
+          assert total_native_observations == quality["geometry_quality"]["track_observations"]
+          assert len(selected) > 100
+          tile_size = 256
+          maps = {}
+          frame_metrics = []
+          all_positive_z = []
+          rejected_nonpositive = 0
+          for frame in frames:
+              image_id = int(frame["image_id"])
+              transform = np.asarray(
+                  frame["camera_from_world_row_major_4x4"], dtype=np.float64
+              )
+              assert transform.shape == (4, 4) and np.isfinite(transform).all()
+              assert np.allclose(transform[3], [0, 0, 0, 1], atol=1e-9)
+              depth = np.full((tile_size, tile_size), np.inf, dtype=np.float32)
+              count = 0
+              for (camera_id, _point_id), (_index, xy, xyz) in selected.items():
+                  if camera_id != image_id:
+                      continue
+                  camera_xyz = transform[:3, :3] @ np.asarray(xyz) + transform[:3, 3]
+                  z = float(camera_xyz[2])
+                  if not math.isfinite(z) or z <= 0 or z > np.finfo(np.float32).max:
+                      rejected_nonpositive += 1
+                      continue
+                  px = min(tile_size - 1, int(xy[0] * tile_size / frame["image_width"]))
+                  py = min(tile_size - 1, int(xy[1] * tile_size / frame["image_height"]))
+                  depth[py, px] = min(depth[py, px], z)
+                  all_positive_z.append(z)
+                  count += 1
+              valid = np.isfinite(depth)
+              assert count > 0 and np.any(valid), frame["image_name"]
+              maps[f"camera_{image_id:04d}"] = np.where(valid, depth, 0)
+              frame_metrics.append({
+                  "image_id": image_id,
+                  "image_name": frame["image_name"],
+                  "native_tracked_points_with_positive_depth": count,
+                  "occupied_depth_bins": int(valid.sum()),
+                  "observed_depth_min_sfm_units": float(depth[valid].min()),
+                  "observed_depth_max_sfm_units": float(depth[valid].max()),
+              })
+          assert len(maps) == len(frame_metrics) == 16
+          assert sum(row["native_tracked_points_with_positive_depth"] for row in frame_metrics) + rejected_nonpositive == len(selected)
+          positive = np.asarray(all_positive_z, dtype=np.float64)
+          assert positive.size > 100 and np.all(np.isfinite(positive))
+          near, far = (float(x) for x in np.percentile(positive, [5, 95]))
+          assert near > 0 and far >= near
+          span = max(far - near, np.finfo(np.float64).eps)
+          sheet = Image.new("L", (tile_size * 4, tile_size * 4), 0)
+          for i, frame in enumerate(frames):
+              data = maps[f"camera_{int(frame['image_id']):04d}"]
+              valid = data > 0
+              shade = np.zeros_like(data, dtype=np.uint8)
+              shade[valid] = np.clip(
+                  32 + 223 * (1 - (data[valid] - near) / span), 32, 255
+              ).astype(np.uint8)
+              sheet.paste(Image.fromarray(shade), ((i % 4) * tile_size, (i // 4) * tile_size))
+          sheet.save(root / "wre-real16-native-sparse-depth-preview.png")
+          np.savez_compressed(root / "wre-real16-native-sparse-depth.npz", **maps)
+          report = {
+              "schema": "wre.experimental.real16_native_observed_sparse_depth.v1",
+              "source_dataset_commit": poses["source_dataset_commit"],
+              "license": poses["license"],
+              "registered_views": 16,
+              "input_native_track_observations": total_native_observations,
+              "distinct_camera_landmark_observations": len(selected),
+              "positive_depth_observations": int(positive.size),
+              "nonpositive_or_nonfinite_depth_observations": rejected_nonpositive,
+              "tile_resolution": [tile_size, tile_size],
+              "tile_order": "image_name_sorted_four_by_four",
+              "depth_units": "positive_camera_z_in_arbitrary_COLMAP_SfM_units_NOT_METERS",
+              "empty_bins_are_zero": True,
+              "depth_png_encoding": "lighter_nearer_5th_to_95th_percentile_only",
+              "depth_display_percentiles_sfm_units": [near, far],
+              "per_camera": frame_metrics,
+              "source_original_photographs_redistributed": False,
+              "dense_depth": False,
+              "held_out_image_quality_measured": False,
+              "gpu_training_executed": False,
+              "temporal_reconstruction_executed": False,
+          }
+          (root / "wre-real16-native-sparse-depth.json").write_text(
+              json.dumps(report, indent=2, sort_keys=True, allow_nan=False) + "\n",
+              encoding="utf-8",
+          )
+          with np.load(root / "wre-real16-native-sparse-depth.npz") as restored:
+              assert set(restored.files) == set(maps)
+              for name, expected in maps.items():
+                  assert np.array_equal(restored[name], expected)
+          with Image.open(root / "wre-real16-native-sparse-depth-preview.png") as preview:
+              assert preview.size == (1024, 1024)
+          print("REAL 16-PHOTO NATIVE SPARSE CAMERA DEPTH:", len(selected),
+                "measured 3D/camera tracks, no dense inference or GPU training.")
+          PY
+
       - name: Publish-ready real SfM RGB glTF on CPU before native CUDA build
         shell: bash
         run: |
