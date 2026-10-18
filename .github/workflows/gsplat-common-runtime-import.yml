@@ -1391,6 +1391,25 @@ jobs:
               f'mean reprojection error {geom["mean_reprojection_error_colmap_px"]:.3f} px '
               '(COLMAP, in-sample; NOT held-out image quality or trained 3DGS).'
           )
+          observed_rgb = json.loads(
+              Path("wre-real16-observed-rgb-agreement.json").read_text()
+          )
+          assert observed_rgb["schema"] == "wre.experimental.real16_observed_rgb_agreement.v1"
+          assert observed_rgb["source_dataset_commit"] == quality["source_dataset_commit"]
+          assert observed_rgb["image_count"] == 16
+          assert observed_rgb["sparse_points3d"] == geom["sparse_points3d"]
+          assert observed_rgb["track_observations"] == geom["track_observations"]
+          assert observed_rgb["held_out_image_quality_measured"] is False
+          assert observed_rgb["gpu_training_executed"] is False
+          score = observed_rgb["mean_rgb_difference_0_to_255"]
+          assert 0 <= score <= 255
+          colour_summary = (
+              f'{observed_rgb["points_with_cross_view_observations"]} real 3D landmarks · '
+              f'{observed_rgb["cross_view_pairs"]} observed view pairs · '
+              f'mean RGB disagreement {score:.2f}/255 '
+              '(measured source pixels; affected by lighting, exposure and occlusion; '
+              'NOT held-out reconstruction quality, trained 3DGS or temporal 4D).'
+          )
           output = Path("wre-real16-offline-viewer")
           output.mkdir(exist_ok=False)
           shutil.copyfile(source, output / source.name)
@@ -1555,6 +1574,10 @@ jobs:
             <strong>Measured CPU SfM quality (in-sample)</strong>
             <output id="wre-sfm-quality-value">WRE_MEASURED_QUALITY</output>
           </section>
+          <section id="wre-source-rgb-agreement" aria-label="Measured source-view RGB agreement">
+            <strong>Cross-view original-photo RGB differences (in-sample, CPU)</strong>
+            <output id="wre-source-rgb-agreement-value">WRE_OBSERVED_RGB_AGREEMENT</output>
+          </section>
           <section id="camera-navigation" aria-label="Inspect reconstructed cameras">
             <label for="wre-camera-choice">Reconstructed camera (filename order, not time)</label>
             <select id="wre-camera-choice" disabled>
@@ -1656,6 +1679,7 @@ jobs:
           · <a download href="./wre-real16-camera-poses.json">Camera poses</a>
           · <a download href="./wre-real16-native-2d3d-tracks.csv">All measured 2D/3D tracks (CSV)</a>
           · <a download href="./wre-real16-sfm-quality.json">SfM quality evidence</a>
+          · <a download href="./wre-real16-observed-rgb-agreement.json">Original-photo RGB observations</a>
           · <a href="./wre-real16-viewable-scene-receipt.json">Provenance</a></p>
           <p>Offline: extract the archive and run
           <code>python3 -m http.server 8765 --bind 127.0.0.1</code>,
@@ -2438,6 +2462,7 @@ jobs:
           </body></html>"""
           html = html.replace("WRE_SCENE_SHA256", receipt["sha256"])
           html = html.replace("WRE_MEASURED_QUALITY", measured_quality)
+          html = html.replace("WRE_OBSERVED_RGB_AGREEMENT", colour_summary)
           (output / "wre-real16-viewer.html").write_text(html, encoding="utf-8")
           manifest = {
               "schema": "wre.experimental.real16_offline_viewer.v1",
