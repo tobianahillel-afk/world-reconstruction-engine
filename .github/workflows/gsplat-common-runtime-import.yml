@@ -538,6 +538,48 @@ jobs:
               })
           assert len(frames) == 16
           assert len({frame["image_name"] for frame in frames}) == 16
+          # Derive real image-pair overlap from exact shared triangulated
+          # COLMAP point IDs. No fake photo, capture time or learned model.
+          ordered_frames = sorted(frames, key=lambda f: f["image_name"])
+          observed_ids = [
+              {
+                  int(p.point3D_id)
+                  for p in model.image(frame["image_id"]).points2D
+                  if p.has_point3D()
+              }
+              for frame in ordered_frames
+          ]
+          assert all(
+              len(ids) == frame["triangulated_2d_observations"] > 0
+              for ids, frame in zip(observed_ids, ordered_frames, strict=True)
+          )
+          shared_tracks = [
+              [len(a & b) for b in observed_ids] for a in observed_ids
+          ]
+          assert all(
+              shared_tracks[i][j] == shared_tracks[j][i]
+              and shared_tracks[i][j] <= min(
+                  ordered_frames[i]["triangulated_2d_observations"],
+                  ordered_frames[j]["triangulated_2d_observations"],
+              )
+              for i in range(16) for j in range(16)
+          )
+          assert any(shared_tracks[i][j] for i in range(16) for j in range(i + 1, 16))
+          # Cross-check via independently exposed COLMAP 3D track elements.
+          camera_indices = {
+              int(frame["image_id"]): i for i, frame in enumerate(ordered_frames)
+          }
+          by_track = [[0] * 16 for _ in range(16)]
+          for point in model.points3D.values():
+              members = {
+                  camera_indices[int(e.image_id)]
+                  for e in point.track.elements
+                  if int(e.image_id) in camera_indices
+              }
+              for i in members:
+                  for j in members:
+                      by_track[i][j] += 1
+          assert by_track == shared_tracks
           centers = np.asarray([frame["camera_center_xyz"] for frame in frames])
           assert np.linalg.norm(np.ptp(centers, axis=0)) > 0
           descriptor = {
@@ -552,6 +594,11 @@ jobs:
               "training_gpu_executed": False,
               "registered_views": len(frames),
               "cameras": frames,
+              "pairwise_shared_sfm_tracks": {
+                  "camera_names": [f["image_name"] for f in ordered_frames],
+                  "counts": shared_tracks,
+                  "measurement": "common_triangulated_3d_point_ids_in_sample",
+              },
           }
           out = Path(os.environ["GITHUB_WORKSPACE"])
           (out / "wre-real16-camera-poses.json").write_text(
