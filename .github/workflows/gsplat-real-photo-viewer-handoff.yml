@@ -724,6 +724,39 @@ jobs:
                   "page_scheme": "file", "external_resource_requests": 0,
                   "cuda_training": False,
               }
+              # Real browser A/B flip: preserve the selected local scene while
+              # switching twice through the upstream WebGL FileReader worker.
+              compare_element = webdriver("POST", f"/session/{session}/element", {
+                  "using": "css selector", "value": "#wre-compare-scene"
+              })["element-6066-11e4-a52e-4f735466cecf"]
+              for target_count, label in ((6917, "WRE-16-photos.splat"),
+                                          (2048, "operator-picked.splat")):
+                  webdriver("POST", f"/session/{session}/element/{compare_element}/click", {})
+                  for _ in range(125):
+                      current = webdriver("POST", f"/session/{session}/execute/sync", {
+                          "script": """return {
+                            count: window.__wreRenderedGaussianCount || 0,
+                            status: document.getElementById('wre-local-status').textContent,
+                            external: performance.getEntriesByType('resource')
+                              .filter(x=>/^https?:/.test(x.name)).map(x=>x.name)};""",
+                          "args": [],
+                      })
+                      if current["count"] == target_count and label in current["status"]:
+                          break
+                      time.sleep(0.35)
+                  else:
+                      raise RuntimeError("Offline WRE 3D A/B comparison failed: " + str(current))
+                  assert current["external"] == [], current
+              webdriver("POST", f"/session/{session}/element/{save_button}/click", {})
+              assert check_browser_download("operator-picked.splat", picked_bytes) == picked_sha
+              receipt["operator_ab_compare_test"] = {
+                  "original_drawn_gaussians": 6917,
+                  "restored_operator_drawn_gaussians": picker_count,
+                  "operator_sha256": picked_sha,
+                  "external_resource_requests": 0,
+                  "cuda_training": False,
+              }
+              print("REAL WEBGL A/B COMPARE PASS: original 6917 -> local 2048")
               reset_element = webdriver("POST", f"/session/{session}/element", {
                   "using": "css selector", "value": "#wre-restore-original"
               })["element-6066-11e4-a52e-4f735466cecf"]
