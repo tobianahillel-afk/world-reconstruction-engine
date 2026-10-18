@@ -548,6 +548,121 @@ jobs:
           print("Native SfM scale only; no temporal motion, metric scale or GPU training")
           PY
 
+      # Genuine real-photo RGB GLB is available before slow CUDA compilation.
+      - name: Publish-ready real SfM RGB glTF on CPU before native CUDA build
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PYTHONPATH="$GITHUB_WORKSPACE/src"
+          .venv/bin/python - <<'PY'
+          import hashlib
+          import json
+          import math
+          import os
+          import struct
+          from pathlib import Path
+
+          import numpy as np
+          import pycolmap
+          from wre.domain.appearance import APPEARANCE_MODEL_ARTIFACT_KIND
+          from wre.domain.artifacts import ArtifactId, ArtifactRef
+          from wre.reconstruction.static_appearance_baseline import (
+              GsplatStaticAppearanceTrainingProfile,
+              materialize_verified_gsplat_ply,
+              export_verified_gsplat_rgb_centers_glb,
+          )
+
+          base = Path(os.environ["GITHUB_WORKSPACE"])
+          capture = base / "wre-common-real-photo-capture"
+          manifest = json.loads((capture / "wre-capture-manifest.json").read_text())
+          model = pycolmap.Reconstruction(str(capture / "sparse" / "0"))
+          assert model.num_reg_images() == manifest["native_registered_views"] == 16
+          assert model.num_points3D() == manifest["native_points3d"] > 100
+          points = [p for _, p in sorted(model.points3D.items())]
+          xyz = np.asarray([p.xyz for p in points], dtype=np.float64)
+          rgb = np.asarray([p.color for p in points], dtype=np.uint8)
+          assert xyz.shape == rgb.shape == (len(points), 3)
+          assert np.isfinite(xyz).all() and np.max(np.abs(xyz)) < 1e20
+          spread = float(np.linalg.norm(np.ptp(np.quantile(xyz, [0.05, 0.95], axis=0), axis=0)))
+          assert np.isfinite(spread) and spread > 0
+          radius = float(np.clip(0.12 * spread / np.cbrt(len(points)), 1e-4, 10.0))
+          log_radius = math.log(radius)
+          root = base / "wre-real16-early-gltf"
+          (root / "ply").mkdir(parents=True, exist_ok=False)
+          ply = root / "ply" / "point_cloud_0.ply"
+          fields = (
+              ["x", "y", "z", "f_dc_0", "f_dc_1", "f_dc_2"]
+              + [f"f_rest_{i}" for i in range(45)]
+              + ["opacity", "scale_0", "scale_1", "scale_2",
+                 "rot_0", "rot_1", "rot_2", "rot_3"]
+          )
+          assert len(fields) == 59
+          header = (
+              "ply\nformat binary_little_endian 1.0\n"
+              f"element vertex {len(points)}\n"
+              + "".join(f"property float {name}\n" for name in fields)
+              + "end_header\n"
+          ).encode("ascii")
+          with ply.open("xb") as output:
+              output.write(header)
+              for pos, color in zip(xyz, rgb, strict=True):
+                  sh0 = [(float(v) / 255.0 - 0.5) / 0.28209479177387814 for v in color]
+                  floats = (
+                      *map(float, pos), *sh0, *([0.0] * 45),
+                      0.0, log_radius, log_radius, log_radius, 1.0, 0.0, 0.0, 0.0
+                  )
+                  assert len(floats) == 59
+                  output.write(struct.pack("<59f", *floats))
+          profile = GsplatStaticAppearanceTrainingProfile(max_steps=1)
+          ref = ArtifactRef(
+              ArtifactId("appearance:gsplat:real16-early-untrained"),
+              APPEARANCE_MODEL_ARTIFACT_KIND,
+          )
+          verified = materialize_verified_gsplat_ply(
+              artifact_ref=ref, output_root=root, profile=profile
+          )
+          glb = root / "viewable-rgb-centers.glb"
+          digest = export_verified_gsplat_rgb_centers_glb(
+              artifact_ref=ref, output_root=root, profile=profile, preview_path=glb
+          )
+          payload = glb.read_bytes()
+          assert payload[:4] == b"glTF"
+          assert struct.unpack_from("<II", payload, 4) == (2, len(payload))
+          chunk_len, chunk_type = struct.unpack_from("<I4s", payload, 12)
+          assert chunk_type == b"JSON"
+          doc = json.loads(payload[20:20 + chunk_len])
+          prim = doc["meshes"][0]["primitives"][0]
+          assert prim["mode"] == 0
+          assert prim["attributes"] == {"POSITION": 0, "COLOR_0": 1}
+          assert doc["accessors"][0]["count"] == doc["accessors"][1]["count"] == len(points)
+          assert hashlib.sha256(payload).hexdigest() == digest.value
+          report = {
+              "schema": "wre.experimental.real16_early_cpu_rgb_glb.v1",
+              "kind": "real_photo_observed_rgb_untrained_sfm_points",
+              "points": len(points),
+              "source_dataset_commit": manifest["dataset_commit"],
+              "license": manifest["license"],
+              "gpu_training_executed": False,
+              "cuda_build_required": False,
+              "metric_scale_known": False,
+              "visualization_radius_untrained_scene_units": radius,
+              "files": {
+                  "ply/point_cloud_0.ply": {
+                      "bytes": ply.stat().st_size,
+                      "sha256": verified.entries[0].sha256.value,
+                  },
+                  "viewable-rgb-centers.glb": {
+                      "bytes": len(payload), "sha256": digest.value,
+                  },
+              },
+          }
+          (root / "manifest.json").write_text(
+              json.dumps(report, indent=2, sort_keys=True, allow_nan=False) + "\n"
+          )
+          print("EARLY REAL-PHOTO CPU 3D GLB:", len(points), "observed RGB points.")
+          print("UNTRAINED; no CUDA build, GPU kernel, metric scale or 4D.")
+          PY
+
       # Produce an independently reusable genuine SfM artifact before the
       # host-only CUDA native compilation, which can be slow or fail.
       # This has NO CUDA kernel execution or 3DGS optimization.
@@ -580,6 +695,9 @@ jobs:
               "wre-real16-camera-poses.json",
               "wre-real16-camera-centers.ply",
               "wre-real16-observed-rgb-LICENSE.txt",
+              "wre-real16-early-gltf/ply/point_cloud_0.ply",
+              "wre-real16-early-gltf/viewable-rgb-centers.glb",
+              "wre-real16-early-gltf/manifest.json",
           )
           manifest = {
               "schema": "wre.experimental.native_cpu_sfm_delivery.v1",
@@ -610,6 +728,9 @@ jobs:
             wre-real16-camera-poses.json
             wre-real16-camera-centers.ply
             wre-real16-observed-rgb-LICENSE.txt
+            wre-real16-early-gltf/ply/point_cloud_0.ply
+            wre-real16-early-gltf/viewable-rgb-centers.glb
+            wre-real16-early-gltf/manifest.json
             wre-real16-native-cpu-sfm-manifest.json
           if-no-files-found: error
           retention-days: 7
