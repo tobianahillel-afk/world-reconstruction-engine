@@ -3700,6 +3700,10 @@ jobs:
                       and a["image_name"]==overlay_cameras[0]["image_name"]
                       and b["image_id"]==second_camera["image_id"]
                       and b["image_name"]==second_camera["image_name"]
+                      and 0<=a["pixel"][0]<overlay_cameras[0]["image_width"]
+                      and 0<=a["pixel"][1]<overlay_cameras[0]["image_height"]
+                      and 0<=b["pixel"][0]<second_camera["image_width"]
+                      and 0<=b["pixel"][1]<second_camera["image_height"]
                   ),None
               )
               assert common is not None, "No real common SfM 3D point in camera A/B"
@@ -3726,19 +3730,24 @@ jobs:
                 document.getElementById('wre-native-observation-open').click();
                 return true;
               """)
-              dual=js("""
-                const a=document.getElementById('wre-native-photo-pixel');
-                const b=document.getElementById('wre-native-photo-pixel-b');
-                return {
-                  cameraA:document.getElementById('wre-camera-choice').value,
-                  cameraB:document.getElementById('wre-baseline-choice').value,
-                  hiddenA:a.hidden,hiddenB:b.hidden,
-                  pixelA:[Number(a.dataset.pixelX),Number(a.dataset.pixelY)],
-                  pixelB:[Number(b.dataset.pixelX),Number(b.dataset.pixelY)]
-                };
-              """)
+              for _ in range(60):
+                  dual=js("""
+                    const a=document.getElementById('wre-native-photo-pixel');
+                    const b=document.getElementById('wre-native-photo-pixel-b');
+                    return {
+                      cameraA:document.getElementById('wre-camera-choice').value,
+                      cameraB:document.getElementById('wre-baseline-choice').value,
+                      hiddenA:a.hidden,hiddenB:b.hidden,
+                      pixelA:[Number(a.dataset.pixelX),Number(a.dataset.pixelY)],
+                      pixelB:[Number(b.dataset.pixelX),Number(b.dataset.pixelY)]
+                    };
+                  """)
+                  if not dual["hiddenA"] and not dual["hiddenB"]:
+                      break
+                  time.sleep(.1)
+              else:
+                  raise RuntimeError("Common native SfM point did not overlay both photos")
               assert dual["cameraA"]=="0" and dual["cameraB"]==str(best_overlap_index)
-              assert not dual["hiddenA"] and not dual["hiddenB"]
               for actual,expected in (
                   (dual["pixelA"],common_a["pixel"]),
                   (dual["pixelB"],common_b["pixel"]),
