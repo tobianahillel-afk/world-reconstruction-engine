@@ -538,6 +538,48 @@ jobs:
               })
           assert len(frames) == 16
           assert len({frame["image_name"] for frame in frames}) == 16
+          # Derive real image-pair overlap from exact shared triangulated
+          # COLMAP point IDs. No fake photo, capture time or learned model.
+          ordered_frames = sorted(frames, key=lambda f: f["image_name"])
+          observed_ids = [
+              {
+                  int(p.point3D_id)
+                  for p in model.image(frame["image_id"]).points2D
+                  if p.has_point3D()
+              }
+              for frame in ordered_frames
+          ]
+          assert all(
+              len(ids) == frame["triangulated_2d_observations"] > 0
+              for ids, frame in zip(observed_ids, ordered_frames, strict=True)
+          )
+          shared_tracks = [
+              [len(a & b) for b in observed_ids] for a in observed_ids
+          ]
+          assert all(
+              shared_tracks[i][j] == shared_tracks[j][i]
+              and shared_tracks[i][j] <= min(
+                  ordered_frames[i]["triangulated_2d_observations"],
+                  ordered_frames[j]["triangulated_2d_observations"],
+              )
+              for i in range(16) for j in range(16)
+          )
+          assert any(shared_tracks[i][j] for i in range(16) for j in range(i + 1, 16))
+          # Cross-check via independently exposed COLMAP 3D track elements.
+          camera_indices = {
+              int(frame["image_id"]): i for i, frame in enumerate(ordered_frames)
+          }
+          by_track = [[0] * 16 for _ in range(16)]
+          for point in model.points3D.values():
+              members = {
+                  camera_indices[int(e.image_id)]
+                  for e in point.track.elements
+                  if int(e.image_id) in camera_indices
+              }
+              for i in members:
+                  for j in members:
+                      by_track[i][j] += 1
+          assert by_track == shared_tracks
           centers = np.asarray([frame["camera_center_xyz"] for frame in frames])
           assert np.linalg.norm(np.ptp(centers, axis=0)) > 0
           descriptor = {
@@ -552,6 +594,11 @@ jobs:
               "training_gpu_executed": False,
               "registered_views": len(frames),
               "cameras": frames,
+              "pairwise_shared_sfm_tracks": {
+                  "camera_names": [f["image_name"] for f in ordered_frames],
+                  "counts": shared_tracks,
+                  "measurement": "common_triangulated_3d_point_ids_in_sample",
+              },
           }
           out = Path(os.environ["GITHUB_WORKSPACE"])
           (out / "wre-real16-camera-poses.json").write_text(
@@ -1191,6 +1238,9 @@ jobs:
             <button id="wre-nearest-camera" type="button" disabled>
               Find nearest other reconstructed camera
             </button>
+            <button id="wre-most-shared-camera" type="button" disabled>
+              Find camera sharing most triangulated 3D tracks
+            </button>
             <output id="camera-details" aria-live="polite">
               Choose a camera to inspect its SfM position (not an exact source photo view).
             </output>
@@ -1248,6 +1298,7 @@ jobs:
           const baselineOutput=document.getElementById('wre-camera-baseline');
           const framePair=document.getElementById('wre-frame-baseline');
           const nearestButton=document.getElementById('wre-nearest-camera');
+          const sharedButton=document.getElementById('wre-most-shared-camera');
           const details=document.getElementById('camera-details');
           const photoInput=document.getElementById('wre-source-files');
           const photoStatus=document.getElementById('wre-photo-status');
@@ -1389,6 +1440,7 @@ jobs:
             showLocalPhoto();
             framePair.disabled=true;
             nearestButton.disabled=true;
+            sharedButton.disabled=true;
             clearPairMarkers();
             choice.value='';
             baselineChoice.value='';
@@ -1422,6 +1474,7 @@ jobs:
               framePair.disabled=true;
               showLocalPhoto();
               nearestButton.disabled=true;
+              sharedButton.disabled=true;
               clearPairMarkers();
               choice.value='';
               baselineChoice.value='';
@@ -1452,6 +1505,7 @@ jobs:
             baselineChoice.value='';
             framePair.disabled=true;
             nearestButton.disabled=true;
+            sharedButton.disabled=true;
             clearPairMarkers();
             baselineOutput.textContent='Select two SfM cameras; distance is not in metres.';
             details.textContent='General orbit restored; filename order is not chronology.';
@@ -1469,6 +1523,18 @@ jobs:
             }
             const cameras=poses.cameras.slice().sort((a,b)=>
               a.image_name<b.image_name?-1:a.image_name>b.image_name?1:0);
+            const overlap=poses.pairwise_shared_sfm_tracks;
+            if(!overlap || overlap.measurement!=='common_triangulated_3d_point_ids_in_sample'
+                || overlap.camera_names?.length!==16 || overlap.counts?.length!==16
+                || !cameras.every((c,i)=>c.image_name===overlap.camera_names[i])
+                || !overlap.counts.every((row,i)=>
+                  Array.isArray(row) && row.length===16 &&
+                  row.every((n,j)=>Number.isSafeInteger(n) && n>=0 &&
+                    n<=Math.min(cameras[i].triangulated_2d_observations,
+                      cameras[j].triangulated_2d_observations) &&
+                    n===overlap.counts[j]?.[i]))) {
+              throw Error('Missing or invalid measured SfM shared-track evidence');
+            }
             const centers=cameras.map(c=>c.camera_center_xyz);
             if (!cameras.every((c,i)=>typeof c.image_name==='string' &&
                 centers[i].length===3 && centers[i].every(Number.isFinite) &&
@@ -1494,6 +1560,7 @@ jobs:
             baselineChoice.disabled=false;
             const updateBaseline=()=>{
               nearestButton.disabled=choice.value==='' || localUrl!==null;
+              sharedButton.disabled=choice.value==='' || localUrl!==null;
               framePair.disabled=choice.value==='' || baselineChoice.value==='' ||
                 localUrl!==null;
               clearPairMarkers();
@@ -1510,9 +1577,13 @@ jobs:
                 return;
               }
               showPairMarkers(first,second,[Number(choice.value),Number(baselineChoice.value)]);
+              const shared=overlap.counts[Number(choice.value)][
+                Number(baselineChoice.value)];
               baselineOutput.textContent='Camera baseline: '+distance.toFixed(6)+
                 ' local SfM units (not metres; no capture-time interpretation). '+
-                'A and B mark reconstructed camera centres in 3D.';
+                'A and B mark reconstructed camera centres in 3D. '+
+                shared+' shared triangulated 3D tracks observed in BOTH real cameras '+
+                '(in-sample; NOT GPU training, image similarity or 4D motion).';
             };
             baselineChoice.addEventListener('change',updateBaseline);
             nearestButton.addEventListener('click',()=>{
@@ -1537,6 +1608,28 @@ jobs:
               details.textContent='Nearest other reconstructed camera framed in 3D. '+
                 'Spatial proximity in local SfM coordinates; NOT capture time, '+
                 'source image overlap or physical metres.';
+            });
+            sharedButton.addEventListener('click',()=>{
+              if(sharedButton.disabled || localUrl || choice.value==='') return;
+              const firstIndex=Number(choice.value);
+              let best=-1;
+              let bestCount=0;
+              // Equal counts resolve by already sorted original image names.
+              overlap.counts[firstIndex].forEach((count,index)=>{
+                if(index!==firstIndex && count>bestCount){
+                  best=index;
+                  bestCount=count;
+                }
+              });
+              if(best<0) {
+                details.textContent='No shared triangulated 3D tracks for camera A.';
+                return;
+              }
+              baselineChoice.value=String(best);
+              updateBaseline();
+              framePair.click();
+              details.textContent='Most overlapping SfM camera: '+bestCount+
+                ' shared observed 3D tracks (in-sample, NOT chronology or GPU training).';
             });
             framePair.addEventListener('click',()=>{
               if(framePair.disabled || localUrl) return;
@@ -2553,6 +2646,49 @@ jobs:
                   float(nearest_evidence["orbit"].split()[2][:-1]),
                   expected_nearest_radius,rel_tol=1e-8,abs_tol=1e-6
               )
+              # Browser pair selection is checked against the original 16-camera
+              # PyCOLMAP-derived common 3D point-ID matrix, not invented pixels.
+              overlap=camera_data["pairwise_shared_sfm_tracks"]
+              assert overlap["measurement"]=="common_triangulated_3d_point_ids_in_sample"
+              assert overlap["camera_names"]==[c["image_name"] for c in actual_cameras]
+              counts=overlap["counts"]
+              assert len(counts)==16 and all(len(row)==16 for row in counts)
+              assert all(
+                  counts[i][j]==counts[j][i] and
+                  counts[i][j]<=min(
+                      actual_cameras[i]["triangulated_2d_observations"],
+                      actual_cameras[j]["triangulated_2d_observations"]
+                  )
+                  for i in range(16) for j in range(16)
+              )
+              best_overlap_index=max(range(1,16),key=lambda i:(counts[0][i],-i))
+              assert counts[0][best_overlap_index]>0
+              expected_overlap_distance=math.dist(
+                  first_center,actual_cameras[best_overlap_index]["camera_center_xyz"]
+              )
+              shared_evidence=js("""
+                const viewer=document.getElementById('wre-scene');
+                const button=document.getElementById('wre-most-shared-camera');
+                if(button.disabled) throw Error('Measured 3D shared-track action disabled');
+                button.click();
+                const b=document.getElementById('wre-baseline-choice');
+                const projected=viewer.queryHotspot('hotspot-pair-second');
+                return {
+                  choice:b.value,
+                  text:document.getElementById('wre-camera-baseline').textContent,
+                  details:document.getElementById('camera-details').textContent,
+                  framed:!viewer.hasAttribute('auto-rotate') &&
+                    Boolean(viewer.getAttribute('camera-target')),
+                  projected:Boolean(projected && projected.canvasPosition &&
+                    Number.isFinite(projected.canvasPosition.x))
+                };
+              """)
+              assert shared_evidence["choice"]==str(best_overlap_index)
+              assert str(counts[0][best_overlap_index])+" shared triangulated 3D tracks" in shared_evidence["text"]
+              assert f"{expected_overlap_distance:.6f}" in shared_evidence["text"]
+              assert "Most overlapping SfM camera" in shared_evidence["details"]
+              assert "NOT chronology or GPU training" in shared_evidence["details"]
+              assert shared_evidence["framed"] and shared_evidence["projected"]
               same_camera=js("""
                 const second=document.getElementById('wre-baseline-choice');
                 second.value='0';
@@ -2594,6 +2730,7 @@ jobs:
                       document.getElementById('wre-baseline-choice').disabled &&
                       document.getElementById('wre-frame-baseline').disabled &&
                       document.getElementById('wre-nearest-camera').disabled &&
+                      document.getElementById('wre-most-shared-camera').disabled &&
                       !viewer.querySelector('[slot^="hotspot-pair-"]') &&
                       document.getElementById('wre-camera-baseline').textContent
                         .includes('unavailable for unverified') &&
