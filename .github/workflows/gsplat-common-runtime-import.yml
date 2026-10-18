@@ -3731,6 +3731,62 @@ jobs:
               assert f'{min(real_first_tile_depths):.4f}' in roi_state["status"]
               assert f'{max(real_first_tile_depths):.4f}' in roi_state["status"]
               assert "NOT dense depth or meters" in roi_state["status"]
+              # Verify spatial measurements through the ACTUAL Chrome JSON export,
+              # independently computed from genuine original SfM Point3D XYZ.
+              assert js("""
+                const button=document.getElementById('wre-depth-roi-download');
+                if(button.disabled) return false;
+                window.__roiSpatialActualText=null;
+                const original=URL.createObjectURL.bind(URL);
+                URL.createObjectURL=(blob)=>{
+                  if(blob.type==='application/json') {
+                    blob.text().then(value=>window.__roiSpatialActualText=value);
+                  }
+                  return original(blob);
+                };
+                button.click();
+                return true;
+              """), "Real measured ROI JSON export was unavailable"
+              for _ in range(40):
+                  roi_json=js("return window.__roiSpatialActualText;")
+                  if roi_json is not None:
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("Real Chrome ROI XYZ measurement JSON was not produced")
+              roi_spatial=json.loads(roi_json)
+              real_native_ids={
+                  str(depth_bins[key]) for key in depth_bins if key.startswith("0:")
+              }
+              source_xyz=[lookup["points"][pid]["xyz"] for pid in real_native_ids]
+              expected_xyz_min=[min(v[axis] for v in source_xyz) for axis in range(3)]
+              expected_xyz_max=[max(v[axis] for v in source_xyz) for axis in range(3)]
+              expected_extent=[
+                  upper-lower for lower,upper in zip(
+                      expected_xyz_min,expected_xyz_max,strict=True
+                  )
+              ]
+              expected_diagonal=math.dist(expected_xyz_min,expected_xyz_max)
+              assert roi_spatial["native_unique_point3d_count"]==len(real_native_ids)
+              assert roi_spatial["measured_frontmost_bins"]==len(real_first_tile_depths)
+              bounds=roi_spatial["native_sparse_xyz_bounds_sfm_units"]
+              for name,expected in (
+                  ("min_xyz",expected_xyz_min),("max_xyz",expected_xyz_max),
+                  ("extent_xyz",expected_extent)
+              ):
+                  assert len(bounds[name])==3
+                  assert all(
+                      math.isclose(float(a),float(b),rel_tol=1e-12,abs_tol=1e-10)
+                      for a,b in zip(bounds[name],expected,strict=True)
+                  )
+              assert math.isclose(
+                  float(bounds["diagonal"]),expected_diagonal,
+                  rel_tol=1e-12,abs_tol=1e-10
+              )
+              assert f'{expected_diagonal:.4f}' in roi_state["status"]
+              assert "Native 3D bounds" in roi_state["status"]
+              assert roi_spatial["dense_depth_inferred"] is False
+              assert roi_spatial["metric_depth_verified"] is False
               # Actually download the measured ROI PLY through Chrome, inspect
               # the Blob bytes, and compare each world XYZ to ORIGINAL COLMAP.
               assert js("""
