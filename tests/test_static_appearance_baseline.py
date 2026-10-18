@@ -1009,6 +1009,9 @@ def test_one_call_gsplat_reconstruction_stages_real_files_and_returns_candidate(
     interpreter.write_bytes(b"stub external interpreter")
     reference = tmp_path / "pinned-reference"
     (reference / "examples").mkdir(parents=True)
+    weights = tmp_path / "pinned-alexnet.pth"
+    weights.write_bytes(b"synthetic AlexNet cache fixture; no Torch imported")
+    digest = hashlib.sha256(weights.read_bytes()).hexdigest()
     monkeypatch.setattr(
         baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
     )
@@ -1044,6 +1047,8 @@ def test_one_call_gsplat_reconstruction_stages_real_files_and_returns_candidate(
         producer=producer,
         cuda_device_index=0,
         timeout_seconds=30,
+        lpips_alexnet_weights=weights,
+        lpips_alexnet_sha256=digest,
     )
     assert len(subprocess_calls) == 1
     assert result.request is request
