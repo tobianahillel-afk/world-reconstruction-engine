@@ -448,13 +448,41 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          printf '%s\\n' \
+          printf '%s\n' \
             'Photographs by Pierre Moulon, OpenMVG Palm Desert Micro DJI, CC BY-NC 4.0.' \
             'Derived native sparse XYZ/RGB PLY is NONCOMMERCIAL experimental data only.' \
             'No metric scale, 3DGS training, GPU execution or world-time 4D verified.' \
             > wre-real16-observed-rgb-LICENSE.txt
           test -s wre-real16-observed-rgb.ply
           test -s wre-real16-sfm-quality.json
+          .venv/bin/python -I - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          quality = json.loads(Path("wre-real16-sfm-quality.json").read_text(encoding="utf-8"))
+          assert quality["schema"] == "wre.experimental.real_photo_sfm_quality.v1"
+          assert quality["source_dataset_commit"] == "323989164b1ea003aade5bf49480630ffc64acde"
+          files = ("wre-real16-observed-rgb.ply", "wre-real16-sfm-quality.json",
+                   "wre-real16-observed-rgb-LICENSE.txt")
+          manifest = {
+              "schema": "wre.experimental.native_cpu_sfm_delivery.v1",
+              "source_dataset_commit": quality["source_dataset_commit"],
+              "license": quality["license"],
+              "gpu_training_executed": False,
+              "real_photo_count": quality["geometry_quality"]["registered_views"],
+              "files": {
+                  name: {
+                      "bytes": Path(name).stat().st_size,
+                      "sha256": hashlib.sha256(Path(name).read_bytes()).hexdigest(),
+                  }
+                  for name in files
+              },
+          }
+          Path("wre-real16-native-cpu-sfm-manifest.json").write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          PY
 
       - name: Publish genuine CPU SfM RGB PLY and in-sample quality independently of CUDA
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -464,6 +492,7 @@ jobs:
             wre-real16-observed-rgb.ply
             wre-real16-sfm-quality.json
             wre-real16-observed-rgb-LICENSE.txt
+            wre-real16-native-cpu-sfm-manifest.json
           if-no-files-found: error
           retention-days: 7
 
