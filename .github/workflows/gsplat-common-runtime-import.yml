@@ -183,7 +183,7 @@ jobs:
           from wre.reconstruction import (
               ColmapFeatureExtractionConfig, ColmapFeatureExtractionRequest, ColmapFeatureInput,
               ColmapPairMatchingConfig, ColmapPairMatchingRequest,
-              extract_colmap_features, match_colmap_pairs,
+              ColmapReconstructionInput, extract_colmap_features, match_colmap_pairs,
           )
           
           # These are upstream Git blob SHA-1 values (not hash-of-URL trust).
