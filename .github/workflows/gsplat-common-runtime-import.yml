@@ -3696,6 +3696,49 @@ jobs:
               assert f'{min(real_first_tile_depths):.4f}' in roi_state["status"]
               assert f'{max(real_first_tile_depths):.4f}' in roi_state["status"]
               assert "NOT dense depth or meters" in roi_state["status"]
+              # Actually download the measured ROI PLY through Chrome, inspect
+              # the Blob bytes, and compare each world XYZ to ORIGINAL COLMAP.
+              assert js("""
+                const button=document.getElementById('wre-depth-roi-ply-download');
+                if(button.disabled) return false;
+                window.__roiPlyActualText=null;
+                const original=URL.createObjectURL.bind(URL);
+                URL.createObjectURL=(blob)=>{
+                  blob.text().then(value=>window.__roiPlyActualText=value);
+                  return original(blob);
+                };
+                button.click();
+                return true;
+              """), "Real measured ROI PLY download button remained disabled"
+              for _ in range(40):
+                  roi_ply=js("return window.__roiPlyActualText;")
+                  if roi_ply is not None:
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("Native 3D ROI PLY bytes were not produced in Chrome")
+              ply_lines=roi_ply.splitlines()
+              assert ply_lines[:2]==["ply","format ascii 1.0"]
+              assert "comment source license CC BY-NC 4.0 NONCOMMERCIAL" in ply_lines
+              assert "property double x" in ply_lines
+              header_end=ply_lines.index("end_header")
+              expected_ids=list(dict.fromkeys(
+                  pid for _,pid in sorted(
+                      (float(depth_values[key]),str(depth_bins[key]))
+                      for key in depth_bins if key.startswith("0:")
+                  )
+              ))
+              assert f"element vertex {len(expected_ids)}" in ply_lines
+              actual_rows=ply_lines[header_end+1:]
+              assert len(actual_rows)==len(expected_ids)
+              for row,pid in zip(actual_rows,expected_ids,strict=True):
+                  coords=[float(value) for value in row.split()]
+                  expected=lookup["points"][pid]["xyz"]
+                  assert len(coords)==3
+                  assert all(
+                      math.isclose(x,y,rel_tol=1e-12,abs_tol=1e-12)
+                      for x,y in zip(coords,expected,strict=True)
+                  )
               # A region across different original camera tiles must not
               # silently combine unrelated SfM camera-Z coordinate frames.
               assert js("""
@@ -3723,6 +3766,7 @@ jobs:
               else:
                   raise RuntimeError("Real Chrome mixed-camera sparse depth ROI was accepted")
               assert not roi_state["enabled"]
+              assert js("return document.getElementById('wre-depth-roi-ply-download').disabled;")
               picked_key=min(depth_bins, key=lambda key:tuple(int(v) for v in key.split(":")))
               selected_tile,selected_x,selected_y=(int(v) for v in picked_key.split(":"))
               selected_depth_id=str(depth_bins[picked_key])
