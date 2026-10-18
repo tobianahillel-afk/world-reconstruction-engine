@@ -4961,7 +4961,7 @@ jobs:
                   area_probe = js(area_scan)
               assert area_probe.get("points"), area_probe
               area_hits = area_probe["points"]
-              area_status = js(f"""
+              area_click_script = f"""
                 const scene=document.getElementById('wre-scene');
                 const button=document.getElementById('wre-area-toggle');
                 // Sample the ACTUAL mesh again immediately before dispatch.
@@ -5017,7 +5017,17 @@ jobs:
                   clicked:window.__wreClickedRaycasts.slice(),
                   markerCount:scene.querySelectorAll('.wre-pick-marker').length
                 }};
-              """)
+              """
+              # Chrome's model-viewer camera may still interpolate after
+              # auto-rotate is disabled. Only retry the *pre-click* miss:
+              # it dispatches NO user events and creates NO fabricated points.
+              # Every retry must raycast three non-collinear actual mesh hits.
+              area_status = js(area_click_script)
+              for _ in range(15):
+                  if area_status.get("error") != "area mesh sample vanished":
+                      break
+                  time.sleep(0.4)
+                  area_status = js(area_click_script)
               assert area_status.get("clicked") and len(area_status["clicked"]) == 3, area_status
               assert area_status["markerCount"] == 3
               assert area_status["pressed"] == "true"
