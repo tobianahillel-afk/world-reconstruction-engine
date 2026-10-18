@@ -1604,6 +1604,21 @@ jobs:
           # measurement, not only eight sampled landmarks in a camera pair.
           poses = json.loads(Path("wre-real16-camera-poses.json").read_text())
           cameras_by_id = {int(c["image_id"]): c for c in poses["cameras"]}
+          # Join actual positive camera-Z observations to native 3D tracks.
+          # No re-triangulation: unmeasured/negative depths remain absent.
+          positive_depths = {}
+          with Path("wre-real16-native-sparse-depth-observations.csv").open(
+              encoding="utf-8", newline=""
+          ) as stream:
+              for row in csv.DictReader(stream):
+                  key = (
+                      int(row["image_id"]), int(row["point3d_id"]),
+                      int(row["point2d_idx"]),
+                  )
+                  z = float(row["camera_z_sfm_units"])
+                  assert key not in positive_depths and math.isfinite(z) and z > 0
+                  positive_depths[key] = (row, z)
+          assert len(positive_depths) > 100
           points = {}
           seen_pixels = set()
           with Path("wre-real16-native-2d3d-tracks.csv").open(
@@ -1628,10 +1643,28 @@ jobs:
                       "xyz": xyz, "in_sample_error_px": error, "observations": [],
                   })
                   assert point["xyz"] == xyz and point["in_sample_error_px"] == error
-                  point["observations"].append({
+                  observation = {
                       "image_id": image_id, "image_name": row["image_name"],
                       "point2d_idx": pixel_id, "pixel": uv,
-                  })
+                  }
+                  measured = positive_depths.pop((image_id, pid, pixel_id), None)
+                  if measured is not None:
+                      depth_row, z = measured
+                      assert depth_row["image_name"] == row["image_name"]
+                      assert depth_row["image_sha256"] == row["image_sha256"]
+                      assert all(
+                          math.isclose(float(depth_row["world_" + axis]), value,
+                                       rel_tol=1e-9, abs_tol=1e-8)
+                          for axis, value in zip(("x", "y", "z"), xyz, strict=True)
+                      )
+                      assert all(
+                          math.isclose(float(depth_row["pixel_" + axis]), value,
+                                       rel_tol=1e-9, abs_tol=1e-8)
+                          for axis, value in zip(("x", "y"), uv, strict=True)
+                      )
+                      observation["positive_camera_z_sfm_units"] = z
+                  point["observations"].append(observation)
+          assert not positive_depths
           assert len(points) == geom["sparse_points3d"]
           assert len(seen_pixels) == geom["track_observations"]
           for point in points.values():
@@ -1978,7 +2011,11 @@ jobs:
                 const match=[...cameraEvidence.entries()].find(([,camera])=>
                   camera.image_id===o.image_id && camera.image_name===o.image_name);
                 if(!match) throw Error('Native observation has no registered camera');
-                return {index:match[0],pixel:o.pixel,image_name:o.image_name};
+                const z=o.positive_camera_z_sfm_units;
+                if(z!==undefined && (!Number.isFinite(z) || z<=0)){
+                  throw Error('Invalid measured camera-Z for this native landmark');
+                }
+                return {index:match[0],pixel:o.pixel,image_name:o.image_name,depth:z};
               });
               nativePoint={id,observed};
               nativeCameraChoice.replaceChildren(new Option('Choose measured camera',''));
@@ -2007,8 +2044,10 @@ jobs:
                 'native in-sample reprojection error '+
                 point.in_sample_error_px.toFixed(4)+' px. '+
                 rgbDescription+
-                observations.map(o=>o.image_name+' #'+o.point2d_idx+
-                  ' ('+o.pixel.map(v=>v.toFixed(1)).join(', ')+')').join(' · ')+
+                observed.map((o,i)=>o.image_name+' #'+observations[i].point2d_idx+
+                  ' ('+o.pixel.map(v=>v.toFixed(1)).join(', ')+')'+
+                  (o.depth===undefined ? ' (no positive camera-Z sample)' :
+                   ' camera-Z '+o.depth.toFixed(5)+' arbitrary SfM units')).join(' · ')+
                 '. Not metric, held-out quality, time, GPU training or 4D.';
             } catch(error){
               clearNativeLookupMarker();
