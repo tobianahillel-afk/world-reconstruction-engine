@@ -1587,7 +1587,7 @@ jobs:
       # Run the actual-photo CPU reconstruction BEFORE expensive native CUDA
       # compilation. Keep the original photo pipeline in one place and make
       # its real 3D/preview outputs inspectable even while CUDA builds run.
-      - name: Stage twenty-seven real-photo CPU 3D, animated mesh, GLB and COLMAP outputs early
+      - name: Stage 31 real-photo CPU 3D, animated mesh, GLB and COLMAP outputs early
         shell: bash
         run: |
           set -euo pipefail
@@ -1697,6 +1697,7 @@ jobs:
         run: |
           set -euo pipefail
           "$COMMON_PYTHON" -I - <<'PY'
+          import json
           import os
           import sys
           from pathlib import Path
@@ -1723,8 +1724,42 @@ jobs:
               assert batch["camtoworld"].shape == (4, 4)
               assert torch.isfinite(batch["camtoworld"]).all()
           assert np.all(np.isfinite(parsed.points))
+          # Independent functional round-trip of SIFT-estimated camera R/t and
+          # RGB tracks, with the ACTUAL pinned gsplat COLMAP reader and Dataset.
+          estimated_root = Path(os.environ["RUNNER_TEMP"]) / "wre-real-stereo-sift-colmap"
+          handoff = json.loads((
+              Path(os.environ["RUNNER_TEMP"])
+              / "wre-real-stereo-sift-estimated-colmap-handoff.json"
+          ).read_text())
+          estimated = Parser(str(estimated_root), factor=1, normalize=False, test_every=8)
+          assert estimated.image_names == ["aloe-left.png", "aloe-right.png"]
+          assert estimated.points.shape == (handoff["triangulated_rgb_tracks"], 3)
+          assert estimated.points.shape[0] >= 20
+          assert np.isfinite(estimated.points).all()
+          estimated_train = Dataset(estimated, split="train")
+          estimated_eval = Dataset(estimated, split="test")
+          assert len(estimated_train) == 1 and len(estimated_eval) == 1
+          for batch in (estimated_train[0], estimated_eval[0]):
+              assert batch["image"].device.type == "cpu"
+              assert batch["image"].shape[-1] == 3
+              assert torch.isfinite(batch["camtoworld"]).all()
+          evidence = {
+              "real_photographs": True,
+              "actual_gsplat_colmap_parser_executed": True,
+              "actual_gsplat_dataset_pixels_loaded": True,
+              "registered_views": 2,
+              "triangulated_tracks": int(len(estimated.points)),
+              "source_intrinsics_approximate": True,
+              "translation_metric_scale_known": False,
+              "gpu_training_executed": False,
+          }
+          (Path(os.environ["RUNNER_TEMP"])
+           / "wre-real-stereo-sift-colmap-parser-evidence.json").write_text(
+              json.dumps(evidence, sort_keys=True, indent=2) + "\n"
+          )
           print("Real stereo photographs: pinned gsplat COLMAP Parser and Dataset decoded")
-          print("Two real images, >=500 estimated XYZ points, no CUDA or training")
+          print("SIFT-estimated R/t -> REAL pinned gsplat Parser/Dataset:",
+                len(estimated.points), "RGB 3D tracks, 2 photographs; NO GPU training")
           PY
 
       - name: Decode a real 3-view COLMAP binary dataset with the pinned trainer (CPU)
@@ -2647,13 +2682,14 @@ jobs:
             wre-real-stereo-sift-estimated-3d.ply \
             wre-real-stereo-sift-estimated-pose.json \
             wre-real-stereo-sift-estimated-colmap-dataset.zip \
-            wre-real-stereo-sift-estimated-colmap-handoff.json
+            wre-real-stereo-sift-estimated-colmap-handoff.json \
+            wre-real-stereo-sift-colmap-parser-evidence.json
           do
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 47
-          echo "Staged all 45 real PLY/OBJ/GLB/GIF/MTL/PNG/PFM/NPY/JSON/ZIP files for artifact upload"
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 48
+          echo "Staged all 48 real PLY/OBJ/GLB/GIF/MTL/PNG/PFM/NPY/JSON/ZIP files for artifact upload"
 
       - name: Publish CPU COLMAP 3D preview and measured reprojection
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
