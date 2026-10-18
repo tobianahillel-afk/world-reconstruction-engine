@@ -1322,10 +1322,13 @@ jobs:
           "$COMMON_PYTHON" - <<'PY'
           import json
           import os
+          import struct
+          import zipfile
           from pathlib import Path
 
           import cv2
           import numpy as np
+          from scipy.spatial.transform import Rotation
 
           root = Path(os.environ["RUNNER_TEMP"])
           metadata = json.loads((root / "wre-real-stereo-cpu-metrics.json").read_text())
@@ -1417,6 +1420,71 @@ jobs:
           }
           (root / "wre-real-stereo-sift-estimated-pose.json").write_text(
               json.dumps(record, sort_keys=True, indent=2) + "\n"
+          )
+          # Reuse the existing COLMAP binary writer's format, but serialize
+          # ESTIMATED SIFT R/t and triangulated inlier tracks; no assumed baseline.
+          scene = root / "wre-real-stereo-sift-colmap"
+          photos_root, sparse = scene / "images", scene / "sparse" / "0"
+          photos_root.mkdir(parents=True)
+          sparse.mkdir(parents=True)
+          names = ("aloe-left.png", "aloe-right.png")
+          for name, photo in zip(names, (left, right), strict=True):
+              assert cv2.imwrite(str(photos_root / name), photo)
+          (sparse / "cameras.bin").write_bytes(
+              struct.pack("<Q", 1)
+              + struct.pack("<IiQQ4d", 1, 1, w, h, focal, focal,
+                            (w - 1) / 2, (h - 1) / 2)
+          )
+          qxyzw = Rotation.from_matrix(R).as_quat()
+          assert np.allclose(Rotation.from_quat(qxyzw).as_matrix(), R, atol=1e-10)
+          qright = (float(qxyzw[3]), *map(float, qxyzw[:3]))
+          images_bin = bytearray(struct.pack("<Q", 2))
+          for image_id, (name, pixels) in enumerate(zip(names, (p0, p1), strict=True), 1):
+              qvec = (1.0, 0.0, 0.0, 0.0) if image_id == 1 else qright
+              trans = (0.0, 0.0, 0.0) if image_id == 1 else tuple(map(float, t.ravel()))
+              images_bin.extend(struct.pack("<I4d3dI", image_id, *qvec, *trans, 1))
+              images_bin.extend(name.encode("ascii") + b"\x00")
+              images_bin.extend(struct.pack("<Q", len(xyz)))
+              for point_id, (u, v) in enumerate(pixels, 1):
+                  images_bin.extend(struct.pack("<ddq", float(u), float(v), point_id))
+          (sparse / "images.bin").write_bytes(images_bin)
+          errors = np.sqrt(
+              (np.square(uv0 - p0).sum(axis=1) + np.square(uv1 - p1).sum(axis=1)) / 2
+          )
+          points_bin = bytearray(struct.pack("<Q", len(xyz)))
+          for i, (point, color, error) in enumerate(zip(xyz, rgb, errors, strict=True)):
+              points_bin.extend(struct.pack(
+                  "<Q3d3BdQ", i + 1, *map(float, point), *map(int, color),
+                  float(error), 2
+              ))
+              for image_id in (1, 2):
+                  points_bin.extend(struct.pack("<II", image_id, i))
+          (sparse / "points3D.bin").write_bytes(points_bin)
+          archive_path = root / "wre-real-stereo-sift-estimated-colmap-dataset.zip"
+          with zipfile.ZipFile(archive_path, "w", zipfile.ZIP_DEFLATED) as archive:
+              for item in sorted(scene.rglob("*")):
+                  if item.is_file():
+                      archive.write(item, item.relative_to(scene))
+          with zipfile.ZipFile(archive_path) as archive:
+              assert sorted(archive.namelist()) == [
+                  "images/aloe-left.png", "images/aloe-right.png",
+                  "sparse/0/cameras.bin", "sparse/0/images.bin",
+                  "sparse/0/points3D.bin",
+              ]
+              assert struct.unpack("<Q", archive.read("sparse/0/points3D.bin")[:8])[0] == len(xyz)
+              assert struct.unpack("<Q", archive.read("sparse/0/images.bin")[:8])[0] == 2
+          (root / "wre-real-stereo-sift-estimated-colmap-handoff.json").write_text(
+              json.dumps({
+                  "real_photographs": True,
+                  "registered_views": 2,
+                  "triangulated_rgb_tracks": int(len(xyz)),
+                  "camera_pose_estimated_from_sift": True,
+                  "intrinsics_approximate": True,
+                  "metric_scale_known": False,
+                  "two_view_in_sample_reprojection_rmse_pixels": rmse,
+                  "colmap_dataset_binary_roundtrip_with_upstream_parser": False,
+                  "gpu_training_executed": False,
+              }, sort_keys=True, indent=2) + "\n"
           )
           assert ply.stat().st_size > 250
           print(f"Real-photo image-only pose: {len(xyz)} RGB 3D points; "
@@ -1554,12 +1622,14 @@ jobs:
             wre-real-stereo-colmap-dataset.zip \
             wre-real-stereo-colmap-handoff.json \
             wre-real-stereo-sift-estimated-3d.ply \
-            wre-real-stereo-sift-estimated-pose.json
+            wre-real-stereo-sift-estimated-pose.json \
+            wre-real-stereo-sift-estimated-colmap-dataset.zip \
+            wre-real-stereo-sift-estimated-colmap-handoff.json
           do
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 29
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 31
 
       - name: Publish real-photo CPU 3D plus COLMAP before native CUDA builds
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
@@ -2575,12 +2645,14 @@ jobs:
             wre-real-stereo-cpu-right-reprojection.png \
             wre-real-stereo-cpu-metrics.json \
             wre-real-stereo-sift-estimated-3d.ply \
-            wre-real-stereo-sift-estimated-pose.json
+            wre-real-stereo-sift-estimated-pose.json \
+            wre-real-stereo-sift-estimated-colmap-dataset.zip \
+            wre-real-stereo-sift-estimated-colmap-handoff.json
           do
             test -s "$RUNNER_TEMP/$file"
             cp "$RUNNER_TEMP/$file" "$destination/$file"
           done
-          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 45
+          test "$(find "$destination" -maxdepth 1 -type f | wc -l)" -eq 47
           echo "Staged all 45 real PLY/OBJ/GLB/GIF/MTL/PNG/PFM/NPY/JSON/ZIP files for artifact upload"
 
       - name: Publish CPU COLMAP 3D preview and measured reprojection
