@@ -2612,6 +2612,7 @@ jobs:
           import base64
           import hashlib
           import json
+          import math
           import struct
           import time
           from pathlib import Path
@@ -2778,7 +2779,6 @@ jobs:
               """), "Camera selection did not navigate the real WebGL viewer"
               # An independent Python geometry calculation verifies the actual
               # displayed SfM baseline from the SAME 16 recovered camera poses.
-              import math
               camera_data=json.loads(
                   (root / "wre-real16-camera-poses.json").read_text()
               )
