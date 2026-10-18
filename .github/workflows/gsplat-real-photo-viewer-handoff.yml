@@ -299,6 +299,46 @@ jobs:
               evidence["webgl_chrome"]["screenshot_sha256"]
           )
 
+          # One HTML that opens directly under file:// with NO web server and
+          # NO runtime network, reusing the very same audited WRE-derived scene.
+          import base64
+          vendor_html = (root / "offline-viewer" / "index.html").read_text(encoding="utf-8")
+          vendor_js = (root / "offline-viewer" / "main.js").read_text(encoding="utf-8")
+          script_tag = '<script src="main.js"></script>'
+          assert vendor_html.count(script_tag) == 1
+          assert "fetch(" in vendor_js and vendor_js.count("fetch(") == 1
+          assert "</script" not in vendor_js.lower()
+          begin = vendor_js.index("    const req = await fetch(url, {")
+          end = vendor_js.index("    console.log(req);", begin)
+          assert begin < end
+          # Keep the upstream WebGL shaders, worker, camera controls and data
+          # streamer; replace ONLY the network load with an in-memory Response.
+          offline_js = (
+              vendor_js[:begin]
+              + "    const req = new Response(window.__wreEmbeddedSplat, "
+                "{status: 200, headers: {'content-length': '"
+              + str(len(canonical))
+              + "'}});\\n"
+              + vendor_js[end:]
+          )
+          assert "fetch(" not in offline_js
+          data_b64 = base64.b64encode(canonical).decode("ascii")
+          bootstrap = (
+              "<script>window.__wreEmbeddedSplat=Uint8Array.from("
+              "atob('" + data_b64 + "'),c=>c.charCodeAt(0));</script>"
+          )
+          inline = (
+              bootstrap
+              + "<script>\\n"
+              + offline_js
+              + "\\n</script>"
+          )
+          standalone = vendor_html.replace(script_tag, inline).encode("utf-8")
+          assert standalone.count(b"window.__wreEmbeddedSplat") >= 2
+          assert b"UNTRAINED (0 steps)" in standalone
+          assert b"http://127.0.0.1:8767" not in standalone
+          (root / "VIEW-IN-BROWSER.html").write_bytes(standalone)
+
           instructions = (
               "WRE — 16 genuine DJI photos -> native CPU COLMAP -> 6917 untrained Gaussians.\n"
               "UNTRAINED, zero CUDA steps, unknown metric scale; NOT a GPU-trained radiance scene.\n"
@@ -313,6 +353,7 @@ jobs:
           ).encode("utf-8")
           contents = {
               "START_HERE.txt": instructions,
+              "VIEW-IN-BROWSER.html": standalone,
               "16-real-photo-untrained-gaussians.zip": (
                   root / "16-real-photo-untrained-gaussians.zip"
               ).read_bytes(),
@@ -329,7 +370,7 @@ jobs:
           ):
               path = f"offline-viewer/{name}"
               contents[path] = (root / path).read_bytes()
-          assert len(contents) == 10
+          assert len(contents) == 11
 
           portable = root / "WRE-16-real-photos-OPEN-ME.zip"
           with zipfile.ZipFile(portable, "x", compression=zipfile.ZIP_STORED) as archive:
@@ -351,6 +392,7 @@ jobs:
               "training_steps": 0,
               "cuda_training": False,
               "browser_entrypoint": "offline-viewer/index.html",
+              "direct_file_browser_entrypoint": "VIEW-IN-BROWSER.html",
               "license": "CC BY-NC 4.0 (noncommercial source photographs)",
               "files": sorted(contents),
           }
