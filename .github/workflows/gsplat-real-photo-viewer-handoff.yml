@@ -358,6 +358,7 @@ jobs:
               'Compare original / local</button>'
               '<button id="wre-save-view" type="button">Save camera viewpoint</button>'
               '<button id="wre-save-png" type="button">Save current 3D view (PNG)</button>'
+              '<button id="wre-record-video" type="button">Record 3D camera move (WebM)</button>'
               '<label for="wre-load-view">Load camera viewpoint JSON: </label>'
               '<input id="wre-load-view" type="file" accept=".json" '
               'aria-label="Load saved camera viewpoint">'
@@ -373,6 +374,7 @@ jobs:
             const compare = document.getElementById('wre-compare-scene');
             const saveView = document.getElementById('wre-save-view');
             const savePng = document.getElementById('wre-save-png');
+            const recordVideo = document.getElementById('wre-record-video');
             const loadView = document.getElementById('wre-load-view');
             const status = document.getElementById('wre-local-status');
             const originalFile = new File([window.__wreEmbeddedSplat],
@@ -520,6 +522,80 @@ jobs:
                 }, 'image/png');
               });
             });
+            // Record an actual video stream from the existing vendor WebGL canvas.
+            // Move only the camera; the 16-photo scene itself is STATIC (not 4D).
+            let videoRecording = false;
+            recordVideo.addEventListener('click', () => {
+              const canvas = document.getElementById('canvas');
+              const mime = ['video/webm;codecs=vp8', 'video/webm'].find(
+                value => typeof MediaRecorder !== 'undefined' &&
+                  MediaRecorder.isTypeSupported(value));
+              if (videoRecording || !canvas?.captureStream || !mime) {
+                status.textContent = 'Local WebM recording unavailable or busy.';
+                return;
+              }
+              videoRecording = true;
+              recordVideo.disabled = true;
+              window.dispatchEvent(new KeyboardEvent('keydown',
+                {key:'Escape',code:'Escape'}));
+              window.dispatchEvent(new KeyboardEvent('keyup',
+                {key:'Escape',code:'Escape'}));
+              const original = Array.from(viewMatrix);
+              let stream;
+              try {
+                stream = canvas.captureStream(20);
+                const recorder = new MediaRecorder(stream,
+                  {mimeType:mime, videoBitsPerSecond:1500000});
+                const chunks = [];
+                const finish = () => {
+                  viewMatrix = original.slice();
+                  stream.getTracks().forEach(track => track.stop());
+                  videoRecording = false;
+                  recordVideo.disabled = false;
+                };
+                recorder.ondataavailable = event => {
+                  if (event.data && event.data.size) chunks.push(event.data);
+                };
+                recorder.onerror = () => {
+                  finish();
+                  status.textContent = 'Unable to record the local 3D view.';
+                };
+                recorder.onstop = () => {
+                  finish();
+                  const blob = new Blob(chunks, {type:mime});
+                  if (blob.size < 1024) {
+                    status.textContent = 'Local video capture returned no frames.';
+                    return;
+                  }
+                  const url = URL.createObjectURL(blob);
+                  const link = document.createElement('a');
+                  link.href = url;
+                  link.download = 'wre-3d-camera-move.webm';
+                  link.click();
+                  setTimeout(() => URL.revokeObjectURL(url), 30000);
+                  status.textContent = 'Saved WebM of static 3D camera motion.';
+                };
+                recorder.start(200);
+                status.textContent = 'Recording a 3-second local 3D camera move...';
+                const started = performance.now();
+                const animate = now => {
+                  if (!videoRecording) return;
+                  const progress = Math.min(1, (now - started) / 3000);
+                  const offset = Math.sin(Math.PI * progress);
+                  viewMatrix[12] = original[12] + 0.5 * offset;
+                  viewMatrix[13] = original[13] + 0.15 * offset;
+                  if (progress < 1) requestAnimationFrame(animate);
+                  else recorder.stop();
+                };
+                requestAnimationFrame(animate);
+              } catch (error) {
+                viewMatrix = original.slice();
+                stream?.getTracks().forEach(track => track.stop());
+                videoRecording = false;
+                recordVideo.disabled = false;
+                status.textContent = 'Local browser WebM recording failed.';
+              }
+            });
             // A camera pose is a view in a coordinate frame, not model registration.
             saveView.addEventListener('click', () => {
               const pose = {format: 'wre-view-matrix-v1', matrix: Array.from(viewMatrix)};
@@ -591,7 +667,9 @@ jobs:
               "Use Compare original / local to toggle without reselecting the local file.\n"
               "Save camera viewpoint as JSON, then load to revisit the same view.\n"
               "Save current 3D view (PNG) captures the WebGL canvas locally.\n"
-              "PNG is illustrative, not metric/camera/quality evidence.\n"
+              "Record 3D camera move (WebM) saves a local 3-second WebGL clip.\n"
+              "WebM shows only camera motion in ONE STATIC scene, NOT real 4D motion.\n"
+              "PNG/video are illustrative, not metric/camera/quality evidence.\n"
               "Camera viewpoint does not align unrelated scenes or infer metric scale.\n"
               "Different scenes may not share geometry, metric scale or camera registration.\n"
               "Use Save displayed .splat to download the currently shown scene locally.\n"
