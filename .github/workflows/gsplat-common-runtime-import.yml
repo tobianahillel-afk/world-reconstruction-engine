@@ -570,36 +570,47 @@ jobs:
               for i in range(16) for j in range(16)
           )
           assert any(shared_tracks[i][j] for i in range(16) for j in range(i + 1, 16))
-          # Cross-check via independently exposed COLMAP 3D track elements.
+          # Use the EXACT native TrackElement.point2D_idx to identify
+          # a measured image pixel. A camera may contain several 2D
+          # observations of one 3D ID; treating that ID as unique failed
+          # on the actual 16-photo reconstruction. Keep distinct 3D IDs
+          # for shared-track counts and select the lowest native point2D
+          # index as an explicit, deterministic representative per camera.
           camera_indices = {
               int(frame["image_id"]): i for i, frame in enumerate(ordered_frames)
           }
           by_track = [[0] * 16 for _ in range(16)]
-          for point in model.points3D.values():
-              members = {
-                  camera_indices[int(e.image_id)]
-                  for e in point.track.elements
-                  if int(e.image_id) in camera_indices
-              }
+          pixels_by_camera = [{} for _ in range(16)]
+          pixel_index_by_camera = [{} for _ in range(16)]
+          for point_id, point in model.points3D.items():
+              point_id = int(point_id)
+              members = set()
+              for element in point.track.elements:
+                  image_id = int(element.image_id)
+                  if image_id not in camera_indices:
+                      continue
+                  camera_index = camera_indices[image_id]
+                  members.add(camera_index)
+                  point2d_index = int(element.point2D_idx)
+                  observation = model.image(image_id).point2D(point2d_index)
+                  assert observation.has_point3D()
+                  assert int(observation.point3D_id) == point_id
+                  xy = np.asarray(observation.xy, dtype=np.float64)
+                  assert xy.shape == (2,) and np.isfinite(xy).all()
+                  previous = pixel_index_by_camera[camera_index].get(point_id)
+                  if previous is None or point2d_index < previous:
+                      pixel_index_by_camera[camera_index][point_id] = point2d_index
+                      pixels_by_camera[camera_index][point_id] = [
+                          float(value) for value in xy
+                      ]
               for i in members:
                   for j in members:
                       by_track[i][j] += 1
           assert by_track == shared_tracks
-          # Real native 2D feature measurements for each 3D point/camera.
-          # These are IN-SAMPLE image pixels, not rendered/reprojected pixels.
-          pixels_by_camera = []
-          for frame in ordered_frames:
-              measured = {}
-              for observation in model.image(frame["image_id"]).points2D:
-                  if not observation.has_point3D():
-                      continue
-                  point_id = int(observation.point3D_id)
-                  xy = np.asarray(observation.xy, dtype=np.float64)
-                  assert xy.shape == (2,) and np.isfinite(xy).all()
-                  assert point_id not in measured
-                  measured[point_id] = [float(v) for v in xy]
-              assert set(measured) == observed_ids[len(pixels_by_camera)]
-              pixels_by_camera.append(measured)
+          assert all(
+              set(measured) == expected
+              for measured, expected in zip(pixels_by_camera, observed_ids, strict=True)
+          )
           # Only real PyCOLMAP 3D points observed by BOTH cameras are sampled.
           # Sorted point IDs make a bounded, deterministic spatial overlay.
           sampled_shared_points = {}
@@ -643,6 +654,7 @@ jobs:
                   "counts": shared_tracks,
                   "samples": sampled_shared_points,
                   "sample_limit_per_distinct_pair": 8,
+                  "pixel_sample_rule": "lowest_native_track_point2D_idx_per_camera",
                   "measurement": "common_triangulated_3d_point_ids_in_sample",
               },
           }
