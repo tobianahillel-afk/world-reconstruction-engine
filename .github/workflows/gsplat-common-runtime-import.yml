@@ -1385,6 +1385,9 @@ jobs:
               "wre-real16-camera-poses.json",
               "wre-real16-native-2d3d-tracks.csv",
               "wre-real16-observed-rgb-agreement.json",
+              "wre-real16-native-sparse-depth.npz",
+              "wre-real16-native-sparse-depth.json",
+              "wre-real16-native-sparse-depth-preview.png",
               "wre-real16-camera-centers.ply",
               "wre-real16-observed-rgb-LICENSE.txt",
               "wre-real16-early-gltf/ply/point_cloud_0.ply",
@@ -1421,6 +1424,9 @@ jobs:
             wre-real16-camera-poses.json
             wre-real16-native-2d3d-tracks.csv
             wre-real16-observed-rgb-agreement.json
+            wre-real16-native-sparse-depth.npz
+            wre-real16-native-sparse-depth.json
+            wre-real16-native-sparse-depth-preview.png
             wre-real16-camera-centers.ply
             wre-real16-observed-rgb-LICENSE.txt
             wre-real16-early-gltf/ply/point_cloud_0.ply
@@ -1563,6 +1569,9 @@ jobs:
               "wre-real16-camera-poses.json",
               "wre-real16-native-2d3d-tracks.csv",
               "wre-real16-observed-rgb-agreement.json",
+              "wre-real16-native-sparse-depth.npz",
+              "wre-real16-native-sparse-depth.json",
+              "wre-real16-native-sparse-depth-preview.png",
           ):
               shutil.copyfile(name, output / name)
 
@@ -1720,6 +1729,15 @@ jobs:
           <section id="wre-source-rgb-agreement" aria-label="Measured source-view RGB agreement">
             <strong>Cross-view original-photo RGB differences (in-sample, CPU)</strong>
             <output id="wre-source-rgb-agreement-value">WRE_OBSERVED_RGB_AGREEMENT</output>
+          </section>
+          <section id="wre-sparse-depth" aria-label="Observed real SfM sparse camera depth">
+            <strong>Measured sparse camera depth (CPU, arbitrary SfM units)</strong>
+            <p>16 registered views. Bright = nearer tracked 3D landmarks; black = no observed depth.
+            NOT dense depth, meters, held-out, or GPU.</p>
+            <img id="wre-sparse-depth-preview" alt="Sixteen real COLMAP sparse depth tiles"
+              src="./wre-real16-native-sparse-depth-preview.png" style="max-width:100%;height:auto">
+            <p><a download href="./wre-real16-native-sparse-depth.npz">Sparse camera depth maps (NPZ)</a>
+            · <a download href="./wre-real16-native-sparse-depth.json">Depth scale and observation metadata</a></p>
           </section>
           <section id="camera-navigation" aria-label="Inspect reconstructed cameras">
             <label for="wre-camera-choice">Reconstructed camera (filename order, not time)</label>
