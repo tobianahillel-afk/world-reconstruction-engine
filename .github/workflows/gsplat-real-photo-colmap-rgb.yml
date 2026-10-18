@@ -1195,6 +1195,7 @@ jobs:
               "  python3 -m http.server 8767 --bind 127.0.0.1\n"
               "Then open http://127.0.0.1:8767/index.html and orbit/zoom.\n"
               "Use digits 0-9 or +/- to cycle all sixteen recovered COLMAP views.\n"
+              "Open wre-real-photo-vs-gaussian-render.html for 16 photo/render pairs.\n"
               "All bytes are local after unzipping; no third-party requests.\n"
               "Gaussians are initialized from real SfM, NOT trained photorealism.\n",
               encoding="utf-8",
@@ -1236,6 +1237,7 @@ jobs:
           .venv/bin/python - <<'PY'
           import base64
           import hashlib
+          import html
           import io
           import json
           import os
@@ -1398,6 +1400,85 @@ jobs:
                       "source_photos_license": "CC BY-NC 4.0; noncommercial",
                   }, sort_keys=True, indent=2)
               )
+              # Qualitative comparison at the ACTUAL recovered COLMAP cameras.
+              # The screenshots were captured from Chrome WebGL, not a GPU-trained model.
+              provenance = json.loads(evidence_path.read_text(encoding="utf-8"))
+              names = provenance["real_gaussian_webgl"]["registered_camera_names"]
+              photos = root / "gsplat-capture" / "images"
+              photo_base = photos.resolve(strict=True)
+              assert len(names) == len(camera_images) == 16
+              assert len(set(names)) == 16
+              rows = []
+              receipts = []
+              for camera_index, (name, webgl_png) in enumerate(zip(names, camera_images, strict=True)):
+                  original = (photos / name).resolve(strict=True)
+                  assert original.is_relative_to(photo_base) and original.is_file()
+                  thumb = dst / f"wre-colmap-photo-{camera_index:02d}.jpg"
+                  with Image.open(original) as im:
+                      im.load()
+                      assert im.width > 0 and im.height > 0
+                      preview = im.convert("RGB")
+                      preview.thumbnail((900, 650), Image.Resampling.LANCZOS)
+                      preview.save(thumb, format="JPEG", quality=82)
+                  with Image.open(thumb) as checked:
+                      checked.load()
+                      assert checked.format == "JPEG" and max(checked.size) <= 900
+                  assert webgl_png.is_file()
+                  render_sha = hashlib.sha256(webgl_png.read_bytes()).hexdigest()
+                  assert render_sha == frame_hashes[camera_index]
+                  receipts.append({
+                      "camera_index": camera_index,
+                      "colmap_image": name,
+                      "undistorted_photo_sha256": hashlib.sha256(original.read_bytes()).hexdigest(),
+                      "preview_jpeg_sha256": hashlib.sha256(thumb.read_bytes()).hexdigest(),
+                      "chrome_webgl_png_sha256": render_sha,
+                  })
+                  rows.append(
+                      f"<section><h2>COLMAP camera {camera_index:02d}: {html.escape(name)}</h2>"
+                      '<div class="pair">'
+                      f'<figure><img src="{thumb.name}" alt="Source COLMAP photo">'
+                      '<figcaption>Real undistorted photo (scaled preview)</figcaption></figure>'
+                      f'<figure><img src="{webgl_png.name}" alt="Chrome WebGL render">'
+                      '<figcaption>RGB-seeded Gaussian WebGL (UNTRAINED)</figcaption></figure>'
+                      "</div></section>"
+                  )
+              gallery = dst / "wre-real-photo-vs-gaussian-render.html"
+              gallery.write_text(
+                  '<!doctype html><html lang="en"><meta charset="utf-8">'
+                  '<meta http-equiv="Content-Security-Policy" content="'
+                  "default-src 'none'; img-src 'self'; style-src 'unsafe-inline'"
+                  '"><meta name="viewport" content="width=device-width,initial-scale=1">'
+                  "<title>WRE real photos vs reconstructed 3D seed render</title>"
+                  '<style>body{font:15px system-ui;margin:1rem;background:#101723;color:#f4f6fb}'
+                  'section{padding:1rem 0;border-top:1px solid #566273}'
+                  '.pair{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,400px),1fr));gap:1rem}'
+                  'figure{margin:0}img{max-width:100%;width:100%;height:auto;background:#182537}'
+                  'figcaption{padding:.5rem;color:#d2d9e4}</style>'
+                  "<h1>16 genuine COLMAP photos vs untrained Gaussian WebGL</h1>"
+                  "<p>Each pair uses the same recovered source camera. The left is a downsized"
+                  " undistorted photo; the right is a real Chrome WebGL screenshot of the"
+                  " source-observed Gaussian seeds (zero optimization steps)."
+                  " NOT held-out quality, trained radiance, metric scale, 4D motion or GPU."
+                  " Photos: Pierre Moulon CC BY-NC 4.0 (noncommercial). Offline HTML.</p>"
+                  + "".join(rows) + "</html>\n",
+                  encoding="utf-8",
+              )
+              assert gallery.read_text(encoding="utf-8").count("<section>") == 16
+              (dst / "wre-real-photo-render-comparison.json").write_text(
+                  json.dumps({
+                      "schema": "wre.experimental.real_photo_visual_comparison.v1",
+                      "camera_count": len(receipts),
+                      "frames": receipts,
+                      "html_sha256": hashlib.sha256(gallery.read_bytes()).hexdigest(),
+                      "qualitative_only": True,
+                      "gpu_training": False,
+                      "held_out_metric": False,
+                      "temporal_4d": False,
+                      "photos_license": "CC BY-NC 4.0; noncommercial",
+                  }, sort_keys=True, indent=2) + "\n",
+                  encoding="utf-8",
+              )
+              print("REAL 16-CAMERA OFFLINE PHOTO-vs-WEBGL GALLERY:", len(rows), "matched views")
               print(
                   "REAL PHOTO GAUSSIAN CAMERA TOUR:",
                   len(camera_images), "genuine browser-rendered source views;",
