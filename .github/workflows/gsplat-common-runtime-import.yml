@@ -1386,6 +1386,11 @@ jobs:
           #camera-navigation select,#camera-navigation button {background:#273950;
             border:1px solid #8097b2;border-radius:5px;color:#fff;padding:8px}
           #camera-details {font-size:13px;line-height:1.45;flex-basis:100%}
+          #wre-native-lookup {padding:9px 18px;background:#1b2a3d;display:flex;
+            flex-wrap:wrap;gap:9px;align-items:center}
+          #wre-native-lookup input,#wre-native-lookup button {padding:8px;
+            background:#273950;border:1px solid #8097b2;color:white;border-radius:5px}
+          #wre-native-lookup-output {flex-basis:100%;font-size:13px;line-height:1.5}
           #wre-sfm-quality {padding:9px 18px;background:#162235;line-height:1.45}
           #local-model {display:flex;flex-wrap:wrap;align-items:center;gap:9px;
             padding:10px 18px;background:#202b3d}
@@ -1453,6 +1458,16 @@ jobs:
               Select a green shared 3D landmark to inspect its real SfM support.
             </output>
           </section>
+          <section id="wre-native-lookup" aria-label="Find a measured 3D landmark">
+            <label for="wre-native-point-id">COLMAP 3D point ID</label>
+            <input id="wre-native-point-id" type="number" min="1" step="1"
+              placeholder="Point ID">
+            <button id="wre-native-point-find" type="button">Find 3D point</button>
+            <output id="wre-native-lookup-output" aria-live="polite">
+              Look up all measured SfM 3D points, not only camera-pair samples.
+              Coordinates in arbitrary SfM units; no GPU training or capture time.
+            </output>
+          </section>
           <section id="local-model" aria-label="Open your own 3D GLB">
             <label for="wre-local-glb">Open your own 3D model (.glb, max 128 MiB)</label>
             <input id="wre-local-glb" type="file" accept=".glb,model/gltf-binary">
@@ -1504,6 +1519,85 @@ jobs:
           <script type="module">
           const viewer=document.getElementById('wre-scene');
           const choice=document.getElementById('wre-camera-choice');
+          const lookupInput=document.getElementById('wre-native-point-id');
+          const lookupButton=document.getElementById('wre-native-point-find');
+          const lookupOutput=document.getElementById('wre-native-lookup-output');
+          let nativeLookup=null;
+          const clearNativeLookupMarker=()=>{
+            viewer.querySelector('[slot="hotspot-native-lookup"]')?.remove();
+          };
+          lookupButton.addEventListener('click',async()=>{
+            clearNativeLookupMarker();
+            if(localUrl!==null){
+              lookupOutput.textContent='Native SfM lookup disabled for unverified GLB.';
+              return;
+            }
+            const id=Number(lookupInput.value);
+            if(!Number.isSafeInteger(id) || id<=0){
+              lookupOutput.textContent='Enter a positive native COLMAP point ID.';
+              return;
+            }
+            try {
+              if(nativeLookup===null){
+                nativeLookup=fetch('./wre-real16-native-landmark-lookup.json')
+                  .then(response=>{
+                    if(!response.ok) throw Error('Missing native SfM landmark index');
+                    return response.json();
+                  }).then(index=>{
+                    if(index.schema!=='wre.experimental.real16_native_landmark_lookup.v1' ||
+                       !Number.isSafeInteger(index.point_count) ||
+                       index.point_count<=100 ||
+                       !Number.isSafeInteger(index.observation_count) ||
+                       index.observation_count<2*index.point_count ||
+                       index.gpu_training_executed!==false) {
+                      throw Error('Invalid native SfM landmark index');
+                    }
+                    return index;
+                  });
+              }
+              const index=await nativeLookup;
+              if(localUrl!==null) return;
+              const point=index.points[String(id)];
+              if(!point){
+                lookupOutput.textContent='No triangulated COLMAP point '+id+'.';
+                return;
+              }
+              const xyz=point.xyz,observations=point.observations;
+              if(!Array.isArray(xyz) || xyz.length!==3 ||
+                 !xyz.every(Number.isFinite) ||
+                 !Array.isArray(observations) || observations.length<2 ||
+                 !Number.isFinite(point.in_sample_error_px) ||
+                 point.in_sample_error_px<0 ||
+                 !observations.every(o=>Number.isSafeInteger(o.image_id) &&
+                   typeof o.image_name==='string' &&
+                   Number.isSafeInteger(o.point2d_idx) &&
+                   Array.isArray(o.pixel) && o.pixel.length===2 &&
+                   o.pixel.every(Number.isFinite))) {
+                throw Error('Invalid native COLMAP point evidence');
+              }
+              const marker=document.createElement('button');
+              marker.type='button';marker.className='wre-track-hotspot';
+              marker.slot='hotspot-native-lookup';
+              marker.setAttribute('data-position',xyz.map(v=>v+'m').join(' '));
+              marker.setAttribute('data-normal','0 1 0');
+              marker.setAttribute('aria-label','Native COLMAP 3D point '+id);
+              marker.textContent='◆';
+              viewer.appendChild(marker);
+              lookupOutput.textContent='Real COLMAP point '+id+' XYZ ('+
+                xyz.map(v=>v.toFixed(5)).join(', ')+') in arbitrary SfM units; '+
+                observations.length+' measured camera observations; '+
+                'native in-sample reprojection error '+
+                point.in_sample_error_px.toFixed(4)+' px. '+
+                observations.map(o=>o.image_name+' #'+o.point2d_idx+
+                  ' ('+o.pixel.map(v=>v.toFixed(1)).join(', ')+')').join(' · ')+
+                '. Not metric, held-out quality, time, GPU training or 4D.';
+            } catch(error){
+              clearNativeLookupMarker();
+              lookupOutput.textContent='Native point lookup failed: '+String(error);
+              nativeLookup=null;
+            }
+          });
+
           const baselineChoice=document.getElementById('wre-baseline-choice');
           const baselineOutput=document.getElementById('wre-camera-baseline');
           const landmarkInspection=document.getElementById('wre-landmark-inspection');
@@ -1722,6 +1816,8 @@ jobs:
               nearestButton.disabled=true;
               sharedButton.disabled=true;
               clearPairMarkers();
+              clearNativeLookupMarker();
+              lookupOutput.textContent='Native SfM points unavailable for third-party GLB.';
               choice.value='';
               baselineChoice.value='';
               baselineOutput.textContent='Baseline unavailable for unverified local GLB.';
