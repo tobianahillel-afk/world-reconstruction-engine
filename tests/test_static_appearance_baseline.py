@@ -1224,9 +1224,7 @@ def test_external_gsplat_runner_rejects_untrusted_lpips_cache_before_process(
 def test_external_gsplat_runner_requires_offline_lpips_before_cuda(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    request, source, staged, output, profile, ref, producer = _retained_gsplat_fixture(
-        tmp_path
-    )
+    request, source, staged, output, profile, ref, producer = _retained_gsplat_fixture(tmp_path)
     (output / profile.expected_ply_relative_path).unlink()
     (output / "ply").rmdir()
     output.rmdir()
