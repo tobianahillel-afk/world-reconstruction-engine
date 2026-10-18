@@ -695,9 +695,9 @@ jobs:
               "wre-real16-camera-poses.json",
               "wre-real16-camera-centers.ply",
               "wre-real16-observed-rgb-LICENSE.txt",
-               "wre-real16-early-gltf/ply/point_cloud_0.ply",
-               "wre-real16-early-gltf/viewable-rgb-centers.glb",
-               "wre-real16-early-gltf/manifest.json",
+              "wre-real16-early-gltf/ply/point_cloud_0.ply",
+              "wre-real16-early-gltf/viewable-rgb-centers.glb",
+              "wre-real16-early-gltf/manifest.json",
           )
           manifest = {
               "schema": "wre.experimental.native_cpu_sfm_delivery.v1",
