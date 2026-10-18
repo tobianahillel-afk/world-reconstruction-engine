@@ -3625,6 +3625,71 @@ jobs:
               assert lookup["depth_tile_resolution"]==256
               assert lookup["depth_tile_order"]=="image_name_sorted_four_by_four"
               assert len(depth_bins)>100
+              depth_values=lookup["depth_bin_to_camera_z_sfm_units"]
+              assert set(depth_values)==set(depth_bins)
+              assert all(math.isfinite(v) and v>0 for v in depth_values.values())
+              real_first_tile_depths=[
+                  float(value) for key,value in depth_values.items()
+                  if key.startswith("0:")
+              ]
+              assert len(real_first_tile_depths)>5
+              # Exercise REAL measured-region selection in headless WebGL Chrome.
+              # The 256x256 ROI includes only occupied, frontmost camera-Z bins;
+              # unobserved cells must never be interpolated or called meters.
+              assert js("""
+                const preview=document.getElementById('wre-sparse-depth-preview');
+                const r=preview.getBoundingClientRect();
+                for(const [x,y] of [[0,0],[255,255]]) {
+                  preview.dispatchEvent(new MouseEvent('click',{
+                    bubbles:true,shiftKey:true,
+                    clientX:r.left+(x+0.5)/1024*r.width,
+                    clientY:r.top+(y+0.5)/1024*r.height
+                  }));
+                }
+                return true;
+              """)
+              for _ in range(60):
+                  roi_state=js("""
+                    const status=document.getElementById('wre-depth-roi-status').textContent;
+                    const download=document.getElementById('wre-depth-roi-download');
+                    return {status,enabled:!download.disabled};
+                  """)
+                  if roi_state["enabled"] and "observed frontmost SfM bins" in roi_state["status"]:
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("Real Chrome sparse SfM depth ROI selection failed")
+              assert f'{len(real_first_tile_depths)} observed frontmost SfM bins' in roi_state["status"]
+              assert f'{min(real_first_tile_depths):.4f}' in roi_state["status"]
+              assert f'{max(real_first_tile_depths):.4f}' in roi_state["status"]
+              assert "NOT dense depth or meters" in roi_state["status"]
+              # A region across different original camera tiles must not
+              # silently combine unrelated SfM camera-Z coordinate frames.
+              assert js("""
+                const preview=document.getElementById('wre-sparse-depth-preview');
+                const r=preview.getBoundingClientRect();
+                for(const [x,y] of [[0,0],[257,0]]) {
+                  preview.dispatchEvent(new MouseEvent('click',{
+                    bubbles:true,shiftKey:true,
+                    clientX:r.left+(x+0.5)/1024*r.width,
+                    clientY:r.top+(y+0.5)/1024*r.height
+                  }));
+                }
+                return true;
+              """)
+              for _ in range(40):
+                  roi_state=js("""
+                    return {
+                      status:document.getElementById('wre-depth-roi-status').textContent,
+                      enabled:!document.getElementById('wre-depth-roi-download').disabled
+                    };
+                  """)
+                  if "within one measured camera tile" in roi_state["status"]:
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("Real Chrome mixed-camera sparse depth ROI was accepted")
+              assert not roi_state["enabled"]
               picked_key=min(depth_bins, key=lambda key:tuple(int(v) for v in key.split(":")))
               selected_tile,selected_x,selected_y=(int(v) for v in picked_key.split(":"))
               selected_depth_id=str(depth_bins[picked_key])
