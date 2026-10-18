@@ -1010,6 +1010,145 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      # One usable, self-contained browser presentation of the real 16-camera
+      # SfM scene. Reuses the vetted model-viewer 4.1.0 bundle from WRE #281.
+      # Publication happens BEFORE slow CUDA compilation; no GPU is needed.
+      - name: Package offline interactive 16-camera scene (CPU)
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv/bin/python -I - <<'PY'
+          import hashlib
+          import json
+          import shutil
+          import struct
+          from pathlib import Path
+          from urllib.request import urlopen
+
+          source = Path("wre-real16-viewable-scene.glb")
+          receipt = json.loads(
+              Path("wre-real16-viewable-scene-receipt.json").read_text(encoding="utf-8")
+          )
+          content = source.read_bytes()
+          assert struct.unpack_from("<4sII", content) == (b"glTF", 2, len(content))
+          assert receipt["sha256"] == hashlib.sha256(content).hexdigest()
+          assert receipt["bytes"] == len(content)
+          assert receipt["registered_cameras"] == 16
+          assert receipt["gpu_training_executed"] is False
+          assert receipt["metric_scale_known"] is False
+
+          output = Path("wre-real16-offline-viewer")
+          output.mkdir(exist_ok=False)
+          shutil.copyfile(source, output / source.name)
+          for name in (
+              "wre-real16-viewable-scene-receipt.json",
+              "wre-real16-observed-rgb-LICENSE.txt",
+              "wre-real16-camera-poses.json",
+          ):
+              shutil.copyfile(name, output / name)
+
+          # Hash-bound Apache-2.0 viewer already used by WRE's working Chrome
+          # real-photo browser smoke; NOT a new 3D viewer implementation.
+          js_url = (
+              "https://cdnjs.cloudflare.com/ajax/libs/model-viewer/4.1.0/"
+              "model-viewer.min.js"
+          )
+          expected_sha512 = (
+              "PMy/x5h09gVKwc21Cdcgu/VWJwgmeJ7uivJkbTar3vh5t8uz"
+              "Yo3NQgTkZE0fsfUd+9vihkAcLNAh6mv9mEXkZQ=="
+          )
+          import base64
+          with urlopen(js_url, timeout=30) as response:
+              vendor = response.read(5_000_001)
+          assert 100_000 < len(vendor) <= 5_000_000
+          assert (
+              base64.b64encode(hashlib.sha512(vendor).digest()).decode("ascii")
+              == expected_sha512
+          )
+          (output / "wre-model-viewer-4.1.0.min.js").write_bytes(vendor)
+          with urlopen(
+              "https://raw.githubusercontent.com/google/model-viewer/v4.1.0/LICENSE",
+              timeout=30,
+          ) as response:
+              vendor_license = response.read(20_001)
+          assert 11_000 < len(vendor_license) <= 20_000
+          assert b"Apache License" in vendor_license[:110]
+          (output / "wre-model-viewer-4.1.0-LICENSE.txt").write_bytes(vendor_license)
+
+          html = """<!doctype html>
+          <html lang="en"><head><meta charset="utf-8">
+          <meta name="viewport" content="width=device-width,initial-scale=1">
+          <title>WRE · Real 16-photo reconstructed 3D</title>
+          <script type="module" src="./wre-model-viewer-4.1.0.min.js"
+            integrity="sha512-PMy/x5h09gVKwc21Cdcgu/VWJwgmeJ7uivJkbTar3vh5t8uzYo3NQgTkZE0fsfUd+9vihkAcLNAh6mv9mEXkZQ=="></script>
+          <style>
+          html,body {height:100%;margin:0;background:#101721;color:#e5effb;
+            font:15px system-ui,sans-serif}
+          main {height:100%;display:flex;flex-direction:column}
+          header,footer {padding:12px 18px;background:#202b3d}
+          h1 {font-size:20px;margin:0 0 6px}
+          p {margin:5px 0;line-height:1.4}
+          model-viewer {width:100%;flex:1;min-height:330px}
+          a {color:#9bdeff}
+          </style></head><body><main>
+          <header><h1>WRE · Real 16-photograph SfM 3D</h1>
+          <p>Orbit and zoom the actual reconstructed RGB point cloud,
+          16 calibrated camera frustums and filename-ordered camera connections.</p>
+          <p>Source: Pierre Moulon, OpenMVG Palm Desert Micro, CC BY-NC 4.0
+          <strong>NONCOMMERCIAL</strong>. No original photographs are distributed.</p>
+          </header>
+          <model-viewer id="wre-scene" camera-controls auto-rotate
+            interaction-prompt="auto"
+            alt="Sparse CPU 3D reconstruction of 16 real photographs"
+            src="./wre-real16-viewable-scene.glb"></model-viewer>
+          <footer><p>SfM RGB geometry from real photographs. No metric scale,
+          no verified capture-time order, no 4D, no CUDA GPU training,
+          no Gaussian appearance optimization.</p>
+          <p>Scene SHA-256: WRE_SCENE_SHA256</p>
+          <p><a download href="./wre-real16-viewable-scene.glb">Download GLB</a>
+          · <a download href="./wre-real16-camera-poses.json">Camera poses</a>
+          · <a href="./wre-real16-viewable-scene-receipt.json">Provenance</a></p>
+          <p>Offline: extract the archive and run
+          <code>python3 -m http.server 8765 --bind 127.0.0.1</code>,
+          then open <code>http://127.0.0.1:8765/wre-real16-viewer.html</code>.
+          No internet access is required at viewing time.</p></footer>
+          </main></body></html>"""
+          html = html.replace("WRE_SCENE_SHA256", receipt["sha256"])
+          (output / "wre-real16-viewer.html").write_text(html, encoding="utf-8")
+          manifest = {
+              "schema": "wre.experimental.real16_offline_viewer.v1",
+              "source_dataset_commit": receipt["source_dataset_commit"],
+              "license": receipt["license"],
+              "scene_sha256": receipt["sha256"],
+              "registered_cameras": 16,
+              "metric_scale_known": False,
+              "gpu_training_executed": False,
+              "model_viewer_version": "4.1.0",
+              "files": {
+                  p.name: {
+                      "sha256": hashlib.sha256(p.read_bytes()).hexdigest(),
+                      "bytes": p.stat().st_size,
+                  }
+                  for p in sorted(output.iterdir())
+                  if p.is_file()
+              },
+          }
+          (output / "viewer-manifest.json").write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          assert (output / "wre-real16-viewable-scene.glb").read_bytes() == content
+          print("Packaged genuine 16-camera GLB with pinned offline viewer, no CUDA.")
+          PY
+
+      - name: Publish portable offline real-photo 3D viewer before CUDA
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wre-real16-offline-3d-viewer
+          path: wre-real16-offline-viewer/
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Build BOTH upstream CUDA extensions into the SAME Python interpreter
         shell: bash
         run: |
