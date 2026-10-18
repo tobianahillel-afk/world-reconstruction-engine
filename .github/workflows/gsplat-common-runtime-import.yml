@@ -3370,6 +3370,68 @@ jobs:
                   assert math.isclose(marker["left"],100*xy[0]/cam["image_width"],abs_tol=1e-4)
                   assert math.isclose(marker["top"],100*xy[1]/cam["image_height"],abs_tol=1e-4)
                   assert "local photo not authenticated" in marker["title"]
+              # Every native track is navigable, including points NOT among
+              # the eight sampled pair hotspots; measured pixels are plotted
+              # only on a locally supplied same-size image (NOT authenticated).
+              available=sorted(
+                  (
+                      (int(pid),obs)
+                      for pid,entry in lookup["points"].items()
+                      for obs in entry["observations"]
+                      if obs["image_name"]==overlay_cameras[0]["image_name"]
+                  ),
+                  key=lambda item:item[0],
+              )
+              assert available
+              native_id,native_obs=available[0]
+              assert js("""
+                const input=document.getElementById('wre-native-point-id');
+                input.value='__ID__';
+                document.getElementById('wre-native-point-find').click();
+                return true;
+              """.replace("__ID__",str(native_id)))
+              for _ in range(60):
+                  option_count=js("""
+                    const camera=document.getElementById('wre-native-observation-camera');
+                    return camera.disabled ? 0 : camera.options.length-1;
+                  """)
+                  if option_count>=2:
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("Native point camera observations not loaded")
+              native_overlay=js("""
+                const name=__CAMERA_NAME__;
+                const select=document.getElementById('wre-native-observation-camera');
+                const option=[...select.options].find(o=>o.textContent.startsWith(name+' ('));
+                if(!option) throw Error('Actual camera missing from 3D point observations');
+                select.value=option.value;
+                document.getElementById('wre-native-observation-open').click();
+                const marker=document.getElementById('wre-native-photo-pixel');
+                return {hidden:marker.hidden,
+                  x:Number(marker.dataset.pixelX),
+                  y:Number(marker.dataset.pixelY),
+                  left:parseFloat(marker.style.left),
+                  top:parseFloat(marker.style.top),
+                  title:marker.title,
+                  selected:document.getElementById('wre-camera-choice')
+                    .selectedOptions[0].textContent};
+              """.replace("__CAMERA_NAME__",json.dumps(native_obs["image_name"])))
+              assert not native_overlay["hidden"]
+              assert native_obs["image_name"] in native_overlay["selected"]
+              assert math.isclose(native_overlay["x"],native_obs["pixel"][0],abs_tol=1e-7)
+              assert math.isclose(native_overlay["y"],native_obs["pixel"][1],abs_tol=1e-7)
+              assert math.isclose(
+                  native_overlay["left"],
+                  100*native_obs["pixel"][0]/overlay_cameras[0]["image_width"],
+                  abs_tol=1e-4,
+              )
+              assert math.isclose(
+                  native_overlay["top"],
+                  100*native_obs["pixel"][1]/overlay_cameras[0]["image_height"],
+                  abs_tol=1e-4,
+              )
+              assert "NOT authenticated" in native_overlay["title"]
               # The very same native 3D track must display the opposite
               # measured pixels when camera A and B are reversed.
               reversed_text=js("""
