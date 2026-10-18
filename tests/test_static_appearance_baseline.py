@@ -8,6 +8,7 @@ import os
 import shutil
 import struct
 import sys
+import zipfile
 import zlib
 from dataclasses import FrozenInstanceError, replace
 from datetime import UTC, datetime
@@ -117,6 +118,7 @@ from wre.reconstruction.static_appearance_baseline import (
     export_verified_gsplat_rgb_centers_glb,
     export_verified_gsplat_rgb_centers_ply,
     export_verified_gsplat_splat,
+    export_verified_gsplat_viewer_bundle,
     inspect_gsplat_static_appearance_shared_track_pixels,
     materialize_verified_gsplat_ply,
     preflight_gsplat_static_appearance_inputs,
@@ -1717,6 +1719,71 @@ def test_verified_gaussian_splat_export_refuses_bad_inputs_without_partial_file(
             artifact_ref=ref, output_root=root, profile=profile, splat_path=target
         )
     assert not target.exists()
+
+
+def test_verified_gsplat_bundle_contains_usable_viewer_files_and_provenance(
+    tmp_path: Path,
+) -> None:
+    """Real disk ZIP/GLB/.splat IO with byte-checked Gaussian fixtures, not GPU training."""
+    actual_ply = _gsplat_ply(vertices=2)
+    root, profile, ref = _gsplat_output(tmp_path, actual_ply)
+    viewer = tmp_path / "viewer"
+    viewer.mkdir()
+    bundle = viewer / "scene.zip"
+
+    archive_sha = export_verified_gsplat_viewer_bundle(
+        artifact_ref=ref, output_root=root, profile=profile, bundle_path=bundle
+    )
+    assert archive_sha == _digest(bundle.read_bytes())
+    with zipfile.ZipFile(bundle) as archive:
+        assert archive.namelist() == ["scene.splat", "centers.glb", "manifest.json"]
+        assert all(item.date_time == (1980, 1, 1, 0, 0, 0) for item in archive.infolist())
+        splat_bytes = archive.read("scene.splat")
+        glb_bytes = archive.read("centers.glb")
+        manifest = json.loads(archive.read("manifest.json"))
+    assert len(splat_bytes) == 64
+    assert len(list(struct.iter_unpack("<6f8B", splat_bytes))) == 2
+    assert glb_bytes.startswith(b"glTF")
+    assert struct.unpack_from("<I", glb_bytes, 8)[0] == len(glb_bytes)
+    assert manifest["format"] == "wre-gsplat-viewer-bundle-v1"
+    assert manifest["source_ply"] == {
+        "relative_path": profile.expected_ply_relative_path,
+        "sha256": _digest(actual_ply),
+    }
+    for name, payload in (("scene.splat", splat_bytes), ("centers.glb", glb_bytes)):
+        assert manifest["outputs"][name] == {
+            "sha256": _digest(payload),
+            "size_bytes": len(payload),
+        }
+    assert (root / profile.expected_ply_relative_path).read_bytes() == actual_ply
+    assert not (viewer / "scene.splat").exists()
+    assert not (viewer / "centers.glb").exists()
+
+    second = viewer / "another.zip"
+    assert export_verified_gsplat_viewer_bundle(
+        artifact_ref=ref, output_root=root, profile=profile, bundle_path=second
+    ) == archive_sha
+    assert second.read_bytes() == bundle.read_bytes()
+    from wre import reconstruction
+
+    assert reconstruction.export_verified_gsplat_viewer_bundle is export_verified_gsplat_viewer_bundle
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="new .zip"):
+        export_verified_gsplat_viewer_bundle(
+            artifact_ref=ref, output_root=root, profile=profile, bundle_path=bundle
+        )
+
+
+def test_verified_gsplat_bundle_rejects_bad_ply_without_partial_archive(tmp_path: Path) -> None:
+    root, profile, ref = _gsplat_output(tmp_path, _gsplat_ply(vertices=2) + b"forged")
+    viewer = tmp_path / "viewer"
+    viewer.mkdir()
+    bundle = viewer / "scene.zip"
+    with pytest.raises(GsplatStaticAppearancePreflightError):
+        export_verified_gsplat_viewer_bundle(
+            artifact_ref=ref, output_root=root, profile=profile, bundle_path=bundle
+        )
+    assert not bundle.exists()
+    assert list(viewer.iterdir()) == []
 
 
 def test_verified_gsplat_gaussian_centers_export_standalone_glb(
