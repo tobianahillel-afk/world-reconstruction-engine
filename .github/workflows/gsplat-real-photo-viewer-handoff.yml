@@ -1084,6 +1084,85 @@ jobs:
               }
               receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\\n")
               print("REAL OFFLINE WEBM CAMERA PASS: actual WebGL clip with moving viewpoint")
+              # Real browser camera path handoff: physical JSON download
+              # from actually sampled WebGL view matrices, then replay the
+              # exact time series in WebGL (NOT temporal 4D world motion).
+              save_track = webdriver("POST", f"/session/{session}/element", {
+                  "using": "css selector", "value": "#wre-save-track"
+              })["element-6066-11e4-a52e-4f735466cecf"]
+              replay_track = webdriver("POST", f"/session/{session}/element", {
+                  "using": "css selector", "value": "#wre-replay-track"
+              })["element-6066-11e4-a52e-4f735466cecf"]
+              webdriver("POST", f"/session/{session}/element/{save_track}/click", {})
+              track_path = saved_scenes / "wre-3d-camera-track.json"
+              for _ in range(80):
+                  if track_path.is_file() and track_path.stat().st_size > 1024:
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("Recorded camera track JSON did not download")
+              track_bytes = track_path.read_bytes()
+              track = json.loads(track_bytes)
+              assert track["format"] == "wre-camera-track-v1"
+              assert track["kind"] == "camera-motion-static-scene"
+              assert track["scene_name"] == "WRE-16-photos.splat"
+              assert track["gaussian_count"] == 6917
+              assert track["duration_ms"] == 3000
+              samples = track["samples"]
+              assert 10 <= len(samples) <= 100
+              stamps = [sample["t_ms"] for sample in samples]
+              assert stamps[0] == 0 and stamps[-1] == 3000
+              assert all(left < right for left, right in zip(stamps, stamps[1:]))
+              assert all(len(sample["matrix"]) == 16 and all(
+                  isinstance(value, (int, float)) and
+                  float("-inf") < value < float("inf")
+                  for value in sample["matrix"]) for sample in samples)
+              assert all(abs(x-y) < 1e-5 for x,y in zip(
+                  samples[0]["matrix"], baseline_pose["pose"]))
+              assert max(abs(sample["matrix"][12] - baseline_pose["pose"][12])
+                         for sample in samples) > 0.04
+              webdriver("POST", f"/session/{session}/element/{replay_track}/click", {})
+              replay_moved = False
+              for _ in range(55):
+                  current_pose = webdriver("POST", f"/session/{session}/execute/sync", {
+                      "script": "return Array.from(viewMatrix);", "args": []
+                  })
+                  if abs(current_pose[12] - baseline_pose["pose"][12]) > 0.04:
+                      replay_moved = True
+                      break
+                  time.sleep(0.08)
+              assert replay_moved, "Recorded camera matrices were not replayed in WebGL"
+              for _ in range(95):
+                  replay_state = webdriver("POST", f"/session/{session}/execute/sync", {
+                      "script": """return {
+                        matrix:Array.from(viewMatrix),
+                        enabled:!document.getElementById('wre-replay-track').disabled,
+                        status:document.getElementById('wre-local-status').textContent,
+                        external:performance.getEntriesByType('resource')
+                          .filter(x=>/^https?:/.test(x.name)).map(x=>x.name)
+                      };""",
+                      "args": [],
+                  })
+                  if replay_state["enabled"] and "Replayed real camera path" in replay_state["status"]:
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("Real WebGL camera trajectory did not finish")
+              assert all(abs(a-b) < 1e-5 for a,b in zip(
+                  replay_state["matrix"], baseline_pose["pose"]))
+              assert replay_state["external"] == []
+              receipt["offline_camera_track_test"] = {
+                  "physical_json_download": True,
+                  "sampled_actual_view_matrices": len(samples),
+                  "strictly_increasing_timestamps": True,
+                  "actual_webgl_replay_moved_camera": True,
+                  "restored_camera_after_replay": True,
+                  "json_sha256": hashlib.sha256(track_bytes).hexdigest(),
+                  "static_scene_only": True,
+                  "gpu_training": False,
+              }
+              receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\\n")
+              print("REAL OFFLINE CAMERA TRACK PASS: sampled matrices exported and replayed")
               # Real browser export: source XYZ + RGB from the displayed
               # scene, not a canvas approximation or a PLY fixture.
               point_button = webdriver("POST", f"/session/{session}/element", {
