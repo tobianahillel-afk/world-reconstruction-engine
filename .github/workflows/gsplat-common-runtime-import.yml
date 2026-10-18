@@ -1723,6 +1723,26 @@ jobs:
               }
             return nativeLookup;
           };
+          let nativeRgbEvidence=null;
+          const loadNativeRgbEvidence=()=>{
+            if(nativeRgbEvidence===null){
+              nativeRgbEvidence=fetch('./wre-real16-observed-rgb-agreement.json')
+                .then(response=>{
+                  if(!response.ok) throw Error('Missing source RGB observation report');
+                  return response.json();
+                }).then(report=>{
+                  if(report.schema!=='wre.experimental.real16_observed_rgb_agreement.v1' ||
+                     report.gpu_training_executed!==false ||
+                     report.held_out_image_quality_measured!==false ||
+                     !report.per_landmark_mean_rgb_difference_0_to_255 ||
+                     typeof report.per_landmark_mean_rgb_difference_0_to_255!=='object'){
+                    throw Error('Invalid native landmark RGB observation report');
+                  }
+                  return report;
+                });
+            }
+            return nativeRgbEvidence;
+          };
           let nativePoint=null;
           let nativeObservation=null;
           const clearNativeLookupMarker=()=>{
@@ -1744,8 +1764,14 @@ jobs:
               return;
             }
             try {
-              const index=await loadNativeIndex();
+              const [index,colourEvidence]=await Promise.all([
+                loadNativeIndex(),loadNativeRgbEvidence()
+              ]);
               if(localUrl!==null) return;
+              if(colourEvidence.source_dataset_commit!==index.source_dataset_commit ||
+                 colourEvidence.sparse_points3d!==index.point_count){
+                throw Error('Landmark RGB data does not belong to this SfM scene');
+              }
               const point=index.points[String(id)];
               if(!point){
                 lookupOutput.textContent='No triangulated COLMAP point '+id+'.';
@@ -1787,11 +1813,18 @@ jobs:
               marker.setAttribute('aria-label','Native COLMAP 3D point '+id);
               marker.textContent='◆';
               viewer.appendChild(marker);
+              const observedRgb=colourEvidence
+                .per_landmark_mean_rgb_difference_0_to_255[String(id)];
+              const rgbDescription=Number.isFinite(observedRgb) &&
+                observedRgb>=0 && observedRgb<=255
+                ? observedRgb.toFixed(2)+'/255 observed in-sample source-view RGB disagreement; '
+                : 'no comparable cross-view RGB observation for this point; ';
               lookupOutput.textContent='Real COLMAP point '+id+' XYZ ('+
                 xyz.map(v=>v.toFixed(5)).join(', ')+') in arbitrary SfM units; '+
                 observations.length+' measured camera observations; '+
                 'native in-sample reprojection error '+
                 point.in_sample_error_px.toFixed(4)+' px. '+
+                rgbDescription+
                 observations.map(o=>o.image_name+' #'+o.point2d_idx+
                   ' ('+o.pixel.map(v=>v.toFixed(1)).join(', ')+')').join(' · ')+
                 '. Not metric, held-out quality, time, GPU training or 4D.';
@@ -3017,6 +3050,16 @@ jobs:
           assert colour["sparse_points3d"] == geom_quality["sparse_points3d"]
           assert colour["track_observations"] == geom_quality["track_observations"]
           assert colour["points_with_cross_view_observations"] > 100
+          point_rgb = colour["per_landmark_mean_rgb_difference_0_to_255"]
+          assert len(point_rgb) == colour["points_with_cross_view_observations"]
+          assert point_rgb and all(
+              isinstance(value, (int, float)) and math.isfinite(value) and 0 <= value <= 255
+              for value in point_rgb.values()
+          )
+          assert abs(
+              sum(point_rgb.values()) / len(point_rgb)
+              - colour["mean_rgb_difference_0_to_255"]
+          ) < 0.000002
           assert colour["held_out_image_quality_measured"] is False
           assert colour["gpu_training_executed"] is False
           lookup = json.loads(
@@ -3026,6 +3069,7 @@ jobs:
           assert lookup["point_count"] == geom_quality["sparse_points3d"]
           assert lookup["observation_count"] == geom_quality["track_observations"]
           assert len(lookup["points"]) == lookup["point_count"]
+          assert set(point_rgb) <= set(lookup["points"])
           assert quality["source_dataset_commit"] == receipt["source_dataset_commit"]
           assert geom_quality["registered_views"] == 16
           assert geom_quality["sparse_points3d"] > 100
@@ -3121,7 +3165,7 @@ jobs:
                   raise RuntimeError("Sixteen actual SfM camera choices never loaded")
               # Search a REAL native COLMAP landmark from the full 3D index,
               # not just the first 8 sampled points per selected camera pair.
-              selected_id=min(int(pid) for pid in lookup["points"])
+              selected_id=min(int(pid) for pid in point_rgb)
               selected_point=lookup["points"][str(selected_id)]
               assert len(selected_point["observations"]) >= 2
               assert js("""
@@ -3159,6 +3203,10 @@ jobs:
                   for a,b in zip(actual_xyz,selected_point["xyz"],strict=True)
               )
               assert result["projected"]
+              assert (
+                  f'{point_rgb[str(selected_id)]:.2f}/255 observed in-sample source-view '
+                  'RGB disagreement'
+              ) in result["text"]
               assert str(len(selected_point["observations"]))+" measured camera observations" in result["text"]
               for observation in selected_point["observations"][:3]:
                   assert observation["image_name"] in result["text"]
