@@ -337,7 +337,58 @@ jobs:
               + offline_js
               + "\n</script>"
           )
-          standalone = vendor_html.replace(script_tag, inline).encode("utf-8")
+          # Usable touch/keyboard alternative to upstream drag/drop. The
+          # existing pinned selectFile -> FileReader -> WebGL path is reused;
+          # nothing reads or uploads the selected file except local Chrome.
+          controls = (
+              '<section id="wre-local-controls" role="region" aria-label="Local 3D scene" '
+              'style="position:fixed;bottom:12px;left:12px;z-index:1000;'
+              'background:#171d28;color:#fff;padding:10px;border-radius:8px;'
+              'font:14px sans-serif;max-width:min(95vw,560px)">'
+              '<label for="wre-local-splat">Open a local .splat file: </label>'
+              '<input id="wre-local-splat" type="file" accept=".splat" '
+              'aria-label="Choose local Gaussian splat file">'
+              '<button id="wre-restore-original" type="button">'
+              'Restore 16-photo scene</button>'
+              '<output id="wre-local-status" aria-live="polite"></output>'
+              '</section>'
+          )
+          ui_logic = """<script>
+(() => {
+  const picker = document.getElementById('wre-local-splat');
+  const reset = document.getElementById('wre-restore-original');
+  const status = document.getElementById('wre-local-status');
+  function show(file) {
+    if (!file || file.size === 0 || file.size % 32 !== 0 ||
+        file.size > 256 * 1024 * 1024) {
+      status.textContent = 'Invalid .splat: expected 32-byte records, maximum 256 MiB.';
+      return;
+    }
+    const transfer = new DataTransfer();
+    transfer.items.add(file);
+    document.dispatchEvent(new DragEvent('drop', {
+      bubbles: true, cancelable: true, dataTransfer: transfer
+    }));
+    status.textContent = 'Loading ' + file.name + ': ' +
+      (file.size / 32) + ' Gaussian records';
+  }
+  picker.addEventListener('change', () => {
+    if (picker.files && picker.files.length === 1) show(picker.files[0]);
+  });
+  reset.addEventListener('click', () => {
+    picker.value = '';
+    show(new File([window.__wreEmbeddedSplat], 'WRE-16-photos.splat', {
+      type: 'application/octet-stream'
+    }));
+  });
+})();
+</script>"""
+          assert vendor_html.count("</body>") == 1
+          standalone = (
+              vendor_html.replace(script_tag, inline)
+              .replace("</body>", controls + ui_logic + "</body>")
+              .encode("utf-8")
+          )
           assert standalone.count(b"window.__wreEmbeddedSplat") >= 2
           assert b"UNTRAINED (0 steps)" in standalone
           assert b"http://127.0.0.1:8767" not in standalone
