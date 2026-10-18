@@ -1228,8 +1228,10 @@ jobs:
         run: |
           set -euo pipefail
           .venv/bin/python -I - <<'PY'
+          import csv
           import hashlib
           import json
+          import math
           import shutil
           import struct
           from pathlib import Path
@@ -1277,6 +1279,59 @@ jobs:
               "wre-real16-native-2d3d-tracks.csv",
           ):
               shutil.copyfile(name, output / name)
+
+          # Real native Point3D/Point2D lookup: a search index over EVERY
+          # measurement, not only eight sampled landmarks in a camera pair.
+          poses = json.loads(Path("wre-real16-camera-poses.json").read_text())
+          cameras_by_id = {int(c["image_id"]): c for c in poses["cameras"]}
+          points = {}
+          seen_pixels = set()
+          with Path("wre-real16-native-2d3d-tracks.csv").open(
+              encoding="utf-8", newline=""
+          ) as stream:
+              for row in csv.DictReader(stream):
+                  pid, image_id = int(row["point3d_id"]), int(row["image_id"])
+                  pixel_id = int(row["point2d_idx"])
+                  c = cameras_by_id[image_id]
+                  assert (image_id, pixel_id) not in seen_pixels
+                  seen_pixels.add((image_id, pixel_id))
+                  assert row["image_name"] == c["image_name"]
+                  assert row["image_sha256"] == c["image_sha256"]
+                  xyz = [float(row[key]) for key in ("x", "y", "z")]
+                  error = float(row["in_sample_error_px"])
+                  uv = [float(row["pixel_x"]), float(row["pixel_y"])]
+                  assert pid > 0 and pixel_id >= 0 and error >= 0
+                  assert all(math.isfinite(v) for v in (*xyz, error, *uv))
+                  assert 0 <= uv[0] < c["image_width"]
+                  assert 0 <= uv[1] < c["image_height"]
+                  point = points.setdefault(str(pid), {
+                      "xyz": xyz, "in_sample_error_px": error, "observations": [],
+                  })
+                  assert point["xyz"] == xyz and point["in_sample_error_px"] == error
+                  point["observations"].append({
+                      "image_id": image_id, "image_name": row["image_name"],
+                      "point2d_idx": pixel_id, "pixel": uv,
+                  })
+          assert len(points) == geom["sparse_points3d"]
+          assert len(seen_pixels) == geom["track_observations"]
+          for point in points.values():
+              point["observations"].sort(
+                  key=lambda obs: (obs["image_name"], obs["point2d_idx"])
+              )
+              assert len(point["observations"]) >= 2
+          lookup = {
+              "schema": "wre.experimental.real16_native_landmark_lookup.v1",
+              "license": receipt["license"],
+              "source_dataset_commit": receipt["source_dataset_commit"],
+              "point_count": len(points),
+              "observation_count": len(seen_pixels),
+              "gpu_training_executed": False,
+              "points": points,
+          }
+          (output / "wre-real16-native-landmark-lookup.json").write_text(
+              json.dumps(lookup, separators=(",", ":"), sort_keys=True, allow_nan=False),
+              encoding="utf-8",
+          )
 
           # Hash-bound Apache-2.0 viewer already used by WRE's working Chrome
           # real-photo browser smoke; NOT a new 3D viewer implementation.
