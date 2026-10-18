@@ -1497,6 +1497,12 @@ jobs:
               Source photos are not bundled. Supply files matching reconstructed camera names;
               they stay in this browser, with no upload or calibration claim.
             </output>
+            <button id="wre-verify-photo-hashes" type="button">
+              Check supplied photos against recorded SfM image SHA-256
+            </button>
+            <output id="wre-photo-hash-status" aria-live="polite">
+              Not checked. Matching a source digest is not a signed provenance guarantee.
+            </output>
             <div class="wre-photo-pair">
               <figure><div class="wre-photo-frame"><img id="wre-photo-image" hidden
                 alt="Locally provided first reconstructed camera photograph">
@@ -1504,14 +1510,14 @@ jobs:
                   aria-label="Measured SfM observation in camera A"></span>
                 <span id="wre-native-photo-pixel" class="wre-measured-pixel" hidden
                   aria-label="Measured native 3D point pixel in local photo"></span></div>
-                <figcaption>Camera A · operator-supplied, unverified</figcaption></figure>
+                <figcaption>Camera A · <span id="wre-photo-hash-a">local photo unverified</span></figcaption></figure>
               <figure><div class="wre-photo-frame"><img id="wre-photo-image-b" hidden
                 alt="Locally provided second reconstructed camera photograph">
                 <span id="wre-measured-pixel-b" class="wre-measured-pixel" hidden
                   aria-label="Measured SfM observation in camera B"></span>
                 <span id="wre-native-photo-pixel-b" class="wre-measured-pixel" hidden
                   aria-label="Native triangulated point measured in camera B"></span></div>
-                <figcaption>Camera B · operator-supplied, unverified</figcaption></figure>
+                <figcaption>Camera B · <span id="wre-photo-hash-b">local photo unverified</span></figcaption></figure>
             </div>
           </section>
           <model-viewer id="wre-scene" camera-controls auto-rotate
@@ -1672,8 +1678,31 @@ jobs:
           const photoMarkerA=document.getElementById('wre-measured-pixel-a');
           const photoMarkerB=document.getElementById('wre-measured-pixel-b');
           const photoUrls=new Map();
+          const photoFiles=new Map();
+          const photoHashMatches=new Map();
+          let photoSelectionGeneration=0;
+          const verifyPhotoHashes=document.getElementById('wre-verify-photo-hashes');
+          const photoHashStatus=document.getElementById('wre-photo-hash-status');
+          const photoHashA=document.getElementById('wre-photo-hash-a');
+          const photoHashB=document.getElementById('wre-photo-hash-b');
           const cameraNames=new Set();
           const cameraEvidence=new Map();
+          const updatePhotoHashLabels=()=>{
+            [
+              [choice,photoHashA],[baselineChoice,photoHashB]
+            ].forEach(([control,label])=>{
+              const name=control.selectedOptions[0]?.textContent?.split(' · ').slice(1).join(' · ');
+              if(localUrl!==null || !photoFiles.has(name)){
+                label.textContent='no verified source photo';
+              } else if(!photoHashMatches.has(name)){
+                label.textContent='local photo unverified';
+              } else {
+                label.textContent=photoHashMatches.get(name)
+                  ? 'SHA-256 matches the recorded SfM source image'
+                  : 'SHA-256 mismatch (not the recorded SfM image)';
+              }
+            });
+          };
           let selectedPhotoPoint=null;
           const drawNativePhotoPixel=()=>{
             nativePhotoPixel.hidden=true;nativePhotoPixelB.hidden=true;
@@ -1794,6 +1823,7 @@ jobs:
           photoImageB.addEventListener('load',drawMeasuredPhotoPixels);
           photoImageB.addEventListener('load',drawNativePhotoPixel);
           const showLocalPhoto=()=>{
+            updatePhotoHashLabels();
             for(const img of [photoImage,photoImageB]){
               img.hidden=true;
               img.removeAttribute('src');
@@ -1859,10 +1889,52 @@ jobs:
               }
               for(const url of photoUrls.values()) URL.revokeObjectURL(url);
               photoUrls.clear();
+              photoFiles.clear();
+              photoHashMatches.clear();
+              photoSelectionGeneration++;
               for(const [name,url] of newUrls) photoUrls.set(name,url);
+              for(const [name,file] of replacements) photoFiles.set(name,file);
+              photoHashStatus.textContent='Photos loaded locally; hashes not checked yet.';
               showLocalPhoto();
             } catch(error) {
               photoStatus.textContent='Local photo selection rejected: '+String(error);
+            }
+          });
+          verifyPhotoHashes.addEventListener('click',async()=>{
+            if(localUrl!==null || !photoFiles.size){
+              photoHashStatus.textContent='Load source-named photos in the original scene first.';
+              return;
+            }
+            const generation=photoSelectionGeneration;
+            verifyPhotoHashes.disabled=true;
+            photoHashStatus.textContent='Checking local file bytes against the recorded source hashes…';
+            try {
+              if(!crypto.subtle) throw Error('browser SHA-256 unavailable');
+              const expected=new Map(
+                [...cameraEvidence.values()].map(c=>[c.image_name,c.image_sha256]));
+              for(const [name,file] of photoFiles){
+                const digest=expected.get(name);
+                if(typeof digest!=='string' || !/^[0-9a-f]{64}$/.test(digest)){
+                  throw Error('missing recorded SHA-256 for '+name);
+                }
+                const bytes=await crypto.subtle.digest('SHA-256',await file.arrayBuffer());
+                if(generation!==photoSelectionGeneration || localUrl!==null) return;
+                const actual=Array.from(new Uint8Array(bytes),v=>
+                  v.toString(16).padStart(2,'0')).join('');
+                photoHashMatches.set(name,actual===digest);
+              }
+              const count=[...photoHashMatches.values()].filter(Boolean).length;
+              photoHashStatus.textContent=count+' of '+photoFiles.size+
+                ' local photos match the recorded SfM source bytes (SHA-256). '+
+                'This check is local, not a signed proof of source authenticity.';
+              updatePhotoHashLabels();
+            } catch(error){
+              if(generation!==photoSelectionGeneration) return;
+              photoHashMatches.clear();
+              updatePhotoHashLabels();
+              photoHashStatus.textContent='Local hash check unavailable: '+String(error);
+            } finally {
+              verifyPhotoHashes.disabled=false;
             }
           });
           let focusCamera=null;
