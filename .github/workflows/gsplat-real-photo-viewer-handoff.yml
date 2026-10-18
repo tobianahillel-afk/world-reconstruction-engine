@@ -359,6 +359,8 @@ jobs:
               '<button id="wre-save-view" type="button">Save camera viewpoint</button>'
               '<button id="wre-save-png" type="button">Save current 3D view (PNG)</button>'
               '<button id="wre-record-video" type="button">Record 3D camera move (WebM)</button>'
+              '<button id="wre-save-track" type="button" disabled>Save recorded camera path (JSON)</button>'
+              '<button id="wre-replay-track" type="button" disabled>Replay 3D camera path</button>'
               '<video id="wre-video-preview" controls playsinline hidden '
               'aria-label="Replay recorded 3D camera movement" '
               'style="max-width:100%;max-height:180px"></video>'
@@ -378,6 +380,8 @@ jobs:
             const saveView = document.getElementById('wre-save-view');
             const savePng = document.getElementById('wre-save-png');
             const recordVideo = document.getElementById('wre-record-video');
+            const saveTrack = document.getElementById('wre-save-track');
+            const replayTrack = document.getElementById('wre-replay-track');
             const videoPreview = document.getElementById('wre-video-preview');
             const loadView = document.getElementById('wre-load-view');
             const status = document.getElementById('wre-local-status');
@@ -529,7 +533,62 @@ jobs:
             // Record an actual video stream from the existing vendor WebGL canvas.
             // Move only the camera; the 16-photo scene itself is STATIC (not 4D).
             let videoRecording = false;
+            let trackPlaying = false;
+            let lastCameraTrack = null;
             let playbackUrl = null;
+            // A time-stamped CAMERA trajectory, not a temporally changing world.
+            // Keep recorded matrices separate from the encoded WebM video.
+            saveTrack.addEventListener('click', () => {
+              if (!lastCameraTrack || videoRecording) return;
+              const blob = new Blob([JSON.stringify(lastCameraTrack)],
+                {type:'application/json'});
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = 'wre-3d-camera-track.json';
+              link.click();
+              setTimeout(() => URL.revokeObjectURL(url), 30000);
+              status.textContent = 'Saved actual camera path samples (STATIC scene).';
+            });
+            replayTrack.addEventListener('click', () => {
+              if (!lastCameraTrack || videoRecording || trackPlaying) return;
+              const samples = lastCameraTrack.samples;
+              if (samples.length < 2) return;
+              trackPlaying = true;
+              replayTrack.disabled = true;
+              recordVideo.disabled = true;
+              window.dispatchEvent(new KeyboardEvent('keydown',
+                {key:'Escape',code:'Escape'}));
+              window.dispatchEvent(new KeyboardEvent('keyup',
+                {key:'Escape',code:'Escape'}));
+              const before = Array.from(viewMatrix);
+              let start = null;
+              let next = 1;
+              const frame = now => {
+                if (start === null) start = now;
+                const elapsed = Math.min(lastCameraTrack.duration_ms, now - start);
+                while (next < samples.length - 1 && samples[next].t_ms < elapsed) {
+                  next++;
+                }
+                const left = samples[next - 1];
+                const right = samples[next];
+                const delta = right.t_ms - left.t_ms;
+                const fraction = delta > 0 ? Math.min(1,
+                  Math.max(0, (elapsed - left.t_ms) / delta)) : 1;
+                viewMatrix = left.matrix.map((value, index) =>
+                  value + (right.matrix[index] - value) * fraction);
+                if (elapsed < lastCameraTrack.duration_ms) {
+                  requestAnimationFrame(frame);
+                } else {
+                  viewMatrix = before;
+                  trackPlaying = false;
+                  replayTrack.disabled = false;
+                  recordVideo.disabled = false;
+                  status.textContent = 'Replayed real camera path; the 3D world stayed STATIC.';
+                }
+              };
+              requestAnimationFrame(frame);
+            });
             window.addEventListener('pagehide', () => {
               if (playbackUrl) URL.revokeObjectURL(playbackUrl);
             });
@@ -538,17 +597,20 @@ jobs:
               const mime = ['video/webm;codecs=vp8', 'video/webm'].find(
                 value => typeof MediaRecorder !== 'undefined' &&
                   MediaRecorder.isTypeSupported(value));
-              if (videoRecording || !canvas?.captureStream || !mime) {
+              if (videoRecording || trackPlaying || !canvas?.captureStream || !mime) {
                 status.textContent = 'Local WebM recording unavailable or busy.';
                 return;
               }
               videoRecording = true;
               recordVideo.disabled = true;
+              replayTrack.disabled = true;
+              saveTrack.disabled = true;
               window.dispatchEvent(new KeyboardEvent('keydown',
                 {key:'Escape',code:'Escape'}));
               window.dispatchEvent(new KeyboardEvent('keyup',
                 {key:'Escape',code:'Escape'}));
               const original = Array.from(viewMatrix);
+              const cameraSamples = [{t_ms:0, matrix:original.slice()}];
               let stream;
               try {
                 stream = canvas.captureStream(20);
@@ -560,6 +622,8 @@ jobs:
                   stream.getTracks().forEach(track => track.stop());
                   videoRecording = false;
                   recordVideo.disabled = false;
+                  replayTrack.disabled = !lastCameraTrack;
+                  saveTrack.disabled = !lastCameraTrack;
                 };
                 recorder.ondataavailable = event => {
                   if (event.data && event.data.size) chunks.push(event.data);
@@ -575,6 +639,16 @@ jobs:
                     status.textContent = 'Local video capture returned no frames.';
                     return;
                   }
+                  lastCameraTrack = {
+                    format:'wre-camera-track-v1',
+                    kind:'camera-motion-static-scene',
+                    scene_name:activeFile.name,
+                    gaussian_count:activeFile.size / 32,
+                    duration_ms:3000,
+                    samples:cameraSamples
+                  };
+                  replayTrack.disabled = false;
+                  saveTrack.disabled = false;
                   const url = URL.createObjectURL(blob);
                   videoPreview.pause();
                   if (playbackUrl) URL.revokeObjectURL(playbackUrl);
@@ -597,6 +671,12 @@ jobs:
                   const offset = Math.sin(Math.PI * progress);
                   viewMatrix[12] = original[12] + 0.5 * offset;
                   viewMatrix[13] = original[13] + 0.15 * offset;
+                  const t = Math.round(progress * 3000);
+                  if (t === 3000 || t - cameraSamples[cameraSamples.length - 1].t_ms >= 65) {
+                    if (t > cameraSamples[cameraSamples.length - 1].t_ms) {
+                      cameraSamples.push({t_ms:t, matrix:Array.from(viewMatrix)});
+                    }
+                  }
                   if (progress < 1) requestAnimationFrame(animate);
                   else recorder.stop();
                 };
@@ -606,6 +686,8 @@ jobs:
                 stream?.getTracks().forEach(track => track.stop());
                 videoRecording = false;
                 recordVideo.disabled = false;
+                replayTrack.disabled = !lastCameraTrack;
+                saveTrack.disabled = !lastCameraTrack;
                 status.textContent = 'Local browser WebM recording failed.';
               }
             });
