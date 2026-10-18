@@ -1885,6 +1885,75 @@ jobs:
                   document.getElementById('camera-details').textContent.includes(
                     'Approximate orbit'));
               """), "Camera selection did not navigate the real WebGL viewer"
+              # Real browser File API: use the actual generated 3D GLB as if
+              # selected locally. This is a real WebGL interaction, no GPU CUDA.
+              local_result = call("POST", f"/session/{session}/execute/async", {
+                  "script": """
+                    const done=arguments[arguments.length-1];
+                    fetch('./wre-real16-viewable-scene.glb')
+                      .then(response=>{
+                        if(!response.ok) throw Error('Missing actual RGB scene');
+                        return response.arrayBuffer();
+                      })
+                      .then(binary=>{
+                        const file=new File([binary], 'my-reconstruction.glb',
+                          {type:'model/gltf-binary'});
+                        const transfer=new DataTransfer();
+                        transfer.items.add(file);
+                        const input=document.getElementById('wre-local-glb');
+                        input.files=transfer.files;
+                        input.dispatchEvent(new Event('change',{bubbles:true}));
+                        done({ok:true,bytes:file.size});
+                      })
+                      .catch(error=>done({ok:false,error:String(error)}));
+                  """,
+                  "args": [],
+              })
+              assert local_result["ok"] and local_result["bytes"] == len(binary)
+              for _ in range(40):
+                  if js("""
+                    const viewer=document.getElementById('wre-scene');
+                    const camera=document.getElementById('wre-camera-choice');
+                    return viewer.loaded && viewer.getAttribute('src').startsWith('blob:') &&
+                      camera.disabled && document.getElementById('local-model-status')
+                        .textContent.includes('Local GLB loaded');
+                  """):
+                      break
+                  time.sleep(0.25)
+              else:
+                  raise RuntimeError("Real Chrome local GLB import did not render")
+              assert js("""
+                const input=document.getElementById('wre-local-glb');
+                const viewer=document.getElementById('wre-scene');
+                const original=viewer.getAttribute('src');
+                const file=new File([new Uint8Array([1,2,3])],'broken.glb');
+                const transfer=new DataTransfer();
+                transfer.items.add(file);
+                input.files=transfer.files;
+                input.dispatchEvent(new Event('change',{bubbles:true}));
+                return viewer.getAttribute('src')===original &&
+                  document.getElementById('local-model-status')
+                    .textContent.includes('Local import rejected');
+              """), "Corrupt local GLB unexpectedly replaced the loaded scene"
+              assert js("""
+                document.getElementById('wre-restore-demo').click();
+                const viewer=document.getElementById('wre-scene');
+                const camera=document.getElementById('wre-camera-choice');
+                return viewer.getAttribute('src')==='./wre-real16-viewable-scene.glb' &&
+                  !camera.disabled && viewer.hasAttribute('auto-rotate');
+              """), "Original real-photo viewer or camera control was not restored"
+              for _ in range(40):
+                  if js("""
+                    const viewer=document.getElementById('wre-scene');
+                    return viewer.loaded && viewer.getAttribute('src')===
+                      './wre-real16-viewable-scene.glb';
+                  """):
+                      break
+                  time.sleep(0.25)
+              else:
+                  raise RuntimeError("Original 16-camera GLB did not reload")
+              print("REAL CHROME LOCAL GLB PASS: real SfM GLB loaded via File, "
+                    "malformed rejected, source camera controls restored")
               png = base64.b64decode(
                   call("GET", f"/session/{session}/screenshot"), validate=True
               )
