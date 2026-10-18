@@ -1228,8 +1228,10 @@ jobs:
         run: |
           set -euo pipefail
           .venv/bin/python -I - <<'PY'
+          import csv
           import hashlib
           import json
+          import math
           import shutil
           import struct
           from pathlib import Path
@@ -1277,6 +1279,59 @@ jobs:
               "wre-real16-native-2d3d-tracks.csv",
           ):
               shutil.copyfile(name, output / name)
+
+          # Real native Point3D/Point2D lookup: a search index over EVERY
+          # measurement, not only eight sampled landmarks in a camera pair.
+          poses = json.loads(Path("wre-real16-camera-poses.json").read_text())
+          cameras_by_id = {int(c["image_id"]): c for c in poses["cameras"]}
+          points = {}
+          seen_pixels = set()
+          with Path("wre-real16-native-2d3d-tracks.csv").open(
+              encoding="utf-8", newline=""
+          ) as stream:
+              for row in csv.DictReader(stream):
+                  pid, image_id = int(row["point3d_id"]), int(row["image_id"])
+                  pixel_id = int(row["point2d_idx"])
+                  c = cameras_by_id[image_id]
+                  assert (image_id, pixel_id) not in seen_pixels
+                  seen_pixels.add((image_id, pixel_id))
+                  assert row["image_name"] == c["image_name"]
+                  assert row["image_sha256"] == c["image_sha256"]
+                  xyz = [float(row[key]) for key in ("x", "y", "z")]
+                  error = float(row["in_sample_error_px"])
+                  uv = [float(row["pixel_x"]), float(row["pixel_y"])]
+                  assert pid > 0 and pixel_id >= 0 and error >= 0
+                  assert all(math.isfinite(v) for v in (*xyz, error, *uv))
+                  assert 0 <= uv[0] < c["image_width"]
+                  assert 0 <= uv[1] < c["image_height"]
+                  point = points.setdefault(str(pid), {
+                      "xyz": xyz, "in_sample_error_px": error, "observations": [],
+                  })
+                  assert point["xyz"] == xyz and point["in_sample_error_px"] == error
+                  point["observations"].append({
+                      "image_id": image_id, "image_name": row["image_name"],
+                      "point2d_idx": pixel_id, "pixel": uv,
+                  })
+          assert len(points) == geom["sparse_points3d"]
+          assert len(seen_pixels) == geom["track_observations"]
+          for point in points.values():
+              point["observations"].sort(
+                  key=lambda obs: (obs["image_name"], obs["point2d_idx"])
+              )
+              assert len(point["observations"]) >= 2
+          lookup = {
+              "schema": "wre.experimental.real16_native_landmark_lookup.v1",
+              "license": receipt["license"],
+              "source_dataset_commit": receipt["source_dataset_commit"],
+              "point_count": len(points),
+              "observation_count": len(seen_pixels),
+              "gpu_training_executed": False,
+              "points": points,
+          }
+          (output / "wre-real16-native-landmark-lookup.json").write_text(
+              json.dumps(lookup, separators=(",", ":"), sort_keys=True, allow_nan=False),
+              encoding="utf-8",
+          )
 
           # Hash-bound Apache-2.0 viewer already used by WRE's working Chrome
           # real-photo browser smoke; NOT a new 3D viewer implementation.
@@ -1331,6 +1386,11 @@ jobs:
           #camera-navigation select,#camera-navigation button {background:#273950;
             border:1px solid #8097b2;border-radius:5px;color:#fff;padding:8px}
           #camera-details {font-size:13px;line-height:1.45;flex-basis:100%}
+          #wre-native-lookup {padding:9px 18px;background:#1b2a3d;display:flex;
+            flex-wrap:wrap;gap:9px;align-items:center}
+          #wre-native-lookup input,#wre-native-lookup button {padding:8px;
+            background:#273950;border:1px solid #8097b2;color:white;border-radius:5px}
+          #wre-native-lookup-output {flex-basis:100%;font-size:13px;line-height:1.5}
           #wre-sfm-quality {padding:9px 18px;background:#162235;line-height:1.45}
           #local-model {display:flex;flex-wrap:wrap;align-items:center;gap:9px;
             padding:10px 18px;background:#202b3d}
@@ -1398,6 +1458,16 @@ jobs:
               Select a green shared 3D landmark to inspect its real SfM support.
             </output>
           </section>
+          <section id="wre-native-lookup" aria-label="Find a measured 3D landmark">
+            <label for="wre-native-point-id">COLMAP 3D point ID</label>
+            <input id="wre-native-point-id" type="number" min="1" step="1"
+              placeholder="Point ID">
+            <button id="wre-native-point-find" type="button">Find 3D point</button>
+            <output id="wre-native-lookup-output" aria-live="polite">
+              Look up all measured SfM 3D points, not only camera-pair samples.
+              Coordinates in arbitrary SfM units; no GPU training or capture time.
+            </output>
+          </section>
           <section id="local-model" aria-label="Open your own 3D GLB">
             <label for="wre-local-glb">Open your own 3D model (.glb, max 128 MiB)</label>
             <input id="wre-local-glb" type="file" accept=".glb,model/gltf-binary">
@@ -1449,6 +1519,85 @@ jobs:
           <script type="module">
           const viewer=document.getElementById('wre-scene');
           const choice=document.getElementById('wre-camera-choice');
+          const lookupInput=document.getElementById('wre-native-point-id');
+          const lookupButton=document.getElementById('wre-native-point-find');
+          const lookupOutput=document.getElementById('wre-native-lookup-output');
+          let nativeLookup=null;
+          const clearNativeLookupMarker=()=>{
+            viewer.querySelector('[slot="hotspot-native-lookup"]')?.remove();
+          };
+          lookupButton.addEventListener('click',async()=>{
+            clearNativeLookupMarker();
+            if(localUrl!==null){
+              lookupOutput.textContent='Native SfM lookup disabled for unverified GLB.';
+              return;
+            }
+            const id=Number(lookupInput.value);
+            if(!Number.isSafeInteger(id) || id<=0){
+              lookupOutput.textContent='Enter a positive native COLMAP point ID.';
+              return;
+            }
+            try {
+              if(nativeLookup===null){
+                nativeLookup=fetch('./wre-real16-native-landmark-lookup.json')
+                  .then(response=>{
+                    if(!response.ok) throw Error('Missing native SfM landmark index');
+                    return response.json();
+                  }).then(index=>{
+                    if(index.schema!=='wre.experimental.real16_native_landmark_lookup.v1' ||
+                       !Number.isSafeInteger(index.point_count) ||
+                       index.point_count<=100 ||
+                       !Number.isSafeInteger(index.observation_count) ||
+                       index.observation_count<2*index.point_count ||
+                       index.gpu_training_executed!==false) {
+                      throw Error('Invalid native SfM landmark index');
+                    }
+                    return index;
+                  });
+              }
+              const index=await nativeLookup;
+              if(localUrl!==null) return;
+              const point=index.points[String(id)];
+              if(!point){
+                lookupOutput.textContent='No triangulated COLMAP point '+id+'.';
+                return;
+              }
+              const xyz=point.xyz,observations=point.observations;
+              if(!Array.isArray(xyz) || xyz.length!==3 ||
+                 !xyz.every(Number.isFinite) ||
+                 !Array.isArray(observations) || observations.length<2 ||
+                 !Number.isFinite(point.in_sample_error_px) ||
+                 point.in_sample_error_px<0 ||
+                 !observations.every(o=>Number.isSafeInteger(o.image_id) &&
+                   typeof o.image_name==='string' &&
+                   Number.isSafeInteger(o.point2d_idx) &&
+                   Array.isArray(o.pixel) && o.pixel.length===2 &&
+                   o.pixel.every(Number.isFinite))) {
+                throw Error('Invalid native COLMAP point evidence');
+              }
+              const marker=document.createElement('button');
+              marker.type='button';marker.className='wre-track-hotspot';
+              marker.slot='hotspot-native-lookup';
+              marker.setAttribute('data-position',xyz.map(v=>v+'m').join(' '));
+              marker.setAttribute('data-normal','0 1 0');
+              marker.setAttribute('aria-label','Native COLMAP 3D point '+id);
+              marker.textContent='◆';
+              viewer.appendChild(marker);
+              lookupOutput.textContent='Real COLMAP point '+id+' XYZ ('+
+                xyz.map(v=>v.toFixed(5)).join(', ')+') in arbitrary SfM units; '+
+                observations.length+' measured camera observations; '+
+                'native in-sample reprojection error '+
+                point.in_sample_error_px.toFixed(4)+' px. '+
+                observations.map(o=>o.image_name+' #'+o.point2d_idx+
+                  ' ('+o.pixel.map(v=>v.toFixed(1)).join(', ')+')').join(' · ')+
+                '. Not metric, held-out quality, time, GPU training or 4D.';
+            } catch(error){
+              clearNativeLookupMarker();
+              lookupOutput.textContent='Native point lookup failed: '+String(error);
+              nativeLookup=null;
+            }
+          });
+
           const baselineChoice=document.getElementById('wre-baseline-choice');
           const baselineOutput=document.getElementById('wre-camera-baseline');
           const landmarkInspection=document.getElementById('wre-landmark-inspection');
@@ -1667,6 +1816,8 @@ jobs:
               nearestButton.disabled=true;
               sharedButton.disabled=true;
               clearPairMarkers();
+              clearNativeLookupMarker();
+              lookupOutput.textContent='Native SfM points unavailable for third-party GLB.';
               choice.value='';
               baselineChoice.value='';
               baselineOutput.textContent='Baseline unavailable for unverified local GLB.';
@@ -2461,6 +2612,7 @@ jobs:
           import base64
           import hashlib
           import json
+          import math
           import struct
           import time
           from pathlib import Path
@@ -2477,6 +2629,13 @@ jobs:
           assert receipt["registered_cameras"] == 16
           quality = json.loads((root / "wre-real16-sfm-quality.json").read_text())
           geom_quality = quality["geometry_quality"]
+          lookup = json.loads(
+              (root / "wre-real16-native-landmark-lookup.json").read_text()
+          )
+          assert lookup["schema"] == "wre.experimental.real16_native_landmark_lookup.v1"
+          assert lookup["point_count"] == geom_quality["sparse_points3d"]
+          assert lookup["observation_count"] == geom_quality["track_observations"]
+          assert len(lookup["points"]) == lookup["point_count"]
           assert quality["source_dataset_commit"] == receipt["source_dataset_commit"]
           assert geom_quality["registered_views"] == 16
           assert geom_quality["sparse_points3d"] > 100
@@ -2556,6 +2715,58 @@ jobs:
                   time.sleep(0.25)
               else:
                   raise RuntimeError("Sixteen actual SfM camera choices never loaded")
+              # Search a REAL native COLMAP landmark from the full 3D index,
+              # not just the first 8 sampled points per selected camera pair.
+              selected_id=min(int(pid) for pid in lookup["points"])
+              selected_point=lookup["points"][str(selected_id)]
+              assert len(selected_point["observations"]) >= 2
+              assert js("""
+                const field=document.getElementById('wre-native-point-id');
+                field.value='__ID__';
+                document.getElementById('wre-native-point-find').click();
+                return true;
+              """.replace("__ID__",str(selected_id)))
+              for _ in range(60):
+                  result=js("""
+                    const viewer=document.getElementById('wre-scene');
+                    const marker=viewer.querySelector('[slot="hotspot-native-lookup"]');
+                    const text=document.getElementById('wre-native-lookup-output').textContent;
+                    if(!marker || !text.includes('Real COLMAP point')) return null;
+                    const position=viewer.queryHotspot('hotspot-native-lookup');
+                    return {
+                      label:marker.getAttribute('aria-label'),
+                      position:marker.getAttribute('data-position'),
+                      text,
+                      projected:Boolean(position && position.canvasPosition &&
+                        Number.isFinite(position.canvasPosition.x) &&
+                        Number.isFinite(position.canvasPosition.y))
+                    };
+                  """)
+                  if result is not None:
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("Real Chrome native 3D landmark lookup did not render")
+              assert result["label"] == "Native COLMAP 3D point "+str(selected_id)
+              actual_xyz=[float(v[:-1]) for v in result["position"].split()]
+              assert len(actual_xyz)==3
+              assert all(
+                  math.isclose(a,b,rel_tol=1e-7,abs_tol=1e-6)
+                  for a,b in zip(actual_xyz,selected_point["xyz"],strict=True)
+              )
+              assert result["projected"]
+              assert str(len(selected_point["observations"]))+" measured camera observations" in result["text"]
+              for observation in selected_point["observations"][:3]:
+                  assert observation["image_name"] in result["text"]
+                  assert "#"+str(observation["point2d_idx"]) in result["text"]
+              assert "Not metric, held-out quality, time, GPU training or 4D" in result["text"]
+              assert js("""
+                document.getElementById('wre-native-point-id').value='-1';
+                document.getElementById('wre-native-point-find').click();
+                return !document.querySelector('[slot="hotspot-native-lookup"]') &&
+                  document.getElementById('wre-native-lookup-output').textContent
+                    .includes('Enter a positive native COLMAP point ID');
+              """), "Invalid point IDs must not leave a misleading hotspot"
               assert js("""
                 const c=document.getElementById('wre-camera-choice');
                 const v=document.getElementById('wre-scene');
@@ -2568,7 +2779,6 @@ jobs:
               """), "Camera selection did not navigate the real WebGL viewer"
               # An independent Python geometry calculation verifies the actual
               # displayed SfM baseline from the SAME 16 recovered camera poses.
-              import math
               camera_data=json.loads(
                   (root / "wre-real16-camera-poses.json").read_text()
               )
