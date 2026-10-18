@@ -403,7 +403,7 @@ jobs:
           reloaded = pycolmap.Reconstruction(str(capture / "sparse" / "0"))
           assert reloaded.num_reg_images() == 16
           points = reloaded.num_points3D()
-          assert points == models[0].num_points3d
+          assert points == models[0].num_points3D()
           views = {}
           for image_id in sorted(int(i) for i in reloaded.reg_image_ids()):
               registered = reloaded.image(image_id)
