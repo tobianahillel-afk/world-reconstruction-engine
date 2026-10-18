@@ -2779,8 +2779,7 @@ def export_verified_gsplat_viewer_bundle(
                 ],
             }
             encoded = (
-                json.dumps(manifest, sort_keys=True, separators=(",", ":"), allow_nan=False)
-                + "\n"
+                json.dumps(manifest, sort_keys=True, separators=(",", ":"), allow_nan=False) + "\n"
             ).encode("utf-8")
             with destination.open("xb") as output:
                 created = True
