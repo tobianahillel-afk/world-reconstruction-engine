@@ -585,6 +585,21 @@ jobs:
                   for j in members:
                       by_track[i][j] += 1
           assert by_track == shared_tracks
+          # Real native 2D feature measurements for each 3D point/camera.
+          # These are IN-SAMPLE image pixels, not rendered/reprojected pixels.
+          pixels_by_camera = []
+          for frame in ordered_frames:
+              measured = {}
+              for observation in model.image(frame["image_id"]).points2D:
+                  if not observation.has_point3D():
+                      continue
+                  point_id = int(observation.point3D_id)
+                  xy = np.asarray(observation.xy, dtype=np.float64)
+                  assert xy.shape == (2,) and np.isfinite(xy).all()
+                  assert point_id not in measured
+                  measured[point_id] = [float(v) for v in xy]
+              assert set(measured) == observed_ids[len(pixels_by_camera)]
+              pixels_by_camera.append(measured)
           # Only real PyCOLMAP 3D points observed by BOTH cameras are sampled.
           # Sorted point IDs make a bounded, deterministic spatial overlay.
           sampled_shared_points = {}
@@ -605,6 +620,8 @@ jobs:
                           *(float(value) for value in xyz),
                           reprojection_error,
                           supporting_images,
+                          *pixels_by_camera[i][point_id],
+                          *pixels_by_camera[j][point_id],
                       ])
                   sampled_shared_points[f"{i}:{j}"] = samples
           centers = np.asarray([frame["camera_center_xyz"] for frame in frames])
@@ -1582,9 +1599,10 @@ jobs:
               const points=sampled[i+':'+j];
               if(!Array.isArray(points) ||
                   points.length!==Math.min(overlap.counts[i][j],8) ||
-                  !points.every(point=>Array.isArray(point) && point.length===6 &&
+                  !points.every(point=>Array.isArray(point) && point.length===10 &&
                     Number.isSafeInteger(point[0]) && point[0]>0 &&
                     point.slice(1,5).every(Number.isFinite) &&
+                    point.slice(6,10).every(Number.isFinite) &&
                     point[4]>=0 &&
                     Number.isSafeInteger(point[5]) && point[5]>=2 &&
                     point[5]<=16)) {
@@ -1650,12 +1668,19 @@ jobs:
                   ', observed in both cameras; no time or GPU inference';
                 marker.addEventListener('click',()=>{
                   if(localUrl!==null || !viewer.contains(marker)) return;
+                  const reversed=firstIndex>secondIndex;
+                  const a=(reversed?point.slice(8,10):point.slice(6,8));
+                  const b=(reversed?point.slice(6,8):point.slice(8,10));
                   landmarkInspection.textContent=
                     'Real 3D landmark '+point[0]+': XYZ ('+
                     point.slice(1,4).map(v=>v.toFixed(5)).join(', ')+
                     ') in arbitrary SfM units; '+point[5]+
-                    ' source-image observations; native COLMAP in-sample '+
-                    'reprojection error '+point[4].toFixed(4)+
+                    ' source-image observations; camera A measured pixel ('+
+                    a.map(v=>v.toFixed(2)).join(', ')+
+                    '), camera B measured pixel ('+
+                    b.map(v=>v.toFixed(2)).join(', ')+
+                    '); native COLMAP in-sample reprojection error '+
+                    point[4].toFixed(4)+
                     ' px (NOT held-out quality, metres, time, 4D or GPU training).';
                 });
                 viewer.appendChild(marker);
@@ -2823,6 +2848,10 @@ jobs:
               assert f"Real 3D landmark {point[0]}" in inspected["text"]
               assert str(point[5])+" source-image observations" in inspected["text"]
               assert f"{point[4]:.4f} px" in inspected["text"]
+              assert "camera A measured pixel (" in inspected["text"]
+              assert "camera B measured pixel (" in inspected["text"]
+              assert ", ".join(f"{value:.2f}" for value in point[6:8]) in inspected["text"]
+              assert ", ".join(f"{value:.2f}" for value in point[8:10]) in inspected["text"]
               assert "NOT held-out quality, metres, time, 4D or GPU training" in inspected["text"]
               same_camera=js("""
                 const second=document.getElementById('wre-baseline-choice');
