@@ -788,8 +788,9 @@ jobs:
               len(params) == 0 for params in parser.params_dict.values()
           ), "upstream parser must see distortion-free PINHOLE cameras"
           train, val = Dataset(parser, split="train"), Dataset(parser, split="val")
-          # Pinned gsplat Dataset holds out indices 0 and 8 when test_every=8.
-          assert (len(train), len(val)) == (10, 2)
+          # With 16 frames and test_every=8, hold out indices 0 and 8.
+          # Verify the actual native decoder split, not a 12-view count.
+          assert (len(train), len(val)) == (14, 2)
           view_proofs = {}
           for split, dataloader in (("train", train), ("val", val)):
               for idx in range(len(dataloader)):
@@ -1234,6 +1235,7 @@ jobs:
           trap 'kill "$http_pid" "$driver_pid" 2>/dev/null || true' EXIT
           .venv/bin/python - <<'PY'
           import base64
+          import hashlib
           import io
           import json
           import os
@@ -1348,6 +1350,59 @@ jobs:
                   )
                   assert len(view) > 10_000
                   (dst / f"wre-real-gaussian-webgl-camera-{index}.png").write_bytes(view)
+              # Shareable camera-path tour from genuine Chrome-rendered WebGL
+              # screenshots; this is spatial navigation over UNTRAINED seeds,
+              # NOT an optimization, real-time 4D video, or CUDA training.
+              camera_images = [
+                  dst / "wre-real-gaussian-webgl-chrome.png",
+                  *(dst / f"wre-real-gaussian-webgl-camera-{index}.png"
+                    for index in range(1, 16)),
+              ]
+              frame_hashes = [
+                  hashlib.sha256(path.read_bytes()).hexdigest()
+                  for path in camera_images
+              ]
+              assert len(camera_images) == 16
+              assert len(set(frame_hashes)) > 1, "Recovered camera views are identical"
+              frames = []
+              for path in camera_images:
+                  with Image.open(path) as captured:
+                      captured.load()
+                      assert captured.width >= 1100 and captured.height >= 700
+                      frames.append(
+                          captured.convert("P", palette=Image.Palette.ADAPTIVE)
+                      )
+              tour = dst / "wre-real-gaussian-camera-tour.gif"
+              frames[0].save(
+                  tour, save_all=True, append_images=frames[1:],
+                  duration=700, loop=0, disposal=2, optimize=False,
+              )
+              with Image.open(tour) as replay:
+                  assert replay.format == "GIF"
+                  assert replay.n_frames == len(frames)
+                  replay.seek(len(frames) - 1)
+                  replay.load()
+              digest = hashlib.sha256(tour.read_bytes()).hexdigest()
+              (dst / "wre-real-gaussian-camera-tour.json").write_text(
+                  json.dumps({
+                      "schema": "wre.experimental.gaussian_camera_tour.v1",
+                      "source_camera_count": len(camera_images),
+                      "frame_duration_ms": 700,
+                      "frame_png_sha256": frame_hashes,
+                      "gif_sha256": digest,
+                      "source": "real COLMAP recovered cameras via pinned offline WebGL",
+                      "gaussians_trained": False,
+                      "gpu_cuda_training_verified": False,
+                      "temporal_scene_change_measured": False,
+                      "scale_metric_known": False,
+                      "source_photos_license": "CC BY-NC 4.0; noncommercial",
+                  }, sort_keys=True, indent=2)
+              )
+              print(
+                  "REAL PHOTO GAUSSIAN CAMERA TOUR:",
+                  len(camera_images), "genuine browser-rendered source views;",
+                  "GIF SHA256", digest, "CUDA 0, 4D not measured"
+              )
               print("REAL MULTIVIEW GAUSSIAN WEBGL PASS: 16 source COLMAP camera views")
               print(
                   "ACTUAL UNTRAINED GAUSSIAN WEBGL PASS:",

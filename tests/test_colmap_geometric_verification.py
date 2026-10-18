@@ -465,20 +465,27 @@ def test_existing_output_database_is_never_reused(tmp_path: Path) -> None:
     assert request.database_path.read_bytes() == b"existing"
 
 
-def test_missing_geometry_result_is_rejected_and_partial_output_removed(tmp_path: Path) -> None:
+def test_nonempty_raw_pair_without_verified_geometry_keeps_native_evidence(tmp_path: Path) -> None:
     matching = _matching_result(tmp_path)
     request = _request(tmp_path, matching)
+    parent_bytes = matching.database_path.read_bytes()
 
-    with pytest.raises(ColmapGeometricVerificationError, match="exactly one geometry result"):
-        verify_colmap_geometry(request, module=_FakePycolmap(drop_last_geometry=True))
+    result = verify_colmap_geometry(request, module=_FakePycolmap(drop_last_geometry=True))
 
-    assert matching.database_path.exists()
-    assert not request.database_path.exists()
+    assert matching.database_path.read_bytes() == parent_bytes
+    assert result.source_matching_database_sha256 == matching.database_sha256
+    assert len(result.geometries) == 0  # Native rejected all pairs: no fabricated pose.
+    assert matching.pairs[0].num_matches == 25
+    assert hash_file_content(result.database_path).sha256 == result.database_sha256
 
 
 @pytest.mark.parametrize("omitted_raw_count", (0, 7))
-def test_native_geometry_can_omit_only_zero_match_pairs(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, omitted_raw_count: int
+@pytest.mark.parametrize("omit_native_raw", (True, False))
+def test_native_reader_distinguishes_missing_raw_pair_from_unverified_geometry(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    omitted_raw_count: int,
+    omit_native_raw: bool,
 ) -> None:
     matching = _matching_result(tmp_path)
     connection = sqlite3.connect(matching.database_path)
@@ -540,13 +547,22 @@ def test_native_geometry_can_omit_only_zero_match_pairs(
         monkeypatch.setattr(database, "read_num_matches", omit_unverified_pair)
         return database
 
-    fake.Database = SimpleNamespace(open=native_database_open)
+    if omit_native_raw:
+        fake.Database = SimpleNamespace(open=native_database_open)
+    else:
+        # Real PyCOLMAP 4.2 may retain a zero-raw-match row in matches, yet
+        # omit its result from read_two_view_geometries().
+        fake.drop_last_geometry = True
     request = _request(tmp_path, matching)
-    if omitted_raw_count != 0:
-        with pytest.raises(ColmapGeometricVerificationError, match="geometry evidence membership"):
+    if omit_native_raw and omitted_raw_count != 0:
+        # The L3.3 source proves the raw pair exists. Native raw-reader loss
+        # remains a hard error, not a permissible failed RANSAC estimate.
+        with pytest.raises(ColmapGeometricVerificationError, match="raw-match membership"):
             verify_colmap_geometry(request, module=fake)
         assert not request.database_path.exists()
     else:
+        # Native may retain raw matches while refusing to publish a
+        # geometrically verified pair. Keep source provenance, not fake inliers.
         result = verify_colmap_geometry(request, module=fake)
         assert len(result.geometries) == 1
         assert result.geometries[0].raw_match_count == 25
