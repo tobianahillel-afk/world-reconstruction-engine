@@ -2122,6 +2122,15 @@ jobs:
             referenceExport.disabled=true;
             calibrationStatus.textContent=
               'Scale not calibrated. User measurements are not verified by WRE.';
+            if(distanceEvidence){
+              delete distanceEvidence.user_supplied_metric_reference;
+              delete distanceEvidence.estimated_distance_m_user_calibrated;
+              distanceOutput.textContent='Native COLMAP points '+
+                distanceEvidence.first.point3d_id+' and '+
+                distanceEvidence.second.point3d_id+': distance '+
+                distanceEvidence.euclidean_distance_sfm_units.toFixed(6)+
+                ' arbitrary SfM units; metric estimate cleared.';
+            }
           };
           const applyMetricReference=evidence=>{
             if(!userMetricReference) return null;
@@ -2201,18 +2210,7 @@ jobs:
               }
             });
 
-          referenceMetres.addEventListener('input',()=>{
-            clearMetricReference();
-            if(distanceEvidence){
-              delete distanceEvidence.user_supplied_metric_reference;
-              delete distanceEvidence.estimated_distance_m_user_calibrated;
-              distanceOutput.textContent='Native COLMAP points '+
-                distanceEvidence.first.point3d_id+' and '+
-                distanceEvidence.second.point3d_id+': distance '+
-                distanceEvidence.euclidean_distance_sfm_units.toFixed(6)+
-                ' arbitrary SfM units. Previous metric estimate cleared.';
-            }
-          });
+          referenceMetres.addEventListener('input',clearMetricReference);
 
           document.getElementById('wre-native-reference-calibrate')
             .addEventListener('click',()=>{
@@ -2275,10 +2273,6 @@ jobs:
           referenceImport.addEventListener('change',async()=>{
             const file=referenceImport.files && referenceImport.files[0];
             clearMetricReference();
-            if(distanceEvidence){
-              delete distanceEvidence.user_supplied_metric_reference;
-              delete distanceEvidence.estimated_distance_m_user_calibrated;
-            }
             try {
               if(!file || file.size===0 || file.size>65536 ||
                  localUrl!==null || !viewer.loaded)
