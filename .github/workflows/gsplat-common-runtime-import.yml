@@ -284,7 +284,7 @@ jobs:
           run-id: 39082307350
           name: wre-real-photo-undistorted-colmap-capture
           github-token: ${{ github.token }}
-          path: ${{ runner.temp }}/wre-common-real-photo-capture
+          path: ${{ github.workspace }}/wre-common-real-photo-capture
 
       - name: Decode ALL real-photo COLMAP data in the SAME pinned native trainer environment
         shell: bash
@@ -312,7 +312,7 @@ jobs:
           assert torch.__version__ == "2.4.0+cu124"
           assert not torch.cuda.is_available()
           assert all(obj is not None for obj in (fused_ssim, _C, CameraState, SceneManager, Config, main))
-          capture = Path(os.environ["RUNNER_TEMP"]) / "wre-common-real-photo-capture"
+          capture = Path(os.environ["GITHUB_WORKSPACE"]) / "wre-common-real-photo-capture"
           candidates = list(capture.rglob("wre-capture-manifest.json"))
           assert len(candidates) == 1, f"Expected one source dataset manifest, found {len(candidates)}"
           root = candidates[0].parent.resolve(strict=True)
