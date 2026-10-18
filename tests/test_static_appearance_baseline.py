@@ -1766,8 +1766,10 @@ def test_verified_gsplat_bundle_contains_usable_viewer_files_and_provenance(
     assert second.read_bytes() == bundle.read_bytes()
     from wre import reconstruction
 
-    assert reconstruction.export_verified_gsplat_viewer_bundle is export_verified_gsplat_viewer_bundle
-    with pytest.raises(GsplatStaticAppearancePreflightError, match="new .zip"):
+    assert (
+        reconstruction.export_verified_gsplat_viewer_bundle is export_verified_gsplat_viewer_bundle
+    )
+    with pytest.raises(GsplatStaticAppearancePreflightError, match=r"new \.zip"):
         export_verified_gsplat_viewer_bundle(
             artifact_ref=ref, output_root=root, profile=profile, bundle_path=bundle
         )
