@@ -3688,6 +3688,65 @@ jobs:
                 camera.dispatchEvent(new Event('change',{bubbles:true}));
                 return camera.value==='0';
               """)
+              # A native Point3D observed by BOTH chosen cameras must place
+              # independent A and B markers at the two actual measured pixels.
+              common=next(
+                  (
+                      (int(pid),a,b)
+                      for pid,point in lookup["points"].items()
+                      for a in point["observations"]
+                      for b in point["observations"]
+                      if a["image_id"]==overlay_cameras[0]["image_id"]
+                      and a["image_name"]==overlay_cameras[0]["image_name"]
+                      and b["image_id"]==second_camera["image_id"]
+                      and b["image_name"]==second_camera["image_name"]
+                  ),None
+              )
+              assert common is not None, "No real common SfM 3D point in camera A/B"
+              common_id,common_a,common_b=common
+              assert js("""
+                const input=document.getElementById('wre-native-point-id');
+                input.value='__ID__';
+                document.getElementById('wre-native-point-find').click();
+                return true;
+              """.replace("__ID__",str(common_id)))
+              for _ in range(60):
+                  common_ready=js("""
+                    const select=document.getElementById('wre-native-observation-camera');
+                    return !select.disabled && [...select.options].some(o=>o.value==='0');
+                  """)
+                  if common_ready:
+                      break
+                  time.sleep(.1)
+              else:
+                  raise RuntimeError("Real common SfM point was not found in browser")
+              assert js("""
+                const select=document.getElementById('wre-native-observation-camera');
+                select.value='0';
+                document.getElementById('wre-native-observation-open').click();
+                return true;
+              """)
+              dual=js("""
+                const a=document.getElementById('wre-native-photo-pixel');
+                const b=document.getElementById('wre-native-photo-pixel-b');
+                return {
+                  cameraA:document.getElementById('wre-camera-choice').value,
+                  cameraB:document.getElementById('wre-baseline-choice').value,
+                  hiddenA:a.hidden,hiddenB:b.hidden,
+                  pixelA:[Number(a.dataset.pixelX),Number(a.dataset.pixelY)],
+                  pixelB:[Number(b.dataset.pixelX),Number(b.dataset.pixelY)]
+                };
+              """)
+              assert dual["cameraA"]=="0" and dual["cameraB"]==str(best_overlap_index)
+              assert not dual["hiddenA"] and not dual["hiddenB"]
+              for actual,expected in (
+                  (dual["pixelA"],common_a["pixel"]),
+                  (dual["pixelB"],common_b["pixel"]),
+              ):
+                  assert all(
+                      math.isclose(x,y,abs_tol=1e-7)
+                      for x,y in zip(actual,expected,strict=True)
+                  )
               # The very same native 3D track must display the opposite
               # measured pixels when camera A and B are reversed.
               reversed_text=js("""
