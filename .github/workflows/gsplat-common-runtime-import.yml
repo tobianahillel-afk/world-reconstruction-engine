@@ -4021,6 +4021,54 @@ jobs:
                       math.isclose(x,y,rel_tol=1e-7,abs_tol=1e-6)
                       for x,y in zip(actual,xyz,strict=True)
                   )
+              # Export actual measured coordinates as portable original-scene
+              # evidence, using independent Python XYZ/GLB provenance checks.
+              assert js("""
+                const button=document.getElementById('wre-native-distance-export');
+                if(button.disabled) return false;
+                window.__nativeDistanceJsonText=null;
+                const original=URL.createObjectURL.bind(URL);
+                URL.createObjectURL=blob=>{
+                  if(blob.type==='application/json') {
+                    blob.text().then(value=>window.__nativeDistanceJsonText=value);
+                  }
+                  return original(blob);
+                };
+                button.click();
+                return true;
+              """), "Original reconstructed point-pair measurement was not exportable"
+              for _ in range(40):
+                  native_pair_text=js("return window.__nativeDistanceJsonText;")
+                  if native_pair_text is not None:
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("Native 16-photo measured pair JSON was not downloaded")
+              exported_pair=json.loads(native_pair_text)
+              assert exported_pair["schema"]==(
+                  "wre.experimental.real16_native_landmark_distance.v1"
+              )
+              assert exported_pair["source_scene_glb_sha256"]==receipt["sha256"]
+              assert exported_pair["first"]["point3d_id"]==int(first_point_id)
+              assert exported_pair["second"]["point3d_id"]==int(second_point_id)
+              for measured_point,truth_xyz in (
+                  (exported_pair["first"],first_point_xyz),
+                  (exported_pair["second"],second_point_xyz),
+              ):
+                  assert len(measured_point["xyz_sfm_units"])==3
+                  assert all(
+                      math.isclose(a,b,rel_tol=1e-12,abs_tol=1e-10)
+                      for a,b in zip(
+                          measured_point["xyz_sfm_units"],truth_xyz,strict=True
+                      )
+                  )
+              assert math.isclose(
+                  exported_pair["euclidean_distance_sfm_units"],
+                  expected_separation,rel_tol=1e-12,abs_tol=1e-10
+              )
+              assert exported_pair["metric_scale_known"] is False
+              assert exported_pair["gpu_training_executed"] is False
+              assert "noncommercial" in exported_pair["source_photo_license"]
               # Input IDs are selectors, never authority to invent a 3D point.
               assert js("""
                 document.getElementById('wre-native-distance-b').value=
@@ -4030,6 +4078,9 @@ jobs:
                   document.getElementById('wre-native-distance-result')
                     .textContent.includes('Choose two distinct positive');
               """), "Repeated native point ID must not leave stale measured markers"
+              assert js(
+                  "return document.getElementById('wre-native-distance-export').disabled;"
+              ), "Invalid native IDs must clear previously exportable evidence"
               # A region across different original camera tiles must not
               # silently combine unrelated SfM camera-Z coordinate frames.
               assert js("""
