@@ -361,6 +361,18 @@ jobs:
               '<button id="wre-record-video" type="button">Record 3D camera move (WebM)</button>'
               '<button id="wre-save-track" type="button" disabled>Save recorded camera path (JSON)</button>'
               '<button id="wre-replay-track" type="button" disabled>Replay 3D camera path</button>'
+              '<details id="wre-snapshot-series">'
+              '<summary>Ordered 3D snapshots (NOT reconstructed 4D motion)</summary>'
+              '<label for="wre-snapshot-files">Choose 2–32 local .splat snapshots: </label>'
+              '<input id="wre-snapshot-files" type="file" accept=".splat" multiple '
+              'aria-label="Choose ordered 3D snapshot files">'
+              '<label for="wre-snapshot-index">Snapshot index: </label>'
+              '<input id="wre-snapshot-index" type="range" min="0" max="1" value="0" '
+              'disabled aria-label="3D snapshot index">'
+              '<button id="wre-play-snapshots" type="button" disabled>Play snapshots</button>'
+              '<button id="wre-export-snapshots" type="button" disabled>Export list (JSON)</button>'
+              '<output id="wre-snapshot-status" aria-live="polite"></output>'
+              '</details>'
               '<video id="wre-video-preview" controls playsinline hidden '
               'aria-label="Replay recorded 3D camera movement" '
               'style="max-width:100%;max-height:180px"></video>'
@@ -384,6 +396,11 @@ jobs:
             const replayTrack = document.getElementById('wre-replay-track');
             const videoPreview = document.getElementById('wre-video-preview');
             const loadView = document.getElementById('wre-load-view');
+            const seriesPicker = document.getElementById('wre-snapshot-files');
+            const seriesSeek = document.getElementById('wre-snapshot-index');
+            const seriesPlay = document.getElementById('wre-play-snapshots');
+            const seriesSave = document.getElementById('wre-export-snapshots');
+            const seriesStatus = document.getElementById('wre-snapshot-status');
             const status = document.getElementById('wre-local-status');
             const originalFile = new File([window.__wreEmbeddedSplat],
               'WRE-16-photos.splat', {type: 'application/octet-stream'});
@@ -493,14 +510,97 @@ jobs:
                 pointCloudSaving = false;
               }
             });
+            // Ordered 3D FILES, not acquired timestamps, geometric alignment
+            // or real motion reconstruction. Uses the existing WebGL loader.
+            let snapshotFiles = [];
+            let snapshotTimer = null;
+            function pauseSnapshots() {
+              if (snapshotTimer !== null) clearInterval(snapshotTimer);
+              snapshotTimer = null;
+              seriesPlay.textContent = 'Play snapshots';
+            }
+            function showSnapshot(index) {
+              if (!snapshotFiles.length || index < 0 || index >= snapshotFiles.length) return;
+              seriesSeek.value = String(index);
+              show(snapshotFiles[index]);
+              seriesStatus.textContent = 'Snapshot ' + (index + 1) + '/' +
+                snapshotFiles.length + ': ' + snapshotFiles[index].name +
+                ' (ordinal only, NOT acquisition time)';
+            }
+            seriesPicker.addEventListener('change', () => {
+              pauseSnapshots();
+              const files = Array.from(seriesPicker.files || []);
+              const total = files.reduce((sum, file) => sum + file.size, 0);
+              if (files.length < 2 || files.length > 32 ||
+                  total > 256 * 1024 * 1024 || !files.every(valid) ||
+                  !files.every(file => file.name.toLowerCase().endsWith('.splat')) ||
+                  new Set(files.map(file => file.name)).size !== files.length) {
+                snapshotFiles = [];
+                seriesSeek.disabled = seriesPlay.disabled = seriesSave.disabled = true;
+                seriesStatus.textContent = 'Use 2–32 distinct .splat names, <=256 MiB total.';
+                return;
+              }
+              snapshotFiles = files.sort((a, b) =>
+                a.name.localeCompare(b.name, undefined, {numeric:true}));
+              seriesSeek.max = String(snapshotFiles.length - 1);
+              seriesSeek.disabled = seriesPlay.disabled = seriesSave.disabled = false;
+              showSnapshot(0);
+            });
+            seriesSeek.addEventListener('input', () => {
+              pauseSnapshots();
+              showSnapshot(Number(seriesSeek.value));
+            });
+            seriesPlay.addEventListener('click', () => {
+              if (!snapshotFiles.length) return;
+              if (snapshotTimer !== null) { pauseSnapshots(); return; }
+              if (videoRecording || trackPlaying) {
+                seriesStatus.textContent = 'Finish camera recording/replay first.';
+                return;
+              }
+              let next = Number(seriesSeek.value) + 1;
+              if (next >= snapshotFiles.length) {
+                showSnapshot(0);
+                next = 1;
+              }
+              seriesPlay.textContent = 'Pause snapshots';
+              snapshotTimer = setInterval(() => {
+                if (next >= snapshotFiles.length) pauseSnapshots();
+                else showSnapshot(next++);
+              }, 1400);
+            });
+            seriesSave.addEventListener('click', () => {
+              if (snapshotFiles.length < 2) return;
+              const payload = {
+                format:'wre-local-3d-snapshot-sequence-v1',
+                time_axis:'ordered_file_index_only',
+                capture_times_verified:false,
+                scene_motion_reconstructed:false,
+                geometric_registration_verified:false,
+                snapshots:snapshotFiles.map((file, index) => ({
+                  index, name:file.name, size_bytes:file.size,
+                  gaussian_records:file.size / 32
+                }))
+              };
+              const url = URL.createObjectURL(new Blob([JSON.stringify(payload)],
+                {type:'application/json'}));
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = 'wre-3d-snapshot-order.json';
+              link.click();
+              setTimeout(() => URL.revokeObjectURL(url), 30000);
+              seriesStatus.textContent = 'Saved ORDINAL snapshot list, not physical 4D.';
+            });
             picker.addEventListener('change', () => {
+              pauseSnapshots();
               if (picker.files && picker.files.length === 1) show(picker.files[0]);
             });
             reset.addEventListener('click', () => {
+              pauseSnapshots();
               picker.value = '';
               show(originalFile);
             });
             compare.addEventListener('click', () => {
+              pauseSnapshots();
               if (!localFile) return;
               show(activeFile === originalFile ? localFile : originalFile);
             });
@@ -760,6 +860,10 @@ jobs:
               "Choose a local .splat using the file picker, or drag one onto the page.\n"
               "Use Restore 16-photo scene to return to the included example.\n"
               "Use Compare original / local to toggle without reselecting the local file.\n"
+              "Choose 2-32 .splat files for ordered scene snapshots and scrub/play them.\n"
+              "Frames are sorted by filename (use zero-padding for explicit order).\n"
+              "This is an ordinal sequence, NOT captured-time 4D reconstruction.\n"
+              "Export snapshot list JSON includes filenames/sizes, NOT motion.\n"
               "Save camera viewpoint as JSON, then load to revisit the same view.\n"
               "Save current 3D view (PNG) captures the WebGL canvas locally.\n"
               "Record 3D camera move (WebM) saves a local 3-second WebGL clip.\n"
