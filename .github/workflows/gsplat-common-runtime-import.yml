@@ -2853,6 +2853,29 @@ jobs:
               assert ", ".join(f"{value:.2f}" for value in point[6:8]) in inspected["text"]
               assert ", ".join(f"{value:.2f}" for value in point[8:10]) in inspected["text"]
               assert "NOT held-out quality, metres, time, 4D or GPU training" in inspected["text"]
+              # The very same native 3D track must display the opposite
+              # measured pixels when camera A and B are reversed.
+              reversed_text=js("""
+                const a=document.getElementById('wre-camera-choice');
+                const b=document.getElementById('wre-baseline-choice');
+                const previousB=b.value;
+                a.value=previousB;
+                a.dispatchEvent(new Event('change',{bubbles:true}));
+                b.value='0';
+                b.dispatchEvent(new Event('change',{bubbles:true}));
+                const marker=document.querySelector('[slot="hotspot-pair-shared-0"]');
+                if(!marker) throw Error('Measured shared landmark missing after pair reversal');
+                marker.click();
+                const text=document.getElementById('wre-landmark-inspection').textContent;
+                a.value='0';
+                a.dispatchEvent(new Event('change',{bubbles:true}));
+                b.value=previousB;
+                b.dispatchEvent(new Event('change',{bubbles:true}));
+                return text;
+              """)
+              assert "camera A measured pixel (" in reversed_text
+              assert ", ".join(f"{value:.2f}" for value in point[8:10]) in reversed_text
+              assert ", ".join(f"{value:.2f}" for value in point[6:8]) in reversed_text
               same_camera=js("""
                 const second=document.getElementById('wre-baseline-choice');
                 second.value='0';
