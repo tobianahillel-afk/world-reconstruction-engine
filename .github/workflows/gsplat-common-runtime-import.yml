@@ -1880,6 +1880,9 @@ jobs:
             <label for="wre-native-distance-b">Second Point3D ID</label>
             <input id="wre-native-distance-b" type="number" min="1" step="1">
             <button id="wre-native-distance-measure" type="button">Measure 3D separation</button>
+            <button id="wre-native-distance-export" type="button" disabled>
+              Save measured landmark pair as JSON
+            </button>
             <output id="wre-native-distance-result" aria-live="polite">
               Two distinct native points; arbitrary SfM units, NOT meters.
             </output>
@@ -2092,7 +2095,11 @@ jobs:
           const distanceA=document.getElementById('wre-native-distance-a');
           const distanceB=document.getElementById('wre-native-distance-b');
           const distanceOutput=document.getElementById('wre-native-distance-result');
+          const distanceExport=document.getElementById('wre-native-distance-export');
+          let distanceEvidence=null;
           const clearDistanceMarkers=()=>{
+            distanceEvidence=null;
+            distanceExport.disabled=true;
             viewer.querySelectorAll('[slot^="hotspot-native-distance-"]').forEach(x=>x.remove());
           };
           document.getElementById('wre-native-distance-measure')
@@ -2134,11 +2141,35 @@ jobs:
                 distanceOutput.textContent='Native COLMAP points '+idA+' and '+idB+
                   ': distance '+measured.toFixed(6)+
                   ' arbitrary SfM units; NOT meters, GPU training or 4D.';
+                distanceEvidence={
+                  schema:'wre.experimental.real16_native_landmark_distance.v1',
+                  source_scene_glb_sha256:'WRE_SCENE_SHA256',
+                  first:{point3d_id:idA,xyz_sfm_units:first.xyz.slice()},
+                  second:{point3d_id:idB,xyz_sfm_units:second.xyz.slice()},
+                  euclidean_distance_sfm_units:measured,
+                  metric_scale_known:false,
+                  gpu_training_executed:false,
+                  source_photo_license:'CC BY-NC 4.0 (noncommercial)'
+                };
+                distanceExport.disabled=false;
               }catch(error){
                 clearDistanceMarkers();
                 distanceOutput.textContent='Native 3D distance failed: '+String(error);
               }
             });
+
+          distanceExport.addEventListener('click',()=>{
+            if(!distanceEvidence || distanceExport.disabled || localUrl!==null ||
+               !viewer.loaded) return;
+            const blob=new Blob([JSON.stringify(distanceEvidence,null,2)],{
+              type:'application/json'
+            });
+            const href=URL.createObjectURL(blob);
+            const link=document.createElement('a');
+            link.href=href;link.download='wre-real16-native-3d-landmark-distance.json';
+            document.body.appendChild(link);link.click();link.remove();
+            setTimeout(()=>URL.revokeObjectURL(href),1000);
+          });
 
           // Native frontmost sparse-depth sample -> exact SfM Point3D lookup.
           // Do not project any unobserved black bin or infer dense depth.
