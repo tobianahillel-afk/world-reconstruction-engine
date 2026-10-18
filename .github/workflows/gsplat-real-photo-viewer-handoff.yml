@@ -343,7 +343,8 @@ jobs:
               "WRE — 16 genuine DJI photos -> native CPU COLMAP -> 6917 untrained Gaussians.\n"
               "UNTRAINED, zero CUDA steps, unknown metric scale; NOT a GPU-trained radiance scene.\n"
               "Photos: Pierre Moulon, CC BY-NC 4.0; NONCOMMERCIAL use only.\n"
-              "Unzip all contents, then run inside the extracted directory:\n"
+              "Unzip and double-click VIEW-IN-BROWSER.html (no server required).\n"
+              "Optional classic viewer: run in the extracted directory:\n"
               "  python3 -m http.server 8767 --bind 127.0.0.1\n"
               "Open http://127.0.0.1:8767/offline-viewer/index.html in a WebGL2 browser.\n"
               "Mouse orbit/zoom and keyboard 0-9 / +/- for recovered cameras.\n"
@@ -401,6 +402,96 @@ jobs:
               encoding="utf-8",
           )
           print(f"PORTABLE REAL-PHOTO VIEWER ZIP PASS: {portable.name} sha256={portable_hash}")
+          PY
+      - name: Validate single-file viewer directly from disk in actual Chrome WebGL
+        shell: bash
+        run: |
+          set -euo pipefail
+          driver="$CHROMEWEBDRIVER/chromedriver"
+          test -x "$driver"
+          "$driver" --port=9521 --allowed-ips=127.0.0.1 >/tmp/wre-standalone-chrome.log 2>&1 &
+          driver_pid="$!"
+          trap 'kill "$driver_pid" 2>/dev/null || true' EXIT
+          uv run --no-sync python - <<'PY'
+          import base64
+          import hashlib
+          import json
+          import os
+          import struct
+          import time
+          from pathlib import Path
+          from urllib.request import Request, urlopen
+
+          root = Path(os.environ["RUNNER_TEMP"]) / "wre-real-photo-viewer-result"
+          page = root / "VIEW-IN-BROWSER.html"
+          assert page.is_file() and page.stat().st_size > 200_000
+          driver_base = "http://127.0.0.1:9521"
+          def webdriver(method, route, payload=None):
+              data = None if payload is None else json.dumps(payload).encode("utf-8")
+              request = Request(driver_base + route, data=data, method=method,
+                                headers={"Content-Type": "application/json"})
+              with urlopen(request, timeout=60) as response:
+                  result = json.load(response)["value"]
+              if isinstance(result, dict) and result.get("error"):
+                  raise RuntimeError(str(result))
+              return result
+
+          for _ in range(75):
+              try:
+                  if webdriver("GET", "/status")["ready"]:
+                      break
+              except (OSError, KeyError):
+                  time.sleep(0.4)
+          else:
+              raise RuntimeError("ChromeDriver not ready for standalone viewer")
+          options = {"browserName": "chrome", "goog:chromeOptions": {"args": [
+              "--headless=new", "--no-sandbox", "--disable-dev-shm-usage",
+              "--enable-unsafe-swiftshader", "--use-gl=angle",
+              "--use-angle=swiftshader", "--window-size=1280,900",
+              "--disable-background-networking",
+              "--host-resolver-rules=MAP * 0.0.0.0, EXCLUDE localhost",
+          ]}}
+          session = webdriver("POST", "/session", {"capabilities": {"alwaysMatch": options}})["sessionId"]
+          try:
+              webdriver("POST", f"/session/{session}/url", {"url": page.resolve().as_uri()})
+              for _ in range(125):
+                  state = webdriver("POST", f"/session/{session}/execute/sync", {
+                      "script": """const canvas=document.getElementById('canvas');
+                        return {count:window.__wreRenderedGaussianCount || 0,
+                        embedded:window.__wreEmbeddedSplat?.byteLength || 0,
+                        error:document.getElementById('message')?.textContent || '',
+                        webgl:!!canvas?.getContext('webgl2'),
+                        external:performance.getEntriesByType('resource')
+                          .filter(x=>/^https?:/.test(x.name)).map(x=>x.name),
+                        width:canvas?.width || 0};""",
+                      "args": [],
+                  })
+                  if state["error"]:
+                      raise RuntimeError("Standalone WebGL: " + state["error"])
+                  if state["count"] == 6917 and state["webgl"] and state["width"] >= 640:
+                      break
+                  time.sleep(0.35)
+              else:
+                  raise RuntimeError("Standalone WRE splats not drawn: " + str(state))
+              assert state["embedded"] == 6917 * 32, state
+              assert state["external"] == [], state
+              png = base64.b64decode(webdriver("GET", f"/session/{session}/screenshot"))
+              assert png[:8] == b"\\x89PNG\\r\\n\\x1a\\n"
+              width, height = struct.unpack_from(">II", png, 16)
+              assert width >= 1100 and height >= 700 and len(png) > 10_000
+              (root / "WRE-one-file-real-photo-WebGL.png").write_bytes(png)
+              receipt_path = root / "portable-viewer-receipt.json"
+              receipt = json.loads(receipt_path.read_text())
+              receipt["direct_file_browser_test"] = {
+                  "actual_webgl2": True, "drawn_gaussians": state["count"],
+                  "screenshot_sha256": hashlib.sha256(png).hexdigest(),
+                  "page_scheme": "file", "external_resource_requests": 0,
+                  "gpu_training": False,
+              }
+              receipt_path.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\\n")
+              print("DIRECT FILE WEBGL PASS: 6917 WRE 16-photo untrained Gaussians")
+          finally:
+              webdriver("DELETE", f"/session/{session}")
           PY
       - name: Upload WRE real-photo 3D viewer archive and evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
