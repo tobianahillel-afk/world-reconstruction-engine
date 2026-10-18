@@ -715,6 +715,127 @@ jobs:
           PY
 
       # Genuine real-photo RGB GLB is available before slow CUDA compilation.
+      # Quantify REAL observed image-colour disagreement at REAL PyCOLMAP
+      # Point2D tracks, before native CUDA compilation or any 3DGS training.
+      # Original NC source photographs remain local to the CI runner.
+      - name: Measure true multiview observed RGB agreement on CPU
+        shell: bash
+        run: |
+          set -euo pipefail
+          .venv/bin/python - <<'PY'
+          import csv
+          import hashlib
+          import itertools
+          import json
+          import math
+          import os
+          import statistics
+          from pathlib import Path
+          import numpy as np
+          from PIL import Image
+
+          root = Path(os.environ["GITHUB_WORKSPACE"])
+          capture = root / "wre-common-real-photo-capture"
+          poses = json.loads((root / "wre-real16-camera-poses.json").read_text())
+          quality = json.loads((root / "wre-real16-sfm-quality.json").read_text())
+          cameras = {int(c["image_id"]): c for c in poses["cameras"]}
+          assert len(cameras) == 16 and poses["registered_views"] == 16
+          assert poses["source_dataset_commit"] == quality["source_dataset_commit"]
+          # Decode each original (undistorted) photograph only once; verify
+          # actual byte SHA and native camera dimensions BEFORE sampling.
+          images = {}
+          for image_id, camera in sorted(cameras.items()):
+              path = capture / "images" / camera["image_name"]
+              assert path.is_file() and not path.is_symlink()
+              assert hashlib.sha256(path.read_bytes()).hexdigest() == camera["image_sha256"]
+              with Image.open(path) as source:
+                  image = np.asarray(source.convert("RGB"), dtype=np.uint8)
+              assert image.shape == (camera["image_height"], camera["image_width"], 3)
+              images[image_id] = image
+
+          observations = {}
+          native_rows = 0
+          with (root / "wre-real16-native-2d3d-tracks.csv").open(
+              encoding="utf-8", newline=""
+          ) as stream:
+              for row in csv.DictReader(stream):
+                  native_rows += 1
+                  point_id = int(row["point3d_id"])
+                  image_id = int(row["image_id"])
+                  camera = cameras[image_id]
+                  assert row["image_name"] == camera["image_name"]
+                  assert row["image_sha256"] == camera["image_sha256"]
+                  u, v = float(row["pixel_x"]), float(row["pixel_y"])
+                  if not (math.isfinite(u) and math.isfinite(v)):
+                      raise AssertionError("Nonfinite native COLMAP pixel")
+                  image = images[image_id]
+                  assert 0 <= u < image.shape[1] and 0 <= v < image.shape[0]
+                  rgb = tuple(int(c) for c in image[math.floor(v), math.floor(u)])
+                  # A COLMAP Point3D may be referenced by multiple Point2D
+                  # indexes in one image. The lowest native index wins, so a
+                  # view never counts twice towards a cross-view comparison.
+                  key = (point_id, image_id)
+                  point2d_idx = int(row["point2d_idx"])
+                  if key not in observations or point2d_idx < observations[key][0]:
+                      observations[key] = (point2d_idx, rgb)
+          assert native_rows == quality["geometry_quality"]["track_observations"]
+          grouped = {}
+          for (point_id, image_id), (idx, rgb) in observations.items():
+              grouped.setdefault(point_id, []).append((image_id, rgb))
+          errors = {}
+          pair_count = 0
+          for point_id, views in grouped.items():
+              if len(views) < 2:
+                  continue
+              differences = [
+                  sum(abs(first[c] - second[c]) for c in range(3)) / 3.0
+                  for (_, first), (_, second) in itertools.combinations(views, 2)
+              ]
+              assert differences
+              pair_count += len(differences)
+              errors[point_id] = statistics.fmean(differences)
+          assert len(grouped) == quality["geometry_quality"]["sparse_points3d"]
+          assert len(errors) > 100 and pair_count >= len(errors)
+          values = sorted(errors.values())
+          assert all(math.isfinite(x) and 0 <= x <= 255 for x in values)
+          # View-dependent BRIGHTNESS, exposure and occlusion all affect the
+          # score; it is NOT a held-out, perceptual, Gaussian or GPU benchmark.
+          report = {
+              "schema": "wre.experimental.real16_observed_rgb_agreement.v1",
+              "source_dataset_commit": poses["source_dataset_commit"],
+              "license": poses["license"],
+              "coordinate_system": "native_colmap_arbitrary_scale",
+              "measure": "mean_absolute_rgb_channel_difference_across_measured_views",
+              "pixel_sampling": "floor_native_measured_uv_nearest_source_pixel",
+              "per_camera_point_rule": "lowest_native_track_point2D_idx",
+              "image_count": len(images),
+              "sparse_points3d": len(grouped),
+              "track_observations": native_rows,
+              "points_with_cross_view_observations": len(errors),
+              "cross_view_pairs": pair_count,
+              "mean_rgb_difference_0_to_255": round(statistics.fmean(values), 6),
+              "median_rgb_difference_0_to_255": round(statistics.median(values), 6),
+              "p95_nearest_rank_rgb_difference_0_to_255": round(
+                  values[math.ceil(0.95 * len(values)) - 1], 6
+              ),
+              "held_out_image_quality_measured": False,
+              "gpu_training_executed": False,
+              "metric_scale_known": False,
+              "temporal_reconstruction_executed": False,
+              "interpretation": (
+                  "Observed in-sample pixel RGB disagreement across real camera views; "
+                  "not a reconstruction-fidelity, relighting, held-out or GPU metric."
+              ),
+          }
+          dest = root / "wre-real16-observed-rgb-agreement.json"
+          dest.write_text(
+              json.dumps(report, indent=2, sort_keys=True, allow_nan=False) + "\n",
+              encoding="utf-8",
+          )
+          print("REAL PHOTO OBSERVED RGB AGREEMENT:", report["mean_rgb_difference_0_to_255"],
+                "across", len(errors), "actual 3D points and", pair_count, "camera pairs")
+          PY
+
       - name: Publish-ready real SfM RGB glTF on CPU before native CUDA build
         shell: bash
         run: |
