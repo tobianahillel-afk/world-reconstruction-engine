@@ -2595,6 +2595,127 @@ def export_verified_gsplat_rgb_centers_glb(
         raise
 
 
+def export_verified_gsplat_splat(
+    *,
+    artifact_ref: ArtifactRef,
+    output_root: Path,
+    profile: GsplatStaticAppearanceTrainingProfile,
+    splat_path: Path,
+) -> Sha256Digest:
+    """Export *actual* anisotropic Gaussian splats for existing .splat viewers.
+
+    The antimatter15/splat layout is one 32-byte little-endian record per
+    Gaussian: XYZ float32, exp(log-scales) float32, RGBA uint8, normalized
+    quaternion wxyz uint8. This retains opacity, scale and orientation unlike
+    the RGB-center GLB, but bakes SH0 lighting and drops higher SH bands.
+    The verified original 59-float gsplat PLY is never modified.
+    """
+
+    if not isinstance(splat_path, Path) or not splat_path.is_absolute():
+        raise TypeError("gsplat .splat destination must be an absolute pathlib.Path")
+    verified = materialize_verified_gsplat_ply(
+        artifact_ref=artifact_ref, output_root=output_root, profile=profile
+    )
+    source_root = _safe_root(output_root, "gsplat output_root")
+    source_path = source_root / profile.expected_ply_relative_path
+    parent = _safe_root(splat_path.parent, "gsplat .splat output parent")
+    destination = parent / splat_path.name
+    if destination.suffix != ".splat" or destination.exists() or destination.is_symlink():
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat renderer export requires a new .splat destination"
+        )
+
+    source_digest = hashlib.sha256()
+    export_digest = hashlib.sha256()
+    created = False
+    try:
+        with source_path.open("rb") as source, destination.open("xb") as output:
+            created = True
+            header = bytearray()
+            while not header.endswith(b"end_header\n"):
+                chunk = source.readline(_MAX_GSPLAT_PLY_HEADER_BYTES + 1 - len(header))
+                if not chunk or len(header) + len(chunk) > _MAX_GSPLAT_PLY_HEADER_BYTES:
+                    raise GsplatStaticAppearancePreflightError(
+                        "gsplat source PLY header changed before .splat export"
+                    )
+                header.extend(chunk)
+            source_digest.update(header)
+            try:
+                count = int(header.splitlines()[2].split()[2])
+            except (IndexError, ValueError) as exc:
+                raise GsplatStaticAppearancePreflightError(
+                    "gsplat source PLY vertex count changed before .splat export"
+                ) from exc
+            if count <= 0 or count > _MAX_GSPLAT_PLY_VERTICES:
+                raise GsplatStaticAppearancePreflightError(
+                    "gsplat source PLY has invalid .splat vertex count"
+                )
+
+            remaining = count
+            while remaining:
+                batch_count = min(remaining, 1024)
+                block = source.read(batch_count * (59 * 4))
+                if len(block) != batch_count * (59 * 4):
+                    raise GsplatStaticAppearancePreflightError(
+                        "gsplat source PLY truncated during .splat export"
+                    )
+                source_digest.update(block)
+                payload = bytearray()
+                for record in struct.iter_unpack("<59f", block):
+                    opacity, *suffix = record[-8:]
+                    logits = suffix[:3]
+                    quaternion = suffix[3:]
+                    norm = math.hypot(*quaternion)
+                    if norm == 0 or not math.isfinite(norm):
+                        raise GsplatStaticAppearancePreflightError(
+                            "gsplat source PLY quaternion cannot be exported"
+                        )
+                    try:
+                        scales = tuple(math.exp(value) for value in logits)
+                        if any(
+                            value <= 0 or value > (2.0 - 2.0**-23) * 2.0**127 for value in scales
+                        ):
+                            raise ValueError("Gaussian scale exceeds float32 range")
+                        packed_scale = struct.pack("<3f", *scales)
+                    except (OverflowError, ValueError) as exc:
+                        raise GsplatStaticAppearancePreflightError(
+                            "gsplat Gaussian scale cannot be exported as float32"
+                        ) from exc
+                    rgb = tuple(
+                        max(0, min(255, int((v * 0.28209479177387814 + 0.5) * 255)))
+                        for v in record[3:6]
+                    )
+                    # Stable sigmoid for very large positive/negative logits.
+                    exponent = math.exp(-abs(opacity))
+                    alpha = 1 / (1 + exponent) if opacity >= 0 else exponent / (1 + exponent)
+                    rgba = (*rgb, max(0, min(255, int(alpha * 255))))
+                    rotation = tuple(
+                        max(0, min(255, int(128 + 128 * value / norm))) for value in quaternion
+                    )
+                    payload.extend(
+                        struct.pack("<3f", *record[:3])
+                        + packed_scale
+                        + bytes(rgba)
+                        + bytes(rotation)
+                    )
+                output.write(payload)
+                export_digest.update(payload)
+                remaining -= batch_count
+            if source.read(1):
+                raise GsplatStaticAppearancePreflightError(
+                    "gsplat source PLY has trailing bytes during .splat export"
+                )
+            if Sha256Digest(source_digest.hexdigest()) != verified.entries[0].sha256:
+                raise GsplatStaticAppearancePreflightError(
+                    "gsplat source PLY identity changed during .splat export"
+                )
+    except Exception:
+        if created:
+            destination.unlink(missing_ok=True)
+        raise
+    return Sha256Digest(export_digest.hexdigest())
+
+
 def assemble_verified_gsplat_static_appearance_result(
     *,
     request: StaticAppearanceCandidateRequest,
@@ -2671,6 +2792,7 @@ __all__ = [
     "assemble_verified_gsplat_static_appearance_result",
     "export_verified_gsplat_rgb_centers_glb",
     "export_verified_gsplat_rgb_centers_ply",
+    "export_verified_gsplat_splat",
     "inspect_gsplat_static_appearance_shared_track_pixels",
     "materialize_verified_gsplat_ply",
     "preflight_gsplat_static_appearance_inputs",
