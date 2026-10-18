@@ -354,35 +354,35 @@ jobs:
               '</section>'
           )
           ui_logic = """<script>
-(() => {
-  const picker = document.getElementById('wre-local-splat');
-  const reset = document.getElementById('wre-restore-original');
-  const status = document.getElementById('wre-local-status');
-  function show(file) {
-    if (!file || file.size === 0 || file.size % 32 !== 0 ||
-        file.size > 256 * 1024 * 1024) {
-      status.textContent = 'Invalid .splat: expected 32-byte records, maximum 256 MiB.';
-      return;
-    }
-    const transfer = new DataTransfer();
-    transfer.items.add(file);
-    document.dispatchEvent(new DragEvent('drop', {
-      bubbles: true, cancelable: true, dataTransfer: transfer
-    }));
-    status.textContent = 'Loading ' + file.name + ': ' +
-      (file.size / 32) + ' Gaussian records';
-  }
-  picker.addEventListener('change', () => {
-    if (picker.files && picker.files.length === 1) show(picker.files[0]);
-  });
-  reset.addEventListener('click', () => {
-    picker.value = '';
-    show(new File([window.__wreEmbeddedSplat], 'WRE-16-photos.splat', {
-      type: 'application/octet-stream'
-    }));
-  });
-})();
-</script>"""
+          (() => {
+            const picker = document.getElementById('wre-local-splat');
+            const reset = document.getElementById('wre-restore-original');
+            const status = document.getElementById('wre-local-status');
+            function show(file) {
+              if (!file || file.size === 0 || file.size % 32 !== 0 ||
+                  file.size > 256 * 1024 * 1024) {
+                status.textContent = 'Invalid .splat: expected 32-byte records, maximum 256 MiB.';
+                return;
+              }
+              const transfer = new DataTransfer();
+              transfer.items.add(file);
+              document.dispatchEvent(new DragEvent('drop', {
+                bubbles: true, cancelable: true, dataTransfer: transfer
+              }));
+              status.textContent = 'Loading ' + file.name + ': ' +
+                (file.size / 32) + ' Gaussian records';
+            }
+            picker.addEventListener('change', () => {
+              if (picker.files && picker.files.length === 1) show(picker.files[0]);
+            });
+            reset.addEventListener('click', () => {
+              picker.value = '';
+              show(new File([window.__wreEmbeddedSplat], 'WRE-16-photos.splat', {
+                type: 'application/octet-stream'
+              }));
+            });
+          })();
+          </script>"""
           assert vendor_html.count("</body>") == 1
           standalone = (
               vendor_html.replace(script_tag, inline)
