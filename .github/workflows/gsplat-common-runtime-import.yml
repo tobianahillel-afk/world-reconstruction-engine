@@ -2899,6 +2899,65 @@ jobs:
               assert ", ".join(f"{value:.2f}" for value in point[6:8]) in inspected["text"]
               assert ", ".join(f"{value:.2f}" for value in point[8:10]) in inspected["text"]
               assert "NOT held-out quality, metres, time, 4D or GPU training" in inspected["text"]
+              # A previously supplied 8x8 operator photo is not aligned to the
+              # native reconstructed image size. Do NOT draw a false marker.
+              assert js("""
+                return ['wre-measured-pixel-a','wre-measured-pixel-b']
+                  .every(id=>document.getElementById(id).hidden);
+              """), "Mismatched local image dimensions exposed misleading SfM pixels"
+              # Test actual browser pixel-to-image overlay geometry with local
+              # synthetic SAME-SIZE files, clearly NOT original source photos.
+              overlay_cameras=[
+                  actual_cameras[0], actual_cameras[best_overlap_index]
+              ]
+              browser_overlay=js("""
+                const cameras=__CAMERAS__;
+                const transfer=new DataTransfer();
+                for(const c of cameras){
+                  const canvas=document.createElement('canvas');
+                  canvas.width=c.image_width;
+                  canvas.height=c.image_height;
+                  const ctx=canvas.getContext('2d');
+                  ctx.fillStyle='rgb(28,82,145)';
+                  ctx.fillRect(0,0,canvas.width,canvas.height);
+                  const b64=canvas.toDataURL('image/png').split(',')[1];
+                  const bytes=Uint8Array.from(atob(b64),v=>v.charCodeAt(0));
+                  transfer.items.add(new File([bytes],c.image_name,{type:'image/png'}));
+                }
+                const input=document.getElementById('wre-source-files');
+                input.files=transfer.files;
+                input.dispatchEvent(new Event('change',{bubbles:true}));
+                return transfer.files.length;
+              """.replace("__CAMERAS__",json.dumps(overlay_cameras)))
+              assert browser_overlay==2
+              for _ in range(50):
+                  if js("""
+                    return ['wre-measured-pixel-a','wre-measured-pixel-b']
+                      .every(id=>!document.getElementById(id).hidden);
+                  """):
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("Measured SfM pixels were not displayed on local photos")
+              measured_overlays=js("""
+                return ['wre-measured-pixel-a','wre-measured-pixel-b']
+                  .map(id=>{
+                    const marker=document.getElementById(id);
+                    return {x:Number(marker.dataset.pixelX),
+                            y:Number(marker.dataset.pixelY),
+                            left:parseFloat(marker.style.left),
+                            top:parseFloat(marker.style.top),
+                            title:marker.title};
+                  });
+              """)
+              for marker,cam,xy in zip(
+                  measured_overlays,overlay_cameras,(point[6:8],point[8:10]),strict=True
+              ):
+                  assert math.isclose(marker["x"],xy[0],abs_tol=1e-7)
+                  assert math.isclose(marker["y"],xy[1],abs_tol=1e-7)
+                  assert math.isclose(marker["left"],100*xy[0]/cam["image_width"],abs_tol=1e-4)
+                  assert math.isclose(marker["top"],100*xy[1]/cam["image_height"],abs_tol=1e-4)
+                  assert "local photo not authenticated" in marker["title"]
               # The very same native 3D track must display the opposite
               # measured pixels when camera A and B are reversed.
               reversed_text=js("""
