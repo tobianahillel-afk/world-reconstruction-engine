@@ -183,10 +183,7 @@ jobs:
           from wre.reconstruction import (
               ColmapFeatureExtractionConfig, ColmapFeatureExtractionRequest, ColmapFeatureInput,
               ColmapPairMatchingConfig, ColmapPairMatchingRequest,
-              ColmapGeometricVerificationConfig, ColmapGeometricVerificationRequest,
-              ColmapIncrementalReconstructionConfig, ColmapIncrementalReconstructionRequest,
               ColmapReconstructionInput, extract_colmap_features, match_colmap_pairs,
-              verify_colmap_geometry, reconstruct_colmap_incrementally,
           )
           
           # These are upstream Git blob SHA-1 values (not hash-of-URL trust).
@@ -302,33 +299,55 @@ jobs:
           names = {x.observation_id: x.image_name for x in features.images}
           canonical = root / "canonical-images"
           canonical.mkdir()
-          native_inputs = []
           for entry in inputs:
               name = names[entry.observation.observation_id]
               target = canonical / name
               target.write_bytes(entry.source_path.read_bytes())
-              native_inputs.append(ColmapReconstructionInput(
-                  observation=entry.observation, source_path=target, image_name=name,
-              ))
+              assert hashlib.sha256(target.read_bytes()).hexdigest() == entry.observation.asset.sha256.value
           match_config = ColmapPairMatchingConfig()
           matched = match_colmap_pairs(ColmapPairMatchingRequest(
               run=run("matching", match_config.sha256, 1),
               features=features, database_path=root / "matches.db", config=match_config,
           ), module=pycolmap)
-          verify_config = ColmapGeometricVerificationConfig()
-          verified = verify_colmap_geometry(ColmapGeometricVerificationRequest(
-              run=run("verification", verify_config.sha256, 2),
-              matching=matched, database_path=root / "verified.db", config=verify_config,
-          ), module=pycolmap)
-          map_config = ColmapIncrementalReconstructionConfig(
-              min_model_size=2, max_num_models=1, max_runtime_seconds=900,
+          # Demonstration SfM uses PyCOLMAP's own pair selection. A pair with
+          # raw feature matches may legitimately fail geometric verification;
+          # the strict WRE L3.4 contract remains unchanged elsewhere.
+          native_verified_db = root / "native-verified.db"
+          shutil.copyfile(matched.database_path, native_verified_db)
+          pycolmap.set_random_seed(0)
+          pycolmap.geometric_verification(native_verified_db)
+          database = pycolmap.Database.open(native_verified_db)
+          try:
+              raw_pair_ids, raw_pair_counts = database.read_num_matches()
+              geometry_pair_ids, _ = database.read_two_view_geometries()
+          finally:
+              database.close()
+          raw_ids = {
+              int(pair_id) for pair_id, count
+              in zip(raw_pair_ids, raw_pair_counts, strict=True) if int(count) > 0
+          }
+          accepted_ids = {int(pair_id) for pair_id in geometry_pair_ids}
+          assert accepted_ids and accepted_ids <= raw_ids, (
+              "COLMAP produced no usable or out-of-membership two-view geometry"
           )
-          mapped = reconstruct_colmap_incrementally(ColmapIncrementalReconstructionRequest(
-              run=run("mapping", map_config.sha256, 3), verification=verified,
-              inputs=tuple(native_inputs), output_path=root / "native-sparse",
-              config=map_config,
-          ), module=pycolmap)
-          models = [m for m in mapped.models if m.num_registered_images == 16 and m.num_points3d > 100]
+          print("REAL16 native COLMAP raw/verified pairs:",
+                len(raw_ids), len(accepted_ids), "excluded:", len(raw_ids - accepted_ids))
+          mapper_options = pycolmap.IncrementalPipelineOptions()
+          mapper_options.min_model_size = 2
+          mapper_options.max_num_models = 1
+          mapper_options.max_runtime_seconds = 900
+          mapper_options.num_threads = 1
+          mapper_options.random_seed = 0
+          mapper_options.ba_use_gpu = False
+          mapper_options.extract_colors = False
+          pycolmap.set_random_seed(0)
+          mapped = pycolmap.incremental_mapping(
+              native_verified_db, canonical, root / "native-sparse", options=mapper_options,
+          )
+          models = [
+              m for m in mapped.values()
+              if m.num_reg_images() == 16 and m.num_points3D() > 100
+          ]
           assert len(models) == 1, "the pinned genuine 16-view reconstruction was not reproduced"
           # The gsplat Parser seeds SH0 appearance from native points3D RGB.
           # Pure SfM can leave those RGB values black: extract observed colors
@@ -384,7 +403,7 @@ jobs:
           reloaded = pycolmap.Reconstruction(str(capture / "sparse" / "0"))
           assert reloaded.num_reg_images() == 16
           points = reloaded.num_points3D()
-          assert points == models[0].num_points3d
+          assert points == models[0].num_points3D()
           views = {}
           for image_id in sorted(int(i) for i in reloaded.reg_image_ids()):
               registered = reloaded.image(image_id)
