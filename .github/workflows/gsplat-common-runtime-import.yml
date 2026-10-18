@@ -462,6 +462,16 @@ jobs:
           colored_model = pycolmap.Reconstruction(str(native_model_path))
           colored_model.extract_colors_for_all_images(str(canonical))
           colored_model.write(str(native_model_path))
+          # Reuse PyCOLMAP's real XYZ/RGB exporter: this is observed SfM,
+          # not a trained Gaussian field or an estimated metric-scale scene.
+          display_ply = Path(os.environ["GITHUB_WORKSPACE"]) / "wre-real16-observed-rgb.ply"
+          colored_model.export_PLY(str(display_ply))
+          rgb_bytes = display_ply.read_bytes()
+          ply_header = rgb_bytes.split(b"end_header\n", 1)[0]
+          assert rgb_bytes.startswith(b"ply\n")
+          assert b"element vertex " + str(colored_model.num_points3D()).encode() + b"\n" in ply_header
+          assert all(b"property uchar " + channel in ply_header for channel in (b"red", b"green", b"blue"))
+          print("REAL 16-PHOTO RGB 3D PLY EXPORTED:", len(rgb_bytes), "bytes")
           print("NATIVE PHOTO-OBSERVED 3D POINT RGB EXTRACTED")
           capture = Path(os.environ["GITHUB_WORKSPACE"]) / "wre-common-real-photo-capture"
           undistorted = root / "undistorted"
@@ -575,6 +585,10 @@ jobs:
           assert np.isfinite(parser.camtoworlds).all()
           assert np.isfinite(parser.points).all()
           assert np.unique(parser.points_rgb, axis=0).shape[0] > 10
+          rgb_ply = Path(os.environ["GITHUB_WORKSPACE"]) / "wre-real16-observed-rgb.ply"
+          ply_bytes = rgb_ply.read_bytes()
+          assert ply_bytes.startswith(b"ply\n")
+          assert b"element vertex " + str(len(parser.points)).encode() + b"\n" in ply_bytes.split(b"end_header\n", 1)[0]
           assert np.linalg.norm(np.ptp(parser.camtoworlds[:, :3, 3], axis=0)) > 0
           assert all(len(params) == 0 for params in parser.params_dict.values())
 
@@ -614,6 +628,14 @@ jobs:
               },
               "real_source_photo_count": 16,
               "real_colmap_points": int(len(parser.points)),
+              "observed_rgb_geometry_ply": {
+                  "filename": rgb_ply.name,
+                  "sha256": hashlib.sha256(ply_bytes).hexdigest(),
+                  "bytes": len(ply_bytes),
+                  "vertices": int(len(parser.points)),
+                  "kind": "untrained_native_sfm_photo_observed_rgb_xyz",
+                  "metric_scale_known": False,
+              },
               "native_parser_cpu_train_views": len(train),
               "native_parser_cpu_validation_views": len(validation),
               "decoded_photo_shapes_and_rgb_sums": samples,
@@ -625,6 +647,13 @@ jobs:
           }
           out = Path(os.environ["GITHUB_WORKSPACE"]) / "wre-common-native-real-photo-receipt.json"
           out.write_text(json.dumps(receipt, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          (Path(os.environ["GITHUB_WORKSPACE"]) / "wre-real16-observed-rgb-LICENSE.txt").write_text(
+              "Photographs by Pierre Moulon, OpenMVG Palm Desert Micro DJI, "
+              "CC BY-NC 4.0 (https://creativecommons.org/licenses/by-nc/4.0/).\n"
+              "Derived RGB 3D is for NONCOMMERCIAL experimental reuse only.\n"
+              "Sparse SfM reconstruction, NOT trained gsplat, metric scale or 4D.\n",
+              encoding="utf-8",
+          )
           print(
               "REAL 16-PHOTO COMMON NATIVE COLMAP PASS:",
               len(parser.image_names), "authentic photographed frames,",
@@ -633,10 +662,13 @@ jobs:
           print("GPU training NONE; native extensions were imported, never executed on GPU.")
           PY
 
-      - name: Publish compact real-photo native-import receipt without redistributing photos
+      - name: Publish real 16-photo SfM RGB PLY and attribution without source photographs
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: wre-common-native-real-photo-receipt
-          path: wre-common-native-real-photo-receipt.json
+          name: wre-common-native-real-photo-sfm-rgb
+          path: |
+            wre-common-native-real-photo-receipt.json
+            wre-real16-observed-rgb.ply
+            wre-real16-observed-rgb-LICENSE.txt
           if-no-files-found: error
           retention-days: 7
