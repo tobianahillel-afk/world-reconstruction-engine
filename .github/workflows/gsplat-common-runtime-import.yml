@@ -541,18 +541,23 @@ jobs:
           # Derive real image-pair overlap from exact shared triangulated
           # COLMAP point IDs. No fake photo, capture time or learned model.
           ordered_frames = sorted(frames, key=lambda f: f["image_name"])
-          observed_ids = [
-              {
+          # PyCOLMAP's num_points3D counts 2D OBSERVATIONS, whereas a
+          # pairwise intersection must operate on UNIQUE triangulated IDs.
+          # Preserve multiplicities for the count cross-check first.
+          observed_point_ids = [
+              [
                   int(p.point3D_id)
                   for p in model.image(frame["image_id"]).points2D
                   if p.has_point3D()
-              }
+              ]
               for frame in ordered_frames
           ]
           assert all(
-              len(ids) == frame["triangulated_2d_observations"] > 0
-              for ids, frame in zip(observed_ids, ordered_frames, strict=True)
+              len(observations) == frame["triangulated_2d_observations"] > 0
+              for observations, frame in zip(observed_point_ids, ordered_frames, strict=True)
           )
+          observed_ids = [set(observations) for observations in observed_point_ids]
+          assert all(ids for ids in observed_ids)
           shared_tracks = [
               [len(a & b) for b in observed_ids] for a in observed_ids
           ]
@@ -591,7 +596,16 @@ jobs:
                   for point_id in shared_ids[:8]:
                       xyz = np.asarray(model.points3D[point_id].xyz, dtype=np.float64)
                       assert xyz.shape == (3,) and np.isfinite(xyz).all()
-                      samples.append([int(point_id), *(float(value) for value in xyz)])
+                      reprojection_error = float(model.points3D[point_id].error)
+                      supporting_images = len(model.points3D[point_id].track.elements)
+                      assert np.isfinite(reprojection_error) and reprojection_error >= 0
+                      assert 2 <= supporting_images <= 16
+                      samples.append([
+                          int(point_id),
+                          *(float(value) for value in xyz),
+                          reprojection_error,
+                          supporting_images,
+                      ])
                   sampled_shared_points[f"{i}:{j}"] = samples
           centers = np.asarray([frame["camera_center_xyz"] for frame in frames])
           assert np.linalg.norm(np.ptp(centers, axis=0)) > 0
@@ -1228,7 +1242,7 @@ jobs:
           .wre-pair-hotspot.secondary {background:#70d7ff}
           .wre-track-hotspot {border:1px solid #fff;border-radius:50%;
             width:13px;height:13px;padding:0;background:#92ffad;
-            box-shadow:0 0 0 2px #123225;pointer-events:none}
+            box-shadow:0 0 0 2px #123225;pointer-events:auto;cursor:pointer}
           </style></head><body><main>
           <header><h1>WRE · Real 16-photograph SfM 3D</h1>
           <p>Orbit and zoom the actual reconstructed RGB point cloud,
@@ -1264,6 +1278,9 @@ jobs:
             </output>
             <output id="wre-camera-baseline" aria-live="polite">
               Select two cameras to measure their SfM baseline; no metric scale.
+            </output>
+            <output id="wre-landmark-inspection" aria-live="polite">
+              Select a green shared 3D landmark to inspect its real SfM support.
             </output>
           </section>
           <section id="local-model" aria-label="Open your own 3D GLB">
@@ -1314,6 +1331,7 @@ jobs:
           const choice=document.getElementById('wre-camera-choice');
           const baselineChoice=document.getElementById('wre-baseline-choice');
           const baselineOutput=document.getElementById('wre-camera-baseline');
+          const landmarkInspection=document.getElementById('wre-landmark-inspection');
           const framePair=document.getElementById('wre-frame-baseline');
           const nearestButton=document.getElementById('wre-nearest-camera');
           const sharedButton=document.getElementById('wre-most-shared-camera');
@@ -1397,6 +1415,8 @@ jobs:
           let focusCamera=null;
           const clearPairMarkers=()=>{
             viewer.querySelectorAll('[slot^="hotspot-pair-"]').forEach(node=>node.remove());
+            landmarkInspection.textContent=
+              'Select a green shared 3D landmark to inspect its real SfM support.';
           };
           const showPairMarkers=(first,second,indices)=>{
             clearPairMarkers();
@@ -1562,9 +1582,12 @@ jobs:
               const points=sampled[i+':'+j];
               if(!Array.isArray(points) ||
                   points.length!==Math.min(overlap.counts[i][j],8) ||
-                  !points.every(point=>Array.isArray(point) && point.length===4 &&
+                  !points.every(point=>Array.isArray(point) && point.length===6 &&
                     Number.isSafeInteger(point[0]) && point[0]>0 &&
-                    point.slice(1).every(Number.isFinite))) {
+                    point.slice(1,5).every(Number.isFinite) &&
+                    point[4]>=0 &&
+                    Number.isSafeInteger(point[5]) && point[5]>=2 &&
+                    point[5]<=16)) {
                 throw Error('Invalid measured shared 3D point positions');
               }
             }
@@ -1619,12 +1642,22 @@ jobs:
                 marker.type='button';
                 marker.className='wre-track-hotspot';
                 marker.slot='hotspot-pair-shared-'+i;
-                marker.setAttribute('data-position',point.slice(1).map(v=>v+'m').join(' '));
+                marker.setAttribute('data-position',point.slice(1,4).map(v=>v+'m').join(' '));
                 marker.setAttribute('data-normal','0 1 0');
                 marker.setAttribute('aria-label',
                   'Shared reconstructed 3D landmark '+point[0]+' (in-sample)');
                 marker.title='Real COLMAP triangulated point '+point[0]+
                   ', observed in both cameras; no time or GPU inference';
+                marker.addEventListener('click',()=>{
+                  if(localUrl!==null || !viewer.contains(marker)) return;
+                  landmarkInspection.textContent=
+                    'Real 3D landmark '+point[0]+': XYZ ('+
+                    point.slice(1,4).map(v=>v.toFixed(5)).join(', ')+
+                    ') in arbitrary SfM units; '+point[5]+
+                    ' source-image observations; native COLMAP in-sample '+
+                    'reprojection error '+point[4].toFixed(4)+
+                    ' px (NOT held-out quality, metres, time, 4D or GPU training).';
+                });
                 viewer.appendChild(marker);
               });
               const shared=overlap.counts[firstIndex][
@@ -2768,10 +2801,29 @@ jobs:
                   assert len(xyz)==3
                   assert all(
                       math.isclose(actual,expected,rel_tol=1e-6,abs_tol=1e-6)
-                      for actual,expected in zip(xyz,point[1:],strict=True)
+                      for actual,expected in zip(xyz,point[1:4],strict=True)
                   )
                   assert str(point[0]) in marker["label"]
                   assert marker["projected"]
+              # Click a REAL browser hotspot backed by an actual PyCOLMAP point,
+              # not a synthetic coordinate or merely a static status label.
+              inspected=js("""
+                const marker=document.querySelector(
+                  '[slot="hotspot-pair-shared-0"]');
+                if(!marker) throw Error('No triangulated landmark hotspot');
+                const clickable=getComputedStyle(marker).pointerEvents;
+                marker.click();
+                return {
+                  clickable,
+                  text:document.getElementById('wre-landmark-inspection').textContent
+                };
+              """)
+              assert inspected["clickable"]=="auto"
+              point=expected_landmarks[0]
+              assert f"Real 3D landmark {point[0]}" in inspected["text"]
+              assert str(point[5])+" source-image observations" in inspected["text"]
+              assert f"{point[4]:.4f} px" in inspected["text"]
+              assert "NOT held-out quality, metres, time, 4D or GPU training" in inspected["text"]
               same_camera=js("""
                 const second=document.getElementById('wre-baseline-choice');
                 second.value='0';
@@ -2779,6 +2831,8 @@ jobs:
                 return document.getElementById('wre-camera-baseline').textContent;
               """)
               assert "0.000000 local SfM units" in same_camera
+              assert "Select a green shared 3D landmark" in js(
+                "return document.getElementById('wre-landmark-inspection').textContent;")
               assert js("""
                 return !document.querySelector('[slot^="hotspot-pair-shared-"]');
               """), "Shared 3D hotspots were not cleared on same-camera selection"
