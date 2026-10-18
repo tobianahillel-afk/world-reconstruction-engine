@@ -2330,6 +2330,77 @@ jobs:
               assert f"{expected_baseline:.6f}" in browser_baseline
               assert "local SfM units (not metres" in browser_baseline
               assert "no capture-time interpretation" in browser_baseline
+              # A/B camera names come from the genuine 16-image SfM JSON.
+              # Only the uploaded test pixels are synthetic: the real source
+              # photos remain absent from the offline archive and network.
+              paired_names=[c["image_name"] for c in actual_cameras[:2]]
+              paired_source_photos=js("""
+                const names=__NAMES__;
+                const transfer=new DataTransfer();
+                for(let i=0;i<2;i++){
+                  const canvas=document.createElement('canvas');
+                  canvas.width=8;canvas.height=8;
+                  const ctx=canvas.getContext('2d');
+                  ctx.fillStyle=i===0?'rgb(200,40,60)':'rgb(20,70,220)';
+                  ctx.fillRect(0,0,8,8);
+                  const text=atob(canvas.toDataURL('image/png').split(',')[1]);
+                  const bytes=Uint8Array.from(text,c=>c.charCodeAt(0));
+                  transfer.items.add(new File([bytes],names[i],{type:'image/png'}));
+                }
+                const input=document.getElementById('wre-source-files');
+                input.files=transfer.files;
+                input.dispatchEvent(new Event('change',{bubbles:true}));
+                const a=document.getElementById('wre-photo-image');
+                const b=document.getElementById('wre-photo-image-b');
+                return {
+                  a:!a.hidden && a.alt.includes(names[0]),
+                  b:!b.hidden && b.alt.includes(names[1]),
+                  urls:a.src.startsWith('blob:') && b.src.startsWith('blob:') &&
+                    a.src!==b.src,
+                  notice:document.getElementById('wre-photo-status')
+                    .textContent.includes('Local photo B: '+names[1])
+                };
+              """.replace("__NAMES__",json.dumps(paired_names)))
+              assert paired_source_photos=={
+                  "a":True,"b":True,"urls":True,"notice":True
+              }
+              for _ in range(40):
+                  if js("""
+                    const a=document.getElementById('wre-photo-image');
+                    const b=document.getElementById('wre-photo-image-b');
+                    return a.complete && b.complete &&
+                      a.naturalWidth===8 && b.naturalWidth===8;
+                  """):
+                      break
+                  time.sleep(0.1)
+              else:
+                  raise RuntimeError("Real Chrome did not decode both local A/B photos")
+              assert js("""
+                const a=document.getElementById('wre-photo-image');
+                const b=document.getElementById('wre-photo-image-b');
+                const sample=image=>{
+                  const c=document.createElement('canvas');
+                  c.width=1;c.height=1;
+                  c.getContext('2d').drawImage(image,0,0,1,1);
+                  return Array.from(c.getContext('2d').getImageData(0,0,1,1).data);
+                };
+                const first=sample(a),second=sample(b);
+                return first[0]>first[2] && second[2]>second[0];
+              """), "The two SfM photo slots reused/swapped the wrong local image pixels"
+              assert js("""
+                const second=document.getElementById('wre-baseline-choice');
+                second.value='2';
+                second.dispatchEvent(new Event('change',{bubbles:true}));
+                return document.getElementById('wre-photo-image-b').hidden &&
+                  !document.getElementById('wre-photo-image').hidden;
+              """), "Camera B photo leaked into another verified SfM camera"
+              assert js("""
+                const second=document.getElementById('wre-baseline-choice');
+                second.value='1';
+                second.dispatchEvent(new Event('change',{bubbles:true}));
+                return !document.getElementById('wre-photo-image-b').hidden &&
+                  !document.getElementById('wre-photo-image').hidden;
+              """), "Previously supplied camera B photo was not restored"
               # Real browser interaction, checked against independent recovered
               # camera centres from the authentic 16-photo COLMAP JSON.
               first_center=actual_cameras[0]["camera_center_xyz"]
