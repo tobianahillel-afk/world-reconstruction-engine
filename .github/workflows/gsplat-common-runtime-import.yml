@@ -1508,7 +1508,9 @@ jobs:
               <figure><div class="wre-photo-frame"><img id="wre-photo-image-b" hidden
                 alt="Locally provided second reconstructed camera photograph">
                 <span id="wre-measured-pixel-b" class="wre-measured-pixel" hidden
-                  aria-label="Measured SfM observation in camera B"></span></div>
+                  aria-label="Measured SfM observation in camera B"></span>
+                <span id="wre-native-photo-pixel-b" class="wre-measured-pixel" hidden
+                  aria-label="Native triangulated point measured in camera B"></span></div>
                 <figcaption>Camera B · operator-supplied, unverified</figcaption></figure>
             </div>
           </section>
@@ -1540,6 +1542,7 @@ jobs:
           const nativeCameraOpen=document.getElementById('wre-native-observation-open');
           const nativeCameraStatus=document.getElementById('wre-native-observation-status');
           const nativePhotoPixel=document.getElementById('wre-native-photo-pixel');
+          const nativePhotoPixelB=document.getElementById('wre-native-photo-pixel-b');
           let nativeLookup=null;
           const loadNativeIndex=()=>{
               if(nativeLookup===null){
@@ -1568,7 +1571,7 @@ jobs:
             nativePoint=null;nativeObservation=null;
             nativeCameraChoice.replaceChildren(new Option('Find a point first',''));
             nativeCameraChoice.disabled=true;nativeCameraOpen.disabled=true;
-            nativePhotoPixel.hidden=true;
+            nativePhotoPixel.hidden=true;nativePhotoPixelB.hidden=true;
           };
           const findNativePoint=async()=>{
             clearNativeLookupMarker();
@@ -1673,23 +1676,29 @@ jobs:
           const cameraEvidence=new Map();
           let selectedPhotoPoint=null;
           const drawNativePhotoPixel=()=>{
-            nativePhotoPixel.hidden=true;
-            if(!nativeObservation || !nativePoint || localUrl!==null ||
-               choice.value!==nativeObservation.index) return;
-            const camera=cameraEvidence.get(nativeObservation.index);
-            const uv=nativeObservation.pixel;
-            if(!camera || photoImage.hidden || !photoImage.complete ||
-               photoImage.naturalWidth!==camera.image_width ||
-               photoImage.naturalHeight!==camera.image_height ||
-               !uv.every(Number.isFinite) ||
-               uv[0]<0 || uv[1]<0 ||
-               uv[0]>=camera.image_width || uv[1]>=camera.image_height) return;
-            nativePhotoPixel.style.left=(100*uv[0]/camera.image_width)+'%';
-            nativePhotoPixel.style.top=(100*uv[1]/camera.image_height)+'%';
-            nativePhotoPixel.dataset.pixelX=String(uv[0]);
-            nativePhotoPixel.dataset.pixelY=String(uv[1]);
-            nativePhotoPixel.title='Real measured SfM pixel; local photo NOT authenticated';
-            nativePhotoPixel.hidden=false;
+            nativePhotoPixel.hidden=true;nativePhotoPixelB.hidden=true;
+            if(!nativeObservation || !nativePoint || localUrl!==null) return;
+            // A/B remain independent camera selections. Overlay only genuine
+            // measured native 2D observations, never a computed projection.
+            [
+              [photoImage,nativePhotoPixel,choice],
+              [photoImageB,nativePhotoPixelB,baselineChoice]
+            ].forEach(([img,marker,control])=>{
+              const camera=cameraEvidence.get(control.value);
+              const observation=nativePoint.observed.find(o=>o.index===control.value);
+              if(!camera || !observation || img.hidden || !img.complete ||
+                 img.naturalWidth!==camera.image_width ||
+                 img.naturalHeight!==camera.image_height) return;
+              const uv=observation.pixel;
+              if(!uv.every(Number.isFinite) || uv[0]<0 || uv[1]<0 ||
+                 uv[0]>=camera.image_width || uv[1]>=camera.image_height) return;
+              marker.style.left=(100*uv[0]/camera.image_width)+'%';
+              marker.style.top=(100*uv[1]/camera.image_height)+'%';
+              marker.dataset.pixelX=String(uv[0]);
+              marker.dataset.pixelY=String(uv[1]);
+              marker.title='Native SfM pixel measured in this camera; local photo NOT authenticated';
+              marker.hidden=false;
+            });
           };
           const drawMeasuredPhotoPixels=()=>{
             photoMarkerA.hidden=true;photoMarkerB.hidden=true;
@@ -1759,7 +1768,18 @@ jobs:
               const observation=nativePoint.observed.find(o=>o.index===selectedCamera);
               if(!observation) return;
               nativeCameraChoice.value=selectedCamera;
-              nativeCameraOpen.click();
+              if(cameraControl===baselineChoice){
+                // Clicking photo B must not silently overwrite camera A.
+                nativeObservation=observation;
+                if(focusCamera) focusCamera(Number(selectedCamera));
+                drawNativePhotoPixel();
+                nativeCameraStatus.textContent='Real 3D point '+nativePoint.id+
+                  ' selected from measured camera B pixel ('+
+                  observation.pixel.map(v=>v.toFixed(2)).join(', ')+
+                  '); A/B comparison retained.';
+              } else {
+                nativeCameraOpen.click();
+              }
               nativeCameraStatus.textContent+=' Selected by clicking the local photograph.';
             } catch(error){
               nativeCameraStatus.textContent='Photo-to-3D navigation failed: '+String(error);
@@ -1772,6 +1792,7 @@ jobs:
           photoImage.addEventListener('load',drawMeasuredPhotoPixels);
           photoImage.addEventListener('load',drawNativePhotoPixel);
           photoImageB.addEventListener('load',drawMeasuredPhotoPixels);
+          photoImageB.addEventListener('load',drawNativePhotoPixel);
           const showLocalPhoto=()=>{
             for(const img of [photoImage,photoImageB]){
               img.hidden=true;
