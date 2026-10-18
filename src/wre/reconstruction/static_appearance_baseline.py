@@ -2717,7 +2717,6 @@ def export_verified_gsplat_splat(
     return Sha256Digest(export_digest.hexdigest())
 
 
-
 def export_verified_gsplat_viewer_bundle(
     *,
     artifact_ref: ArtifactRef,
