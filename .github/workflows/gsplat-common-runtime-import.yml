@@ -3089,6 +3089,34 @@ jobs:
                 };
               """.replace("__CAMERA_NAME__",json.dumps(camera_name)))
               assert browser_local_photo == {"accepted": True, "privateUrl": True}
+              # Real Chrome Web Crypto digests the actual local File bytes.
+              # This synthetic 8x8 test photo must NOT authenticate as the
+              # reconstructed source photo despite its matching filename.
+              assert js("""
+                const output=document.getElementById('wre-photo-hash-status');
+                const label=document.getElementById('wre-photo-hash-a');
+                if(!label.textContent.includes('unverified')) return false;
+                document.getElementById('wre-verify-photo-hashes').click();
+                return output.textContent.includes('Checking local file bytes');
+              """), "Hash verification did not begin for the browser-local photo"
+              for _ in range(80):
+                  image_integrity=js("""
+                    return {
+                      text:document.getElementById('wre-photo-hash-status').textContent,
+                      label:document.getElementById('wre-photo-hash-a').textContent,
+                      url:document.getElementById('wre-photo-image').getAttribute('src')
+                    };
+                  """)
+                  if "0 of 1 local photos match" in image_integrity["text"]:
+                      break
+                  time.sleep(.1)
+              else:
+                  raise RuntimeError(
+                      "Local synthetic photo was not SHA-256-checked in real Chrome"
+                  )
+              assert "SHA-256 mismatch" in image_integrity["label"]
+              assert "not a signed proof" in image_integrity["text"]
+              assert image_integrity["url"].startswith("blob:")
               for _ in range(40):
                   if js("""
                     const image=document.getElementById('wre-photo-image');
