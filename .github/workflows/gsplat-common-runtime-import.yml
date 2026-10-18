@@ -469,6 +469,7 @@ jobs:
         run: |
           set -euo pipefail
           .venv/bin/python - <<'PY'
+          import csv
           import hashlib
           import json
           import math
@@ -570,36 +571,68 @@ jobs:
               for i in range(16) for j in range(16)
           )
           assert any(shared_tracks[i][j] for i in range(16) for j in range(i + 1, 16))
-          # Cross-check via independently exposed COLMAP 3D track elements.
+          # Use the EXACT native TrackElement.point2D_idx to identify
+          # a measured image pixel. A camera may contain several 2D
+          # observations of one 3D ID; treating that ID as unique failed
+          # on the actual 16-photo reconstruction. Keep distinct 3D IDs
+          # for shared-track counts and select the lowest native point2D
+          # index as an explicit, deterministic representative per camera.
           camera_indices = {
               int(frame["image_id"]): i for i, frame in enumerate(ordered_frames)
           }
           by_track = [[0] * 16 for _ in range(16)]
-          for point in model.points3D.values():
-              members = {
-                  camera_indices[int(e.image_id)]
-                  for e in point.track.elements
-                  if int(e.image_id) in camera_indices
-              }
+          # Complete source-measured tracks; the WebGL pairwise preview
+          # remains a bounded sample of eight shared points.
+          native_observation_rows = []
+          pixels_by_camera = [{} for _ in range(16)]
+          pixel_index_by_camera = [{} for _ in range(16)]
+          for point_id, point in model.points3D.items():
+              point_id = int(point_id)
+              members = set()
+              for element in point.track.elements:
+                  image_id = int(element.image_id)
+                  if image_id not in camera_indices:
+                      continue
+                  camera_index = camera_indices[image_id]
+                  members.add(camera_index)
+                  point2d_index = int(element.point2D_idx)
+                  observation = model.image(image_id).point2D(point2d_index)
+                  assert observation.has_point3D()
+                  assert int(observation.point3D_id) == point_id
+                  xy = np.asarray(observation.xy, dtype=np.float64)
+                  assert xy.shape == (2,) and np.isfinite(xy).all()
+                  xyz = np.asarray(point.xyz, dtype=np.float64)
+                  error = float(point.error)
+                  assert xyz.shape == (3,) and np.isfinite(xyz).all()
+                  assert np.isfinite(error) and error >= 0
+                  frame = ordered_frames[camera_index]
+                  assert 0 <= xy[0] < frame["image_width"]
+                  assert 0 <= xy[1] < frame["image_height"]
+                  native_observation_rows.append((
+                      point_id, image_id, frame["image_name"], frame["image_sha256"],
+                      point2d_index, float(xy[0]), float(xy[1]),
+                      *(float(value) for value in xyz), error,
+                  ))
+                  previous = pixel_index_by_camera[camera_index].get(point_id)
+                  if previous is None or point2d_index < previous:
+                      pixel_index_by_camera[camera_index][point_id] = point2d_index
+                      pixels_by_camera[camera_index][point_id] = [
+                          float(value) for value in xy
+                      ]
               for i in members:
                   for j in members:
                       by_track[i][j] += 1
           assert by_track == shared_tracks
-          # Real native 2D feature measurements for each 3D point/camera.
-          # These are IN-SAMPLE image pixels, not rendered/reprojected pixels.
-          pixels_by_camera = []
-          for frame in ordered_frames:
-              measured = {}
-              for observation in model.image(frame["image_id"]).points2D:
-                  if not observation.has_point3D():
-                      continue
-                  point_id = int(observation.point3D_id)
-                  xy = np.asarray(observation.xy, dtype=np.float64)
-                  assert xy.shape == (2,) and np.isfinite(xy).all()
-                  assert point_id not in measured
-                  measured[point_id] = [float(v) for v in xy]
-              assert set(measured) == observed_ids[len(pixels_by_camera)]
-              pixels_by_camera.append(measured)
+          assert len(native_observation_rows) == sum(
+              frame["triangulated_2d_observations"] for frame in ordered_frames
+          )
+          assert len({
+              (row[1], row[4]) for row in native_observation_rows
+          }) == len(native_observation_rows)
+          assert all(
+              set(measured) == expected
+              for measured, expected in zip(pixels_by_camera, observed_ids, strict=True)
+          )
           # Only real PyCOLMAP 3D points observed by BOTH cameras are sampled.
           # Sorted point IDs make a bounded, deterministic spatial overlay.
           sampled_shared_points = {}
@@ -643,10 +676,24 @@ jobs:
                   "counts": shared_tracks,
                   "samples": sampled_shared_points,
                   "sample_limit_per_distinct_pair": 8,
+                  "pixel_sample_rule": "lowest_native_track_point2D_idx_per_camera",
                   "measurement": "common_triangulated_3d_point_ids_in_sample",
               },
           }
           out = Path(os.environ["GITHUB_WORKSPACE"])
+          track_csv = out / "wre-real16-native-2d3d-tracks.csv"
+          with track_csv.open("x", encoding="utf-8", newline="") as stream:
+              writer = csv.writer(stream, lineterminator="\n")
+              writer.writerow((
+                  "point3d_id", "image_id", "image_name", "image_sha256",
+                  "point2d_idx", "pixel_x", "pixel_y", "x", "y", "z",
+                  "in_sample_error_px",
+              ))
+              writer.writerows(sorted(
+                  native_observation_rows, key=lambda row: (row[0], row[1], row[4])
+              ))
+          print("EXPORTED ACTUAL NATIVE SFM TRACK OBSERVATIONS:",
+                len(native_observation_rows), "for", len(model.points3D), "3D landmarks")
           (out / "wre-real16-camera-poses.json").write_text(
               json.dumps(descriptor, indent=2, sort_keys=True, allow_nan=False) + "\n"
           )
@@ -1015,8 +1062,10 @@ jobs:
           test -s wre-real16-observed-rgb.ply
           test -s wre-real16-sfm-quality.json
           .venv/bin/python -I - <<'PY'
+          import csv
           import hashlib
           import json
+          import math
           from pathlib import Path
 
           quality = json.loads(Path("wre-real16-sfm-quality.json").read_text(encoding="utf-8"))
@@ -1026,10 +1075,51 @@ jobs:
           assert poses["schema"] == "wre.experimental.native_cpu_colmap_registered_cameras.v1"
           assert poses["registered_views"] == quality["geometry_quality"]["registered_views"]
           assert poses["source_dataset_commit"] == quality["source_dataset_commit"]
+          with Path("wre-real16-native-2d3d-tracks.csv").open(
+              encoding="utf-8", newline=""
+          ) as stream:
+              tracks = list(csv.DictReader(stream))
+          cameras = {int(c["image_id"]): c for c in poses["cameras"]}
+          assert len(cameras) == 16
+          assert len(tracks) == quality["geometry_quality"]["track_observations"]
+          assert len(tracks) == sum(
+              c["triangulated_2d_observations"] for c in cameras.values()
+          )
+          assert len({(int(r["image_id"]), int(r["point2d_idx"])) for r in tracks}) == len(tracks)
+          assert len({int(r["point3d_id"]) for r in tracks}) == quality["geometry_quality"]["sparse_points3d"]
+          indexed = {}
+          for row in tracks:
+              c = cameras[int(row["image_id"])]
+              assert row["image_name"] == c["image_name"]
+              assert row["image_sha256"] == c["image_sha256"]
+              assert 0 <= float(row["pixel_x"]) < c["image_width"]
+              assert 0 <= float(row["pixel_y"]) < c["image_height"]
+              assert int(row["point3d_id"]) > 0 and int(row["point2d_idx"]) >= 0
+              assert all(
+                  math.isfinite(float(row[k]))
+                  for k in ("x", "y", "z", "in_sample_error_px")
+              )
+              assert float(row["in_sample_error_px"]) >= 0
+              indexed.setdefault((int(row["image_id"]), int(row["point3d_id"])), []).append(row)
+          ordered = sorted(cameras.values(), key=lambda c: c["image_name"])
+          # Independently compare EVERY displayed sample against full native
+          # track observations, not another copy of the exported pair JSON.
+          for pair, points in poses["pairwise_shared_sfm_tracks"]["samples"].items():
+              left, right = (int(v) for v in pair.split(":"))
+              for point in points:
+                  for camera_index, pixel in ((left, point[6:8]), (right, point[8:10])):
+                      image_id = int(ordered[camera_index]["image_id"])
+                      candidates = indexed[(image_id, int(point[0]))]
+                      selected = min(candidates, key=lambda r: int(r["point2d_idx"]))
+                      assert all(
+                          abs(float(selected[key]) - float(val)) < 1e-9
+                          for key, val in zip(("pixel_x", "pixel_y"), pixel, strict=True)
+                      )
           files = (
               "wre-real16-observed-rgb.ply",
               "wre-real16-sfm-quality.json",
               "wre-real16-camera-poses.json",
+              "wre-real16-native-2d3d-tracks.csv",
               "wre-real16-camera-centers.ply",
               "wre-real16-observed-rgb-LICENSE.txt",
               "wre-real16-early-gltf/ply/point_cloud_0.ply",
@@ -1064,6 +1154,7 @@ jobs:
             wre-real16-observed-rgb.ply
             wre-real16-sfm-quality.json
             wre-real16-camera-poses.json
+            wre-real16-native-2d3d-tracks.csv
             wre-real16-camera-centers.ply
             wre-real16-observed-rgb-LICENSE.txt
             wre-real16-early-gltf/ply/point_cloud_0.ply
@@ -1183,6 +1274,7 @@ jobs:
               "wre-real16-viewable-scene-receipt.json",
               "wre-real16-observed-rgb-LICENSE.txt",
               "wre-real16-camera-poses.json",
+              "wre-real16-native-2d3d-tracks.csv",
           ):
               shutil.copyfile(name, output / name)
 
@@ -1346,6 +1438,7 @@ jobs:
           <p>Scene SHA-256: WRE_SCENE_SHA256</p>
           <p><a download href="./wre-real16-viewable-scene.glb">Download GLB</a>
           · <a download href="./wre-real16-camera-poses.json">Camera poses</a>
+          · <a download href="./wre-real16-native-2d3d-tracks.csv">All measured 2D/3D tracks (CSV)</a>
           · <a download href="./wre-real16-sfm-quality.json">SfM quality evidence</a>
           · <a href="./wre-real16-viewable-scene-receipt.json">Provenance</a></p>
           <p>Offline: extract the archive and run
