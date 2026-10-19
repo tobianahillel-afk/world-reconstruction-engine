@@ -231,7 +231,6 @@ def test_gsplat_reference_source_git_pins_are_the_reviewed_upstream_identity() -
     )
 
 
-
 @pytest.mark.parametrize("tampered", (False, True))
 def test_only_verified_trainer_python_is_staged_for_execution(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tampered: bool
