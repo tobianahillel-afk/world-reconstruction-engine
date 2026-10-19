@@ -1378,7 +1378,8 @@ def test_external_trainer_rejects_self_hash_receipt_without_repo_approval(
     receipt.write_bytes(b'{"source_revisions": "caller-claimed"}')
     unapproved_digest = hashlib.sha256(receipt.read_bytes()).hexdigest()
     monkeypatch.setattr(
-        baseline_module, "verify_gsplat_static_appearance_matching_capture_metadata",
+        baseline_module,
+        "verify_gsplat_static_appearance_matching_capture_metadata",
         lambda *_: (),
     )
     monkeypatch.setattr(
