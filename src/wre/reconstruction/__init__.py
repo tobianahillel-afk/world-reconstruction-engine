@@ -362,8 +362,6 @@ from wre.reconstruction.open3d_surface import (
 from wre.reconstruction.static_appearance_baseline import (
     GsplatStaticAppearanceAdapter,
     assemble_verified_gsplat_static_appearance_result,
-    export_verified_gsplat_rgb_centers_glb,
-    export_verified_gsplat_rgb_centers_ply,
     reconstruct_gsplat_static_appearance,
     run_gsplat_reference_training,
     verify_gsplat_fused_ssim_reference_sources,
@@ -700,8 +698,6 @@ __all__ = [
     "evaluate_geometry_consensus",
     "evaluate_surface_suitability",
     "execute_da3_base_preview",
-    "export_verified_gsplat_rgb_centers_glb",
-    "export_verified_gsplat_rgb_centers_ply",
     "extract_colmap_features",
     "geometry_semantics",
     "import_colmap_reconstruction",
