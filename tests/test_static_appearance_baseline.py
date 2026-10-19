@@ -1397,31 +1397,56 @@ def test_external_gsplat_runner_rejects_untrusted_lpips_cache_before_process(
 
 @pytest.mark.skipif(os.name != "posix", reason="smoke executable uses POSIX shebang")
 @pytest.mark.parametrize(
-    ("runtime_version", "visible_cuda", "should_run"),
-    (("1.5.3", True, True), ("0.9.0", True, False), ("1.5.3", False, False)),
+    (
+        "runtime_version",
+        "visible_cuda",
+        "torch_version",
+        "cuda_version",
+        "numpy_version",
+        "should_run",
+    ),
+    (
+        ("1.5.3", True, "2.4.0+cu124", "12.4", "1.26.4", True),
+        ("0.9.0", True, "2.4.0+cu124", "12.4", "1.26.4", False),
+        ("1.5.3", False, "2.4.0+cu124", "12.4", "1.26.4", False),
+        ("1.5.3", True, "2.5.0+cu124", "12.4", "1.26.4", False),
+        ("1.5.3", True, "2.4.0+cu124", "12.1", "1.26.4", False),
+        ("1.5.3", True, "2.4.0+cu124", "12.4", "2.5.3", False),
+    ),
 )
 def test_reference_trainer_child_enforces_runtime_version_and_cuda(
-    tmp_path: Path, runtime_version: str, visible_cuda: bool, should_run: bool
+    tmp_path: Path,
+    runtime_version: str,
+    visible_cuda: bool,
+    torch_version: str,
+    cuda_version: str,
+    numpy_version: str,
+    should_run: bool,
 ) -> None:
-    """Real CPU Python subprocess exercising child logic with fake GPU modules.
+    """Real CPU subprocess checks exact runtime pins using synthetic modules.
 
-    No PyTorch, gsplat binary, CUDA kernels, or reference trainer are executed.
+    PyTorch, NumPy, CUDA kernels, and real training are NOT executed here.
     """
     script = (
-        "import sys, types\n"
-        "torch = types.ModuleType('torch')\n"
+        "import sys, types\\n"
+        "torch = types.ModuleType('torch')\\n"
+        f"torch.__version__ = {torch_version!r}\\n"
+        f"torch.version = types.SimpleNamespace(cuda={cuda_version!r})\\n"
         f"torch.cuda = types.SimpleNamespace(is_available=lambda: {visible_cuda!r}, "
-        f"device_count=lambda: {1 if visible_cuda else 0})\n"
-        "torch.hub = types.SimpleNamespace(download_url_to_file=lambda *a, **kw: None)\n"
-        "sys.modules['torch'] = torch\n"
-        "gsplat = types.ModuleType('gsplat')\n"
-        f"gsplat.__version__ = {runtime_version!r}\n"
-        "sys.modules['gsplat'] = gsplat\n"
-        "trainer = types.ModuleType('simple_trainer')\n"
-        "trainer.Config = lambda **kw: kw\n"
-        "trainer.main = lambda *a: print('runner-stub-executed')\n"
-        "sys.modules['simple_trainer'] = trainer\n"
-        f"exec({baseline_module._GSPLAT_TRAINER_CHILD!r})\n"
+        f"device_count=lambda: {1 if visible_cuda else 0})\\n"
+        "torch.hub = types.SimpleNamespace(download_url_to_file=lambda *a, **kw: None)\\n"
+        "sys.modules['torch'] = torch\\n"
+        "numpy = types.ModuleType('numpy')\\n"
+        f"numpy.__version__ = {numpy_version!r}\\n"
+        "sys.modules['numpy'] = numpy\\n"
+        "gsplat = types.ModuleType('gsplat')\\n"
+        f"gsplat.__version__ = {runtime_version!r}\\n"
+        "sys.modules['gsplat'] = gsplat\\n"
+        "trainer = types.ModuleType('simple_trainer')\\n"
+        "trainer.Config = lambda **kw: kw\\n"
+        "trainer.main = lambda *a: print('runner-stub-executed')\\n"
+        "sys.modules['simple_trainer'] = trainer\\n"
+        f"exec({baseline_module._GSPLAT_TRAINER_CHILD!r})\\n"
     )
     completed = baseline_module.subprocess.run(
         [sys.executable, "-I", "-c", script, str(tmp_path)],
@@ -1439,6 +1464,7 @@ def test_reference_trainer_child_enforces_runtime_version_and_cuda(
         assert (
             b"runtime version differs" in completed.stderr
             or b"requires exactly one visible CUDA GPU" in completed.stderr
+            or b"requires pinned Torch/CUDA/NumPy runtime" in completed.stderr
         )
 
 

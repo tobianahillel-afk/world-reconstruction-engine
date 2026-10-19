@@ -1796,6 +1796,16 @@ def build_gsplat_reference_trainer_path_overrides(
 _GSPLAT_TRAINER_CHILD = """import json
 import sys
 import torch
+import numpy
+
+# The external native extension closure is pinned separately from WRE core.
+# Refuse incompatible Torch/CUDA/NumPy combinations before importing trainer code.
+if (
+    torch.__version__ != "2.4.0+cu124"
+    or torch.version.cuda != "12.4"
+    or numpy.__version__ != "1.26.4"
+):
+    raise RuntimeError("gsplat reference training requires pinned Torch/CUDA/NumPy runtime")
 
 # Upstream constructs LPIPS/AlexNet even when evaluation is disabled.
 # Require pretrained weights to be provisioned in this runtime's torch cache.
