@@ -46,6 +46,7 @@ from wre.domain.producer_identity import ArtifactProducerIdentity
 from wre.domain.source_photometry import SourcePhotometryInterpretationStatus
 from wre.reconstruction.colmap_canonical_geometry import (
     CanonicalColmapSparseModel,
+    _load_pycolmap,
     _verified_native_model_path,
     canonicalize_colmap_sparse_model,
     colmap_sparse_model_content_identity,
@@ -1903,11 +1904,15 @@ def run_gsplat_reference_training(
         )
     # gsplat trains on the exact native COLMAP poses/points, not on an
     # independently refined WRE frame. Reject mismatches before CUDA launch.
-    verify_gsplat_static_appearance_native_geometry(
+    # Require connected reciprocal Point3D tracks before allocating CUDA time.
+    # This existing gate ALSO verifies exact native camera/geometry identity.
+    verify_gsplat_static_appearance_shared_scene_tracks(
         request,
         source,
+        assessments,
         features=features,
         expected_environment=expected_environment,
+        module=_load_pycolmap(),
     )
     verify_gsplat_static_appearance_staged_dataset(request, source, staged)
     source_directory = _safe_root(source_root, "gsplat pinned reference checkout")

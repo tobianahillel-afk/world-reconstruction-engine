@@ -1037,6 +1037,16 @@ def _gsplat_output(
     return output, profile, ref
 
 
+def _stub_reference_trainer_track_gate(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Only CPU trainer orchestration tests stub the separately tested COLMAP gate."""
+    monkeypatch.setattr(baseline_module, "_load_pycolmap", lambda: object())
+    monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_shared_scene_tracks",
+        lambda *_args, **_kwargs: (),
+    )
+
+
 def test_reference_runner_rejects_missing_photometry_before_any_cuda(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1101,6 +1111,7 @@ def test_reference_runner_accepts_real_two_view_capture_evidence_before_native_g
     monkeypatch.setattr(
         baseline_module, "verify_gsplat_static_appearance_native_geometry", reached_native_gate
     )
+    monkeypatch.setattr(baseline_module, "_load_pycolmap", lambda: object())
     monkeypatch.setattr(
         baseline_module.subprocess,
         "run",
@@ -1120,6 +1131,68 @@ def test_reference_runner_accepts_real_two_view_capture_evidence_before_native_g
             output_root=output,
             artifact_ref=ArtifactRef(
                 ArtifactId("appearance:gsplat:photo-evidence"), APPEARANCE_MODEL_ARTIFACT_KIND
+            ),
+            producer=producer,
+            cuda_device_index=0,
+            timeout_seconds=30,
+        )
+    assert not output.exists()
+
+
+def test_reference_trainer_refuses_disconnected_native_tracks_before_cuda(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Real shared-track gate rejects disconnected images before a GPU launch."""
+    request, source = _two_view_parts(tmp_path)
+    assessments = _matching_shared_track_photometry(source)
+    features, env = _native_feature_evidence(tmp_path)
+    profile = GsplatStaticAppearanceTrainingProfile(max_steps=20)
+    producer = ArtifactProducerIdentity(
+        producer=ProducerRef(
+            implementation="gsplat.examples.simple_trainer",
+            version="1.5.3",
+            revision=GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION,
+        ),
+        configuration=ConfigurationIdentity(sha256=profile.configuration_sha256),
+        model=ModelIdentity(
+            name="gsplat",
+            version="1.5.3",
+            revision=GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION,
+        ),
+    )
+    python = tmp_path / "external-python"
+    python.write_bytes(b"fake interpreter")
+    output = tmp_path / "must-not-be-created"
+    monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_native_geometry",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        baseline_module,
+        "_load_pycolmap",
+        lambda: _shared_track_fixture(track_image_ids=(1,)),
+    )
+    monkeypatch.setattr(
+        baseline_module.subprocess,
+        "run",
+        lambda *_args, **_kwargs: pytest.fail("disconnected scene launched CUDA trainer"),
+    )
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="do not connect"):
+        run_gsplat_reference_training(
+            request=request,
+            source=source,
+            assessments=assessments,
+            staged=cast(baseline_module.GsplatStaticAppearanceStagedDataset, object()),
+            profile=profile,
+            features=features,
+            expected_environment=env,
+            source_root=tmp_path,
+            python_executable=python,
+            output_root=output,
+            artifact_ref=ArtifactRef(
+                ArtifactId("appearance:gsplat:disconnected"),
+                APPEARANCE_MODEL_ARTIFACT_KIND,
             ),
             producer=producer,
             cuda_device_index=0,
@@ -1169,11 +1242,7 @@ def test_one_call_gsplat_reconstruction_stages_real_files_and_returns_candidate(
         return SimpleNamespace(returncode=0)
 
     monkeypatch.setattr(baseline_module.subprocess, "run", fake_trainer)
-    monkeypatch.setattr(
-        baseline_module,
-        "verify_gsplat_static_appearance_native_geometry",
-        lambda *_args, **_kwargs: None,
-    )
+    _stub_reference_trainer_track_gate(monkeypatch)
     lpips = tmp_path / "synthetic-offline-alexnet.pth"
     lpips.write_bytes(b"test-only-not-actual-weights")
     lpips_sha = hashlib.sha256(lpips.read_bytes()).hexdigest()
@@ -1268,11 +1337,7 @@ def test_external_gsplat_runner_builds_complete_canonical_candidate_with_process
         return SimpleNamespace(returncode=0)
 
     monkeypatch.setattr(baseline_module.subprocess, "run", fake_cuda_process)
-    monkeypatch.setattr(
-        baseline_module,
-        "verify_gsplat_static_appearance_native_geometry",
-        lambda *_args, **_kwargs: None,
-    )
+    _stub_reference_trainer_track_gate(monkeypatch)
     result = run_gsplat_reference_training(
         request=request,
         source=source,
@@ -1342,11 +1407,7 @@ def test_reference_trainer_rejects_output_within_pinned_source_checkout(
     monkeypatch.setattr(
         baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
     )
-    monkeypatch.setattr(
-        baseline_module,
-        "verify_gsplat_static_appearance_native_geometry",
-        lambda *_args, **_kwargs: None,
-    )
+    _stub_reference_trainer_track_gate(monkeypatch)
     monkeypatch.setattr(
         baseline_module.subprocess,
         "run",
@@ -1409,11 +1470,7 @@ def test_external_gsplat_runner_rejects_untrusted_lpips_cache_before_process(
     monkeypatch.setattr(
         baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
     )
-    monkeypatch.setattr(
-        baseline_module,
-        "verify_gsplat_static_appearance_native_geometry",
-        lambda *_args, **_kwargs: None,
-    )
+    _stub_reference_trainer_track_gate(monkeypatch)
     monkeypatch.setattr(
         baseline_module.subprocess,
         "run",
@@ -1563,11 +1620,7 @@ def test_external_gsplat_runner_spawns_real_process_and_assembles_appearance(
     monkeypatch.setattr(
         baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
     )
-    monkeypatch.setattr(
-        baseline_module,
-        "verify_gsplat_static_appearance_native_geometry",
-        lambda *_args, **_kwargs: None,
-    )
+    _stub_reference_trainer_track_gate(monkeypatch)
     lpips = tmp_path / "synthetic-offline-alexnet.pth"
     lpips.write_bytes(b"test-only-not-actual-weights")
     lpips_sha = hashlib.sha256(lpips.read_bytes()).hexdigest()
@@ -1626,6 +1679,7 @@ def test_real_trainer_refuses_foreign_native_geometry_before_cuda_launch(
         "verify_gsplat_static_appearance_native_geometry",
         reject_foreign_geometry,
     )
+    monkeypatch.setattr(baseline_module, "_load_pycolmap", lambda: object())
     monkeypatch.setattr(baseline_module.subprocess, "run", must_not_train)
     with pytest.raises(GsplatStaticAppearancePreflightError, match="native COLMAP camera poses"):
         run_gsplat_reference_training(
@@ -1713,11 +1767,7 @@ def test_external_gsplat_runner_rejects_failure_or_missing_output(
         "run",
         lambda *_args, **_kwargs: SimpleNamespace(returncode=return_code),
     )
-    monkeypatch.setattr(
-        baseline_module,
-        "verify_gsplat_static_appearance_native_geometry",
-        lambda *_args, **_kwargs: None,
-    )
+    _stub_reference_trainer_track_gate(monkeypatch)
     lpips = tmp_path / "synthetic-offline-alexnet.pth"
     lpips.write_bytes(b"test-only-not-actual-weights")
     lpips_sha = hashlib.sha256(lpips.read_bytes()).hexdigest()
