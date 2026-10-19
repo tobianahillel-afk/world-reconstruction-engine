@@ -182,6 +182,7 @@ def test_gsplat_concrete_adapter_implements_v2l18_2_protocol(
     monkeypatch.setattr(baseline_module, "reconstruct_gsplat_static_appearance", fake_reconstruct)
     adapter: StaticAppearanceCandidateAdapter = baseline_module.GsplatStaticAppearanceAdapter(
         source=cast(baseline_module.GsplatStaticAppearancePreflightSource, object()),
+        assessments=(),
         dataset_root=tmp_path / "dataset",
         profile=baseline_module.GsplatStaticAppearanceTrainingProfile(max_steps=20),
         features=cast(ColmapFeatureExtractionResult, object()),
@@ -200,6 +201,7 @@ def test_gsplat_concrete_adapter_implements_v2l18_2_protocol(
     assert adapter.derive_candidate(request) is expected
     assert context["request"] is request
     assert context["source"] is not None
+    assert context["assessments"] == ()
     assert context["profile"] == adapter.profile
     assert context["features"] is adapter.features
     assert context["expected_environment"] is adapter.expected_environment

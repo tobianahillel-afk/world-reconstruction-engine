@@ -2082,6 +2082,7 @@ class GsplatStaticAppearanceAdapter:
     """
 
     source: GsplatStaticAppearancePreflightSource
+    assessments: tuple[PhotometricCompatibilityAssessment, ...]
     dataset_root: Path
     profile: GsplatStaticAppearanceTrainingProfile
     features: ColmapFeatureExtractionResult
@@ -2103,6 +2104,7 @@ class GsplatStaticAppearanceAdapter:
         return reconstruct_gsplat_static_appearance(
             request=request,
             source=self.source,
+            assessments=self.assessments,
             dataset_root=self.dataset_root,
             profile=self.profile,
             features=self.features,
