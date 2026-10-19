@@ -1223,7 +1223,9 @@ def test_external_gsplat_runner_rejects_untrusted_lpips_cache_before_process(
             lpips_alexnet_weights=weight_file,
             lpips_alexnet_sha256=expected,
         )
-    assert not (output / "wre-reference-training.log").exists()
+    # Missing, unpinned or corrupted weights cannot reserve a workspace,
+    # otherwise a corrected retry using the same output_root would fail.
+    assert not output.exists()
 
 
 def test_external_gsplat_runner_requires_offline_lpips_before_cuda(
