@@ -1322,6 +1322,45 @@ def test_one_call_gsplat_reconstruction_does_not_stage_false_producer(
     assert not staged.dataset_root.exists()
 
 
+@pytest.mark.parametrize(
+    ("manifest_bytes", "approved_sha256", "message"),
+    (
+        (None, None, "requires an approved external runtime manifest"),
+        (b"{}", "0" * 64, "manifest digest differs"),
+    ),
+)
+def test_external_trainer_child_rejects_unapproved_runtime_before_import(
+    tmp_path: Path,
+    manifest_bytes: bytes | None,
+    approved_sha256: str | None,
+    message: str,
+) -> None:
+    """Real isolated Python subprocess; MUST reject before importing CUDA packages."""
+    child = baseline_module._GSPLAT_TRAINER_CHILD
+    ast.parse(child, feature_version=(3, 10))
+    receipt = tmp_path / "native-runtime.json"
+    if manifest_bytes is not None:
+        receipt.write_bytes(manifest_bytes)
+    completed = baseline_module.subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-c",
+            child,
+            str(tmp_path),
+            str(receipt) if manifest_bytes is not None else "",
+            approved_sha256 or "",
+        ],
+        input=b"{}",
+        capture_output=True,
+        timeout=20,
+        check=False,
+    )
+    assert completed.returncode != 0
+    assert message.encode() in completed.stderr
+    assert b"ModuleNotFoundError: No module named 'torch'" not in completed.stderr
+
+
 def test_external_gsplat_runner_builds_complete_canonical_candidate_with_process_stub(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1344,6 +1383,11 @@ def test_external_gsplat_runner_builds_complete_canonical_candidate_with_process
     weights = tmp_path / "trusted-local-alexnet.pth"
     weights.write_bytes(b"offline-test-weights-only-not-a-real-pytorch-state-dict")
     weight_digest = hashlib.sha256(weights.read_bytes()).hexdigest()
+    # Simulated receipt only tests argument wiring. Real child separately
+    # validates an independently approved runtime receipt before Torch import.
+    receipt = tmp_path / "synthetic-native-receipt.json"
+    receipt.write_text('{"test_only": true}')
+    receipt_digest = hashlib.sha256(receipt.read_bytes()).hexdigest()
     monkeypatch.setattr(
         baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
     )
@@ -1374,6 +1418,8 @@ def test_external_gsplat_runner_builds_complete_canonical_candidate_with_process
         timeout_seconds=30,
         lpips_alexnet_weights=weights,
         lpips_alexnet_sha256=weight_digest,
+        runtime_manifest_path=receipt,
+        approved_runtime_manifest_sha256=receipt_digest,
     )
     assert len(calls) == 1
     command, kwargs = calls[0]
@@ -1381,6 +1427,8 @@ def test_external_gsplat_runner_builds_complete_canonical_candidate_with_process
     assert "from simple_trainer import Config, main" in command[3]
     private_imports = output / "wre-pinned-examples"
     assert command[4] == str(private_imports)
+    assert command[5] == str(receipt)
+    assert command[6] == receipt_digest
     assert kwargs["cwd"] == private_imports
     assert (private_imports / "simple_trainer.py").read_bytes() == (
         source_root / "examples" / "simple_trainer.py"
