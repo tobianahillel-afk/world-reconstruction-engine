@@ -1474,8 +1474,7 @@ def test_external_gsplat_runner_rejects_untrusted_lpips_cache_before_process(
     (output / profile.expected_ply_relative_path).unlink()
     (output / "ply").rmdir()
     output.rmdir()
-    reference = tmp_path / "pinned-reference"
-    (reference / "examples").mkdir(parents=True)
+    reference, _ = _reviewed_source_fixture(tmp_path, monkeypatch)
     interpreter = tmp_path / "external-python"
     interpreter.write_bytes(b"stub")
     weight_file = tmp_path / "alexnet.pth"
@@ -1613,8 +1612,7 @@ def test_external_gsplat_runner_spawns_real_process_and_assembles_appearance(
     (output / profile.expected_ply_relative_path).unlink()
     (output / "ply").rmdir()
     output.rmdir()
-    source_root = tmp_path / "pinned-reference"
-    (source_root / "examples").mkdir(parents=True)
+    source_root, _ = _reviewed_source_fixture(tmp_path, monkeypatch)
     runtime = tmp_path / "fake-external-python"
     # A real external child must never inherit unrelated GitHub/cloud secrets.
     monkeypatch.setenv("WRE_PRIVATE_CI_TOKEN", "do-not-leak-to-native-trainer")
