@@ -1565,9 +1565,9 @@ def test_external_gsplat_runner_rejects_untrusted_lpips_cache_before_process(
             lpips_alexnet_weights=provided_weights,
             lpips_alexnet_sha256=expected,
         )
-    assert not (output / "wre-reference-training.log").exists()
-    if invalid in {"missing_hash", "missing_file", "missing_both"}:
-        assert not output.exists()
+    # Bad or unavailable LPIPS weights must not reserve the private output
+    # directory: a valid retry with the same path must remain possible.
+    assert not output.exists()
 
 
 @pytest.mark.skipif(os.name != "posix", reason="smoke executable uses POSIX shebang")
