@@ -1817,7 +1817,7 @@ with receipt_path.open("rb") as stream:
 if hashlib.sha256(receipt_bytes).hexdigest() != sys.argv[3]:
     raise RuntimeError("gsplat runtime manifest digest differs from approved receipt")
 receipt = json.loads(receipt_bytes)
-required_modules = {"torch", "torchvision", "numpy", "gsplat", "fused_ssim", "nerfview", "pycolmap"}
+required_modules = {"torch", "torchvision", "numpy", "gsplat", "fused_ssim", "fused_ssim_cuda", "nerfview", "pycolmap"}
 if (
     receipt.get("schema") != "wre.gsplat.common_runtime_native_files.v1"
     or receipt.get("python") != ".".join(str(n) for n in sys.version_info[:3])
@@ -1876,6 +1876,14 @@ for name in required_modules:
         raise RuntimeError("gsplat imported native module escaped approved environment")
     if origin.relative_to(environment).as_posix() not in verified:
         raise RuntimeError("gsplat native module entrypoint not in approved manifest")
+    # All executable Python and native package files must be in the approved
+    # receipt. Refuse additions, not just mutations of already listed files.
+    if origin.name == "__init__.py":
+        for installed in origin.parent.rglob("*"):
+            if installed.is_file() and installed.suffix.lower() in (".py", ".so", ".pyd", ".dylib"):
+                relative = installed.resolve(strict=True).relative_to(environment).as_posix()
+                if relative not in verified:
+                    raise RuntimeError("gsplat runtime has unapproved importable package files")
 
 import torch
 import numpy
