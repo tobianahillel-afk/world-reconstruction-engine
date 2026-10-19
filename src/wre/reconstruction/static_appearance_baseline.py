@@ -1857,7 +1857,6 @@ def _verify_gsplat_reference_producer(
         )
 
 
-
 def _stage_verified_gsplat_trainer_imports(source_root: Path, private_root: Path) -> Path:
     """Copy only reviewed trainer Python entrypoints into a fresh private import root.
 
