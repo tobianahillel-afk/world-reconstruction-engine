@@ -1911,46 +1911,44 @@ def run_gsplat_reference_training(
         raise GsplatStaticAppearancePreflightError(
             "gsplat external trainer output must be an appearance artifact"
         )
-    # Ownership is intentionally explicit: only WRE's new private output
-    # directory is created, and is not removed when a run fails.
-    output_root.mkdir(mode=0o700)
-    # Upstream Runner instantiates LPIPS/AlexNet even without evaluation.
-    # Torchvision expects the standard weight basename in torch.hub's cache.
-    # Supply a trusted, independently SHA-256-pinned local copy; never fetch it.
-    if (lpips_alexnet_weights is None) != (lpips_alexnet_sha256 is None):
+    # The pinned upstream Runner always constructs LPIPS/AlexNet. Without an
+    # explicit offline checkpoint it cannot train; reject before creating any
+    # output or attempting to launch the CUDA interpreter.
+    if lpips_alexnet_weights is None or lpips_alexnet_sha256 is None:
         raise GsplatStaticAppearancePreflightError(
             "gsplat LPIPS offline weights require both a local file and SHA-256"
         )
-    torch_home: Path | None = None
-    if lpips_alexnet_weights is not None:
-        if not isinstance(lpips_alexnet_weights, Path) or not lpips_alexnet_weights.is_file():
-            raise GsplatStaticAppearancePreflightError(
-                "gsplat LPIPS pretrained weight file is unavailable"
-            )
-        if not isinstance(lpips_alexnet_sha256, str) or (
-            len(lpips_alexnet_sha256) != 64
-            or any(char not in "0123456789abcdef" for char in lpips_alexnet_sha256)
-        ):
-            raise GsplatStaticAppearancePreflightError(
-                "gsplat LPIPS pretrained weight digest must be lowercase SHA-256"
-            )
-        torch_home = output_root / "torch-cache"
-        cache = torch_home / "hub" / "checkpoints"
-        cache.mkdir(parents=True, mode=0o700)
-        destination = cache / "alexnet-owt-7be5be79.pth"
-        try:
-            shutil.copyfile(lpips_alexnet_weights, destination)
-            with destination.open("rb") as checked:
-                digest = hashlib.file_digest(checked, "sha256").hexdigest()
-        except OSError as exc:
-            raise GsplatStaticAppearancePreflightError(
-                "gsplat LPIPS offline weights could not be staged"
-            ) from exc
-        if digest != lpips_alexnet_sha256:
-            destination.unlink(missing_ok=True)
-            raise GsplatStaticAppearancePreflightError(
-                "gsplat LPIPS offline pretrained weight SHA-256 mismatch"
-            )
+    if not isinstance(lpips_alexnet_weights, Path) or not lpips_alexnet_weights.is_file():
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat LPIPS pretrained weight file is unavailable"
+        )
+    if not isinstance(lpips_alexnet_sha256, str) or (
+        len(lpips_alexnet_sha256) != 64
+        or any(char not in "0123456789abcdef" for char in lpips_alexnet_sha256)
+    ):
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat LPIPS pretrained weight digest must be lowercase SHA-256"
+        )
+    # The private directory is created only after mandatory dependency inputs
+    # have passed their inexpensive boundary checks.
+    output_root.mkdir(mode=0o700)
+    torch_home = output_root / "torch-cache"
+    cache = torch_home / "hub" / "checkpoints"
+    cache.mkdir(parents=True, mode=0o700)
+    destination = cache / "alexnet-owt-7be5be79.pth"
+    try:
+        shutil.copyfile(lpips_alexnet_weights, destination)
+        with destination.open("rb") as checked:
+            digest = hashlib.file_digest(checked, "sha256").hexdigest()
+    except OSError as exc:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat LPIPS offline weights could not be staged"
+        ) from exc
+    if digest != lpips_alexnet_sha256:
+        destination.unlink(missing_ok=True)
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat LPIPS offline pretrained weight SHA-256 mismatch"
+        )
     log_path = output_root / "wre-reference-training.log"
     # The external interpreter executes third-party native code. Never
     # forward unrelated credentials (e.g. CI tokens or cloud keys).

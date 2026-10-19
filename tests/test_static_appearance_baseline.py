@@ -1130,6 +1130,9 @@ def test_one_call_gsplat_reconstruction_stages_real_files_and_returns_candidate(
         "verify_gsplat_static_appearance_native_geometry",
         lambda *_args, **_kwargs: None,
     )
+    lpips = tmp_path / "synthetic-offline-alexnet.pth"
+    lpips.write_bytes(b"test-only-not-actual-weights")
+    lpips_sha = hashlib.sha256(lpips.read_bytes()).hexdigest()
     result = reconstruct_gsplat_static_appearance(
         request=request,
         source=source,
@@ -1145,6 +1148,8 @@ def test_one_call_gsplat_reconstruction_stages_real_files_and_returns_candidate(
         producer=producer,
         cuda_device_index=0,
         timeout_seconds=30,
+        lpips_alexnet_weights=lpips,
+        lpips_alexnet_sha256=lpips_sha,
     )
     assert len(subprocess_calls) == 1
     assert result.request is request
@@ -1273,7 +1278,7 @@ def test_external_gsplat_runner_builds_complete_canonical_candidate_with_process
     assert (output / "wre-reference-training.log").exists()
 
 
-@pytest.mark.parametrize("invalid", ("mismatch", "missing_hash", "missing_file"))
+@pytest.mark.parametrize("invalid", ("mismatch", "missing_hash", "missing_file", "missing_both"))
 def test_external_gsplat_runner_rejects_untrusted_lpips_cache_before_process(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, invalid: str
 ) -> None:
@@ -1302,6 +1307,10 @@ def test_external_gsplat_runner_rejects_untrusted_lpips_cache_before_process(
         expected = None
     if invalid == "missing_file":
         weight_file.unlink()
+    provided_weights: Path | None = weight_file
+    if invalid == "missing_both":
+        provided_weights = None
+        expected = None
     monkeypatch.setattr(
         baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
     )
@@ -1331,10 +1340,12 @@ def test_external_gsplat_runner_rejects_untrusted_lpips_cache_before_process(
             producer=producer,
             cuda_device_index=0,
             timeout_seconds=30,
-            lpips_alexnet_weights=weight_file,
+            lpips_alexnet_weights=provided_weights,
             lpips_alexnet_sha256=expected,
         )
     assert not (output / "wre-reference-training.log").exists()
+    if invalid in {"missing_hash", "missing_file", "missing_both"}:
+        assert not output.exists()
 
 
 @pytest.mark.skipif(os.name != "posix", reason="smoke executable uses POSIX shebang")
@@ -1436,6 +1447,9 @@ def test_external_gsplat_runner_spawns_real_process_and_assembles_appearance(
         "verify_gsplat_static_appearance_native_geometry",
         lambda *_args, **_kwargs: None,
     )
+    lpips = tmp_path / "synthetic-offline-alexnet.pth"
+    lpips.write_bytes(b"test-only-not-actual-weights")
+    lpips_sha = hashlib.sha256(lpips.read_bytes()).hexdigest()
     result = run_gsplat_reference_training(
         request=request,
         source=source,
@@ -1451,6 +1465,8 @@ def test_external_gsplat_runner_spawns_real_process_and_assembles_appearance(
         producer=producer,
         cuda_device_index=0,
         timeout_seconds=15,
+        lpips_alexnet_weights=lpips,
+        lpips_alexnet_sha256=lpips_sha,
     )
     assert result.candidate.artifact_ref == artifact_ref
     assert result.candidate.source_geometry is request.source_geometry
@@ -1581,6 +1597,9 @@ def test_external_gsplat_runner_rejects_failure_or_missing_output(
         "verify_gsplat_static_appearance_native_geometry",
         lambda *_args, **_kwargs: None,
     )
+    lpips = tmp_path / "synthetic-offline-alexnet.pth"
+    lpips.write_bytes(b"test-only-not-actual-weights")
+    lpips_sha = hashlib.sha256(lpips.read_bytes()).hexdigest()
     with pytest.raises(GsplatStaticAppearancePreflightError):
         run_gsplat_reference_training(
             request=request,
