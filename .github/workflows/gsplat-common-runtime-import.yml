@@ -370,6 +370,34 @@ jobs:
               completed.stderr.decode(errors="replace")[-4000:]
           )
           print("Approved live native manifest hashes and imports matched; no CUDA device available.")
+          # Negative control: a NEW importable Python file under a reviewed
+          # package is untrusted even if all previously listed hashes match.
+          # An entrypoint-only or .so-only receipt would incorrectly accept it.
+          import importlib.util
+          torch_spec = importlib.util.find_spec("torch")
+          assert torch_spec is not None and torch_spec.origin is not None
+          rogue = Path(torch_spec.origin).parent / "wre_unapproved_trainer_import.py"
+          assert not rogue.exists()
+          try:
+              rogue.write_text("raise RuntimeError('unapproved python executed')\n")
+              rejected = subprocess.run(
+                  [os.environ["COMMON_PYTHON"], "-I", "-c", child,
+                   str(examples), str(manifest), expected_sha256],
+                  input=b"{}",
+                  capture_output=True,
+                  cwd=examples,
+                  env=environment,
+                  timeout=120,
+                  check=False,
+              )
+              assert rejected.returncode != 0
+              assert b"unapproved importable package files" in rejected.stderr, (
+                  rejected.stderr.decode(errors="replace")[-4000:]
+              )
+              assert b"unapproved python executed" not in rejected.stderr
+          finally:
+              rogue.unlink(missing_ok=True)
+          print("Tampered native package with an added Python file: rejected before CUDA.")
           print("No GPU kernel, Gaussian optimizer or training executed.")
           PY
 
