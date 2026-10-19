@@ -614,6 +614,58 @@ jobs:
           print("Same native CPU-hosted Python environment; no GPU or training executed")
           PY
 
+      # This is the import directory used by the REAL external trainer subprocess,
+      # not the complete original upstream checkout. Its eager-import closure
+      # must work in the pinned common native environment before GPU execution.
+      - name: Import WRE private pinned trainer sources in real native interpreter
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PYTHONPATH="$GITHUB_WORKSPACE/src"
+          uv run --locked --no-dev --no-sync --python 3.12.12 python - <<'PY'
+          import os
+          from pathlib import Path
+
+          from wre.reconstruction.static_appearance_baseline import (
+              GsplatStaticAppearanceTrainingProfile,
+              _stage_verified_gsplat_trainer_imports,
+              verify_gsplat_reference_trainer_config_fields,
+          )
+
+          upstream = Path(os.environ["COMMON_SOURCES"]) / "gsplat"
+          root = Path(os.environ["RUNNER_TEMP"]) / "wre-private-trainer-import"
+          root.mkdir(mode=0o700, exist_ok=False)
+          verify_gsplat_reference_trainer_config_fields(
+              upstream, GsplatStaticAppearanceTrainingProfile(max_steps=1)
+          )
+          private = _stage_verified_gsplat_trainer_imports(upstream, root)
+          assert (private / "simple_trainer.py").is_file()
+          assert (private / "datasets" / "colmap.py").is_file()
+          assert not (private / "datasets" / "__init__.py").exists()
+          print("WRE created private import closure from verified pinned source bytes")
+          PY
+          "$COMMON_PYTHON" -I - "$RUNNER_TEMP/wre-private-trainer-import/wre-pinned-examples" <<'PY'
+          import sys
+          from pathlib import Path
+
+          import torch
+
+          assert not torch.cuda.is_available(), "This integration lane is CPU-hosted only"
+          private = Path(sys.argv[1]).resolve(strict=True)
+          sys.path.insert(0, str(private))
+          import simple_trainer
+          from datasets import colmap
+          from simple_trainer import Config, main
+
+          assert Path(simple_trainer.__file__).resolve() == private / "simple_trainer.py"
+          assert Path(colmap.__file__).resolve() == private / "datasets" / "colmap.py"
+          assert callable(main)
+          cfg = Config()
+          assert cfg.camera_model == "pinhole"
+          print("Real native trainer imports from the EXACT WRE private source closure")
+          print("No CUDA device, GPU kernels, model training or scene quality proven")
+          PY
+
       - name: Retain true exporter to WRE materialization artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
