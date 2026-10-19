@@ -1355,7 +1355,7 @@ def test_reference_trainer_rejects_output_within_pinned_source_checkout(
         "run",
         lambda *_args, **_kwargs: pytest.fail("overlapping output launched external trainer"),
     )
-    with pytest.raises(GsplatStaticAppearancePreflightError, match="overlaps.*checkout"):
+    with pytest.raises(GsplatStaticAppearancePreflightError, match=r"overlaps.*checkout"):
         run_gsplat_reference_training(
             request=request,
             source=source,
