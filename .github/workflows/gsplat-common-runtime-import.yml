@@ -200,6 +200,66 @@ jobs:
           print("No CUDA kernel, training, reconstruction, or GPU was executed.")
           PY
 
+      # Execute WRE's exact optional trainer child against the true selected
+      # interpreter, not a mocked subprocess. This runner has no GPU; the
+      # production child MUST refuse before it can train or emit a Gaussian.
+      - name: Run actual WRE trainer child and verify CPU-hosted CUDA refusal
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$COMMON_PYTHON" -I - <<'PY'
+          import ast
+          import os
+          import subprocess
+          from pathlib import Path
+
+          source = Path("src/wre/reconstruction/static_appearance_baseline.py")
+          assignments = [
+              statement for statement in ast.parse(source.read_text()).body
+              if isinstance(statement, ast.Assign)
+              and any(
+                  isinstance(target, ast.Name)
+                  and target.id == "_GSPLAT_TRAINER_CHILD"
+                  for target in statement.targets
+              )
+          ]
+          assert len(assignments) == 1
+          child = ast.literal_eval(assignments[0].value)
+          assert isinstance(child, str)
+          assert "from simple_trainer import Config, main" in child
+
+          source_examples = Path(os.environ["COMMON_SOURCES"]) / "gsplat" / "examples"
+          assert source_examples.is_dir()
+          environment = {
+              key: os.environ[key] for key in ("PATH", "HOME", "LD_LIBRARY_PATH")
+              if key in os.environ
+          }
+          environment.update({
+              "CUDA_VISIBLE_DEVICES": "",
+              "PYTHONNOUSERSITE": "1",
+              "PIP_NO_INDEX": "1",
+          })
+          completed = subprocess.run(
+              [
+                  os.environ["COMMON_PYTHON"], "-I", "-c",
+                  child, str(source_examples),
+              ],
+              input=b"{}",
+              capture_output=True,
+              cwd=source_examples,
+              env=environment,
+              timeout=120,
+              check=False,
+          )
+          assert completed.returncode != 0, "CPU environment unexpectedly executed trainer"
+          assert (
+              b"gsplat reference training requires exactly one visible CUDA GPU"
+              in completed.stderr
+          ), completed.stderr.decode(errors="replace")[-4000:]
+          print("Real pinned WRE trainer child rejected CPU-only native interpreter.")
+          print("No GPU kernel, Gaussian optimization, or training ran.")
+          PY
+
       - name: Record real imported Python and native-extension file hashes
         shell: bash
         run: |
