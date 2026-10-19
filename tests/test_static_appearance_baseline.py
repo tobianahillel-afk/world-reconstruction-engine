@@ -231,6 +231,28 @@ def test_gsplat_reference_source_git_pins_are_the_reviewed_upstream_identity() -
     )
 
 
+
+@pytest.mark.parametrize("tampered", (False, True))
+def test_only_verified_trainer_python_is_staged_for_execution(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tampered: bool
+) -> None:
+    root, data = _reviewed_source_fixture(tmp_path, monkeypatch)
+    (root / "examples" / "viser.py").write_text("raise RuntimeError('injected')", encoding="utf-8")
+    private = tmp_path / "private"
+    private.mkdir()
+    if tampered:
+        (root / "examples" / "simple_trainer.py").write_bytes(b"unreviewed replacement")
+        with pytest.raises(GsplatStaticAppearancePreflightError, match="source changed"):
+            baseline_module._stage_verified_gsplat_trainer_imports(root, private)
+    else:
+        import_root = baseline_module._stage_verified_gsplat_trainer_imports(root, private)
+        assert (import_root / "simple_trainer.py").read_bytes() == data[
+            "examples/simple_trainer.py"
+        ]
+        assert not (import_root / "viser.py").exists()
+        assert sorted(path.name for path in import_root.glob("*.py")) == ["simple_trainer.py"]
+
+
 def test_gsplat_reference_source_gate_verifies_exact_bytes_without_import(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1224,8 +1246,7 @@ def test_one_call_gsplat_reconstruction_stages_real_files_and_returns_candidate(
     shutil.rmtree(output)
     interpreter = tmp_path / "external-python"
     interpreter.write_bytes(b"stub external interpreter")
-    reference = tmp_path / "pinned-reference"
-    (reference / "examples").mkdir(parents=True)
+    reference, _ = _reviewed_source_fixture(tmp_path, monkeypatch)
     monkeypatch.setattr(
         baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
     )
@@ -1318,8 +1339,7 @@ def test_external_gsplat_runner_builds_complete_canonical_candidate_with_process
     (output / profile.expected_ply_relative_path).unlink()
     (output / "ply").rmdir()
     output.rmdir()
-    source_root = tmp_path / "pinned-source"
-    (source_root / "examples").mkdir(parents=True)
+    source_root, _ = _reviewed_source_fixture(tmp_path, monkeypatch)
     runtime = tmp_path / "external-python"
     runtime.write_bytes(b"stub: external runtime explicitly provided")
     weights = tmp_path / "trusted-local-alexnet.pth"
@@ -1360,8 +1380,12 @@ def test_external_gsplat_runner_builds_complete_canonical_candidate_with_process
     command, kwargs = calls[0]
     assert command[:3] == [str(runtime), "-I", "-c"]
     assert "from simple_trainer import Config, main" in command[3]
-    assert command[4] == str(source_root / "examples")
-    assert kwargs["cwd"] == source_root / "examples"
+    private_imports = output / "wre-pinned-examples"
+    assert command[4] == str(private_imports)
+    assert kwargs["cwd"] == private_imports
+    assert (private_imports / "simple_trainer.py").read_bytes() == (
+        source_root / "examples" / "simple_trainer.py"
+    ).read_bytes()
     assert kwargs["env"]["CUDA_VISIBLE_DEVICES"] == "2"
     assert kwargs["env"]["PIP_NO_INDEX"] == "1"
     assert kwargs["env"]["TORCH_HOME"] == str(output / "torch-cache")
@@ -1755,8 +1779,7 @@ def test_external_gsplat_runner_rejects_failure_or_missing_output(
     (output / profile.expected_ply_relative_path).unlink()
     (output / "ply").rmdir()
     output.rmdir()
-    source_root = tmp_path / "upstream"
-    (source_root / "examples").mkdir(parents=True)
+    source_root, _ = _reviewed_source_fixture(tmp_path, monkeypatch)
     runtime = tmp_path / "external-python"
     runtime.write_bytes(b"stub")
     monkeypatch.setattr(
