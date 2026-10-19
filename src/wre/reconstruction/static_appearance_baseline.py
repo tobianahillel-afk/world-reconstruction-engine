@@ -1817,7 +1817,10 @@ with receipt_path.open("rb") as stream:
 if hashlib.sha256(receipt_bytes).hexdigest() != sys.argv[3]:
     raise RuntimeError("gsplat runtime manifest digest differs from approved receipt")
 receipt = json.loads(receipt_bytes)
-required_modules = {"torch", "torchvision", "numpy", "gsplat", "fused_ssim", "fused_ssim_cuda", "nerfview", "pycolmap"}
+required_modules = {
+    "torch", "torchvision", "numpy", "gsplat", "fused_ssim",
+    "fused_ssim_cuda", "nerfview", "pycolmap",
+}
 if (
     receipt.get("schema") != "wre.gsplat.common_runtime_native_files.v1"
     or receipt.get("python") != ".".join(str(n) for n in sys.version_info[:3])
