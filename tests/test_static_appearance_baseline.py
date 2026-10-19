@@ -1361,6 +1361,59 @@ def test_external_trainer_child_rejects_unapproved_runtime_before_import(
     assert b"ModuleNotFoundError: No module named 'torch'" not in completed.stderr
 
 
+def test_external_trainer_rejects_self_hash_receipt_without_repo_approval(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A caller-chosen SHA of its own binaries is NOT an independent trust root."""
+    request, source, staged, output, profile, ref, producer = _retained_gsplat_fixture(tmp_path)
+    (output / profile.expected_ply_relative_path).unlink()
+    (output / "ply").rmdir()
+    output.rmdir()
+    source_root, _ = _reviewed_source_fixture(tmp_path, monkeypatch)
+    interpreter = tmp_path / "unreviewed-python"
+    interpreter.write_bytes(b"stub")
+    weights = tmp_path / "offline-alexnet.pth"
+    weights.write_bytes(b"test-only-weights")
+    receipt = tmp_path / "self-asserted-native-files.json"
+    receipt.write_bytes(b'{"source_revisions": "caller-claimed"}')
+    unapproved_digest = hashlib.sha256(receipt.read_bytes()).hexdigest()
+    monkeypatch.setattr(
+        baseline_module, "verify_gsplat_static_appearance_matching_capture_metadata",
+        lambda *_: (),
+    )
+    monkeypatch.setattr(
+        baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
+    )
+    _stub_reference_trainer_track_gate(monkeypatch)
+    monkeypatch.setattr(
+        baseline_module.subprocess,
+        "run",
+        lambda *_a, **_kw: pytest.fail("unapproved native runtime was executed"),
+    )
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="WRE trust root"):
+        run_gsplat_reference_training(
+            request=request,
+            source=source,
+            assessments=(),
+            staged=staged,
+            profile=profile,
+            features=cast(ColmapFeatureExtractionResult, object()),
+            expected_environment=cast(ColmapEnvironmentIdentity, object()),
+            source_root=source_root,
+            python_executable=interpreter,
+            output_root=output,
+            artifact_ref=ref,
+            producer=producer,
+            cuda_device_index=0,
+            timeout_seconds=15,
+            lpips_alexnet_weights=weights,
+            lpips_alexnet_sha256=hashlib.sha256(weights.read_bytes()).hexdigest(),
+            runtime_manifest_path=receipt,
+            approved_runtime_manifest_sha256=unapproved_digest,
+        )
+    assert not output.exists()
+
+
 def test_external_gsplat_runner_builds_complete_canonical_candidate_with_process_stub(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1388,6 +1441,10 @@ def test_external_gsplat_runner_builds_complete_canonical_candidate_with_process
     receipt = tmp_path / "synthetic-native-receipt.json"
     receipt.write_text('{"test_only": true}')
     receipt_digest = hashlib.sha256(receipt.read_bytes()).hexdigest()
+    # Test-only trust approval; production WRE has NO approved native receipts.
+    monkeypatch.setattr(
+        baseline_module, "_GSPLAT_APPROVED_NATIVE_RECEIPT_SHA256", frozenset({receipt_digest})
+    )
     monkeypatch.setattr(
         baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
     )
@@ -1700,6 +1757,12 @@ def test_external_gsplat_runner_spawns_real_process_and_assembles_appearance(
     lpips = tmp_path / "synthetic-offline-alexnet.pth"
     lpips.write_bytes(b"test-only-not-actual-weights")
     lpips_sha = hashlib.sha256(lpips.read_bytes()).hexdigest()
+    receipt = tmp_path / "test-native-runtime-receipt.json"
+    receipt.write_bytes(b"test-only: unapproved native metadata")
+    receipt_sha = hashlib.sha256(receipt.read_bytes()).hexdigest()
+    monkeypatch.setattr(
+        baseline_module, "_GSPLAT_APPROVED_NATIVE_RECEIPT_SHA256", frozenset({receipt_sha})
+    )
     result = run_gsplat_reference_training(
         request=request,
         source=source,
@@ -1717,6 +1780,8 @@ def test_external_gsplat_runner_spawns_real_process_and_assembles_appearance(
         timeout_seconds=15,
         lpips_alexnet_weights=lpips,
         lpips_alexnet_sha256=lpips_sha,
+        runtime_manifest_path=receipt,
+        approved_runtime_manifest_sha256=receipt_sha,
     )
     assert result.candidate.artifact_ref == artifact_ref
     assert result.candidate.source_geometry is request.source_geometry
@@ -1846,6 +1911,12 @@ def test_external_gsplat_runner_rejects_failure_or_missing_output(
     lpips = tmp_path / "synthetic-offline-alexnet.pth"
     lpips.write_bytes(b"test-only-not-actual-weights")
     lpips_sha = hashlib.sha256(lpips.read_bytes()).hexdigest()
+    receipt = tmp_path / "test-runtime-receipt.json"
+    receipt.write_bytes(b"stubbed native runtime for failure coverage")
+    receipt_sha = hashlib.sha256(receipt.read_bytes()).hexdigest()
+    monkeypatch.setattr(
+        baseline_module, "_GSPLAT_APPROVED_NATIVE_RECEIPT_SHA256", frozenset({receipt_sha})
+    )
     with pytest.raises(GsplatStaticAppearancePreflightError):
         run_gsplat_reference_training(
             request=request,
@@ -1864,6 +1935,8 @@ def test_external_gsplat_runner_rejects_failure_or_missing_output(
             timeout_seconds=30,
             lpips_alexnet_weights=lpips,
             lpips_alexnet_sha256=lpips_sha,
+            runtime_manifest_path=receipt,
+            approved_runtime_manifest_sha256=receipt_sha,
         )
     assert (output / "wre-reference-training.log").exists()
 
