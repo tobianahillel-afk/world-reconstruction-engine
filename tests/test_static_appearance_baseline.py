@@ -1325,6 +1325,57 @@ def test_external_gsplat_runner_builds_complete_canonical_candidate_with_process
     assert (output / "wre-reference-training.log").exists()
 
 
+def test_reference_trainer_rejects_output_within_pinned_source_checkout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An external trainer must never write into its pinned source checkout."""
+    monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_matching_capture_metadata",
+        lambda *_args: (),
+    )
+    request, source, staged, _old_output, profile, artifact_ref, producer = (
+        _retained_gsplat_fixture(tmp_path)
+    )
+    checkout = tmp_path / "reviewed-upstream"
+    (checkout / "examples").mkdir(parents=True)
+    output = checkout / "training-results"
+    interpreter = tmp_path / "external-python"
+    interpreter.write_bytes(b"stub")
+    monkeypatch.setattr(
+        baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
+    )
+    monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_native_geometry",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        baseline_module.subprocess,
+        "run",
+        lambda *_args, **_kwargs: pytest.fail("overlapping output launched external trainer"),
+    )
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="overlaps.*checkout"):
+        run_gsplat_reference_training(
+            request=request,
+            source=source,
+            assessments=(),
+            staged=staged,
+            profile=profile,
+            features=cast(ColmapFeatureExtractionResult, object()),
+            expected_environment=cast(ColmapEnvironmentIdentity, object()),
+            source_root=checkout,
+            python_executable=interpreter,
+            output_root=output,
+            artifact_ref=artifact_ref,
+            producer=producer,
+            cuda_device_index=0,
+            timeout_seconds=30,
+        )
+    assert not output.exists()
+    assert (checkout / "examples").is_dir()
+
+
 @pytest.mark.parametrize("invalid", ("mismatch", "missing_hash", "missing_file", "missing_both"))
 def test_external_gsplat_runner_rejects_untrusted_lpips_cache_before_process(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, invalid: str

@@ -1915,6 +1915,12 @@ def run_gsplat_reference_training(
     overrides = build_gsplat_reference_trainer_path_overrides(
         profile=profile, dataset_root=staged.dataset_root, output_root=output_root
     )
+    # The external trainer writes its result_dir. Keep the reviewed pinned
+    # checkout immutable, including its examples and dependency source trees.
+    if Path(str(overrides["result_dir"])).is_relative_to(source_directory):
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat training output overlaps the pinned reference source checkout"
+        )
     if not isinstance(artifact_ref, ArtifactRef):
         raise TypeError("gsplat output artifact_ref must be ArtifactRef")
     if artifact_ref.artifact_kind != APPEARANCE_MODEL_ARTIFACT_KIND:
