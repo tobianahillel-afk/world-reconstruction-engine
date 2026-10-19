@@ -387,6 +387,60 @@ jobs:
           print("Cross-interpreter output hashing verified; no GPU optimization executed.")
           PY
 
+      # The real upstream Config must accept the exact path/algorithm
+      # overrides emitted by WRE (Python 3.12), not only its own defaults.
+      # This is a genuine cross-interpreter integration test, not training.
+      - name: Construct actual pinned trainer Config from WRE overrides
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PYTHONPATH="$GITHUB_WORKSPACE/src"
+          uv run --locked --no-dev --no-sync --python 3.12.12 python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          from wre.reconstruction.static_appearance_baseline import (
+              GsplatStaticAppearanceTrainingProfile,
+              build_gsplat_reference_trainer_path_overrides,
+          )
+
+          root = Path(os.environ["RUNNER_TEMP"])
+          profile = GsplatStaticAppearanceTrainingProfile(max_steps=1)
+          config = build_gsplat_reference_trainer_path_overrides(
+              profile=profile,
+              dataset_root=root / "gsplat-colmap-decode-smoke",
+              output_root=root / "wre-config-bridge-output",
+          )
+          assert len(config) == len(profile.reference_overrides()) + 2
+          (root / "wre-config-bridge.json").write_text(
+              json.dumps(config, sort_keys=True, allow_nan=False), encoding="utf-8"
+          )
+          print("WRE 3.12 emitted explicit reviewed Config for real COLMAP inputs")
+          PY
+          "$COMMON_PYTHON" -I - "$RUNNER_TEMP/wre-config-bridge.json" <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+          import torch
+
+          assert not torch.cuda.is_available()
+          source = Path(os.environ["COMMON_SOURCES"]) / "gsplat" / "examples"
+          sys.path.insert(0, str(source))
+          from simple_trainer import Config
+
+          overrides = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          actual = Config(**overrides)
+          root = Path(os.environ["RUNNER_TEMP"])
+          assert actual.data_dir == str(root / "gsplat-colmap-decode-smoke")
+          assert actual.result_dir == str(root / "wre-config-bridge-output")
+          assert actual.max_steps == 1 and actual.ply_steps == [1]
+          assert actual.save_ply and actual.disable_viewer and not actual.pose_opt
+          assert not (root / "wre-config-bridge-output").exists()
+          print("REAL pinned simple_trainer.Config accepted all WRE path and solver overrides")
+          print("Same native CPU-hosted Python environment; no GPU or training executed")
+          PY
+
       - name: Retain true exporter to WRE materialization artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
