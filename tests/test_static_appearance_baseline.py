@@ -1602,6 +1602,13 @@ def test_reference_trainer_child_enforces_runtime_version_and_cuda(
 
     PyTorch, NumPy, CUDA kernels, and real training are NOT executed here.
     """
+    # This synthetic-version test exercises the separate Torch/CUDA version
+    # contract. The real child is tested independently for mandatory manifest
+    # rejection and by the native CI with an actual signed-off file receipt.
+    child = baseline_module._GSPLAT_TRAINER_CHILD
+    guard_start = child.index("# An external Python executable is NOT a trusted dependency")
+    guard_end = child.index("\nimport torch\nimport numpy\n", guard_start)
+    version_only_child = child[:guard_start] + child[guard_end:]
     script = (
         "import sys, types\n"
         "torch = types.ModuleType('torch')\n"
@@ -1621,7 +1628,7 @@ def test_reference_trainer_child_enforces_runtime_version_and_cuda(
         "trainer.Config = lambda **kw: kw\n"
         "trainer.main = lambda *a: print('runner-stub-executed')\n"
         "sys.modules['simple_trainer'] = trainer\n"
-        f"exec({baseline_module._GSPLAT_TRAINER_CHILD!r})\n"
+        f"exec({version_only_child!r})\n"
     )
     completed = baseline_module.subprocess.run(
         [sys.executable, "-I", "-c", script, str(tmp_path)],
