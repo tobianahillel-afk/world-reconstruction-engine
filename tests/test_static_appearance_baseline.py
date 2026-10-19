@@ -179,9 +179,7 @@ def test_gsplat_concrete_adapter_implements_v2l18_2_protocol(
         context.update(kwargs)
         return expected
 
-    monkeypatch.setattr(
-        baseline_module, "reconstruct_gsplat_static_appearance", fake_reconstruct
-    )
+    monkeypatch.setattr(baseline_module, "reconstruct_gsplat_static_appearance", fake_reconstruct)
     adapter: StaticAppearanceCandidateAdapter = baseline_module.GsplatStaticAppearanceAdapter(
         source=cast(baseline_module.GsplatStaticAppearancePreflightSource, object()),
         dataset_root=tmp_path / "dataset",
