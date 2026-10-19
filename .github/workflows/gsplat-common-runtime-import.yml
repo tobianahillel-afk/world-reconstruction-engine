@@ -243,7 +243,7 @@ jobs:
               "gpu_executed": False,
               "source_revisions": {
                   "gsplat": os.environ["GSPLAT_REVISION"],
-                  "fused_ssim": os.environ["FUSED_SSIM_REVISION"],
+                  "fused_ssim": os.environ["SSIM_REVISION"],
                   "nerfview": os.environ["NERFVIEW_REVISION"],
               },
               "modules": list(modules),
