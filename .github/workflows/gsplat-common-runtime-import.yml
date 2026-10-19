@@ -274,7 +274,7 @@ jobs:
 
           environment = Path(sys.prefix).resolve()
           files = {}
-          modules = ("torch", "torchvision", "numpy", "gsplat", "fused_ssim", "nerfview", "pycolmap")
+          modules = ("torch", "torchvision", "numpy", "gsplat", "fused_ssim", "fused_ssim_cuda", "nerfview", "pycolmap")
           for name in modules:
               module = importlib.import_module(name)
               location = getattr(module, "__file__", None)
@@ -287,7 +287,7 @@ jobs:
               if origin.name == "__init__.py":
                   candidates.extend(
                       item for item in origin.parent.rglob("*")
-                      if item.is_file() and item.suffix.lower() in (".so", ".pyd", ".dylib")
+                      if item.is_file() and item.suffix.lower() in (".py", ".so", ".pyd", ".dylib")
                   )
               for item in candidates:
                   resolved = item.resolve(strict=True)
