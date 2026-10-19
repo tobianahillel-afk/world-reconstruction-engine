@@ -1269,11 +1269,22 @@ def test_external_gsplat_runner_requires_offline_lpips_before_cuda(
 
 @pytest.mark.skipif(os.name != "posix", reason="smoke executable uses POSIX shebang")
 @pytest.mark.parametrize(
-    ("runtime_version", "visible_cuda", "should_run"),
-    (("1.5.3", True, True), ("0.9.0", True, False), ("1.5.3", False, False)),
+    ("runtime_version", "torch_version", "cuda_abi", "visible_cuda", "should_run"),
+    (
+        ("1.5.3", "2.4.0+cu124", "12.4", True, True),
+        ("0.9.0", "2.4.0+cu124", "12.4", True, False),
+        ("1.5.3", "2.5.0+cu124", "12.4", True, False),
+        ("1.5.3", "2.4.0+cu124", "12.1", True, False),
+        ("1.5.3", "2.4.0+cu124", "12.4", False, False),
+    ),
 )
 def test_reference_trainer_child_enforces_runtime_version_and_cuda(
-    tmp_path: Path, runtime_version: str, visible_cuda: bool, should_run: bool
+    tmp_path: Path,
+    runtime_version: str,
+    torch_version: str,
+    cuda_abi: str,
+    visible_cuda: bool,
+    should_run: bool,
 ) -> None:
     """Real CPU Python subprocess exercising child logic with fake GPU modules.
 
@@ -1282,6 +1293,8 @@ def test_reference_trainer_child_enforces_runtime_version_and_cuda(
     script = (
         "import sys, types\n"
         "torch = types.ModuleType('torch')\n"
+        f"torch.__version__ = {torch_version!r}\n"
+        f"torch.version = types.SimpleNamespace(cuda={cuda_abi!r})\n"
         f"torch.cuda = types.SimpleNamespace(is_available=lambda: {visible_cuda!r}, "
         f"device_count=lambda: {1 if visible_cuda else 0})\n"
         "torch.hub = types.SimpleNamespace(download_url_to_file=lambda *a, **kw: None)\n"
@@ -1311,6 +1324,7 @@ def test_reference_trainer_child_enforces_runtime_version_and_cuda(
         assert (
             b"runtime version differs" in completed.stderr
             or b"requires exactly one visible CUDA GPU" in completed.stderr
+            or b"requires the pinned Torch/CUDA ABI" in completed.stderr
         )
 
 

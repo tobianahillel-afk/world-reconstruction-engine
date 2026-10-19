@@ -1805,6 +1805,8 @@ def reject_implicit_download(*args, **kwargs):
 
 torch.hub.download_url_to_file = reject_implicit_download
 
+if torch.__version__ != "2.4.0+cu124" or torch.version.cuda != "12.4":
+    raise RuntimeError("gsplat reference training requires the pinned Torch/CUDA ABI")
 if not torch.cuda.is_available() or torch.cuda.device_count() != 1:
     raise RuntimeError("gsplat reference training requires exactly one visible CUDA GPU")
 import gsplat
