@@ -1266,6 +1266,12 @@ def test_one_call_gsplat_reconstruction_stages_real_files_and_returns_candidate(
     lpips = tmp_path / "synthetic-offline-alexnet.pth"
     lpips.write_bytes(b"test-only-not-actual-weights")
     lpips_sha = hashlib.sha256(lpips.read_bytes()).hexdigest()
+    receipt = tmp_path / "one-call-stub-runtime-receipt.json"
+    receipt.write_bytes(b"test-only native receipt for subprocess stub")
+    receipt_sha = hashlib.sha256(receipt.read_bytes()).hexdigest()
+    monkeypatch.setattr(
+        baseline_module, "_GSPLAT_APPROVED_NATIVE_RECEIPT_SHA256", frozenset({receipt_sha})
+    )
     result = reconstruct_gsplat_static_appearance(
         request=request,
         source=source,
@@ -1283,6 +1289,8 @@ def test_one_call_gsplat_reconstruction_stages_real_files_and_returns_candidate(
         timeout_seconds=30,
         lpips_alexnet_weights=lpips,
         lpips_alexnet_sha256=lpips_sha,
+        runtime_manifest_path=receipt,
+        approved_runtime_manifest_sha256=receipt_sha,
     )
     assert len(subprocess_calls) == 1
     assert result.request is request
