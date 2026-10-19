@@ -1599,7 +1599,6 @@ def test_external_gsplat_runner_rejects_failure_or_missing_output(
     )
     lpips = tmp_path / "synthetic-offline-alexnet.pth"
     lpips.write_bytes(b"test-only-not-actual-weights")
-    lpips_sha = hashlib.sha256(lpips.read_bytes()).hexdigest()
     with pytest.raises(GsplatStaticAppearancePreflightError):
         run_gsplat_reference_training(
             request=request,
