@@ -1849,8 +1849,11 @@ for record in files:
     path = environment.joinpath(*name.split("/"))
     if path.is_symlink() or not path.is_file() or not path.resolve().is_relative_to(environment):
         raise RuntimeError("gsplat installed native file is absent or outside approved runtime")
+    digest_state = hashlib.sha256()
     with path.open("rb") as stream:
-        actual = hashlib.file_digest(stream, "sha256").hexdigest()
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest_state.update(chunk)
+    actual = digest_state.hexdigest()
     if actual != digest:
         raise RuntimeError("gsplat installed native file differs from approved runtime")
     native_found |= path.suffix in (".so", ".pyd", ".dylib")
