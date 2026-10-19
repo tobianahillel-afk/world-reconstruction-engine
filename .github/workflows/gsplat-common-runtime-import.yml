@@ -234,8 +234,11 @@ jobs:
                   if not resolved.is_relative_to(environment):
                       raise RuntimeError(f"Native extension escaped pinned environment: {name}")
                   relative = resolved.relative_to(environment).as_posix()
+                  digest = hashlib.sha256()
                   with resolved.open("rb") as data:
-                      files[relative] = hashlib.file_digest(data, "sha256").hexdigest()
+                      for chunk in iter(lambda: data.read(1024 * 1024), b""):
+                          digest.update(chunk)
+                  files[relative] = digest.hexdigest()
 
           evidence = {
               "schema": "wre.gsplat.common_runtime_native_files.v1",
