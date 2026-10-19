@@ -360,6 +360,7 @@ from wre.reconstruction.open3d_surface import (
     inspect_open3d_surface_environment,
 )
 from wre.reconstruction.static_appearance_baseline import (
+    GsplatStaticAppearanceAdapter,
     assemble_verified_gsplat_static_appearance_result,
     export_verified_gsplat_rgb_centers_glb,
     export_verified_gsplat_rgb_centers_ply,
@@ -668,6 +669,7 @@ __all__ = [
     "Open3dSurfaceResult",
     "Open3dTsdfSurfaceAdapter",
     "Open3dTsdfSurfaceConfig",
+    "GsplatStaticAppearanceAdapter",
     "StaticAppearanceCandidateAdapter",
     "StaticAppearanceCandidateRequest",
     "StaticAppearanceCandidateResult",

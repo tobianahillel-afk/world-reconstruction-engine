@@ -2072,6 +2072,53 @@ def reconstruct_gsplat_static_appearance(
     )
 
 
+@dataclass(frozen=True, slots=True)
+class GsplatStaticAppearanceAdapter:
+    """One configured V2L18.2 specialist; no implicit runtime or GPU fallback.
+
+    The caller supplies the reviewed source, native COLMAP evidence, private
+    workspaces and the explicit optional CUDA environment. Every request goes
+    through the existing complete stage -> trainer -> canonical result path.
+    """
+
+    source: GsplatStaticAppearancePreflightSource
+    dataset_root: Path
+    profile: GsplatStaticAppearanceTrainingProfile
+    features: ColmapFeatureExtractionResult
+    expected_environment: ColmapEnvironmentIdentity
+    source_root: Path
+    python_executable: Path
+    output_root: Path
+    artifact_ref: ArtifactRef
+    producer: ArtifactProducerIdentity
+    cuda_device_index: int
+    timeout_seconds: int
+    lpips_alexnet_weights: Path
+    lpips_alexnet_sha256: str
+
+    def derive_candidate(
+        self, request: StaticAppearanceCandidateRequest
+    ) -> StaticAppearanceCandidateResult:
+        """Implement the existing solver-independent adapter boundary."""
+        return reconstruct_gsplat_static_appearance(
+            request=request,
+            source=self.source,
+            dataset_root=self.dataset_root,
+            profile=self.profile,
+            features=self.features,
+            expected_environment=self.expected_environment,
+            source_root=self.source_root,
+            python_executable=self.python_executable,
+            output_root=self.output_root,
+            artifact_ref=self.artifact_ref,
+            producer=self.producer,
+            cuda_device_index=self.cuda_device_index,
+            timeout_seconds=self.timeout_seconds,
+            lpips_alexnet_weights=self.lpips_alexnet_weights,
+            lpips_alexnet_sha256=self.lpips_alexnet_sha256,
+        )
+
+
 def verify_gsplat_reference_trainer_config_fields(
     source_root: Path,
     profile: GsplatStaticAppearanceTrainingProfile,
@@ -2658,6 +2705,7 @@ __all__ = [
     "GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION",
     "GSPLAT_STATIC_APPEARANCE_SOURCE_TREE",
     "GSPLAT_STATIC_APPEARANCE_TRAINER_GIT_BLOB",
+    "GsplatStaticAppearanceAdapter",
     "GsplatStaticAppearancePreflightError",
     "GsplatStaticAppearancePreflightEvidence",
     "GsplatStaticAppearancePreflightSource",

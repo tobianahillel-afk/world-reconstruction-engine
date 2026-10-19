@@ -130,7 +130,11 @@ from wre.reconstruction.static_appearance_baseline import (
     verify_gsplat_static_appearance_source_photometry,
     verify_gsplat_static_appearance_staged_dataset,
 )
-from wre.reconstruction.static_appearance_candidate import StaticAppearanceCandidateRequest
+from wre.reconstruction.static_appearance_candidate import (
+    StaticAppearanceCandidateAdapter,
+    StaticAppearanceCandidateRequest,
+    StaticAppearanceCandidateResult,
+)
 
 
 def _digest(data: bytes) -> Sha256Digest:
@@ -162,6 +166,49 @@ def _reviewed_source_fixture(
         ),
     )
     return root, data
+
+
+def test_gsplat_concrete_adapter_implements_v2l18_2_protocol(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The public specialist must accept one canonical request without a GPU import."""
+    context: dict[str, object] = {}
+    expected = cast(StaticAppearanceCandidateResult, object())
+
+    def fake_reconstruct(**kwargs: object) -> StaticAppearanceCandidateResult:
+        context.update(kwargs)
+        return expected
+
+    monkeypatch.setattr(
+        baseline_module, "reconstruct_gsplat_static_appearance", fake_reconstruct
+    )
+    adapter: StaticAppearanceCandidateAdapter = baseline_module.GsplatStaticAppearanceAdapter(
+        source=cast(baseline_module.GsplatStaticAppearancePreflightSource, object()),
+        dataset_root=tmp_path / "dataset",
+        profile=baseline_module.GsplatStaticAppearanceTrainingProfile(max_steps=20),
+        features=cast(ColmapFeatureExtractionResult, object()),
+        expected_environment=cast(ColmapEnvironmentIdentity, object()),
+        source_root=tmp_path / "exact-upstream",
+        python_executable=tmp_path / "external-python",
+        output_root=tmp_path / "private-output",
+        artifact_ref=cast(ArtifactRef, object()),
+        producer=cast(ArtifactProducerIdentity, object()),
+        cuda_device_index=0,
+        timeout_seconds=60,
+        lpips_alexnet_weights=tmp_path / "alexnet.pth",
+        lpips_alexnet_sha256="a" * 64,
+    )
+    request = cast(StaticAppearanceCandidateRequest, object())
+    assert adapter.derive_candidate(request) is expected
+    assert context["request"] is request
+    assert context["source"] is not None
+    assert context["profile"] == adapter.profile
+    assert context["features"] is adapter.features
+    assert context["expected_environment"] is adapter.expected_environment
+    assert context["output_root"] == tmp_path / "private-output"
+    assert context["lpips_alexnet_weights"] == tmp_path / "alexnet.pth"
+    assert context["lpips_alexnet_sha256"] == "a" * 64
+    assert context["timeout_seconds"] == 60
 
 
 def test_gsplat_reference_source_git_pins_are_the_reviewed_upstream_identity() -> None:
