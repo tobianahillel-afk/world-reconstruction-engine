@@ -1794,8 +1794,80 @@ def build_gsplat_reference_trainer_path_overrides(
 # The external interpreter is an explicit, caller-owned CUDA environment.
 # -I prevents user site/PYTHONPATH injection; only the pinned examples directory
 # is prepended in the child. The parent never imports torch or CUDA modules.
-_GSPLAT_TRAINER_CHILD = """import json
+_GSPLAT_TRAINER_CHILD = """import hashlib
+import importlib.util
+import json
 import sys
+from pathlib import Path
+
+# An external Python executable is NOT a trusted dependency identity. An
+# operator-approved SHA-256 of the native import receipt is required; validate
+# every listed installed file before importing Torch or the upstream trainer.
+if len(sys.argv) != 4 or not sys.argv[2] or len(sys.argv[3]) != 64:
+    raise RuntimeError("gsplat requires an approved external runtime manifest digest")
+receipt_path = Path(sys.argv[2])
+with receipt_path.open("rb") as stream:
+    receipt_bytes = stream.read()
+if hashlib.sha256(receipt_bytes).hexdigest() != sys.argv[3]:
+    raise RuntimeError("gsplat runtime manifest digest differs from approved receipt")
+receipt = json.loads(receipt_bytes)
+required_modules = {"torch", "torchvision", "numpy", "gsplat", "fused_ssim", "nerfview", "pycolmap"}
+if (
+    receipt.get("schema") != "wre.gsplat.common_runtime_native_files.v1"
+    or receipt.get("python") != ".".join(str(n) for n in sys.version_info[:3])
+    or set(receipt.get("modules", [])) != required_modules
+    or receipt.get("source_revisions") != {
+        "gsplat": "937e29912570c372bed6747a5c9bf85fed877bae",
+        "fused_ssim": "328dc9836f513d00c4b5bc38fe30478b4435cbb5",
+        "nerfview": "4538024fe0d15fd1a0e4d760f3695fc44ca72787",
+    }
+):
+    raise RuntimeError("gsplat external runtime manifest does not identify reviewed versions")
+files = receipt.get("files")
+if not isinstance(files, list) or len(files) < len(required_modules):
+    raise RuntimeError("gsplat runtime manifest has incomplete native file coverage")
+environment = Path(sys.prefix).resolve(strict=True)
+verified = set()
+native_found = False
+for record in files:
+    if not isinstance(record, dict):
+        raise RuntimeError("gsplat native file record is invalid")
+    name, digest = record.get("path"), record.get("sha256")
+    if (
+        not isinstance(name, str)
+        or not name
+        or name.startswith("/")
+        or "\\\\" in name
+        or any(part in ("", ".", "..") for part in name.split("/"))
+        or not isinstance(digest, str)
+        or len(digest) != 64
+        or any(char not in "0123456789abcdef" for char in digest)
+        or name in verified
+    ):
+        raise RuntimeError("gsplat native file identity is malformed or duplicated")
+    verified.add(name)
+    path = environment.joinpath(*name.split("/"))
+    if path.is_symlink() or not path.is_file() or not path.resolve().is_relative_to(environment):
+        raise RuntimeError("gsplat installed native file is absent or outside approved runtime")
+    with path.open("rb") as stream:
+        actual = hashlib.file_digest(stream, "sha256").hexdigest()
+    if actual != digest:
+        raise RuntimeError("gsplat installed native file differs from approved runtime")
+    native_found |= path.suffix in (".so", ".pyd", ".dylib")
+if not native_found:
+    raise RuntimeError("gsplat approved runtime has no native-extension identity")
+# Check module entrypoints WITHOUT running their package code. The receipt
+# cannot be replaced by a version-string comparison or a caller path claim.
+for name in required_modules:
+    module = importlib.util.find_spec(name)
+    if module is None or module.origin is None:
+        raise RuntimeError("gsplat required native module is absent: " + name)
+    origin = Path(module.origin).resolve(strict=True)
+    if not origin.is_relative_to(environment):
+        raise RuntimeError("gsplat imported native module escaped approved environment")
+    if origin.relative_to(environment).as_posix() not in verified:
+        raise RuntimeError("gsplat native module entrypoint not in approved manifest")
+
 import torch
 import numpy
 
@@ -1910,6 +1982,8 @@ def run_gsplat_reference_training(
     timeout_seconds: int,
     lpips_alexnet_weights: Path | None = None,
     lpips_alexnet_sha256: str | None = None,
+    runtime_manifest_path: Path | None = None,
+    approved_runtime_manifest_sha256: str | None = None,
 ) -> StaticAppearanceCandidateResult:
     """Run the exact reference trainer on an EXPLICIT external CUDA environment.
 
@@ -2043,6 +2117,8 @@ def run_gsplat_reference_training(
                     "-c",
                     _GSPLAT_TRAINER_CHILD,
                     str(private_import_root),
+                    str(runtime_manifest_path) if runtime_manifest_path is not None else "",
+                    approved_runtime_manifest_sha256 or "",
                 ],
                 input=json.dumps(overrides, allow_nan=False).encode("utf-8"),
                 stdout=log,
@@ -2093,6 +2169,8 @@ def reconstruct_gsplat_static_appearance(
     timeout_seconds: int,
     lpips_alexnet_weights: Path | None = None,
     lpips_alexnet_sha256: str | None = None,
+    runtime_manifest_path: Path | None = None,
+    approved_runtime_manifest_sha256: str | None = None,
 ) -> StaticAppearanceCandidateResult:
     """Stage real COLMAP/PNG files, execute the selected trainer, retain its 3D PLY.
 
@@ -2126,6 +2204,8 @@ def reconstruct_gsplat_static_appearance(
         timeout_seconds=timeout_seconds,
         lpips_alexnet_weights=lpips_alexnet_weights,
         lpips_alexnet_sha256=lpips_alexnet_sha256,
+        runtime_manifest_path=runtime_manifest_path,
+        approved_runtime_manifest_sha256=approved_runtime_manifest_sha256,
     )
 
 
@@ -2153,6 +2233,8 @@ class GsplatStaticAppearanceAdapter:
     timeout_seconds: int
     lpips_alexnet_weights: Path
     lpips_alexnet_sha256: str
+    runtime_manifest_path: Path | None = None
+    approved_runtime_manifest_sha256: str | None = None
 
     def derive_candidate(
         self, request: StaticAppearanceCandidateRequest
@@ -2175,6 +2257,8 @@ class GsplatStaticAppearanceAdapter:
             timeout_seconds=self.timeout_seconds,
             lpips_alexnet_weights=self.lpips_alexnet_weights,
             lpips_alexnet_sha256=self.lpips_alexnet_sha256,
+            runtime_manifest_path=self.runtime_manifest_path,
+            approved_runtime_manifest_sha256=self.approved_runtime_manifest_sha256,
         )
 
 
