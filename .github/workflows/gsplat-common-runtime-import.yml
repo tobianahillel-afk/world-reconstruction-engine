@@ -200,6 +200,62 @@ jobs:
           print("No CUDA kernel, training, reconstruction, or GPU was executed.")
           PY
 
+      - name: Record real imported Python and native-extension file hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$COMMON_PYTHON" -I - <<'PY'
+          import hashlib
+          import importlib
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          environment = Path(sys.prefix).resolve()
+          files = {}
+          modules = ("torch", "torchvision", "numpy", "gsplat", "fused_ssim", "nerfview", "pycolmap")
+          for name in modules:
+              module = importlib.import_module(name)
+              location = getattr(module, "__file__", None)
+              if not location:
+                  raise RuntimeError(f"Native manifest lacks module origin: {name}")
+              origin = Path(location).resolve(strict=True)
+              if not origin.is_relative_to(environment):
+                  raise RuntimeError(f"Native module is outside pinned environment: {name}")
+              candidates = [origin]
+              if origin.name == "__init__.py":
+                  candidates.extend(
+                      item for item in origin.parent.rglob("*")
+                      if item.is_file() and item.suffix.lower() in (".so", ".pyd", ".dylib")
+                  )
+              for item in candidates:
+                  resolved = item.resolve(strict=True)
+                  if not resolved.is_relative_to(environment):
+                      raise RuntimeError(f"Native extension escaped pinned environment: {name}")
+                  relative = resolved.relative_to(environment).as_posix()
+                  with resolved.open("rb") as data:
+                      files[relative] = hashlib.file_digest(data, "sha256").hexdigest()
+
+          evidence = {
+              "schema": "wre.gsplat.common_runtime_native_files.v1",
+              "python": ".".join(map(str, sys.version_info[:3])),
+              "gpu_executed": False,
+              "source_revisions": {
+                  "gsplat": os.environ["GSPLAT_REVISION"],
+                  "fused_ssim": os.environ["FUSED_SSIM_REVISION"],
+                  "nerfview": os.environ["NERFVIEW_REVISION"],
+              },
+              "modules": list(modules),
+              "files": [{"path": key, "sha256": files[key]} for key in sorted(files)],
+          }
+          target = Path(os.environ["RUNNER_TEMP"]) / "gsplat-common-runtime-native-files.json"
+          target.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
+          assert files and any(name.endswith(".so") for name in files)
+          print(f"Recorded {len(files)} REAL installed module/native-file SHA-256 identities.")
+          print("No CUDA device, kernel or training was executed.")
+          PY
+
       - name: Decode actual COLMAP records and RGB camera tensors with pinned reader
         shell: bash
         run: |
@@ -394,5 +450,6 @@ jobs:
           path: |
             ${{ runner.temp }}/wre-upstream-exporter-smoke/ply/point_cloud_0.ply
             ${{ runner.temp }}/wre-upstream-exporter-smoke/point_cloud_0.splat
+            ${{ runner.temp }}/gsplat-common-runtime-native-files.json
           if-no-files-found: error
           retention-days: 7
