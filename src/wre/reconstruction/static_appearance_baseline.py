@@ -1857,6 +1857,42 @@ def _verify_gsplat_reference_producer(
         )
 
 
+
+def _stage_verified_gsplat_trainer_imports(source_root: Path, private_root: Path) -> Path:
+    """Copy only reviewed trainer Python entrypoints into a fresh private import root.
+
+    A full upstream checkout may contain unrelated importable Python files. Never
+    place that mutable, unreviewed directory on the trainer subprocess sys.path.
+    This does not attest external site-packages or their native extensions.
+    """
+
+    entrypoint = private_root / "wre-pinned-examples"
+    entrypoint.mkdir(mode=0o700)
+    for relative, expected_size, expected_blob in _GSPLAT_REFERENCE_SOURCE_FILES:
+        parts = PurePosixPath(relative).parts
+        if parts[0] != "examples" or not relative.endswith(".py"):
+            continue
+        candidate = source_root.joinpath(*parts)
+        if candidate.is_symlink():
+            raise GsplatStaticAppearancePreflightError(
+                "gsplat executable trainer source cannot be a symlink"
+            )
+        try:
+            payload = candidate.read_bytes()
+            if len(payload) != expected_size or _git_blob_sha1(payload) != expected_blob:
+                raise GsplatStaticAppearancePreflightError(
+                    "gsplat executable trainer source changed after verification"
+                )
+            destination = entrypoint.joinpath(*parts[1:])
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(payload)
+        except OSError as exc:
+            raise GsplatStaticAppearancePreflightError(
+                "gsplat executable trainer sources could not be staged"
+            ) from exc
+    return entrypoint
+
+
 def run_gsplat_reference_training(
     *,
     request: StaticAppearanceCandidateRequest,
@@ -1953,6 +1989,7 @@ def run_gsplat_reference_training(
     # The private directory is created only after mandatory dependency inputs
     # have passed their inexpensive boundary checks.
     output_root.mkdir(mode=0o700)
+    private_import_root = _stage_verified_gsplat_trainer_imports(source_directory, output_root)
     torch_home = output_root / "torch-cache"
     cache = torch_home / "hub" / "checkpoints"
     cache.mkdir(parents=True, mode=0o700)
@@ -2006,12 +2043,12 @@ def run_gsplat_reference_training(
                     "-I",
                     "-c",
                     _GSPLAT_TRAINER_CHILD,
-                    str(source_directory / "examples"),
+                    str(private_import_root),
                 ],
                 input=json.dumps(overrides, allow_nan=False).encode("utf-8"),
                 stdout=log,
                 stderr=subprocess.STDOUT,
-                cwd=source_directory / "examples",
+                cwd=private_import_root,
                 env=env,
                 timeout=timeout_seconds,
                 check=False,
