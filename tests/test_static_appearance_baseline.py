@@ -3,10 +3,12 @@ from __future__ import annotations
 import ast
 import hashlib
 import json
+import math
 import os
 import shutil
 import struct
 import sys
+import zipfile
 import zlib
 from dataclasses import FrozenInstanceError, replace
 from datetime import UTC, datetime
@@ -115,6 +117,8 @@ from wre.reconstruction.static_appearance_baseline import (
     build_gsplat_reference_trainer_path_overrides,
     export_verified_gsplat_rgb_centers_glb,
     export_verified_gsplat_rgb_centers_ply,
+    export_verified_gsplat_splat,
+    export_verified_gsplat_viewer_bundle,
     inspect_gsplat_static_appearance_shared_track_pixels,
     materialize_verified_gsplat_ply,
     preflight_gsplat_static_appearance_inputs,
@@ -865,6 +869,7 @@ def test_preflight_has_no_trainer_execution_or_optional_framework_import() -> No
         "tempfile",
         "typing",
         "wre",
+        "zipfile",
         "zlib",
     }
     assert not {"torch", "gsplat", "numpy", "pycolmap"} & imported
@@ -1660,6 +1665,150 @@ def test_verified_gsplat_gaussian_centers_export_real_viewable_rgb_ply(
         export_verified_gsplat_rgb_centers_ply(
             artifact_ref=ref, output_root=root, profile=profile, preview_path=preview
         )
+
+
+def test_verified_gsplat_gaussian_splat_export_retains_shape_orientation_and_opacity(
+    tmp_path: Path,
+) -> None:
+    """Actual 32-byte records decoded independently, not just an export stub."""
+    first = [0.0] * 59
+    first[:6] = [1.0, 2.0, 3.0, 0.0, 0.0, 0.0]
+    first[-8:] = [0.0, 0.0, math.log(2), math.log(0.5), 1.0, 0.0, 0.0, 0.0]
+    second = [0.0] * 59
+    second[:6] = [-1.0, 0.0, 2.0, 2.0, -2.0, 0.0]
+    second[-8:] = [5.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0]
+    template = _gsplat_ply(vertices=2)
+    split = template.index(b"end_header\n") + len(b"end_header\n")
+    gaussian_ply = template[:split] + struct.pack("<59f", *first) + struct.pack("<59f", *second)
+    root, profile, ref = _gsplat_output(tmp_path, gaussian_ply)
+    viewer = tmp_path / "viewer"
+    viewer.mkdir()
+    target = viewer / "gaussians.splat"
+    digest = export_verified_gsplat_splat(
+        artifact_ref=ref, output_root=root, profile=profile, splat_path=target
+    )
+    data = target.read_bytes()
+    assert len(data) == 2 * 32
+    assert digest == _digest(data)
+    assert (root / profile.expected_ply_relative_path).read_bytes() == gaussian_ply
+    records = list(struct.iter_unpack("<6f8B", data))
+    assert len(records) == 2
+    assert records[0][:3] == (1.0, 2.0, 3.0)
+    assert records[0][3:6] == pytest.approx((1.0, 2.0, 0.5), rel=1e-6)
+    assert records[0][6:] == (127, 127, 127, 127, 255, 128, 128, 128)
+    assert records[1][:3] == (-1.0, 0.0, 2.0)
+    assert records[1][3:6] == (1.0, 1.0, 1.0)
+    assert records[1][6:] == (255, 0, 127, 253, 128, 255, 128, 128)
+    from wre import reconstruction
+
+    assert reconstruction.export_verified_gsplat_splat is export_verified_gsplat_splat
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="renderer export requires"):
+        export_verified_gsplat_splat(
+            artifact_ref=ref, output_root=root, profile=profile, splat_path=target
+        )
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected_message"),
+    (
+        ("invalid_ply", "unexpected bytes"),
+        ("zero_rotation", "quaternion"),
+        ("huge_log_scale", "scale"),
+    ),
+)
+def test_verified_gaussian_splat_export_refuses_bad_inputs_without_partial_file(
+    tmp_path: Path, mutation: str, expected_message: str
+) -> None:
+    record = [0.0] * 59
+    record[-4] = 1.0
+    if mutation == "zero_rotation":
+        record[-4:] = [0.0, 0.0, 0.0, 0.0]
+    if mutation == "huge_log_scale":
+        record[-7] = 1000.0
+    template = _gsplat_ply(vertices=1)
+    split = template.index(b"end_header\n") + len(b"end_header\n")
+    payload = template[:split] + struct.pack("<59f", *record)
+    if mutation == "invalid_ply":
+        payload += b"unexpected"
+    root, profile, ref = _gsplat_output(tmp_path, payload)
+    viewer = tmp_path / "viewer"
+    viewer.mkdir()
+    target = viewer / "gaussians.splat"
+    with pytest.raises(GsplatStaticAppearancePreflightError, match=expected_message):
+        export_verified_gsplat_splat(
+            artifact_ref=ref, output_root=root, profile=profile, splat_path=target
+        )
+    assert not target.exists()
+
+
+def test_verified_gsplat_bundle_contains_usable_viewer_files_and_provenance(
+    tmp_path: Path,
+) -> None:
+    """Real disk ZIP/GLB/.splat IO with byte-checked Gaussian fixtures, not GPU training."""
+    actual_ply = _gsplat_ply(vertices=2)
+    root, profile, ref = _gsplat_output(tmp_path, actual_ply)
+    viewer = tmp_path / "viewer"
+    viewer.mkdir()
+    bundle = viewer / "scene.zip"
+
+    archive_sha = export_verified_gsplat_viewer_bundle(
+        artifact_ref=ref, output_root=root, profile=profile, bundle_path=bundle
+    )
+    assert archive_sha == _digest(bundle.read_bytes())
+    with zipfile.ZipFile(bundle) as archive:
+        assert archive.namelist() == ["scene.splat", "centers.glb", "manifest.json"]
+        assert all(item.date_time == (1980, 1, 1, 0, 0, 0) for item in archive.infolist())
+        splat_bytes = archive.read("scene.splat")
+        glb_bytes = archive.read("centers.glb")
+        manifest = json.loads(archive.read("manifest.json"))
+    assert len(splat_bytes) == 64
+    assert len(list(struct.iter_unpack("<6f8B", splat_bytes))) == 2
+    assert glb_bytes.startswith(b"glTF")
+    assert struct.unpack_from("<I", glb_bytes, 8)[0] == len(glb_bytes)
+    assert manifest["format"] == "wre-gsplat-viewer-bundle-v1"
+    assert manifest["source_ply"] == {
+        "relative_path": profile.expected_ply_relative_path,
+        "sha256": _digest(actual_ply).value,
+    }
+    for name, payload in (("scene.splat", splat_bytes), ("centers.glb", glb_bytes)):
+        assert manifest["outputs"][name] == {
+            "sha256": _digest(payload).value,
+            "size_bytes": len(payload),
+        }
+    assert (root / profile.expected_ply_relative_path).read_bytes() == actual_ply
+    assert not (viewer / "scene.splat").exists()
+    assert not (viewer / "centers.glb").exists()
+
+    second = viewer / "another.zip"
+    assert (
+        export_verified_gsplat_viewer_bundle(
+            artifact_ref=ref, output_root=root, profile=profile, bundle_path=second
+        )
+        == archive_sha
+    )
+    assert second.read_bytes() == bundle.read_bytes()
+    from wre import reconstruction
+
+    assert (
+        reconstruction.export_verified_gsplat_viewer_bundle is export_verified_gsplat_viewer_bundle
+    )
+    with pytest.raises(GsplatStaticAppearancePreflightError, match=r"new \.zip"):
+        export_verified_gsplat_viewer_bundle(
+            artifact_ref=ref, output_root=root, profile=profile, bundle_path=bundle
+        )
+
+
+def test_verified_gsplat_bundle_rejects_bad_ply_without_partial_archive(tmp_path: Path) -> None:
+    root, profile, ref = _gsplat_output(tmp_path, _gsplat_ply(vertices=2) + b"forged")
+    viewer = tmp_path / "viewer"
+    viewer.mkdir()
+    bundle = viewer / "scene.zip"
+    with pytest.raises(GsplatStaticAppearancePreflightError):
+        export_verified_gsplat_viewer_bundle(
+            artifact_ref=ref, output_root=root, profile=profile, bundle_path=bundle
+        )
+    assert not bundle.exists()
+    assert list(viewer.iterdir()) == []
 
 
 def test_verified_gsplat_gaussian_centers_export_standalone_glb(
