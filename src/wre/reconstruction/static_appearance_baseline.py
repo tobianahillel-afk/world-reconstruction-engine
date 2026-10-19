@@ -2062,8 +2062,22 @@ def run_gsplat_reference_training(
         raise GsplatStaticAppearancePreflightError(
             "gsplat LPIPS pretrained weight digest must be lowercase SHA-256"
         )
+    # An invalid offline checkpoint must not reserve the one-shot private
+    # output path; a corrected retry with the same path must remain possible.
+    # Check its bytes before creating anything, then verify the staged copy.
+    try:
+        with lpips_alexnet_weights.open("rb") as checked_source:
+            source_digest = hashlib.file_digest(checked_source, "sha256").hexdigest()
+    except OSError as exc:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat LPIPS pretrained weight file could not be read"
+        ) from exc
+    if source_digest != lpips_alexnet_sha256:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat LPIPS offline pretrained weight SHA-256 mismatch"
+        )
     # The private directory is created only after mandatory dependency inputs
-    # have passed their inexpensive boundary checks.
+    # have passed their integrity checks.
     output_root.mkdir(mode=0o700)
     private_import_root = _stage_verified_gsplat_trainer_imports(source_directory, output_root)
     torch_home = output_root / "torch-cache"
