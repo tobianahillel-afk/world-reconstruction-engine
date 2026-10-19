@@ -666,6 +666,268 @@ jobs:
           print("No CUDA device, GPU kernels, model training or scene quality proven")
           PY
 
+      - name: Decode a real 3-view COLMAP binary dataset with the pinned trainer (CPU)
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$COMMON_PYTHON" -I - <<'PY'
+          import os
+          import struct
+          import sys
+          import tempfile
+          from pathlib import Path
+
+          import numpy as np
+          import torch
+          from PIL import Image
+          from gsplat import export_splats
+
+          # Same -I and single source path as the real external trainer child.
+          # Reuse the private source closure verified by WRE in the prior step.
+          # Do not import from the mutable complete upstream checkout.
+          root = Path(os.environ["RUNNER_TEMP"]) / "wre-private-trainer-import"
+          private = (root / "wre-pinned-examples").resolve(strict=True)
+          sys.path.insert(0, str(private))
+          from datasets.colmap import Dataset, Parser
+          from simple_trainer import create_splats_with_optimizers
+
+          # Eight non-coplanar coloured points, observed in all three
+          # calibrated COLMAP camera views with actual projected 2D tracks.
+          dataset = Path(os.environ["RUNNER_TEMP"]) / "wre-colmap-preview-source"
+          photos, sparse = dataset / "images", dataset / "sparse" / "0"
+          photos.mkdir(parents=True)
+          sparse.mkdir(parents=True)
+          cube = [
+              (-.3, -.25, 1.6, 255, 40, 40),
+              (-.3, .25, 1.6, 40, 255, 40),
+              (.3, -.25, 1.6, 40, 40, 255),
+              (.3, .25, 1.6, 255, 255, 40),
+              (-.3, -.25, 2.4, 40, 255, 255),
+              (-.3, .25, 2.4, 255, 40, 255),
+              (.3, -.25, 2.4, 255, 160, 40),
+              (.3, .25, 2.4, 160, 100, 255),
+          ]
+          n = len(cube)
+          (sparse / "cameras.bin").write_bytes(
+              struct.pack("<Q", 1)
+              + struct.pack("<IiQQ4d", 1, 1, 64, 64, 64., 64., 32., 32.)
+          )
+          images_bin = bytearray(struct.pack("<Q", 3))
+          for image_id in range(1, 4):
+              name = f"frame-{image_id:02d}.png"
+              pixels = np.full((64, 64, 3), 12, dtype=np.uint8)
+              tx = (2 - image_id) * 0.2
+              images_bin.extend(
+                  struct.pack("<I4d3dI", image_id, 1., 0., 0., 0., tx, 0., 0., 1)
+              )
+              images_bin.extend(name.encode("ascii") + b"\x00")
+              images_bin.extend(struct.pack("<Q", n))
+              for pid, (x, y, z, r, g, b) in enumerate(cube, start=1):
+                  u, v = 64 * (x + tx) / z + 32, 64 * y / z + 32
+                  assert 0 <= u < 64 and 0 <= v < 64
+                  pixels[round(v), round(u)] = [r, g, b]
+                  images_bin.extend(struct.pack("<ddq", u, v, pid))
+              Image.fromarray(pixels, mode="RGB").save(photos / name)
+          (sparse / "images.bin").write_bytes(images_bin)
+          points = bytearray(struct.pack("<Q", n))
+          for pid, (x, y, z, r, g, b) in enumerate(cube, start=1):
+              points.extend(struct.pack("<Q3d3BdQ", pid, x, y, z, r, g, b, .01, 3))
+              for image_id in range(1, 4):
+                  points.extend(struct.pack("<II", image_id, pid - 1))
+          (sparse / "points3D.bin").write_bytes(points)
+
+          parsed = Parser(str(dataset), factor=1, normalize=False, test_every=8)
+          train = Dataset(parsed, split="train")
+          test = Dataset(parsed, split="test")
+          assert parsed.image_names == [
+              "frame-01.png", "frame-02.png", "frame-03.png"
+          ]
+          assert parsed.points.shape == (n, 3)
+          expected = np.array(cube, dtype=np.float64)
+          actual_order = np.lexsort(
+              (parsed.points[:, 2], parsed.points[:, 1], parsed.points[:, 0])
+          )
+          source_order = np.lexsort(
+              (expected[:, 2], expected[:, 1], expected[:, 0])
+          )
+          np.testing.assert_allclose(
+              parsed.points[actual_order], expected[source_order, :3], atol=1e-6
+          )
+          np.testing.assert_array_equal(
+              parsed.points_rgb[actual_order], expected[source_order, 3:]
+          )
+          assert len(train) == 2 and len(test) == 1
+          for batch in (train[0], train[1], test[0]):
+              assert isinstance(batch["image"], torch.Tensor)
+              assert batch["image"].shape == (64, 64, 3)
+              assert batch["image"].device.type == "cpu"
+              assert batch["K"].shape == (3, 3)
+              assert batch["camtoworld"].shape == (4, 4)
+              assert torch.isfinite(batch["K"]).all()
+              assert torch.isfinite(batch["camtoworld"]).all()
+          # The REAL upstream reference trainer builds its Gaussian model
+          # and six optimizer groups from the decoded native COLMAP points.
+          # device="cpu": no CUDA kernel, optimizer step or training is run.
+          assert parsed.points.shape == (n, 3)
+          assert parsed.points_rgb.shape == (n, 3)
+          torch.manual_seed(7)
+          splats, optimizers = create_splats_with_optimizers(
+              parsed, init_type="sfm", init_opacity=0.1, init_scale=1.0,
+              sh_degree=3, device="cpu", world_rank=0, world_size=1,
+          )
+          assert len(optimizers) == 6
+          assert set(optimizers) == {
+              "means", "scales", "quats", "opacities", "sh0", "shN",
+          }
+          assert all(param.device.type == "cpu" for param in splats.values())
+          assert all(torch.isfinite(param).all() for param in splats.values())
+          assert splats["means"].shape == (n, 3)
+          assert splats["scales"].shape == (n, 3)
+          assert splats["quats"].shape == (n, 4)
+          assert splats["sh0"].shape == (n, 1, 3)
+          assert splats["shN"].shape == (n, 15, 3)
+          np.testing.assert_allclose(
+              splats["means"].detach().numpy(), parsed.points, atol=1e-6
+          )
+          # The selected upstream trainer calculates its own KNN scale
+          # logits, opacity logits, SH colour parameters and quaternions.
+          assert (torch.exp(splats["scales"]) > 0).all()
+          assert torch.allclose(
+              torch.sigmoid(splats["opacities"]),
+              torch.full((n,), 0.1), atol=1e-6,
+          )
+          gaussian_names = ("means", "scales", "quats", "opacities", "sh0", "shN")
+          gaussians = {
+              name: splats[name].detach().cpu() for name in gaussian_names
+          }
+          export_root = Path(os.environ["RUNNER_TEMP"]) / "wre-colmap-derived-splats"
+          (export_root / "ply").mkdir(parents=True, exist_ok=False)
+          ply_file = export_root / "ply" / "point_cloud_0.ply"
+          splat_file = export_root / "point_cloud_0.splat"
+          ply_bytes = export_splats(**gaussians, format="ply", save_to=str(ply_file))
+          splat_bytes = export_splats(
+              **gaussians, format="splat", save_to=str(splat_file)
+          )
+          assert ply_file.read_bytes() == ply_bytes
+          assert splat_file.read_bytes() == splat_bytes
+          assert f"element vertex {n}\n".encode("ascii") in ply_bytes
+          assert b"property float f_rest_44\n" in ply_bytes
+          assert len(splat_bytes) == n * 32
+          # gsplat's binary .splat writer Morton-sorts the points.
+          # Match by decoded 3D position rather than assuming input order.
+          unmatched = set(range(n))
+          for idx in range(n):
+              splat = splat_bytes[idx * 32 : (idx + 1) * 32]
+              xyz = np.array(struct.unpack("<3f", splat[:12]))
+              options = [
+                  point_idx for point_idx in unmatched
+                  if np.allclose(parsed.points[point_idx], xyz, atol=1e-6)
+              ]
+              assert len(options) == 1
+              point_idx = options[0]
+              unmatched.remove(point_idx)
+              expected_scale = torch.exp(splats["scales"][point_idx]).detach().numpy()
+              np.testing.assert_allclose(
+                  struct.unpack("<3f", splat[12:24]), expected_scale, atol=1e-6
+              )
+              assert all(
+                  abs(actual - expected) <= 1
+                  for actual, expected in zip(splat[24:27], parsed.points_rgb[point_idx])
+              )
+              assert splat[27] == 25  # floor(sigmoid(logit(.1)) * 255)
+          assert not unmatched
+          print("Eight tracked COLMAP points initialized by REAL pinned trainer on CPU.")
+          print("Upstream KNN, colour SH, quats and optimizers used; NO TRAINING.")
+
+          print("Three REAL binary COLMAP views and 24 tracks decoded with upstream Parser/Dataset.")
+          print("CPU tensor generation verified; no CUDA kernel or training occurred.")
+          PY
+
+      - name: Materialize COLMAP-derived gsplat PLY with canonical WRE
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The pinned gsplat CUDA toolchain uses Python 3.10; WRE uses 3.12.
+          # Verify the actual generated bytes across that interpreter boundary.
+          uv sync --locked --no-dev --python 3.12.12
+          export PYTHONPATH="$GITHUB_WORKSPACE/src"
+          uv run --locked --no-dev --no-sync --python 3.12.12 python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          from wre.domain.appearance import APPEARANCE_MODEL_ARTIFACT_KIND
+          from wre.domain.artifacts import ArtifactId, ArtifactRef
+          from wre.reconstruction.static_appearance_baseline import (
+              GsplatStaticAppearanceTrainingProfile,
+              materialize_verified_gsplat_ply,
+          )
+
+          root = Path(os.environ["RUNNER_TEMP"]) / "wre-colmap-derived-splats"
+          ply = root / "ply" / "point_cloud_0.ply"
+          splat = root / "point_cloud_0.splat"
+          artifact = ArtifactRef(
+              ArtifactId("appearance:gsplat:cpu-colmap-init"),
+              APPEARANCE_MODEL_ARTIFACT_KIND,
+          )
+          metadata = materialize_verified_gsplat_ply(
+              artifact_ref=artifact,
+              output_root=root,
+              profile=GsplatStaticAppearanceTrainingProfile(max_steps=1),
+          )
+          assert metadata.artifact_ref == artifact
+          assert len(metadata.entries) == 1
+          entry = metadata.entries[0]
+          assert entry.relative_path == "ply/point_cloud_0.ply"
+          assert entry.byte_length == ply.stat().st_size
+          assert entry.sha256.value == hashlib.sha256(ply.read_bytes()).hexdigest()
+          assert splat.is_file() and splat.stat().st_size == 8 * 32
+          input_root = Path(os.environ["RUNNER_TEMP"]) / "wre-colmap-preview-source"
+          input_files = sorted((input_root / "images").glob("*.png")) + sorted(
+              (input_root / "sparse" / "0").glob("*.bin")
+          )
+          assert len(input_files) == 6
+          source_sha256 = {
+              f.relative_to(input_root).as_posix(): hashlib.sha256(f.read_bytes()).hexdigest()
+              for f in input_files
+          }
+          manifest = {
+              "input_sha256": source_sha256,
+              "registered_views": 3,
+              "tracked_points": 8,
+              "colmap_observations": 24,
+              "dataset": "synthetic COLMAP binary, 3 registered views, 8 tracked 3D points",
+              "producer": "pinned upstream gsplat 1.5.3 CPU initializer and exporter (untrained)",
+              "initialization": "simple_trainer.create_splats_with_optimizers, sfm, CPU",
+              "optimizer_groups_initialized": 6,
+              "optimizer_steps_executed": 0,
+              "gpu_training_executed": False,
+              "ply_sha256": entry.sha256.value,
+              "ply_bytes": entry.byte_length,
+              "splat_sha256": hashlib.sha256(splat.read_bytes()).hexdigest(),
+              "splat_bytes": splat.stat().st_size,
+          }
+          (root / "wre-cpu-colmap-init-manifest.json").write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          print("Actual COLMAP point/RGB -> pinned gsplat exporter -> WRE PLY materializer.")
+          print("Eight untrained 3D Gaussians: GPU training and 4D unverified.")
+          PY
+
+      - name: Retain COLMAP-derived Gaussian preview and WRE hash evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wre-colmap-to-gsplat-cpu-preview
+          path: |
+            ${{ runner.temp }}/wre-colmap-derived-splats/ply/point_cloud_0.ply
+            ${{ runner.temp }}/wre-colmap-derived-splats/point_cloud_0.splat
+            ${{ runner.temp }}/wre-colmap-derived-splats/wre-cpu-colmap-init-manifest.json
+            ${{ runner.temp }}/wre-colmap-preview-source/images/*.png
+            ${{ runner.temp }}/wre-colmap-preview-source/sparse/0/*.bin
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Retain true exporter to WRE materialization artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
