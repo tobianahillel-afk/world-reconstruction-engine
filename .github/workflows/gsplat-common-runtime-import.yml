@@ -323,7 +323,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python - <<'PY'
+          # The pinned CUDA container has no bare `python` on PATH; the
+          # exact CPython 3.10.21 interpreter is provisioned by setup-uv.
+          "$COMMON_PYTHON" - <<'PY'
           import ast
           import hashlib
           import os
