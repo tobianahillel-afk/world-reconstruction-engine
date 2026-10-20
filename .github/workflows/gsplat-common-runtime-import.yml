@@ -337,6 +337,50 @@ jobs:
           }
           for i in (0, 32):
               assert splat_data[i + 12:i + 24] == struct.pack("<3f", 1.0, 1.0, 1.0)
+          # Functional CPU data path: the REAL pinned COLMAP Parser's measured
+          # Point3D XYZ and RGB feed the REAL pinned gsplat exporter, not
+          # hand-authored Gaussian centers. This is a diagnostic untrained
+          # Gaussian, NOT fitted appearance or validated radiance.
+          import sys
+          import numpy as np
+          upstream_examples = Path(os.environ["COMMON_SOURCES"]) / "gsplat" / "examples"
+          sys.path.insert(0, str(upstream_examples))
+          from datasets.colmap import Parser
+
+          native_root = Path(os.environ["RUNNER_TEMP"]) / "gsplat-colmap-decode-smoke"
+          native_parser = Parser(
+              data_dir=str(native_root), factor=1, normalize=False, test_every=3
+          )
+          assert native_parser.points.shape == (1, 3)
+          assert native_parser.points_rgb.shape == (1, 3)
+          assert native_parser.points[0].tolist() == [0.0, 0.0, 2.0]
+          assert native_parser.points_rgb[0].tolist() == [200, 100, 50]
+          native_means = torch.from_numpy(native_parser.points.copy())
+          # SH-DC is only a container encoding of native COLMAP RGB here.
+          # There is no shared-radiance calibration or Gaussian optimization.
+          native_rgb = torch.from_numpy(
+              native_parser.points_rgb.astype(np.float32)
+          ) / 255.0
+          native_sh0 = ((native_rgb - 0.5) / 0.28209479177387814).unsqueeze(1)
+          native_output_root = Path(os.environ["RUNNER_TEMP"]) / "wre-colmap-gsplat-cpu"
+          (native_output_root / "ply").mkdir(parents=True, exist_ok=False)
+          native_ply_path = native_output_root / "ply" / "point_cloud_0.ply"
+          native_ply = export_splats(
+              means=native_means,
+              scales=torch.zeros((1, 3), dtype=torch.float32),
+              quats=torch.tensor([[1., 0., 0., 0.]], dtype=torch.float32),
+              opacities=torch.zeros((1,), dtype=torch.float32),
+              sh0=native_sh0,
+              shN=torch.zeros((1, 15, 3), dtype=torch.float32),
+              format="ply",
+              save_to=str(native_ply_path),
+          )
+          assert native_ply_path.read_bytes() == native_ply
+          payload_start = native_ply.index(b"end_header\\n") + len(b"end_header\\n")
+          assert struct.unpack_from("<3f", native_ply, payload_start) == (0., 0., 2.)
+          assert b"element vertex 1\\n" in native_ply
+          print("REAL COLMAP Parser Point3D/RGB -> native gsplat CPU PLY complete.")
+          print("Input model is synthetic, splat untrained, radiance uncalibrated.")
           print(f"Actual pinned gsplat.export_splats CPU emitted {len(produced)} PLY bytes")
           print(f"Actual pinned gsplat.export_splats CPU emitted {len(splat_data)} .splat bytes")
           print("Two synthetic CPU Gaussians; no GPU run or scene reconstruction.")
@@ -384,6 +428,27 @@ jobs:
           assert entry.byte_length == len(actual_bytes)
           assert entry.sha256.value == hashlib.sha256(actual_bytes).hexdigest()
           print("Canonical WRE Python 3.12 accepted the REAL gsplat CPU exporter PLY")
+          # The other output actually derives its center/color from the
+          # native COLMAP Parser rather than hard-coded torch positions.
+          # This retains the source geometry bytes, but is not training.
+          native_root = Path(os.environ["RUNNER_TEMP"]) / "wre-colmap-gsplat-cpu"
+          native_bytes = (native_root / "ply" / "point_cloud_0.ply").read_bytes()
+          native_artifact = ArtifactRef(
+              ArtifactId("appearance:gsplat:colmap-derived-cpu-diagnostic"),
+              APPEARANCE_MODEL_ARTIFACT_KIND,
+          )
+          native_metadata = materialize_verified_gsplat_ply(
+              artifact_ref=native_artifact,
+              output_root=native_root,
+              profile=GsplatStaticAppearanceTrainingProfile(max_steps=1),
+          )
+          assert len(native_metadata.entries) == 1
+          assert native_metadata.entries[0].byte_length == len(native_bytes)
+          assert native_metadata.entries[0].sha256.value == hashlib.sha256(
+              native_bytes
+          ).hexdigest()
+          assert native_metadata.entries[0].relative_path == "ply/point_cloud_0.ply"
+          print("COLMAP native XYZ/RGB -> gsplat CPU export -> WRE PLY re-read: PASS")
           print("Cross-interpreter output hashing verified; no GPU optimization executed.")
           PY
 
@@ -448,5 +513,6 @@ jobs:
           path: |
             ${{ runner.temp }}/wre-upstream-exporter-smoke/ply/point_cloud_0.ply
             ${{ runner.temp }}/wre-upstream-exporter-smoke/point_cloud_0.splat
+            ${{ runner.temp }}/wre-colmap-gsplat-cpu/ply/point_cloud_0.ply
           if-no-files-found: error
           retention-days: 7
