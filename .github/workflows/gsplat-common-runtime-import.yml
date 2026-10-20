@@ -979,16 +979,56 @@ jobs:
           print("Eight untrained 3D Gaussians: GPU training and 4D unverified.")
           PY
 
+      # RUNNER_TEMP inside the CUDA job container does not necessarily equal
+      # the host runner.temp expression used by Node upload-artifact.
+      # Archive a single checkout-relative tree to retain the actual payload.
+      - name: Stage complete COLMAP and native exporter evidence for retention
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$GITHUB_WORKSPACE/wre-ci-evidence"
+          colmap="$evidence/colmap"
+          exporter="$evidence/exporter"
+          test ! -e "$evidence"
+          mkdir -p "$colmap/ply" "$colmap/images" "$colmap/sparse/0" "$exporter/ply"
+          cp "$RUNNER_TEMP/wre-colmap-derived-splats/ply/point_cloud_0.ply" "$colmap/ply/"
+          cp "$RUNNER_TEMP/wre-colmap-derived-splats/point_cloud_0.splat" "$colmap/"
+          cp "$RUNNER_TEMP/wre-colmap-derived-splats/wre-cpu-colmap-init-manifest.json" "$colmap/"
+          cp "$RUNNER_TEMP/wre-colmap-preview-source/images/"*.png "$colmap/images/"
+          cp "$RUNNER_TEMP/wre-colmap-preview-source/sparse/0/"*.bin "$colmap/sparse/0/"
+          cp "$RUNNER_TEMP/wre-upstream-exporter-smoke/ply/point_cloud_0.ply" "$exporter/ply/"
+          cp "$RUNNER_TEMP/wre-upstream-exporter-smoke/point_cloud_0.splat" "$exporter/"
+          cp "$RUNNER_TEMP/wre-config-bridge.json" "$exporter/"
+          cp "$RUNNER_TEMP/gsplat-common-runtime-native-files.json" "$exporter/"
+          # All nine source/output proof files and four bridge/runtime files
+          # must exist before an artifact upload can report success.
+          test "$(find "$colmap" -type f | wc -l)" -eq 9
+          test "$(find "$exporter" -type f | wc -l)" -eq 4
+          "$COMMON_PYTHON" - "$colmap" <<'PY'
+          import hashlib
+          import json
+          import sys
+          from pathlib import Path
+
+          root = Path(sys.argv[1])
+          manifest = json.loads((root / "wre-cpu-colmap-init-manifest.json").read_text())
+          assert len(manifest["input_sha256"]) == 6
+          for relative, expected in manifest["input_sha256"].items():
+              observed = hashlib.sha256((root / relative).read_bytes()).hexdigest()
+              assert observed == expected, relative
+          for kind, filename in (("ply", root / "ply/point_cloud_0.ply"), ("splat", root / "point_cloud_0.splat")):
+              assert hashlib.sha256(filename.read_bytes()).hexdigest() == manifest[f"{kind}_sha256"]
+              assert filename.stat().st_size == manifest[f"{kind}_bytes"]
+          assert manifest["gpu_training_executed"] is False
+          assert manifest["optimizer_steps_executed"] == 0
+          print("Retained nine verified COLMAP/gsplat files and four native bridge files; NO GPU training.")
+          PY
+
       - name: Retain COLMAP-derived Gaussian preview and WRE hash evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: wre-colmap-to-gsplat-cpu-preview
-          path: |
-            ${{ runner.temp }}/wre-colmap-derived-splats/ply/point_cloud_0.ply
-            ${{ runner.temp }}/wre-colmap-derived-splats/point_cloud_0.splat
-            ${{ runner.temp }}/wre-colmap-derived-splats/wre-cpu-colmap-init-manifest.json
-            ${{ runner.temp }}/wre-colmap-preview-source/images/*.png
-            ${{ runner.temp }}/wre-colmap-preview-source/sparse/0/*.bin
+          path: wre-ci-evidence/colmap/
           if-no-files-found: error
           retention-days: 7
 
@@ -996,10 +1036,6 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: wre-real-gsplat-exporter-to-materializer-cpu
-          path: |
-            ${{ runner.temp }}/wre-upstream-exporter-smoke/ply/point_cloud_0.ply
-            ${{ runner.temp }}/wre-upstream-exporter-smoke/point_cloud_0.splat
-            ${{ runner.temp }}/wre-config-bridge.json
-            ${{ runner.temp }}/gsplat-common-runtime-native-files.json
+          path: wre-ci-evidence/exporter/
           if-no-files-found: error
           retention-days: 7
