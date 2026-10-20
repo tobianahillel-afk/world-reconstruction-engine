@@ -382,7 +382,7 @@ jobs:
           assert not marker.exists()
           try:
               startup_pth.write_text(
-                  f"import pathlib; pathlib.Path({str(marker)!r}).write_text('injected')\\n"
+                  f"import pathlib; pathlib.Path({str(marker)!r}).write_text('injected')\n"
               )
               vulnerable = subprocess.run(
                   [os.environ["COMMON_PYTHON"], "-I", "-c", "pass"],
