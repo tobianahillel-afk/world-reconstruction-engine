@@ -356,7 +356,7 @@ jobs:
               "PIP_NO_INDEX": "1",
           })
           completed = subprocess.run(
-              [os.environ["COMMON_PYTHON"], "-I", "-c", child,
+              [os.environ["COMMON_PYTHON"], "-I", "-S", "-c", child,
                str(examples), str(manifest), expected_sha256],
               input=b"{}",
               capture_output=True,
@@ -370,6 +370,42 @@ jobs:
               completed.stderr.decode(errors="replace")[-4000:]
           )
           print("Approved live native manifest hashes and imports matched; no CUDA device available.")
+          # Python -I alone still executes site-packages *.pth before the
+          # receipt guard. Prove that risk, then prove -I -S suppresses it
+          # without breaking the exact native import/GPU refusal path.
+          import importlib.util
+          torch_spec = importlib.util.find_spec("torch")
+          assert torch_spec is not None and torch_spec.origin is not None
+          startup_pth = Path(torch_spec.origin).parent.parent / "wre_unapproved_startup.pth"
+          marker = Path(os.environ["RUNNER_TEMP"]) / "wre-pth-startup-marker"
+          assert not startup_pth.exists()
+          assert not marker.exists()
+          try:
+              startup_pth.write_text(
+                  f"import pathlib; pathlib.Path({str(marker)!r}).write_text('injected')\\n"
+              )
+              vulnerable = subprocess.run(
+                  [os.environ["COMMON_PYTHON"], "-I", "-c", "pass"],
+                  capture_output=True, env=environment, timeout=120, check=False,
+              )
+              assert vulnerable.returncode == 0, vulnerable.stderr.decode(errors="replace")
+              assert marker.exists(), "The control must prove -I executes the injected .pth"
+              marker.unlink()
+              hardened = subprocess.run(
+                  [os.environ["COMMON_PYTHON"], "-I", "-S", "-c", child,
+                   str(examples), str(manifest), expected_sha256],
+                  input=b"{}", capture_output=True, cwd=examples, env=environment,
+                  timeout=120, check=False,
+              )
+              assert hardened.returncode != 0
+              assert b"gsplat reference training requires exactly one visible CUDA GPU" in hardened.stderr, (
+                  hardened.stderr.decode(errors="replace")[-4000:]
+              )
+              assert not marker.exists(), "The -S child must not execute startup .pth code"
+          finally:
+              startup_pth.unlink(missing_ok=True)
+              marker.unlink(missing_ok=True)
+          print("Unsafe .pth startup demonstrated with -I; hardened -I -S did not execute it.")
           # Negative control: a NEW importable Python file under a reviewed
           # package is untrusted even if all previously listed hashes match.
           # An entrypoint-only or .so-only receipt would incorrectly accept it.
@@ -381,7 +417,7 @@ jobs:
           try:
               rogue.write_text("raise RuntimeError('unapproved python executed')\n")
               rejected = subprocess.run(
-                  [os.environ["COMMON_PYTHON"], "-I", "-c", child,
+                  [os.environ["COMMON_PYTHON"], "-I", "-S", "-c", child,
                    str(examples), str(manifest), expected_sha256],
                   input=b"{}",
                   capture_output=True,
