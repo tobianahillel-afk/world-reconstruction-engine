@@ -1798,7 +1798,8 @@ def build_gsplat_reference_trainer_path_overrides(
 _GSPLAT_APPROVED_NATIVE_RECEIPT_SHA256: frozenset[str] = frozenset()
 
 # The external interpreter is an explicit, caller-owned CUDA environment.
-# -I prevents user site/PYTHONPATH injection; only the pinned examples directory
+# -I -S prevents user site/PYTHONPATH and executable .pth/sitecustomize injection;
+# only the pinned examples directory
 # is prepended in the child. The parent never imports torch or CUDA modules.
 _GSPLAT_TRAINER_CHILD = """import hashlib
 import importlib.util
@@ -1835,7 +1836,23 @@ if (
 files = receipt.get("files")
 if not isinstance(files, list) or len(files) < len(required_modules):
     raise RuntimeError("gsplat runtime manifest has incomplete native file coverage")
-environment = Path(sys.prefix).resolve(strict=True)
+# Python -I alone runs site initialization and executable .pth entries
+# BEFORE this receipt guard. The launcher MUST use -I -S. Add the sole
+# explicitly located venv site-packages without invoking site.addsitedir().
+venv_bin = Path(sys.executable).parent
+if venv_bin.name not in ("bin", "Scripts"):
+    raise RuntimeError("gsplat requires a dedicated external virtual environment")
+environment = venv_bin.parent.resolve(strict=True)
+if not (environment / "pyvenv.cfg").is_file():
+    raise RuntimeError("gsplat external venv identity is missing")
+if sys.platform == "win32":
+    packages = environment / "Lib" / "site-packages"
+else:
+    packages = environment / "lib" / ("python%d.%d" % sys.version_info[:2]) / "site-packages"
+if packages.is_symlink() or not packages.is_dir():
+    raise RuntimeError("gsplat external site-packages directory is missing or redirected")
+sys.prefix = sys.exec_prefix = str(environment)
+sys.path.append(str(packages))
 verified = set()
 native_found = False
 for record in files:
@@ -2162,6 +2179,7 @@ def run_gsplat_reference_training(
                 [
                     str(python_executable),
                     "-I",
+                    "-S",
                     "-c",
                     _GSPLAT_TRAINER_CHILD,
                     str(private_import_root),
