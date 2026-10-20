@@ -376,9 +376,9 @@ jobs:
               save_to=str(native_ply_path),
           )
           assert native_ply_path.read_bytes() == native_ply
-          payload_start = native_ply.index(b"end_header\\n") + len(b"end_header\\n")
+          payload_start = native_ply.index(b"end_header\n") + len(b"end_header\n")
           assert struct.unpack_from("<3f", native_ply, payload_start) == (0., 0., 2.)
-          assert b"element vertex 1\\n" in native_ply
+          assert b"element vertex 1\n" in native_ply
           print("REAL COLMAP Parser Point3D/RGB -> native gsplat CPU PLY complete.")
           print("Input model is synthetic, splat untrained, radiance uncalibrated.")
           print(f"Actual pinned gsplat.export_splats CPU emitted {len(produced)} PLY bytes")
