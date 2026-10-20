@@ -1353,6 +1353,7 @@ def test_external_trainer_child_rejects_unapproved_runtime_before_import(
         [
             sys.executable,
             "-I",
+            "-S",
             "-c",
             child,
             str(tmp_path),
@@ -1489,12 +1490,12 @@ def test_external_gsplat_runner_builds_complete_canonical_candidate_with_process
     )
     assert len(calls) == 1
     command, kwargs = calls[0]
-    assert command[:3] == [str(runtime), "-I", "-c"]
-    assert "from simple_trainer import Config, main" in command[3]
+    assert command[:4] == [str(runtime), "-I", "-S", "-c"]
+    assert "from simple_trainer import Config, main" in command[4]
     private_imports = output / "wre-pinned-examples"
-    assert command[4] == str(private_imports)
-    assert command[5] == str(receipt)
-    assert command[6] == receipt_digest
+    assert command[5] == str(private_imports)
+    assert command[6] == str(receipt)
+    assert command[7] == receipt_digest
     assert kwargs["cwd"] == private_imports
     assert (private_imports / "simple_trainer.py").read_bytes() == (
         source_root / "examples" / "simple_trainer.py"
@@ -1744,9 +1745,9 @@ def test_external_gsplat_runner_spawns_real_process_and_assembles_appearance(
         "assert 'WRE_PRIVATE_CI_TOKEN' not in os.environ\n"
         "from pathlib import Path\n"
         "import sys\n"
-        "assert sys.argv[1:3] == ['-I', '-c']\n"
-        "assert 'from simple_trainer import Config, main' in sys.argv[3]\n"
-        "assert 'torch.hub.download_url_to_file = reject_implicit_download' in sys.argv[3]\n"
+        "assert sys.argv[1:4] == ['-I', '-S', '-c']\n"
+        "assert 'from simple_trainer import Config, main' in sys.argv[4]\n"
+        "assert 'torch.hub.download_url_to_file = reject_implicit_download' in sys.argv[4]\n"
         "cfg = json.load(sys.stdin)\n"
         "assert cfg['max_steps'] == 20\n"
         "assert cfg['save_ply'] is True\n"
