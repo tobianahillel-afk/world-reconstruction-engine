@@ -74,17 +74,45 @@ jobs:
           assert len(wheels) == 76
           assert next(x for x in wheels if x["name"] == "torch")["version"] == "2.4.0+cu124"
           lines = []
+          audit_versions = []
           for item in sorted(wheels, key=lambda entry: entry["name"].lower()):
               url, digest = item["url"], item["sha256"]
               parts = urlsplit(url)
               assert parts.scheme == "https" and not parts.fragment
               assert re.fullmatch("[0-9a-f]{64}", digest)
               lines.append(f'{item["name"]} @ {url}#sha256={digest}')
+              audit_versions.append(f'{item["name"]}=={item["version"]}')
           (Path(os.environ["RUNNER_TEMP"]) / "common-locked-wheels.txt").write_text(
               "\n".join(lines) + "\n", encoding="utf-8"
           )
+          (Path(os.environ["RUNNER_TEMP"]) / "common-locked-advisories.txt").write_text(
+              "\n".join(audit_versions) + "\n", encoding="utf-8"
+          )
           print(f"One common environment requires {len(wheels)} pinned wheels")
           PY
+
+      # This is an independent vulnerability audit of the 76 locked wheel
+      # identities only. It does NOT replace GitHub Dependency Review/SBOM,
+      # native/CUDA closure security, checkpoint trust or license approval.
+      - name: Audit all 76 locked Python wheel versions against PyPI advisories
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(wc -l < "$RUNNER_TEMP/common-locked-advisories.txt")" -eq 76
+          uvx --python 3.10.21 --from "pip-audit==2.10.1" pip-audit \
+            --no-deps --disable-pip --vulnerability-service pypi \
+            --format json \
+            --requirement "$RUNNER_TEMP/common-locked-advisories.txt" \
+            --output "$GITHUB_WORKSPACE/wre-76-wheel-advisory-report.json"
+
+      - name: Retain 76-wheel advisory report even if vulnerabilities are found
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wre-76-wheel-python-advisory-report
+          path: wre-76-wheel-advisory-report.json
+          if-no-files-found: warn
+          retention-days: 7
 
       - name: Install all 76 reviewed wheels without resolving new dependencies
         shell: bash
