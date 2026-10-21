@@ -91,29 +91,6 @@ jobs:
           print(f"One common environment requires {len(wheels)} pinned wheels")
           PY
 
-      # This is an independent vulnerability audit of the 76 locked wheel
-      # identities only. It does NOT replace GitHub Dependency Review/SBOM,
-      # native/CUDA closure security, checkpoint trust or license approval.
-      - name: Audit all 76 locked Python wheel versions against PyPI advisories
-        shell: bash
-        run: |
-          set -euo pipefail
-          test "$(wc -l < "$RUNNER_TEMP/common-locked-advisories.txt")" -eq 76
-          uvx --python 3.10.21 --from "pip-audit==2.10.1" pip-audit \
-            --no-deps --disable-pip --vulnerability-service pypi \
-            --format json \
-            --requirement "$RUNNER_TEMP/common-locked-advisories.txt" \
-            --output "$GITHUB_WORKSPACE/wre-76-wheel-advisory-report.json"
-
-      - name: Retain 76-wheel advisory report even if vulnerabilities are found
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: wre-76-wheel-python-advisory-report
-          path: wre-76-wheel-advisory-report.json
-          if-no-files-found: warn
-          retention-days: 7
-
       - name: Install all 76 reviewed wheels without resolving new dependencies
         shell: bash
         run: |
@@ -1156,4 +1133,31 @@ jobs:
           name: wre-real-gsplat-exporter-to-materializer-cpu
           path: wre-ci-evidence/exporter/
           if-no-files-found: error
+          retention-days: 7
+
+      # Execute after native tests so discovered advisories do not mask CPU
+      # compatibility/contract proofs. The scan still FAILS the whole job.
+      # 'always' also preserves the audit result if an earlier native step fails.
+      # This is an independent vulnerability audit of the 76 locked wheel
+      # identities only. It does NOT replace GitHub Dependency Review/SBOM,
+      # native/CUDA closure security, checkpoint trust or license approval.
+      - name: Audit all 76 locked Python wheel versions against PyPI advisories
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(wc -l < "$RUNNER_TEMP/common-locked-advisories.txt")" -eq 76
+          uvx --python 3.10.21 --from "pip-audit==2.10.1" pip-audit \
+            --no-deps --disable-pip --vulnerability-service pypi \
+            --format json \
+            --requirement "$RUNNER_TEMP/common-locked-advisories.txt" \
+            --output "$GITHUB_WORKSPACE/wre-76-wheel-advisory-report.json"
+
+      - name: Retain 76-wheel advisory report even if vulnerabilities are found
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wre-76-wheel-python-advisory-report
+          path: wre-76-wheel-advisory-report.json
+          if-no-files-found: warn
           retention-days: 7
