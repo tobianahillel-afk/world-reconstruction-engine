@@ -1173,7 +1173,6 @@ jobs:
     timeout-minutes: 120
     permissions:
       contents: read
-      actions: read
     container:
       image: nvidia/cuda@sha256:da6791294b0b04d7e65d87b7451d6f2390b4d36225ab0701ee7dfec5769829f5
     env:
@@ -1181,9 +1180,6 @@ jobs:
       TORCH_CUDA_ARCH_LIST: "7.5"
       MAX_JOBS: "1"
       PYTHONPATH: ""
-      LOCK_ARTIFACT_ID: "12379162173"
-      LOCK_ARTIFACT_ZIP_SHA256: "7d73e7f450fb8382f1f2cbbda9f8609283d694b42d685f8b057f1603990581b0"
-      LOCK_MANIFEST_SHA256: "fb5affbcc826476d73bdf3aeb229244f7627bc2bf5b27544aa1c64348dd03bb5"
       GSPLAT_REVISION: "937e29912570c372bed6747a5c9bf85fed877bae"
       GSPLAT_TREE: "90c3f0b2352e6d2725bcba1ef0407168f922c0fa"
       SSIM_REVISION: "328dc9836f513d00c4b5bc38fe30478b4435cbb5"
@@ -1193,7 +1189,6 @@ jobs:
       NERFVIEW_REVISION: "4538024fe0d15fd1a0e4d760f3695fc44ca72787"
       NERFVIEW_TREE: "e333400e39605978a3d1f9cf6d73ddf577a8c8e3"
       SCENE_MANAGER_REVISION: "cc7ea4b7301720ac29287dbe450952511b32125e"
-      GITHUB_TOKEN: ${{ github.token }}
     steps:
       - name: Checkout WRE to keep the branch and source identity explicit
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -1207,7 +1202,7 @@ jobs:
           python-version: "3.11.14"
           enable-cache: false
 
-      - name: Fetch exactly audited candidate manifest and install its 76 wheels
+      - name: Reconstruct pinned experimental Python 3.11 native identity overlay and install all 76 wheels
         shell: bash
         run: |
           set -euo pipefail
@@ -1215,80 +1210,87 @@ jobs:
           "$CUDA_HOME/bin/nvcc" --version | grep -F 'release 12.4,'
           uv venv --seed --python 3.11.14 "$RUNNER_TEMP/wre-py311-native"
           echo "CANDIDATE_PYTHON=$RUNNER_TEMP/wre-py311-native/bin/python" >> "$GITHUB_ENV"
-          "$RUNNER_TEMP/wre-py311-native/bin/python" - <<'PY'
-          import hashlib
-          import io
+
+          # Use the immutable WRE repository registry, not an expiring Actions artifact.
+          # Bootstrap PyYAML is isolated from the sealed 76-wheel native environment.
+          uv run --no-project --with "pyyaml==6.0.2" python - <<'PY'
           import json
           import os
           import re
-          import urllib.request
-          import zipfile
           from pathlib import Path
           from urllib.parse import unquote, urlsplit
 
-          repo = os.environ["GITHUB_REPOSITORY"]
-          artifact_id = os.environ["LOCK_ARTIFACT_ID"]
-          url = f"https://api.github.com/repos/{repo}/actions/artifacts/{artifact_id}/zip"
-          req = urllib.request.Request(url, headers={
-              "Authorization": f"Bearer {os.environ['GITHUB_TOKEN']}",
-              "Accept": "application/vnd.github+json",
-              "User-Agent": "WRE-Pinned-Py311-Native-Probe",
-              "X-GitHub-Api-Version": "2022-11-28",
-          })
-          # The artifact REST endpoint redirects to a signed download URL.
-          # Never forward the repository bearer token to that other host.
-          class TokenStrippingRedirect(urllib.request.HTTPRedirectHandler):
-              def redirect_request(self, request, fp, code, msg, headers, newurl):
-                  target = urlsplit(newurl)
-                  if target.scheme != "https" or target.username or target.password:
-                      raise SystemExit("insecure GitHub artifact redirect refused")
-                  return urllib.request.Request(
-                      newurl, headers={"User-Agent": "WRE-Pinned-Py311-Native-Probe"}
-                  )
+          import yaml
 
-          opener = urllib.request.build_opener(TokenStrippingRedirect)
-          with opener.open(req, timeout=180) as response:
-              blob = response.read(2 * 1024 * 1024 + 1)
-          if len(blob) > 2 * 1024 * 1024:
-              raise SystemExit("candidate artifact exceeds bound")
-          if hashlib.sha256(blob).hexdigest() != os.environ["LOCK_ARTIFACT_ZIP_SHA256"]:
-              raise SystemExit("candidate ZIP hash does not match exact CI artifact")
-          with zipfile.ZipFile(io.BytesIO(blob)) as archive:
-              if archive.namelist() != ["gsplat-python-runtime-lock.json"]:
-                  raise SystemExit("unexpected source artifact contents")
-              content = archive.read("gsplat-python-runtime-lock.json")
-          if hashlib.sha256(content).hexdigest() != os.environ["LOCK_MANIFEST_SHA256"]:
-              raise SystemExit("candidate manifest hash does not match audited source")
-          lock = json.loads(content)
-          if lock["evidence_kind"] != "pip_dependency_resolution_only":
-              raise SystemExit("candidate cannot self-report native runtime success")
-          if lock["target"]["python"] != "3.11.14" or lock["target"]["torch_cuda"] != "12.4":
-              raise SystemExit("wrong candidate Python or CUDA target")
-          if any(lock[x] is not False for x in ("gpu_execution_evidence", "native_extension_build_evidence", "runtime_execution_evidence")):
-              raise SystemExit("candidate claims execution without proof")
-          packages = lock["packages"]
-          if len(packages) != 76:
-              raise SystemExit("unexpected candidate wheel count")
-          allowed_hosts = {"files.pythonhosted.org", "pypi.nvidia.com", "download-r2.pytorch.org", "download.pytorch.org"}
+          entry = yaml.safe_load(
+              Path("registry/dependencies.yaml").read_text(encoding="utf-8")
+          )["dependencies"]["gsplat_static_appearance"]
+          candidate = entry["runtime_python_311_candidate"]
+          if (
+              candidate["status"] != "experimental_non_default_not_approved"
+              or candidate["evidence_kind"] != "pinned_wheel_identity_overlay_not_released_runtime"
+              or candidate["target_python"] != "3.11.14"
+              or candidate["target_cuda"] != "12.4"
+              or candidate["gpu_execution_evidence"] is not False
+              or candidate["runtime_approved"] is not False
+              or candidate["license_review"] != "pending"
+          ):
+              raise SystemExit("candidate not eligible for experimental CPU compilation")
+          base = entry[candidate["base_lock_key"]]["packages"]
+          changes = candidate["wheel_overrides"]
+          if len(base) != 76 or len(changes) != 21:
+              raise SystemExit("expected 76 base and 21 changed wheel identities")
+          def canonical(value):
+              return re.sub(r"[-_.]+", "-", value).lower()
+          by_name = {canonical(p["name"]): dict(p) for p in base}
+          if len(by_name) != 76:
+              raise SystemExit("duplicate original dependencies")
           seen = set()
-          lines = []
-          for item in sorted(packages, key=lambda x: x["name"].lower()):
-              name, digest, url = item["name"], item["sha256"], item["url"]
-              parts = urlsplit(url)
-              key = re.sub(r"[-_.]+", "-", name).lower()
-              if (not re.fullmatch(r"[a-zA-Z0-9_.-]+", name) or key in seen
-                  or not re.fullmatch(r"[0-9a-f]{64}", digest)
-                  or parts.scheme != "https" or parts.hostname not in allowed_hosts
-                  or parts.username or parts.password or parts.query or parts.fragment
-                  or unquote(parts.path.rsplit("/", 1)[-1]) != item["filename"]
-                  or not item["filename"].endswith(".whl")):
-                  raise SystemExit("untrusted candidate wheel identity")
+          for item in changes:
+              key = canonical(item["name"])
+              if key not in by_name or key in seen:
+                  raise SystemExit("invalid duplicate or additional wheel")
               seen.add(key)
-              lines.append(f"{name} @ {url}#sha256={digest}")
-          root = Path(os.environ["RUNNER_TEMP"])
-          (root / "py311-exact-wheels.txt").write_text("\n".join(lines) + "\n")
-          (root / "py311-locked-manifest.json").write_bytes(content)
-          print("All 76 wheel identities are bound to one CI manifest SHA")
+              record = by_name[key]
+              if all(record[field] == item[field] for field in ("version", "url", "sha256")):
+                  raise SystemExit("unnecessary wheel overlay entry")
+              record.update({field: item[field] for field in ("version", "url", "sha256")})
+              record["filename"] = unquote(urlsplit(item["url"]).path.rsplit("/", 1)[-1])
+          allowed_hosts = {
+              "files.pythonhosted.org",
+              "download.pytorch.org",
+              "download-r2.pytorch.org",
+              "pypi.nvidia.com",
+          }
+          wheel_lines = []
+          records = []
+          for p in sorted(by_name.values(), key=lambda p: p["name"].lower()):
+              parsed = urlsplit(p["url"])
+              if (
+                  not re.fullmatch(r"[A-Za-z0-9_.-]+", p["name"])
+                  or not re.fullmatch(r"[a-f0-9]{64}", p["sha256"])
+                  or parsed.scheme != "https"
+                  or parsed.hostname not in allowed_hosts
+                  or parsed.username or parsed.password or parsed.fragment or parsed.query
+                  or unquote(parsed.path.rsplit("/", 1)[-1]) != p["filename"]
+                  or not p["filename"].endswith(".whl")
+              ):
+                  raise SystemExit("invalid or untrusted wheel identity")
+              wheel_lines.append(f'{p["name"]} @ {p["url"]}#sha256={p["sha256"]}')
+              records.append({k: p[k] for k in ("name", "version", "url", "sha256", "filename")})
+          out = Path(os.environ["RUNNER_TEMP"])
+          (out / "py311-exact-wheels.txt").write_text("\n".join(wheel_lines) + "\n")
+          (out / "py311-locked-manifest.json").write_text(
+              json.dumps({
+                  "evidence_kind": "permanent_registry_identity_overlay_only",
+                  "target": {"python": "3.11.14", "torch_cuda": "12.4"},
+                  "packages": records,
+                  "native_extension_build_evidence": False,
+                  "gpu_execution_evidence": False,
+                  "approved_runtime": False,
+              }, sort_keys=True, indent=2) + "\n"
+          )
+          print("Exact 76 Python 3.11 artifact URLs/SHA-256 reconstructed from WRE registry")
           PY
           "$RUNNER_TEMP/wre-py311-native/bin/python" -m pip install --no-index --no-deps --no-cache-dir --require-hashes \
             -r "$RUNNER_TEMP/py311-exact-wheels.txt"

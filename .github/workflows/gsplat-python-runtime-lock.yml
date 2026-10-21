@@ -408,6 +408,69 @@ jobs:
           fi
           echo "Committed gsplat Python runtime lock matches exact regeneration."
 
+
+      - name: Verify exact Python 3.11 candidate wheels against durable registry overlay
+        if: matrix.flavor == 'py311-pillow13-probe'
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run --no-project --with "pyyaml==6.0.2" python - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          import yaml
+
+          entry = yaml.safe_load(
+              Path("registry/dependencies.yaml").read_text(encoding="utf-8")
+          )["dependencies"]["gsplat_static_appearance"]
+          candidate = entry["runtime_python_311_candidate"]
+          old = entry[candidate["base_lock_key"]]["packages"]
+          got = json.loads(
+              (Path(os.environ["RUNNER_TEMP"]) / "gsplat-python-runtime-lock.json").read_text()
+          )
+          if (
+              candidate["status"] != "experimental_non_default_not_approved"
+              or candidate["evidence_kind"] != "pinned_wheel_identity_overlay_not_released_runtime"
+              or candidate["target_python"] != got["target"]["python"]
+          ):
+              raise SystemExit("invalid experimental candidate")
+          if candidate["target_python"] != "3.11.14":
+              raise SystemExit("unexpected candidate interpreter")
+          if candidate["target_cuda"] != got["target"]["torch_cuda"] != "12.4":
+              raise SystemExit("unexpected candidate CUDA ABI")
+          if len(old) != 76 or len(got["packages"]) != 76 or len(candidate["wheel_overrides"]) != 21:
+              raise SystemExit("wrong number of exact pinned wheels")
+          if candidate["gpu_execution_evidence"] is not False or candidate["runtime_approved"] is not False:
+              raise SystemExit("candidate authority must remain unapproved")
+          if candidate["license_review"] != "pending":
+              raise SystemExit("license approval must not be auto-attested")
+          def canonical(value):
+              return re.sub(r"[-_.]+", "-", value).lower()
+          def identities(packs):
+              out = {}
+              for package in packs:
+                  key = canonical(package["name"])
+                  if key in out or not re.fullmatch(r"[a-f0-9]{64}", package["sha256"]):
+                      raise SystemExit("duplicate/missing SHA-256")
+                  out[key] = tuple(package[k] for k in ("version", "url", "sha256"))
+              return out
+          expected = identities(old)
+          delta = identities(candidate["wheel_overrides"])
+          if not set(delta).issubset(expected):
+              raise SystemExit("overlay introduced a new dependency")
+          if any(expected[k] == v for k, v in delta.items()):
+              raise SystemExit("redundant/malformed candidate wheel override")
+          expected.update(delta)
+          actual = identities(got["packages"])
+          if actual != expected:
+              mismatch = sorted(k for k in expected if expected.get(k) != actual.get(k))
+              raise SystemExit(f"candidate 76-wheel artifact drift: {mismatch}")
+          print("Registry pinned 76/76 Python 3.11 wheel names/versions/URLs/SHA-256")
+          print("This is not native/GPU execution, license review or approved runtime")
+          PY
+
       - name: Validate Python 3.11 + Pillow 13 candidate identity (resolution ONLY)
         if: matrix.flavor == 'py311-pillow13-probe'
         shell: bash
