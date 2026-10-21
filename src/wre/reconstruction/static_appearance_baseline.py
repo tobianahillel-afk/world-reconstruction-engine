@@ -2077,6 +2077,17 @@ def run_gsplat_reference_training(
         raise GsplatStaticAppearancePreflightError(
             "gsplat training output overlaps the pinned reference source checkout"
         )
+    # The training process writes arbitrary files below result_dir. The staged
+    # dataset and pinned checkout are already protected; protect the original
+    # immutable source evidence too, not only its private staged copies.
+    output_destination = Path(str(overrides["result_dir"]))
+    if any(
+        output_destination.is_relative_to(_safe_root(root, "gsplat original source root"))
+        for root in (source.image_root, source.native_model_root)
+    ):
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat training output overlaps original image or native-model source evidence"
+        )
     if not isinstance(artifact_ref, ArtifactRef):
         raise TypeError("gsplat output artifact_ref must be ArtifactRef")
     if artifact_ref.artifact_kind != APPEARANCE_MODEL_ARTIFACT_KIND:

@@ -1597,6 +1597,57 @@ def test_external_gsplat_runner_builds_complete_canonical_candidate_with_process
     assert (output / "wre-reference-training.log").exists()
 
 
+@pytest.mark.parametrize("source_root_name", ("image_root", "native_model_root"))
+def test_reference_trainer_rejects_output_inside_original_sources(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, source_root_name: str
+) -> None:
+    """Never let the external trainer create results under immutable inputs."""
+    monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_matching_capture_metadata",
+        lambda *_args: (),
+    )
+    request, source, staged, _old_output, profile, artifact_ref, producer = (
+        _retained_gsplat_fixture(tmp_path)
+    )
+    source_root, _ = _reviewed_source_fixture(tmp_path, monkeypatch)
+    interpreter = tmp_path / "external-python"
+    interpreter.write_bytes(b"stub")
+    protected_root = getattr(source, source_root_name)
+    output = protected_root / "training-results"
+    image_before = source.images[0].source_path.read_bytes()
+    native_before = (source.native_model_root / "0" / "cameras.bin").read_bytes()
+    monkeypatch.setattr(
+        baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
+    )
+    _stub_reference_trainer_track_gate(monkeypatch)
+    monkeypatch.setattr(
+        baseline_module.subprocess,
+        "run",
+        lambda *_args, **_kwargs: pytest.fail("overlapping output launched trainer"),
+    )
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="original image or native-model"):
+        run_gsplat_reference_training(
+            request=request,
+            source=source,
+            assessments=(),
+            staged=staged,
+            profile=profile,
+            features=cast(ColmapFeatureExtractionResult, object()),
+            expected_environment=cast(ColmapEnvironmentIdentity, object()),
+            source_root=source_root,
+            python_executable=interpreter,
+            output_root=output,
+            artifact_ref=artifact_ref,
+            producer=producer,
+            cuda_device_index=0,
+            timeout_seconds=30,
+        )
+    assert not output.exists()
+    assert source.images[0].source_path.read_bytes() == image_before
+    assert (source.native_model_root / "0" / "cameras.bin").read_bytes() == native_before
+
+
 def test_reference_trainer_rejects_output_within_pinned_source_checkout(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
