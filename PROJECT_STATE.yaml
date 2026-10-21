@@ -10,18 +10,24 @@ status: ready
 last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5, V2L3.6, V2L4.1, V2L4.2, V2L4.3, V2L4.4, V2L4.5, V2L4.6, V2L5.1, V2L5.2, V2L5.3, V2L5.4, V2L5.5, V2L5.6, V2L6.1, V2L6.2, V2L6.3, V2L6.4, V2L6.5, V2L6.6, V2L7.1, V2L7.2, V2L7.3, V2L7.4, V2L7.5, V2L7.6, V2L8.1, V2L8.2, V2L8.3, V2L8.4, V2L8.5, V2L9.1, V2L9.2, V2L9.3, V2L9.4, V2L9.5, V2L10.1, V2L10.2, V2L10.3, V2L10.4, V2L10.5, V2L10.6, V2L11.1, V2L11.2, V2L11.3, V2L11.4, V2L11.5, V2L11.6, V2L12.1, V2L12.2, V2L12.3, V2L12.4, V2L12.5, V2L13.1, V2L13.2, V2L13.3, V2L13.4, V2L13.5, V2L13.6, V2L14.1, V2L14.2, V2L14.3, V2L14.4, V2L14.5, V2L14.6, V2L15.1, V2L15.2, V2L15.3, V2L15.4, V2L15.5, V2L15.6, V2L16.1, V2L16.2, V2L16.3, V2L16.4, V2L16.5, V2L16.6, V2L17.1, V2L17.2, V2L17.3, V2L17.4, V2L17.5, V2L18.1, V2L18.2]
 last_merged_pr: 192
 current_goal: >-
-  Option A CPU-first roadmap migration PROPOSED in PR #401: the experimental gsplat
+  Standalone CPU evidence-evaluator NO-GO sequencing PROPOSED in PR #401,
+  distinct from the docs/23 accelerator-evidence exception: experimental gsplat
   V2L18.3 integration remains BLOCKED, not done, not merged, not independently
   approved; unsupported GPU kernels, learned training and GPU-dependent quality are
   DEFERRED / UNVERIFIED. Preserve exact CPU/provenance evidence of PR #322 without
   equating synthetic Gaussian exports or CUDA native builds to learned appearance.
-  Activate only the independently executable CPU metrics/evidence contract V2L18.4
-  after this governance migration itself passes required reviews and is merged.
+  Activate the separately justified V2L18.4 CPU evidence-admissibility/metrics
+  contract only after an independent review of this NO-GO sequencing exception
+  and its actual merge. Render scoring must establish exact retained model-to-
+  renderer/config/camera-to-output lineage or remain UNVERIFIED.
 next_action: >-
-  V2L18.4 READY: implement only bounded CPU-held-out evidence validation and
+  V2L18.4 READY ONLY ON THIS UNMERGED PROPOSAL BRANCH: after independent review
+  and merge, implement bounded CPU-held-out evidence validation and
   appearance/geometry/motion metric calculations using the frozen V2L18.2
   solver-independent contracts and already retained WRE metric primitives.
-  Never render or train a model, infer synthetic benchmark quality, enable gsplat,
+  Reject any supplied render lacking independent retained model/producer/config/
+  camera/output-digest derivation, with no invented score or claim. Never render
+  or train a model, infer synthetic benchmark quality, enable gsplat,
   issue default promotion, or complete V2L18 lot while V2L18.3 remains blocked.
   Separately, repo owner/independent reviewer must clear native runtime identities,
   LPIPS/checkpoint and transitive redistribution licensing and an actually executed
