@@ -1272,6 +1272,9 @@ def test_one_call_gsplat_reconstruction_stages_real_files_and_returns_candidate(
     monkeypatch.setattr(
         baseline_module, "_GSPLAT_APPROVED_NATIVE_RECEIPT_SHA256", frozenset({receipt_sha})
     )
+    monkeypatch.setattr(
+        baseline_module, "_GSPLAT_APPROVED_LPIPS_ALEXNET_SHA256", frozenset({lpips_sha})
+    )
     result = reconstruct_gsplat_static_appearance(
         request=request,
         source=source,
@@ -1385,6 +1388,11 @@ def test_external_trainer_rejects_self_hash_receipt_without_repo_approval(
     weights.write_bytes(b"test-only-weights")
     receipt = tmp_path / "self-asserted-native-files.json"
     receipt.write_bytes(b'{"source_revisions": "caller-claimed"}')
+    monkeypatch.setattr(
+        baseline_module,
+        "_GSPLAT_APPROVED_LPIPS_ALEXNET_SHA256",
+        frozenset({hashlib.sha256(weights.read_bytes()).hexdigest()}),
+    )
     unapproved_digest = hashlib.sha256(receipt.read_bytes()).hexdigest()
     monkeypatch.setattr(
         baseline_module,
@@ -1424,6 +1432,69 @@ def test_external_trainer_rejects_self_hash_receipt_without_repo_approval(
     assert not output.exists()
 
 
+def test_external_trainer_rejects_self_hashed_lpips_even_with_approved_native_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Matching caller SHA cannot authorize unreviewed deserializable weights."""
+    request, source, staged, output, profile, ref, producer = _retained_gsplat_fixture(
+        tmp_path
+    )
+    (output / profile.expected_ply_relative_path).unlink()
+    (output / "ply").rmdir()
+    output.rmdir()
+    source_root, _ = _reviewed_source_fixture(tmp_path, monkeypatch)
+    interpreter = tmp_path / "external-python"
+    interpreter.write_bytes(b"test interpreter")
+    weights = tmp_path / "self-asserted-alexnet.pth"
+    weights.write_bytes(b"caller-supplied-unreviewed-weights")
+    self_hash = hashlib.sha256(weights.read_bytes()).hexdigest()
+    receipt = tmp_path / "independently-reviewed-native-receipt.json"
+    receipt.write_bytes(b"test-only native receipt")
+    receipt_sha = hashlib.sha256(receipt.read_bytes()).hexdigest()
+    monkeypatch.setattr(
+        baseline_module, "_GSPLAT_APPROVED_NATIVE_RECEIPT_SHA256", frozenset({receipt_sha})
+    )
+    monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_matching_capture_metadata",
+        lambda *_: (),
+    )
+    monkeypatch.setattr(
+        baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
+    )
+    _stub_reference_trainer_track_gate(monkeypatch)
+    monkeypatch.setattr(
+        baseline_module.subprocess,
+        "run",
+        lambda *_a, **_kw: pytest.fail("unapproved LPIPS launched native process"),
+    )
+    assert not baseline_module._GSPLAT_APPROVED_LPIPS_ALEXNET_SHA256
+    with pytest.raises(
+        GsplatStaticAppearancePreflightError, match="independently approved WRE digest"
+    ):
+        run_gsplat_reference_training(
+            request=request,
+            source=source,
+            assessments=(),
+            staged=staged,
+            profile=profile,
+            features=cast(ColmapFeatureExtractionResult, object()),
+            expected_environment=cast(ColmapEnvironmentIdentity, object()),
+            source_root=source_root,
+            python_executable=interpreter,
+            output_root=output,
+            artifact_ref=ref,
+            producer=producer,
+            cuda_device_index=0,
+            timeout_seconds=15,
+            lpips_alexnet_weights=weights,
+            lpips_alexnet_sha256=self_hash,
+            runtime_manifest_path=receipt,
+            approved_runtime_manifest_sha256=receipt_sha,
+        )
+    assert not output.exists()
+
+
 def test_external_gsplat_runner_builds_complete_canonical_candidate_with_process_stub(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1454,6 +1525,9 @@ def test_external_gsplat_runner_builds_complete_canonical_candidate_with_process
     # Test-only trust approval; production WRE has NO approved native receipts.
     monkeypatch.setattr(
         baseline_module, "_GSPLAT_APPROVED_NATIVE_RECEIPT_SHA256", frozenset({receipt_digest})
+    )
+    monkeypatch.setattr(
+        baseline_module, "_GSPLAT_APPROVED_LPIPS_ALEXNET_SHA256", frozenset({weight_digest})
     )
     monkeypatch.setattr(
         baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
@@ -1773,6 +1847,9 @@ def test_external_gsplat_runner_spawns_real_process_and_assembles_appearance(
     monkeypatch.setattr(
         baseline_module, "_GSPLAT_APPROVED_NATIVE_RECEIPT_SHA256", frozenset({receipt_sha})
     )
+    monkeypatch.setattr(
+        baseline_module, "_GSPLAT_APPROVED_LPIPS_ALEXNET_SHA256", frozenset({lpips_sha})
+    )
     result = run_gsplat_reference_training(
         request=request,
         source=source,
@@ -1926,6 +2003,9 @@ def test_external_gsplat_runner_rejects_failure_or_missing_output(
     receipt_sha = hashlib.sha256(receipt.read_bytes()).hexdigest()
     monkeypatch.setattr(
         baseline_module, "_GSPLAT_APPROVED_NATIVE_RECEIPT_SHA256", frozenset({receipt_sha})
+    )
+    monkeypatch.setattr(
+        baseline_module, "_GSPLAT_APPROVED_LPIPS_ALEXNET_SHA256", frozenset({lpips_sha})
     )
     with pytest.raises(GsplatStaticAppearancePreflightError):
         run_gsplat_reference_training(
