@@ -479,7 +479,7 @@ jobs:
           )
           try:
               bytecode.write_bytes(
-                  importlib.util.MAGIC_NUMBER + b"\\x00" * 12 + marshal.dumps(code)
+                  importlib.util.MAGIC_NUMBER + b"\x00" * 12 + marshal.dumps(code)
               )
               rejected = subprocess.run(
                   [os.environ["COMMON_PYTHON"], "-I", "-S", "-c", child,
@@ -504,7 +504,7 @@ jobs:
               external = Path(private) / "unreviewed"
               external.mkdir()
               (external / "__init__.py").write_text(
-                  "raise RuntimeError('unapproved linked module executed')\\n"
+                  "raise RuntimeError('unapproved linked module executed')\n"
               )
               linked = packages / "wre_unapproved_linked_package"
               assert not linked.exists() and not linked.is_symlink()
