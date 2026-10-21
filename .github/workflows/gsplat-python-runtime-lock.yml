@@ -1526,6 +1526,7 @@ jobs:
         run: |
           set -euo pipefail
           export PYTHONPATH="$GITHUB_WORKSPACE/src"
+          uv sync --locked --no-dev --python 3.12.12
           uv run --locked --no-dev --no-sync --python 3.12.12 python - <<'PY'
           import os
           from pathlib import Path
