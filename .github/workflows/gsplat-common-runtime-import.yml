@@ -272,9 +272,13 @@ jobs:
           import json
           import os
           import sys
+          import sysconfig
           from pathlib import Path
 
           environment = Path(sys.prefix).resolve()
+          packages = Path(sysconfig.get_path("purelib")).resolve(strict=True)
+          if not packages.is_relative_to(environment):
+              raise RuntimeError("Native receipt site-packages is outside the pinned environment")
           files = {}
           modules = ("torch", "torchvision", "numpy", "gsplat", "fused_ssim", "fused_ssim_cuda", "nerfview", "pycolmap")
           for name in modules:
@@ -283,24 +287,24 @@ jobs:
               if not location:
                   raise RuntimeError(f"Native manifest lacks module origin: {name}")
               origin = Path(location).resolve(strict=True)
-              if not origin.is_relative_to(environment):
-                  raise RuntimeError(f"Native module is outside pinned environment: {name}")
-              candidates = [origin]
-              if origin.name == "__init__.py":
-                  candidates.extend(
-                      item for item in origin.parent.rglob("*")
-                      if item.is_file() and item.suffix.lower() in (".py", ".so", ".pyd", ".dylib")
-                  )
-              for item in candidates:
-                  resolved = item.resolve(strict=True)
-                  if not resolved.is_relative_to(environment):
-                      raise RuntimeError(f"Native extension escaped pinned environment: {name}")
-                  relative = resolved.relative_to(environment).as_posix()
-                  digest = hashlib.sha256()
-                  with resolved.open("rb") as data:
-                      for chunk in iter(lambda: data.read(1024 * 1024), b""):
-                          digest.update(chunk)
-                  files[relative] = digest.hexdigest()
+              if not origin.is_relative_to(packages):
+                  raise RuntimeError(f"Native module is outside pinned site-packages: {name}")
+
+          # The approved receipt must bind EVERY importable Python/native file,
+          # including otherwise unlisted transitive modules and top-level .so
+          # modules. An exact digest for eight root packages is insufficient.
+          for item in packages.rglob("*"):
+              if not (item.suffix.lower() in (".py", ".so", ".pyd", ".dylib", ".dll")
+                      or ".so." in item.name):
+                  continue
+              if item.is_symlink() or not item.is_file():
+                  raise RuntimeError("Native receipt contains redirected or missing module")
+              relative = item.relative_to(environment).as_posix()
+              digest = hashlib.sha256()
+              with item.open("rb") as data:
+                  for chunk in iter(lambda: data.read(1024 * 1024), b""):
+                      digest.update(chunk)
+              files[relative] = digest.hexdigest()
 
           evidence = {
               "schema": "wre.gsplat.common_runtime_native_files.v1",
@@ -436,6 +440,26 @@ jobs:
           finally:
               rogue.unlink(missing_ok=True)
           print("Tampered native package with an added Python file: rejected before CUDA.")
+          # A top-level module outside the eight named roots is also reachable
+          # through sys.path; it must not escape the same approved closure.
+          rogue = Path(torch_spec.origin).parent.parent / "wre_unapproved_transitive.py"
+          assert not rogue.exists()
+          try:
+              rogue.write_text("raise RuntimeError('unapproved transitive code executed')\n")
+              rejected = subprocess.run(
+                  [os.environ["COMMON_PYTHON"], "-I", "-S", "-c", child,
+                   str(examples), str(manifest), expected_sha256],
+                  input=b"{}", capture_output=True, cwd=examples, env=environment,
+                  timeout=120, check=False,
+              )
+              assert rejected.returncode != 0
+              assert b"unapproved importable package files" in rejected.stderr, (
+                  rejected.stderr.decode(errors="replace")[-4000:]
+              )
+              assert b"unapproved transitive code executed" not in rejected.stderr
+          finally:
+              rogue.unlink(missing_ok=True)
+          print("Unreviewed TOP-LEVEL transitive module: rejected before third-party imports.")
           print("No GPU kernel, Gaussian optimizer or training executed.")
           PY
 

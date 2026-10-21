@@ -1901,14 +1901,19 @@ for name in required_modules:
         raise RuntimeError("gsplat imported native module escaped approved environment")
     if origin.relative_to(environment).as_posix() not in verified:
         raise RuntimeError("gsplat native module entrypoint not in approved manifest")
-    # All executable Python and native package files must be in the approved
-    # receipt. Refuse additions, not just mutations of already listed files.
-    if origin.name == "__init__.py":
-        for installed in origin.parent.rglob("*"):
-            if installed.is_file() and installed.suffix.lower() in (".py", ".so", ".pyd", ".dylib"):
-                relative = installed.resolve(strict=True).relative_to(environment).as_posix()
-                if relative not in verified:
-                    raise RuntimeError("gsplat runtime has unapproved importable package files")
+# A reviewed receipt must cover the WHOLE importable site-packages closure,
+# not just the eight named roots. Otherwise an extra top-level/transitive
+# dependency can execute unreviewed Python/native code after these checks.
+# Keep this scan before ALL third-party imports under -I -S.
+for installed in packages.rglob("*"):
+    if not (installed.suffix.lower() in (".py", ".so", ".pyd", ".dylib", ".dll")
+            or ".so." in installed.name):
+        continue
+    if installed.is_symlink() or not installed.is_file():
+        raise RuntimeError("gsplat runtime has unapproved importable package files")
+    relative = installed.relative_to(environment).as_posix()
+    if relative not in verified:
+        raise RuntimeError("gsplat runtime has unapproved importable package files")
 
 import torch
 import numpy
