@@ -1122,7 +1122,6 @@ jobs:
           if (
               info["name"].lower().replace("_", "-") != "cuda-toolkit"
               or info["version"] != "12.6.3"
-              or "NVIDIA" not in (info.get("author") or "")
           ):
               raise SystemExit("official CUDA publisher identity differs")
           releases = [
@@ -1146,7 +1145,10 @@ jobs:
               "version": "12.6.3",
               "filename": expected_filename,
               "wheel_sha256": expected_sha,
-              "vendor": info["author"],
+              "declared_pypi_author_not_owner_attestation": info.get("author") or None,
+              "declared_pypi_author_email_not_owner_attestation": info.get("author_email") or None,
+              "official_pypi_wheel_hash_verified": True,
+              "separately_verified_publisher_account_owner": False,
               "license_terms_reference_for_independent_review": eula,
               "package_wheel_license_metadata_missing": True,
               "nvidia_eula_review_completed": False,
@@ -1157,7 +1159,8 @@ jobs:
               json.dumps(publisher, indent=2, sort_keys=True) + "\n",
               encoding="utf-8",
           )
-          evidence["publisher_license_identity_verified"] = True
+          evidence["publisher_license_identity_verified"] = False
+          evidence["exact_upstream_wheel_release_identity_verified"] = True
           if (
               evidence["independent_license_approval"] is not False
               or evidence["runtime_approved"] is not False
@@ -1165,7 +1168,8 @@ jobs:
           ):
               raise SystemExit("independent approval was not granted")
           path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
-          print("Exact NVIDIA CUDA toolkit artifact matched official PyPI wheel digest")
+          print("CUDA toolkit 12.6.3 exact wheel hash matched official PyPI release")
+          print("PyPI author fields are optional metadata, NOT authenticated owner or license")
           print("Vendor EULA retained for independent review; redistribution is NOT approved")
           PY
 
