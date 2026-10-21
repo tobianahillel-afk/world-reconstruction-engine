@@ -1412,6 +1412,60 @@ jobs:
           test "$(git -C "$root/gsplat/gsplat/cuda/csrc/third_party/glm" rev-parse HEAD^{tree})" = "$GLM_TREE"
           echo "MODERN_SOURCES=$root" >> "$GITHUB_ENV"
 
+      # Torch 2.14 public headers use C++20 (std::strong_ordering/operator<=>).
+      # Exact upstream gsplat v1.5.3 hardcodes nvcc -std=c++17. After verifying
+      # git HEAD, tree and original setup.py blob, perform ONE narrowly scoped
+      # source modification for this experimental ABI proof. It is NOT the
+      # pristine upstream build, a reviewed fork or an approved shipping model.
+      - name: Apply experimental C++20 compatibility overlay to pinned gsplat source
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$MODERN_SOURCES/gsplat"
+          test "$(git -C "$root" rev-parse HEAD)" = "$GSPLAT_REVISION"
+          test "$(git -C "$root" rev-parse HEAD^{tree})" = "$GSPLAT_TREE"
+          test "$(git -C "$root" hash-object setup.py)" = "f152008e5f35604b38e0ec6c98e8e17c525c1bcb"
+          "$MODERN_PYTHON" - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path(os.environ["MODERN_SOURCES"]) / "gsplat" / "setup.py"
+          original = path.read_bytes()
+          old = b'"-std=c++17"'
+          new = b'"-std=c++20"'
+          if original.count(old) != 1 or original.count(new):
+              raise SystemExit("unreviewed or missing upstream nvcc standard flag")
+          modified = original.replace(old, new)
+          if modified.count(new) != 1 or modified.replace(new, old) != original:
+              raise SystemExit("compatibility overlay changes unexpected upstream bytes")
+          path.write_bytes(modified)
+          evidence = {
+              "evidence_kind": "experimental_exact_pinned_upstream_source_delta_cxx20",
+              "source_repository": "nerfstudio-project/gsplat",
+              "source_commit": os.environ["GSPLAT_REVISION"],
+              "source_tree_before_overlay": os.environ["GSPLAT_TREE"],
+              "source_path": "setup.py",
+              "exact_change": "one nvcc -std=c++17 flag to -std=c++20",
+              "source_sha256_before": hashlib.sha256(original).hexdigest(),
+              "source_sha256_after": hashlib.sha256(modified).hexdigest(),
+              "modified_upstream_source": True,
+              "upstream_unmodified_binary_claim": False,
+              "runtime_approved": False,
+              "redistribution_approved": False,
+              "gpu_execution_evidence": False,
+              "training_execution_evidence": False,
+          }
+          Path("wre-py311-torch214-cxx20-overlay.json").write_text(
+              json.dumps(evidence, sort_keys=True, indent=2) + "\n"
+          )
+          print("One exact source patch only: gsplat setup.py nvcc C++17 -> C++20")
+          print("No GPU/training or redistribution approval inferred")
+          PY
+          test "$(git -C "$root" diff --name-only)" = "setup.py"
+          git -C "$root" diff --check
+
       - name: Compile real gsplat and fused-ssim CUDA native extensions under Torch 2.14
         shell: bash
         run: |
@@ -1465,6 +1519,8 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: v2l18-3-modern-torch214-cuda126-native-compat
-          path: wre-py311-torch214-native-compat.json
+          path: |
+            wre-py311-torch214-native-compat.json
+            wre-py311-torch214-cxx20-overlay.json
           if-no-files-found: warn
           retention-days: 30
