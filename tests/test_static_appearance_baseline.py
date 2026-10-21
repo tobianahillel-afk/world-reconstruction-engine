@@ -1626,7 +1626,9 @@ def test_reference_trainer_rejects_output_inside_original_sources(
         "run",
         lambda *_args, **_kwargs: pytest.fail("overlapping output launched trainer"),
     )
-    with pytest.raises(GsplatStaticAppearancePreflightError, match="original image or native-model"):
+    with pytest.raises(
+        GsplatStaticAppearancePreflightError, match="original image or native-model"
+    ):
         run_gsplat_reference_training(
             request=request,
             source=source,
