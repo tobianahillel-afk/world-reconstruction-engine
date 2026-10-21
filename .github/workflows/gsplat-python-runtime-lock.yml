@@ -21,12 +21,29 @@ concurrency:
 
 jobs:
   resolve:
-    name: linux-x86_64-py310-torch24-cu124-resolution-only
+    name: linux-x86_64-${{ matrix.flavor }}-torch24-cu124-resolution-only
     runs-on: ubuntu-24.04
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The original exact lock verification remains mandatory.
+          - flavor: py310-pillow12-committed
+            target_python: "3.10.21"
+            pillow_version: "12.3.0"
+            committed_lock: true
+            artifact_name: v2l18-3-gsplat-python-runtime-lock
+          # Exploratory candidate; NO approved runtime or GPU claim.
+          - flavor: py311-pillow13-probe
+            target_python: "3.11.14"
+            pillow_version: "13.0.0"
+            committed_lock: false
+            artifact_name: v2l18-3-gsplat-python311-pillow13-probe
     timeout-minutes: 20
     env:
       LOCK_KEY: runtime_python_lock
-      TARGET_PYTHON_REQUEST: "3.10.21"
+      TARGET_PYTHON_REQUEST: ${{ matrix.target_python }}
+      PILLOW_VERSION: ${{ matrix.pillow_version }}
       PIP_VERSION: "25.3"
       PYTORCH_INDEX: https://download.pytorch.org/whl/cu124
 
@@ -40,7 +57,7 @@ jobs:
         uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
           version: "0.12.13"
-          python-version: "3.10.21"
+          python-version: ${{ matrix.target_python }}
           enable-cache: false
 
       - name: Prepare exact pip resolver
@@ -57,6 +74,7 @@ jobs:
           ldd --version | head -n 1
 
       - name: Build optional exact constraints from reviewed registry lock
+        if: matrix.committed_lock
         shell: bash
         run: |
           set -euo pipefail
@@ -121,7 +139,7 @@ jobs:
             "numpy==1.26.4"
             "scipy==1.15.3"
             "opencv-python==4.11.0.86"
-            "Pillow==12.3.0"
+            "Pillow==$PILLOW_VERSION"
             "imageio==2.38.0"
             "scikit-learn==1.7.2"
             "tqdm==4.70.1"
@@ -346,6 +364,7 @@ jobs:
           PY
 
       - name: Verify committed registry lock or expose bootstrap result
+        if: matrix.committed_lock
         shell: bash
         run: |
           set -euo pipefail
@@ -389,10 +408,46 @@ jobs:
           fi
           echo "Committed gsplat Python runtime lock matches exact regeneration."
 
+      - name: Validate Python 3.11 + Pillow 13 candidate identity (resolution ONLY)
+        if: matrix.flavor == 'py311-pillow13-probe'
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RESOLVER_PYTHON" - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          report = json.loads(
+              (Path(os.environ["RUNNER_TEMP"]) / "gsplat-python-runtime-lock.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          if report["evidence_kind"] != "pip_dependency_resolution_only":
+              raise SystemExit("probe cannot claim training or native execution")
+          if report["target"]["python"] != "3.11.14":
+              raise SystemExit("probe resolved wrong Python runtime")
+          if any(report[key] is not False for key in (
+              "runtime_execution_evidence",
+              "gpu_execution_evidence",
+              "native_extension_build_evidence",
+          )):
+              raise SystemExit("probe must remain resolution-only")
+          packages = {item["name"].lower().replace("_", "-"): item
+                      for item in report["packages"]}
+          expected = {"pillow": "13.0.0", "torch": "2.4.0+cu124",
+                      "torchvision": "0.19.0+cu124", "numpy": "1.26.4"}
+          for name, version in expected.items():
+              if packages.get(name, {}).get("version") != version:
+                  raise SystemExit(f"probe has incompatible {name} version")
+          print(f"CPU-only Python 3.11 Pillow 13 candidate resolved "
+                f"{len(packages)} immutable wheels; not an approved runtime")
+          PY
+
       - name: Retain machine-readable resolver evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: v2l18-3-gsplat-python-runtime-lock
+          name: ${{ matrix.artifact_name }}
           path: ${{ runner.temp }}/gsplat-python-runtime-lock.json
           if-no-files-found: error
           retention-days: 30
