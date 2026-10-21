@@ -917,6 +917,8 @@ jobs:
           echo "CANDIDATE_PYTHON=$RUNNER_TEMP/wre-torch214/bin/python" >> "$GITHUB_ENV"
           "$RUNNER_TEMP/wre-torch214/bin/python" -m pip install \
             --disable-pip-version-check --no-deps "pip==25.3"
+          # Request PyPI's exact Jinja2 3.1.6 wheel rather than a
+          # secondary-index mirror with incomplete wheel identity metadata.
           "$RUNNER_TEMP/wre-torch214/bin/python" -m pip install \
             --dry-run --ignore-installed --only-binary=:all: \
             --report "$RUNNER_TEMP/wre-torch214-pip-report.json" \
@@ -929,7 +931,8 @@ jobs:
             "tensorboard==2.21.0" "torchmetrics[image]==1.9.0" \
             "ninja==1.13.2" "jaxtyping==0.3.7" "rich==14.3.4" \
             "typing-extensions==4.16.0" "setuptools==84.0.0" \
-            "wheel==0.48.0"
+            "wheel==0.48.0" \
+            "https://files.pythonhosted.org/packages/62/a1/3d680cbfd5f4b8f15abc1d571870c5fc3e594bb582bc3b64ea099db13e56/jinja2-3.1.6-py3-none-any.whl#sha256=85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67"
 
       - name: Bind every candidate wheel to its source HTTPS URL and SHA-256
         shell: bash
