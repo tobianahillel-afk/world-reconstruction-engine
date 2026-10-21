@@ -451,3 +451,128 @@ jobs:
           path: ${{ runner.temp }}/gsplat-python-runtime-lock.json
           if-no-files-found: error
           retention-days: 30
+
+      # This is a real CPython/Pillow CPU import and image round-trip check.
+      # It is NOT a gsplat/CUDA/native-extension or full 76-wheel execution.
+      - name: Exercise SHA-pinned Pillow 13 real CPU PNG decode
+        if: matrix.flavor == 'py311-pillow13-probe'
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RESOLVER_PYTHON" - <<'PY'
+          import json
+          import os
+          import re
+          import subprocess
+          from pathlib import Path
+          from urllib.parse import urlsplit
+
+          lock = json.loads(
+              (Path(os.environ["RUNNER_TEMP"]) / "gsplat-python-runtime-lock.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          pillow = next((p for p in lock["packages"] if p["name"].lower() == "pillow"), None)
+          if pillow is None or pillow["version"] != "13.0.0":
+              raise SystemExit("missing exactly resolved Pillow 13.0.0")
+          url = pillow["url"]
+          digest = pillow["sha256"]
+          if (
+              urlsplit(url).scheme != "https"
+              or urlsplit(url).hostname != "files.pythonhosted.org"
+              or not re.fullmatch(r"[0-9a-f]{64}", digest)
+          ):
+              raise SystemExit("unverified or untrusted Pillow wheel identity")
+          subprocess.run(
+              [os.sys.executable, "-m", "pip", "install", "--disable-pip-version-check",
+               "--no-deps", "--no-index", f"{url}#sha256={digest}"],
+              check=True,
+          )
+          PY
+          "$RESOLVER_PYTHON" - <<'PY'
+          import io
+          import struct
+          import zlib
+
+          from PIL import Image, ImageFile, __version__
+
+          if __version__ != "13.0.0" or ImageFile.LOAD_TRUNCATED_IMAGES:
+              raise SystemExit("unexpected Pillow version or unsafe truncated-image mode")
+
+          def chunk(tag: bytes, data: bytes) -> bytes:
+              return (
+                  struct.pack("!I", len(data)) + tag + data
+                  + struct.pack("!I", zlib.crc32(tag + data) & 0xffffffff)
+              )
+
+          # Independent 2x1 RGB8 PNG source, not generated with Pillow itself.
+          pixels = bytes((2, 4, 6, 10, 20, 30))
+          png = (
+              b"\x89PNG\r\n\x1a\n"
+              + chunk(b"IHDR", struct.pack("!IIBBBBB", 2, 1, 8, 2, 0, 0, 0))
+              + chunk(b"IDAT", zlib.compress(b"\x00" + pixels))
+              + chunk(b"IEND", b"")
+          )
+          with Image.open(io.BytesIO(png)) as decoded:
+              if decoded.format != "PNG" or decoded.mode != "RGB" or decoded.size != (2, 1):
+                  raise SystemExit("wrong PNG identity or RGB8 dimensions")
+              decoded.load()
+              if decoded.tobytes() != pixels:
+                  raise SystemExit("real Pillow 13 PNG decoded pixels incorrectly")
+          print("CPU Pillow 13.0.0: exact SHA-pinned wheel imported; real PNG decoded to exact RGB8 bytes")
+          PY
+
+      # Scan the *candidate* 76 package versions. These names and versions
+      # come from the immutable resolver artifact, NOT the old Python3.10 lock.
+      # Security findings or scanner unavailability are mandatory failures.
+      - name: Audit Python 3.11 candidate 76 resolved wheel versions
+        if: always() && matrix.flavor == 'py311-pillow13-probe'
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RESOLVER_PYTHON" - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          lock = json.loads(
+              (Path(os.environ["RUNNER_TEMP"]) / "gsplat-python-runtime-lock.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          if lock["target"]["python"] != "3.11.14":
+              raise SystemExit("refusing scan of unexpected Python environment")
+          packages = lock["packages"]
+          if len(packages) != 76:
+              raise SystemExit("candidate dependency count not 76")
+          seen = set()
+          versions = []
+          for package in packages:
+              name, version = package["name"], package["version"]
+              key = re.sub(r"[-_.]+", "-", name).lower()
+              if (
+                  not re.fullmatch(r"[A-Za-z0-9_.-]+", name)
+                  or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.+!-]*", version)
+                  or key in seen
+              ):
+                  raise SystemExit("duplicate or malformed candidate package identity")
+              seen.add(key)
+              versions.append(f"{name}=={version}")
+          Path(os.environ["RUNNER_TEMP"], "gsplat-py311-advisory-versions.txt").write_text(
+              "\n".join(sorted(versions, key=str.lower)) + "\n", encoding="utf-8"
+          )
+          PY
+          uvx --python "$TARGET_PYTHON_REQUEST" --from "pip-audit==2.10.1" pip-audit \
+            --no-deps --disable-pip --vulnerability-service pypi --format json \
+            --requirement "$RUNNER_TEMP/gsplat-py311-advisory-versions.txt" \
+            --output "$GITHUB_WORKSPACE/wre-gsplat-py311-advisories.json"
+
+      - name: Retain Python 3.11 candidate vulnerability scan evidence
+        if: always() && matrix.flavor == 'py311-pillow13-probe'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v2l18-3-gsplat-py311-pillow13-advisories
+          path: wre-gsplat-py311-advisories.json
+          if-no-files-found: warn
+          retention-days: 30
