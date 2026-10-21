@@ -97,7 +97,7 @@ next_action: >-
 blockers:
   - "V2L18.3 R1 native dependency trust: PR #322 unresolved review thread PRRT_kwDOUauyh86txA3g; independently approve exact 76-wheel, native-extension, transitive-license and LPIPS receipt before enabling any CUDA runtime."
   - "V2L18.3 repository security: GitHub Dependency Graph SBOM HTTP 404; the dependency-review check can be globally green while Review dependency changes is skipped. Actual scan or officially reviewed equivalent still absent."
-  - "V2L18.3 release governance: PR #322 and the dependent experimental integration PRs are unmerged; no native GitHub APPROVED review and no recorded passed lot review in registry/reviews.yaml. Do not activate V2L18.4 yet."
+  - "V2L18.3 release governance: PR #322 and dependent integration candidates are unmerged and required independent PR review/approval is incomplete. Do not activate V2L18.4 until V2L18.3 actually closes. V2L18 lot review comes after the final item V2L18.6, not before V2L18.4."
   - "Unavailable local GPU: only real GPU kernel execution, learned gsplat training and accelerator-dependent quality evidence are DEFERRED / UNVERIFIED under docs/23; this is not an acceptance failure or success and does not waive the above blockers."
 architecture:
   product_blueprint: docs/01_PRODUCT.md
