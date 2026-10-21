@@ -1797,6 +1797,11 @@ def build_gsplat_reference_trainer_path_overrides(
 # No external CUDA runtime has been independently approved yet.
 _GSPLAT_APPROVED_NATIVE_RECEIPT_SHA256: frozenset[str] = frozenset()
 
+# Independently reviewed LPIPS/AlexNet checkpoint digests. A caller-provided
+# digest only proves byte consistency, not trusted code/weights or redistribution
+# permission. Do not populate this from an artifact produced by the same CI.
+_GSPLAT_APPROVED_LPIPS_ALEXNET_SHA256: frozenset[str] = frozenset()
+
 # The external interpreter is an explicit, caller-owned CUDA environment.
 # -I -S prevents user site/PYTHONPATH and executable .pth/sitecustomize injection;
 # only the pinned examples directory
@@ -2109,6 +2114,10 @@ def run_gsplat_reference_training(
     if source_digest != lpips_alexnet_sha256:
         raise GsplatStaticAppearancePreflightError(
             "gsplat LPIPS offline pretrained weight SHA-256 mismatch"
+        )
+    if source_digest not in _GSPLAT_APPROVED_LPIPS_ALEXNET_SHA256:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat LPIPS pretrained weights lack an independently approved WRE digest"
         )
     # The caller's digest cannot approve its own installed executable closure.
     # Require a separate, immutable WRE-approved native receipt BEFORE we
