@@ -985,10 +985,15 @@ jobs:
           for name, version in targets.items():
               if packages.get(name, {}).get("version") != version:
                   raise SystemExit(f"CUDA 12.6 security candidate ABI mismatch: {name}")
-          if len(packages) < 65 or not all(
-              packages[x]["license_metadata_present"] for x in packages
-          ):
-              raise SystemExit("missing mandatory transitive wheels or metadata")
+          if len(packages) < 65:
+              raise SystemExit("missing mandatory transitive wheels")
+          # Missing wheel metadata is NOT license approval. Keep the full
+          # candidate closure for fail-closed advisory scanning, then verify
+          # exact upstream publisher evidence BEFORE installing any wheels.
+          missing_license_metadata = sorted(
+              key for key, value in packages.items()
+              if not value["license_metadata_present"]
+          )
           ordered = [packages[k] for k in sorted(packages)]
           root = Path(os.environ["GITHUB_WORKSPACE"])
           evidence = {
@@ -1000,6 +1005,8 @@ jobs:
               "cuda_abi": "12.6",
               "original_pip_report_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
               "packages": ordered,
+              "missing_wheel_license_metadata": missing_license_metadata,
+              "publisher_license_identity_verified": False,
               "gpu_execution_evidence": False,
               "native_gsplat_build_evidence": False,
               "independent_license_approval": False,
@@ -1062,6 +1069,80 @@ jobs:
           print("CUDA-local binary source/license vulnerabilities are NOT proven absent")
           PY
 
+
+      - name: Verify exact upstream publisher license identity for metadata gaps
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$CANDIDATE_PYTHON" - <<'PY'
+          import json
+          import urllib.request
+          from pathlib import Path
+
+          path = Path("wre-py311-torch214-candidate.json")
+          evidence = json.loads(path.read_text(encoding="utf-8"))
+          gaps = evidence["missing_wheel_license_metadata"]
+          # Strict allowlist for this one upstream package artifact ONLY.
+          # Any other metadata omission remains a mandatory hard failure.
+          if gaps != ["jinja2"]:
+              raise SystemExit(f"unreviewed wheel license-metadata gaps: {gaps}")
+          jinja = next(
+              p for p in evidence["packages"] if p["name"].lower() == "jinja2"
+          )
+          expected_sha = "85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67"
+          if (jinja["version"] != "3.1.6"
+              or jinja["filename"] != "jinja2-3.1.6-py3-none-any.whl"
+              or jinja["sha256"] != expected_sha
+              or jinja["license_metadata_present"]):
+              raise SystemExit("candidate Jinja2 wheel differs from upstream release")
+          request = urllib.request.Request(
+              "https://pypi.org/pypi/Jinja2/3.1.6/json",
+              headers={"Accept": "application/json",
+                       "User-Agent": "WRE-Exact-Jinja2-Publisher-Evidence"},
+          )
+          with urllib.request.urlopen(request, timeout=30) as response:
+              if response.geturl() != request.full_url:
+                  raise SystemExit("unexpected PyPI release metadata redirect")
+              payload = response.read(2 * 1024 * 1024 + 1)
+          if len(payload) > 2 * 1024 * 1024:
+              raise SystemExit("publisher metadata exceeds permitted size")
+          official = json.loads(payload)
+          release = official["info"]
+          if (release["name"].lower() != "jinja2"
+              or release["version"] != "3.1.6"
+              or "License :: OSI Approved :: BSD License"
+                  not in release["classifiers"]):
+              raise SystemExit("no official BSD release license evidence")
+          matching = [
+              f for f in official["urls"]
+              if f["filename"] == jinja["filename"]
+              and f["digests"]["sha256"] == expected_sha
+          ]
+          if len(matching) != 1 or matching[0]["url"] != jinja["url"]:
+              raise SystemExit("publisher wheel URL or SHA-256 differs")
+          publisher = {
+              "kind": "exact_upstream_release_metadata_not_license_approval",
+              "source": request.full_url,
+              "package": "Jinja2",
+              "version": "3.1.6",
+              "wheel_sha256": expected_sha,
+              "publisher_license_classifier": "License :: OSI Approved :: BSD License",
+              "license_redistribution_approved": False,
+              "binary_and_native_sources_audited": False,
+          }
+          Path("wre-py311-torch214-publisher-license-evidence.json").write_text(
+              json.dumps(publisher, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          evidence["publisher_license_identity_verified"] = True
+          # Never promote a sourcing record into independent redistribution approval.
+          if evidence["independent_license_approval"] is not False:
+              raise SystemExit("independent license approval was not granted")
+          path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
+          print("Pinned Jinja2 upstream wheel and BSD release identity checked")
+          print("All third-party redistribution and native license reviews remain pending")
+          PY
+
       - name: Install all hash-pinned candidate wheels and test real CPU imports
         shell: bash
         run: |
@@ -1120,6 +1201,7 @@ jobs:
           path: |
             wre-py311-torch214-candidate.json
             wre-py311-torch214-advisories.json
+            wre-py311-torch214-publisher-license-evidence.json
             wre-py311-torch214-cpu-proof.json
           if-no-files-found: warn
           retention-days: 30
