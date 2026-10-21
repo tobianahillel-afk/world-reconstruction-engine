@@ -39,7 +39,7 @@ jobs:
             pillow_version: "13.0.0"
             committed_lock: false
             artifact_name: v2l18-3-gsplat-python311-pillow13-probe
-    timeout-minutes: 20
+    timeout-minutes: 55
     env:
       LOCK_KEY: runtime_python_lock
       TARGET_PYTHON_REQUEST: ${{ matrix.target_python }}
@@ -574,5 +574,150 @@ jobs:
         with:
           name: v2l18-3-gsplat-py311-pillow13-advisories
           path: wre-gsplat-py311-advisories.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      # A separate proof AFTER resolver/SCA. Never promotes this candidate
+      # into the committed Python 3.10 lock or approved native trust root.
+      - name: Install all 76 SHA-pinned Python 3.11 wheels and import CPU libraries
+        if: matrix.flavor == 'py311-pillow13-probe'
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RESOLVER_PYTHON" - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          from pathlib import Path
+          from urllib.parse import unquote, urlsplit
+
+          root = Path(os.environ["RUNNER_TEMP"])
+          manifest = root / "gsplat-python-runtime-lock.json"
+          data = manifest.read_bytes()
+          lock = json.loads(data)
+          if lock["evidence_kind"] != "pip_dependency_resolution_only":
+              raise SystemExit("expected immutable resolver evidence")
+          if lock["target"]["python"] != "3.11.14":
+              raise SystemExit("unexpected candidate interpreter")
+          if lock["target"]["torch_cuda"] != "12.4":
+              raise SystemExit("unexpected CUDA ABI target")
+          if any(lock[field] is not False for field in (
+              "gpu_execution_evidence",
+              "native_extension_build_evidence",
+              "runtime_execution_evidence",
+          )):
+              raise SystemExit("resolver incorrectly reports execution evidence")
+          packages = lock["packages"]
+          if len(packages) != 76:
+              raise SystemExit("expected exactly 76 resolved wheels")
+          seen = set()
+          entries = []
+          allowed_hosts = {
+              "files.pythonhosted.org",
+              "download.pytorch.org",
+              "download-r2.pytorch.org",
+              "pypi.nvidia.com",
+          }
+          for package in sorted(packages, key=lambda p: p["name"].lower()):
+              name, url, digest = package["name"], package["url"], package["sha256"]
+              canonical = re.sub(r"[-_.]+", "-", name).lower()
+              parts = urlsplit(url)
+              if (
+                  not re.fullmatch(r"[A-Za-z0-9_.-]+", name)
+                  or canonical in seen
+                  or parts.scheme != "https"
+                  or parts.hostname not in allowed_hosts
+                  or parts.username is not None or parts.password is not None
+                  or parts.query or parts.fragment
+                  or unquote(parts.path.rsplit("/", 1)[-1]) != package["filename"]
+                  or not package["filename"].endswith(".whl")
+                  or not re.fullmatch(r"[a-f0-9]{64}", digest)
+              ):
+                  raise SystemExit("non-canonical or unexpected candidate wheel")
+              seen.add(canonical)
+              entries.append(f"{name} @ {url}#sha256={digest}")
+          (root / "gsplat-py311-candidate-76-wheels.txt").write_text(
+              "\n".join(entries) + "\n", encoding="utf-8"
+          )
+          (root / "gsplat-py311-candidate-manifest.sha256").write_text(
+              hashlib.sha256(data).hexdigest() + "\n", encoding="ascii"
+          )
+          print("Prepared 76 HTTPS artifact identities with individually checked hashes")
+          PY
+          "$RESOLVER_PYTHON" -m pip install --no-index --no-deps --no-cache-dir \
+            --require-hashes -r "$RUNNER_TEMP/gsplat-py311-candidate-76-wheels.txt"
+          "$RESOLVER_PYTHON" -m pip check
+          "$RESOLVER_PYTHON" - <<'PY'
+          import hashlib
+          import importlib.metadata as metadata
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          manifest = Path(os.environ["RUNNER_TEMP"], "gsplat-python-runtime-lock.json")
+          data = manifest.read_bytes()
+          lock = json.loads(data)
+          if not sys.version.startswith("3.11.14"):
+              raise SystemExit("wrong executable for Python 3.11 wheel test")
+          actual = {}
+          for package in lock["packages"]:
+              name, expected = package["name"], package["version"]
+              version = metadata.version(name)
+              if version != expected:
+                  raise SystemExit(f"installed {name}: {version} != {expected}")
+              actual[name] = version
+
+          import numpy
+          import scipy
+          import cv2
+          import imageio
+          from PIL import __version__ as pillow_version
+          import torch
+          import torchvision
+
+          if (pillow_version, numpy.__version__, torch.__version__, torchvision.__version__) != (
+              "13.0.0", "1.26.4", "2.4.0+cu124", "0.19.0+cu124"
+          ):
+              raise SystemExit("CPU Python 3.11 Python/Torch/image ABI mismatch")
+          if torch.version.cuda != "12.4" or torch.cuda.is_available():
+              raise SystemExit("wrong Torch CUDA build or unexpected GPU availability")
+          if (torch.tensor([2.0, 4.0]) * 3).tolist() != [6.0, 12.0]:
+              raise SystemExit("real CPU PyTorch tensor operation failed")
+          evidence = {
+              "evidence_kind": "experimental_python311_pillow13_installed_wheels_cpu_import",
+              "manifest_sha256": hashlib.sha256(data).hexdigest(),
+              "python_version": sys.version.split()[0],
+              "wheel_count": len(actual),
+              "installed_versions_match_exact_manifest": True,
+              "pillow": pillow_version,
+              "numpy": numpy.__version__,
+              "scipy": scipy.__version__,
+              "opencv": cv2.__version__,
+              "imageio": imageio.__version__,
+              "torch": torch.__version__,
+              "torchvision": torchvision.__version__,
+              "torch_compiled_cuda": torch.version.cuda,
+              "cpu_tensor_operation_passed": True,
+              "gpu_execution_evidence": False,
+              "native_extension_build_evidence": False,
+              "gsplat_trainer_execution_evidence": False,
+              "checkpoint_approval": False,
+              "reviewed_redistribution_approval": False,
+          }
+          Path("gsplat-py311-cpu-import-evidence.json").write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          print("76/76 exact wheel versions installed, CPU Torch and image imports exercised")
+          print("This evidence is NOT native gsplat training, GPU execution or license approval")
+          PY
+
+      - name: Retain Python 3.11 installed-wheel CPU import evidence
+        if: always() && matrix.flavor == 'py311-pillow13-probe'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v2l18-3-gsplat-py311-installed-wheel-cpu
+          path: gsplat-py311-cpu-import-evidence.json
           if-no-files-found: warn
           retention-days: 30
