@@ -294,11 +294,15 @@ jobs:
           # including otherwise unlisted transitive modules and top-level .so
           # modules. An exact digest for eight root packages is insufficient.
           for item in packages.rglob("*"):
-              if not (item.suffix.lower() in (".py", ".so", ".pyd", ".dylib", ".dll")
+              # A symlinked directory can hide executable files from rglob.
+              # Record no implicit link escapes, including extensionless links.
+              if item.is_symlink():
+                  raise RuntimeError("Native receipt contains symbolic-link paths")
+              if not (item.suffix.lower() in (".py", ".pyc", ".so", ".pyd", ".dylib", ".dll")
                       or ".so." in item.name):
                   continue
-              if item.is_symlink() or not item.is_file():
-                  raise RuntimeError("Native receipt contains redirected or missing module")
+              if not item.is_file():
+                  raise RuntimeError("Native receipt contains missing importable files")
               relative = item.relative_to(environment).as_posix()
               digest = hashlib.sha256()
               with item.open("rb") as data:
@@ -460,6 +464,66 @@ jobs:
           finally:
               rogue.unlink(missing_ok=True)
           print("Unreviewed TOP-LEVEL transitive module: rejected before third-party imports.")
+          # Source-free .pyc is an executable import target. Hashing .py alone
+          # does not attest such code; a new .pyc MUST invalidate the receipt.
+          import importlib.util
+          import marshal
+          import tempfile
+          packages = Path(torch_spec.origin).parent.parent
+          bytecode = packages / "wre_unapproved_bytecode.pyc"
+          marker = Path(os.environ["RUNNER_TEMP"]) / "wre-unapproved-pyc-marker"
+          assert not bytecode.exists() and not marker.exists()
+          code = compile(
+              f"from pathlib import Path; Path({str(marker)!r}).write_text('executed')",
+              "<unapproved-bytecode>", "exec",
+          )
+          try:
+              bytecode.write_bytes(
+                  importlib.util.MAGIC_NUMBER + b"\\x00" * 12 + marshal.dumps(code)
+              )
+              rejected = subprocess.run(
+                  [os.environ["COMMON_PYTHON"], "-I", "-S", "-c", child,
+                   str(examples), str(manifest), expected_sha256],
+                  input=b"{}", capture_output=True, cwd=examples, env=environment,
+                  timeout=120, check=False,
+              )
+              assert rejected.returncode != 0
+              assert b"unapproved importable package files" in rejected.stderr, (
+                  rejected.stderr.decode(errors="replace")[-4000:]
+              )
+              assert not marker.exists(), "Unapproved bytecode must not execute"
+          finally:
+              bytecode.unlink(missing_ok=True)
+              marker.unlink(missing_ok=True)
+          print("Unapproved importable source-free BYTECODE: rejected before import.")
+          # A symlinked directory is normally skipped by Path.rglob and can
+          # expose unapproved executable package files via sys.path imports.
+          with tempfile.TemporaryDirectory(
+              prefix="wre-native-symlink-", dir=os.environ["RUNNER_TEMP"]
+          ) as private:
+              external = Path(private) / "unreviewed"
+              external.mkdir()
+              (external / "__init__.py").write_text(
+                  "raise RuntimeError('unapproved linked module executed')\\n"
+              )
+              linked = packages / "wre_unapproved_linked_package"
+              assert not linked.exists() and not linked.is_symlink()
+              try:
+                  linked.symlink_to(external, target_is_directory=True)
+                  rejected = subprocess.run(
+                      [os.environ["COMMON_PYTHON"], "-I", "-S", "-c", child,
+                       str(examples), str(manifest), expected_sha256],
+                      input=b"{}", capture_output=True, cwd=examples, env=environment,
+                      timeout=120, check=False,
+                  )
+                  assert rejected.returncode != 0
+                  assert b"unapproved symbolic-link paths" in rejected.stderr, (
+                      rejected.stderr.decode(errors="replace")[-4000:]
+                  )
+                  assert b"unapproved linked module executed" not in rejected.stderr
+              finally:
+                  linked.unlink(missing_ok=True)
+          print("Extensionless symlinked PACKAGE DIRECTORY: rejected before import.")
           print("No GPU kernel, Gaussian optimizer or training executed.")
           PY
 

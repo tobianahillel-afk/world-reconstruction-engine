@@ -1906,10 +1906,14 @@ for name in required_modules:
 # dependency can execute unreviewed Python/native code after these checks.
 # Keep this scan before ALL third-party imports under -I -S.
 for installed in packages.rglob("*"):
-    if not (installed.suffix.lower() in (".py", ".so", ".pyd", ".dylib", ".dll")
+    # pathlib does not descend into symlinked directories; reject them
+    # explicitly, even when the link itself has no executable suffix.
+    if installed.is_symlink():
+        raise RuntimeError("gsplat runtime has unapproved symbolic-link paths")
+    if not (installed.suffix.lower() in (".py", ".pyc", ".so", ".pyd", ".dylib", ".dll")
             or ".so." in installed.name):
         continue
-    if installed.is_symlink() or not installed.is_file():
+    if not installed.is_file():
         raise RuntimeError("gsplat runtime has unapproved importable package files")
     relative = installed.relative_to(environment).as_posix()
     if relative not in verified:
