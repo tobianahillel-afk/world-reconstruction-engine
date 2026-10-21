@@ -1073,7 +1073,7 @@ jobs:
           PY
 
 
-      - name: Verify exact upstream publisher license identity for metadata gaps
+      - name: Verify exact NVIDIA CUDA toolkit publisher identity and preserve license review gate
         shell: bash
         run: |
           set -euo pipefail
@@ -1081,69 +1081,92 @@ jobs:
           import json
           import urllib.request
           from pathlib import Path
+          from urllib.parse import urlsplit
 
           path = Path("wre-py311-torch214-candidate.json")
           evidence = json.loads(path.read_text(encoding="utf-8"))
           gaps = evidence["missing_wheel_license_metadata"]
-          # Strict allowlist for this one upstream package artifact ONLY.
-          # Any other metadata omission remains a mandatory hard failure.
-          if gaps != ["jinja2"]:
+          # Only this exact NVIDIA wheel is eligible for supplementary
+          # official publisher identity evidence. Other missing licenses
+          # remain hard failures. This is NEVER redistribution approval.
+          if gaps != ["cuda-toolkit"]:
               raise SystemExit(f"unreviewed wheel license-metadata gaps: {gaps}")
-          jinja = next(
-              p for p in evidence["packages"] if p["name"].lower() == "jinja2"
-          )
-          expected_sha = "85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67"
-          if (jinja["version"] != "3.1.6"
-              or jinja["filename"] != "jinja2-3.1.6-py3-none-any.whl"
-              or jinja["sha256"] != expected_sha
-              or jinja["license_metadata_present"]):
-              raise SystemExit("candidate Jinja2 wheel differs from upstream release")
+          matches = [p for p in evidence["packages"]
+                     if p["name"].lower().replace("_", "-") == "cuda-toolkit"]
+          if len(matches) != 1:
+              raise SystemExit("missing or duplicate CUDA toolkit wheel")
+          toolkit = matches[0]
+          expected_sha = "79d8605baeb6c2f695761e0efb54bc62dbc3c9e32eb0742df7669c07befaa8f7"
+          expected_filename = "cuda_toolkit-12.6.3-py2.py3-none-any.whl"
+          if (
+              toolkit["version"] != "12.6.3"
+              or toolkit["filename"] != expected_filename
+              or toolkit["sha256"] != expected_sha
+              or toolkit["url"] != "https://pypi.nvidia.com/cuda-toolkit/" + expected_filename
+              or toolkit["license_metadata_present"]
+          ):
+              raise SystemExit("candidate NVIDIA CUDA toolkit artifact changed")
+          url = "https://pypi.org/pypi/cuda-toolkit/12.6.3/json"
           request = urllib.request.Request(
-              "https://pypi.org/pypi/Jinja2/3.1.6/json",
-              headers={"Accept": "application/json",
-                       "User-Agent": "WRE-Exact-Jinja2-Publisher-Evidence"},
+              url, headers={"Accept": "application/json",
+                            "User-Agent": "WRE-CUDA-Toolkit-12.6.3-Publisher-Evidence"},
           )
           with urllib.request.urlopen(request, timeout=30) as response:
-              if response.geturl() != request.full_url:
-                  raise SystemExit("unexpected PyPI release metadata redirect")
+              if response.geturl() != url:
+                  raise SystemExit("official PyPI metadata redirect unexpected")
               payload = response.read(2 * 1024 * 1024 + 1)
           if len(payload) > 2 * 1024 * 1024:
-              raise SystemExit("publisher metadata exceeds permitted size")
-          official = json.loads(payload)
-          release = official["info"]
-          if (release["name"].lower() != "jinja2"
-              or release["version"] != "3.1.6"
-              or "License :: OSI Approved :: BSD License"
-                  not in release["classifiers"]):
-              raise SystemExit("no official BSD release license evidence")
-          matching = [
-              f for f in official["urls"]
-              if f["filename"] == jinja["filename"]
-              and f["digests"]["sha256"] == expected_sha
+              raise SystemExit("publisher metadata exceeds safe bound")
+          published = json.loads(payload)
+          info = published["info"]
+          if (
+              info["name"].lower().replace("_", "-") != "cuda-toolkit"
+              or info["version"] != "12.6.3"
+              or "NVIDIA" not in (info.get("author") or "")
+          ):
+              raise SystemExit("official CUDA publisher identity differs")
+          releases = [
+              release for release in published["urls"]
+              if release["filename"] == expected_filename
+              and release["digests"]["sha256"] == expected_sha
           ]
-          if len(matching) != 1 or matching[0]["url"] != jinja["url"]:
-              raise SystemExit("publisher wheel URL or SHA-256 differs")
+          if len(releases) != 1:
+              raise SystemExit("PyPI cannot attest exact CUDA toolkit wheel bytes")
+          if urlsplit(toolkit["url"]).hostname != "pypi.nvidia.com":
+              raise SystemExit("candidate wheel is not sourced from NVIDIA index")
+          # PyPI validates the exact bytes; the NVIDIA index URL is kept
+          # separately. CUDA 12.6.3 SDK EULA requires independent human
+          # review of scope and distribution permissions, not inferred from
+          # an empty wheel metadata License field.
+          eula = "https://docs.nvidia.com/cuda/archive/12.6.3/eula/index.html"
           publisher = {
-              "kind": "exact_upstream_release_metadata_not_license_approval",
-              "source": request.full_url,
-              "package": "Jinja2",
-              "version": "3.1.6",
+              "kind": "exact_vendor_wheel_identity_and_license_terms_reference_only",
+              "pypi_release_identity": url,
+              "nvidia_wheel_url": toolkit["url"],
+              "version": "12.6.3",
+              "filename": expected_filename,
               "wheel_sha256": expected_sha,
-              "publisher_license_classifier": "License :: OSI Approved :: BSD License",
+              "vendor": info["author"],
+              "license_terms_reference_for_independent_review": eula,
+              "package_wheel_license_metadata_missing": True,
+              "nvidia_eula_review_completed": False,
               "license_redistribution_approved": False,
-              "binary_and_native_sources_audited": False,
+              "native_sources_audited": False,
           }
           Path("wre-py311-torch214-publisher-license-evidence.json").write_text(
               json.dumps(publisher, indent=2, sort_keys=True) + "\n",
               encoding="utf-8",
           )
           evidence["publisher_license_identity_verified"] = True
-          # Never promote a sourcing record into independent redistribution approval.
-          if evidence["independent_license_approval"] is not False:
-              raise SystemExit("independent license approval was not granted")
+          if (
+              evidence["independent_license_approval"] is not False
+              or evidence["runtime_approved"] is not False
+              or evidence["checkpoint_approval"] is not False
+          ):
+              raise SystemExit("independent approval was not granted")
           path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
-          print("Pinned Jinja2 upstream wheel and BSD release identity checked")
-          print("All third-party redistribution and native license reviews remain pending")
+          print("Exact NVIDIA CUDA toolkit artifact matched official PyPI wheel digest")
+          print("Vendor EULA retained for independent review; redistribution is NOT approved")
           PY
 
       - name: Install all hash-pinned candidate wheels and test real CPU imports
