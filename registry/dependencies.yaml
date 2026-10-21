@@ -968,7 +968,7 @@ dependencies:
             url: "https://files.pythonhosted.org/packages/b3/7d/01e62f59e4166af1be6238d9f2b7f3453630c51b8044b412d05b5606532a/absl_py-2.5.1-py3-none-any.whl"
             version: "2.5.1"
           - direct: false
-            filename: "certifi-2026.7.22-py3-none-any.whl"
+            filename: "certifi-2026.10.19-py3-none-any.whl"
             legacy_license: "MPL-2.0"
             legacy_license_byte_length: 7
             legacy_license_sha256: "09962c1dc23fac80a0e5a88b2eb7051b74a6443a568ca2a045a4ec2fb82aeee5"
@@ -979,10 +979,10 @@ dependencies:
             requested: false
             requires_dist: []
             requires_python: ">=3.7"
-            sha256: "62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775"
-            sha256_source: "pip_report"
-            url: "https://files.pythonhosted.org/packages/0b/a7/71ac2cff56fec219ed242bb11b8efb69fcc4bec75db06fb7bfe35de520e6/certifi-2026.7.22-py3-none-any.whl"
-            version: "2026.7.22"
+            sha256: "42d35340cc5b9ba78e818ddbff0c5b1c2b779de448a340fd1b989f5fa8670e1b"
+            sha256_source: "pypi_verified_released_wheel_attestation"
+            url: "https://files.pythonhosted.org/packages/c4/51/29046e48f693c54e5b7412216d447a1d8362c9653148d98c02cdf65fa733/certifi-2026.10.19-py3-none-any.whl"
+            version: "2026.10.19"
           - direct: false
             filename: "charset_normalizer-3.5.2-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl"
             legacy_license: "MIT"
