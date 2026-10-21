@@ -1436,9 +1436,7 @@ def test_external_trainer_rejects_self_hashed_lpips_even_with_approved_native_re
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """Matching caller SHA cannot authorize unreviewed deserializable weights."""
-    request, source, staged, output, profile, ref, producer = _retained_gsplat_fixture(
-        tmp_path
-    )
+    request, source, staged, output, profile, ref, producer = _retained_gsplat_fixture(tmp_path)
     (output / profile.expected_ply_relative_path).unlink()
     (output / "ply").rmdir()
     output.rmdir()
