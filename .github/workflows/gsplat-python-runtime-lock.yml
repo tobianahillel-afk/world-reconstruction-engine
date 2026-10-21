@@ -1235,3 +1235,236 @@ jobs:
             wre-py311-torch214-cpu-proof.json
           if-no-files-found: warn
           retention-days: 30
+
+  # Experimental compatibility evidence only. Depends on the exact same-run
+  # modern Torch 2.14 resolver/SCA/publisher-evidence job, and consumes its
+  # immutable workflow artifact. No checkpoint or runtime is approved here.
+  modern-torch-cu126-native-cpu-compat:
+    name: experimental-py311-torch214-cu126-actual-gsplat-fused-ssim-native-no-gpu
+    needs: modern-torch-cu126-cpu-feasibility
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    container:
+      # NVIDIA CUDA 12.6.3 development SDK, pinned multiarch Docker index.
+      image: nvidia/cuda@sha256:392c0df7b577ecae17a17f6ba7f2009c217bb4422f8431c053ae9af61a8c148a
+    env:
+      CUDA_HOME: /usr/local/cuda
+      TORCH_CUDA_ARCH_LIST: "7.5"
+      MAX_JOBS: "1"
+      PYTHONPATH: ""
+      GSPLAT_REVISION: "937e29912570c372bed6747a5c9bf85fed877bae"
+      GSPLAT_TREE: "90c3f0b2352e6d2725bcba1ef0407168f922c0fa"
+      SSIM_REVISION: "328dc9836f513d00c4b5bc38fe30478b4435cbb5"
+      SSIM_TREE: "ac5f1d8fe5d519f9c44b220d235bf1f198463da7"
+      GLM_REVISION: "33b4a621a697a305bc3a7610d290677b96beb181"
+      GLM_TREE: "e57f342f0fb63852d65e0da2090528fdca9b0117"
+      NERFVIEW_REVISION: "4538024fe0d15fd1a0e4d760f3695fc44ca72787"
+      NERFVIEW_TREE: "e333400e39605978a3d1f9cf6d73ddf577a8c8e3"
+      SCENE_MANAGER_REVISION: "cc7ea4b7301720ac29287dbe450952511b32125e"
+    steps:
+      - name: Checkout canonical V2L18.3 work item without credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download same-run audited Torch 2.14 wheel and license evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: v2l18-3-torch214-cu126-security-cpu-candidate
+          path: modern-candidate
+
+      - name: Install pinned Python 3.11 and essential CUDA build tools
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.13"
+          python-version: "3.11.14"
+          enable-cache: false
+
+      - name: Install audited modern Torch CUDA 12.6 wheels on a CPU runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$CUDA_HOME/bin/nvcc"
+          "$CUDA_HOME/bin/nvcc" --version | grep -F 'release 12.6,'
+          DEBIAN_FRONTEND=noninteractive apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            git ca-certificates build-essential libgl1 libglib2.0-0
+          uv venv --seed --python 3.11.14 "$RUNNER_TEMP/wre-modern-native"
+          echo "MODERN_PYTHON=$RUNNER_TEMP/wre-modern-native/bin/python" >> "$GITHUB_ENV"
+          "$RUNNER_TEMP/wre-modern-native/bin/python" - <<'PY'
+          import json
+          import re
+          from pathlib import Path
+          from urllib.parse import unquote, urlsplit
+
+          root = Path("modern-candidate")
+          expected = {
+              "wre-py311-torch214-candidate.json",
+              "wre-py311-torch214-advisories.json",
+              "wre-py311-torch214-publisher-license-evidence.json",
+              "wre-py311-torch214-cpu-proof.json",
+          }
+          if {p.name for p in root.iterdir()} != expected:
+              raise SystemExit("missing or additional candidate proof files")
+          candidate = json.loads((root / "wre-py311-torch214-candidate.json").read_text())
+          audit = json.loads((root / "wre-py311-torch214-advisories.json").read_text())
+          publisher = json.loads((root / "wre-py311-torch214-publisher-license-evidence.json").read_text())
+          proof = json.loads((root / "wre-py311-torch214-cpu-proof.json").read_text())
+          if (candidate["evidence_kind"] != "unapproved_pytorch214_cuda126_wheel_resolution_only"
+              or candidate["selected_torch"] != "2.14.0+cu126"
+              or candidate["selected_torchvision"] != "0.29.0+cu126"
+              or candidate["selected_pillow"] != "13.0.0"
+              or candidate["python"] != "3.11.14"
+              or candidate["cuda_abi"] != "12.6"
+              or candidate["independent_license_approval"] is not False
+              or candidate["runtime_approved"] is not False
+              or candidate["checkpoint_approval"] is not False
+              or candidate["gpu_execution_evidence"] is not False
+              or candidate["native_gsplat_build_evidence"] is not False
+              or candidate["exact_upstream_wheel_release_identity_verified"] is not True
+              or candidate["publisher_license_identity_verified"] is not False
+              or candidate["missing_wheel_license_metadata"] != ["cuda-toolkit"]):
+              raise SystemExit("incorrect candidate runtime identity or approval claim")
+          if (publisher["wheel_sha256"] != "79d8605baeb6c2f695761e0efb54bc62dbc3c9e32eb0742df7669c07befaa8f7"
+              or publisher["nvidia_eula_review_completed"] is not False
+              or publisher["license_redistribution_approved"] is not False
+              or publisher["official_pypi_wheel_hash_verified"] is not True):
+              raise SystemExit("unreviewed NVIDIA toolkit metadata")
+          def canonical(value):
+              return re.sub(r"[-_.]+", "-", value).lower()
+          packages = candidate["packages"]
+          if len(packages) != 82:
+              raise SystemExit("expected 82 exact candidate dependency wheels")
+          identities = {}
+          allowed = {"files.pythonhosted.org", "download.pytorch.org",
+                     "download-r2.pytorch.org", "pypi.nvidia.com"}
+          for item in packages:
+              name = canonical(item["name"])
+              uri = urlsplit(item["url"])
+              if (name in identities
+                  or not re.fullmatch(r"[a-zA-Z0-9_.-]+", item["name"])
+                  or not re.fullmatch(r"[0-9a-f]{64}", item["sha256"])
+                  or uri.scheme != "https" or uri.hostname not in allowed
+                  or uri.username or uri.password or uri.query or uri.fragment
+                  or unquote(uri.path.rsplit("/", 1)[-1]) != item["filename"]
+                  or not item["filename"].endswith(".whl")):
+                  raise SystemExit("invalid candidate wheel identity")
+              identities[name] = item
+          audited = {canonical(p["name"]): p for p in audit["dependencies"]}
+          if set(audited) != set(identities):
+              raise SystemExit("not all pinned versions were independently scanned")
+          for name, item in audited.items():
+              public = identities[name]["version"].split("+", 1)[0]
+              if item.get("version") != public or item.get("skip_reason") or item.get("vulns") is None or item["vulns"]:
+                  raise SystemExit("security finding or missing advisory coverage for " + name)
+          if proof.get("gpu_execution_evidence") is True:
+              raise SystemExit("GPU evidence must remain unverified")
+          output = Path("modern-wheels-exact.txt")
+          output.write_text("".join(
+              f'{p["name"]} @ {p["url"]}#sha256={p["sha256"]}\n'
+              for p in sorted(packages, key=lambda p: canonical(p["name"]))
+          ))
+          print("82 exact candidate wheels, same-run advisory scan and unapproved license status verified")
+          PY
+          "$RUNNER_TEMP/wre-modern-native/bin/python" -m pip install --no-index --no-deps \
+            --no-cache-dir --require-hashes -r modern-wheels-exact.txt
+          "$RUNNER_TEMP/wre-modern-native/bin/python" -m pip check
+          "$RUNNER_TEMP/wre-modern-native/bin/python" - <<'PY'
+          import json
+          import importlib.metadata as md
+          import torch
+          from PIL import __version__ as pillow
+          from pathlib import Path
+
+          entries = json.loads(Path("modern-candidate/wre-py311-torch214-candidate.json").read_text())["packages"]
+          if any(md.version(p["name"]) != p["version"] for p in entries):
+              raise SystemExit("installed environment does not match 82 pinned wheels")
+          if (torch.__version__ != "2.14.0+cu126" or torch.version.cuda != "12.6"
+              or pillow != "13.0.0" or torch.cuda.is_available()):
+              raise SystemExit("modern pinned CPU/native ABI mismatch")
+          if (torch.tensor([3.0, 5.0]) * 2).tolist() != [6.0, 10.0]:
+              raise SystemExit("real CPU Torch operation failed")
+          print("Real Torch 2.14 CUDA12.6 CPU execution, no CUDA kernel execution")
+          PY
+
+      - name: Fetch pinned gsplat and fused-ssim source trees
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/wre-modern-upstreams"
+          mkdir -p "$root"
+          fetch_exact() {
+            name="$1"; remote="$2"; rev="$3"; tree="$4"
+            git init -q "$root/$name"
+            git -C "$root/$name" remote add origin "$remote"
+            git -C "$root/$name" fetch --quiet --depth 1 origin "$rev"
+            git -C "$root/$name" checkout -q --detach FETCH_HEAD
+            test "$(git -C "$root/$name" rev-parse HEAD)" = "$rev"
+            test "$(git -C "$root/$name" rev-parse HEAD^{tree})" = "$tree"
+          }
+          fetch_exact gsplat https://github.com/nerfstudio-project/gsplat.git "$GSPLAT_REVISION" "$GSPLAT_TREE"
+          fetch_exact ssim https://github.com/rahul-goel/fused-ssim.git "$SSIM_REVISION" "$SSIM_TREE"
+          fetch_exact nerfview https://github.com/nerfstudio-project/nerfview.git "$NERFVIEW_REVISION" "$NERFVIEW_TREE"
+          git -C "$root/gsplat" submodule update --init --depth 1 -- gsplat/cuda/csrc/third_party/glm
+          test "$(git -C "$root/gsplat/gsplat/cuda/csrc/third_party/glm" rev-parse HEAD)" = "$GLM_REVISION"
+          test "$(git -C "$root/gsplat/gsplat/cuda/csrc/third_party/glm" rev-parse HEAD^{tree})" = "$GLM_TREE"
+          echo "MODERN_SOURCES=$root" >> "$GITHUB_ENV"
+
+      - name: Compile real gsplat and fused-ssim CUDA native extensions under Torch 2.14
+        shell: bash
+        run: |
+          set -euo pipefail
+          export BUILD_NO_CUDA=0
+          "$MODERN_PYTHON" -m pip install --no-deps --no-build-isolation --no-cache-dir "$MODERN_SOURCES/ssim"
+          "$MODERN_PYTHON" -m pip install --no-deps --no-build-isolation --no-cache-dir "$MODERN_SOURCES/gsplat"
+          "$MODERN_PYTHON" -I - <<'PY'
+          import hashlib
+          import json
+          import os
+          import sys
+          from pathlib import Path
+          import torch
+          import gsplat
+          from gsplat.cuda._backend import _C
+          import fused_ssim_cuda
+          from fused_ssim import fused_ssim
+
+          if (torch.__version__ != "2.14.0+cu126" or torch.version.cuda != "12.6"
+              or torch.cuda.is_available() or _C is None or not callable(fused_ssim)):
+              raise SystemExit("real native imports do not match CPU-hosted ABI")
+          native = [Path(_C.__file__).resolve(), Path(fused_ssim_cuda.__file__).resolve()]
+          if not all(p.is_file() and p.suffix == ".so" for p in native):
+              raise SystemExit("missing true compiled binary extension")
+          report = {
+              "evidence_kind": "experimental_modern_py311_torch214_cu126_cpu_hosted_native_build",
+              "python": sys.version.split()[0],
+              "torch": torch.__version__,
+              "cuda_compiled": torch.version.cuda,
+              "gsplat_source_sha": os.environ["GSPLAT_REVISION"],
+              "fused_ssim_source_sha": os.environ["SSIM_REVISION"],
+              "real_compiled_binary_sha256": {
+                  p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in native
+              },
+              "gpu_execution_evidence": False,
+              "training_execution_evidence": False,
+              "runtime_approved": False,
+              "native_receipt_approved": False,
+              "checkpoint_license_approved": False,
+              "redistribution_approved": False,
+          }
+          Path("wre-py311-torch214-native-compat.json").write_text(
+              json.dumps(report, indent=2, sort_keys=True) + "\n"
+          )
+          print("Torch2.14/CUDA12.6 real gsplat and fused-ssim native CPU-hosted imports")
+          PY
+
+      - name: Preserve exact modern CUDA native compatibility evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v2l18-3-modern-torch214-cuda126-native-compat
+          path: wre-py311-torch214-native-compat.json
+          if-no-files-found: warn
+          retention-days: 30
