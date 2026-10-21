@@ -1161,3 +1161,249 @@ jobs:
           path: wre-76-wheel-advisory-report.json
           if-no-files-found: warn
           retention-days: 7
+
+  # EXPERIMENTAL proof only: this job does not change the Python 3.10
+  # reviewed runtime, its empty native/LPIPS trust roots, or shipping status.
+  # The exact SHA-bound GitHub artifact is a temporary qualification input,
+  # not a permanent approved lock. A full reviewed in-repo lock is required
+  # before choosing this Python 3.11 runtime for shipping.
+  experimental-py311-native-import:
+    name: experimental-py311-pillow13-actual-gsplat-fused-ssim-import-no-gpu
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      actions: read
+    container:
+      image: nvidia/cuda@sha256:da6791294b0b04d7e65d87b7451d6f2390b4d36225ab0701ee7dfec5769829f5
+    env:
+      CUDA_HOME: /usr/local/cuda
+      TORCH_CUDA_ARCH_LIST: "7.5"
+      MAX_JOBS: "1"
+      PYTHONPATH: ""
+      LOCK_ARTIFACT_ID: "12379162173"
+      LOCK_ARTIFACT_ZIP_SHA256: "7d73e7f450fb8382f1f2cbbda9f8609283d694b42d685f8b057f1603990581b0"
+      LOCK_MANIFEST_SHA256: "fb5affbcc826476d73bdf3aeb229244f7627bc2bf5b27544aa1c64348dd03bb5"
+      GSPLAT_REVISION: "937e29912570c372bed6747a5c9bf85fed877bae"
+      GSPLAT_TREE: "90c3f0b2352e6d2725bcba1ef0407168f922c0fa"
+      SSIM_REVISION: "328dc9836f513d00c4b5bc38fe30478b4435cbb5"
+      SSIM_TREE: "ac5f1d8fe5d519f9c44b220d235bf1f198463da7"
+      GLM_REVISION: "33b4a621a697a305bc3a7610d290677b96beb181"
+      GLM_TREE: "e57f342f0fb63852d65e0da2090528fdca9b0117"
+      NERFVIEW_REVISION: "4538024fe0d15fd1a0e4d760f3695fc44ca72787"
+      NERFVIEW_TREE: "e333400e39605978a3d1f9cf6d73ddf577a8c8e3"
+      SCENE_MANAGER_REVISION: "cc7ea4b7301720ac29287dbe450952511b32125e"
+      GITHUB_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout WRE to keep the branch and source identity explicit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned Python 3.11.14 without GPU
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.13"
+          python-version: "3.11.14"
+          enable-cache: false
+
+      - name: Fetch exactly audited candidate manifest and install its 76 wheels
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$CUDA_HOME/bin/nvcc"
+          "$CUDA_HOME/bin/nvcc" --version | grep -F 'release 12.4,'
+          uv venv --seed --python 3.11.14 "$RUNNER_TEMP/wre-py311-native"
+          echo "CANDIDATE_PYTHON=$RUNNER_TEMP/wre-py311-native/bin/python" >> "$GITHUB_ENV"
+          "$RUNNER_TEMP/wre-py311-native/bin/python" - <<'PY'
+          import hashlib
+          import io
+          import json
+          import os
+          import re
+          import urllib.request
+          import zipfile
+          from pathlib import Path
+          from urllib.parse import unquote, urlsplit
+
+          repo = os.environ["GITHUB_REPOSITORY"]
+          artifact_id = os.environ["LOCK_ARTIFACT_ID"]
+          url = f"https://api.github.com/repos/{repo}/actions/artifacts/{artifact_id}/zip"
+          req = urllib.request.Request(url, headers={
+              "Authorization": f"Bearer {os.environ['GITHUB_TOKEN']}",
+              "Accept": "application/vnd.github+json",
+              "User-Agent": "WRE-Pinned-Py311-Native-Probe",
+              "X-GitHub-Api-Version": "2022-11-28",
+          })
+          with urllib.request.urlopen(req, timeout=180) as response:
+              blob = response.read(2 * 1024 * 1024 + 1)
+          if len(blob) > 2 * 1024 * 1024:
+              raise SystemExit("candidate artifact exceeds bound")
+          if hashlib.sha256(blob).hexdigest() != os.environ["LOCK_ARTIFACT_ZIP_SHA256"]:
+              raise SystemExit("candidate ZIP hash does not match exact CI artifact")
+          with zipfile.ZipFile(io.BytesIO(blob)) as archive:
+              if archive.namelist() != ["gsplat-python-runtime-lock.json"]:
+                  raise SystemExit("unexpected source artifact contents")
+              content = archive.read("gsplat-python-runtime-lock.json")
+          if hashlib.sha256(content).hexdigest() != os.environ["LOCK_MANIFEST_SHA256"]:
+              raise SystemExit("candidate manifest hash does not match audited source")
+          lock = json.loads(content)
+          if lock["evidence_kind"] != "pip_dependency_resolution_only":
+              raise SystemExit("candidate cannot self-report native runtime success")
+          if lock["target"]["python"] != "3.11.14" or lock["target"]["torch_cuda"] != "12.4":
+              raise SystemExit("wrong candidate Python or CUDA target")
+          if any(lock[x] is not False for x in ("gpu_execution_evidence", "native_extension_build_evidence", "runtime_execution_evidence")):
+              raise SystemExit("candidate claims execution without proof")
+          packages = lock["packages"]
+          if len(packages) != 76:
+              raise SystemExit("unexpected candidate wheel count")
+          allowed_hosts = {"files.pythonhosted.org", "pypi.nvidia.com", "download-r2.pytorch.org", "download.pytorch.org"}
+          seen = set()
+          lines = []
+          for item in sorted(packages, key=lambda x: x["name"].lower()):
+              name, digest, url = item["name"], item["sha256"], item["url"]
+              parts = urlsplit(url)
+              key = re.sub(r"[-_.]+", "-", name).lower()
+              if (not re.fullmatch(r"[a-zA-Z0-9_.-]+", name) or key in seen
+                  or not re.fullmatch(r"[0-9a-f]{64}", digest)
+                  or parts.scheme != "https" or parts.hostname not in allowed_hosts
+                  or parts.username or parts.password or parts.query or parts.fragment
+                  or unquote(parts.path.rsplit("/", 1)[-1]) != item["filename"]
+                  or not item["filename"].endswith(".whl")):
+                  raise SystemExit("untrusted candidate wheel identity")
+              seen.add(key)
+              lines.append(f"{name} @ {url}#sha256={digest}")
+          root = Path(os.environ["RUNNER_TEMP"])
+          (root / "py311-exact-wheels.txt").write_text("\n".join(lines) + "\n")
+          (root / "py311-locked-manifest.json").write_bytes(content)
+          print("All 76 wheel identities are bound to one CI manifest SHA")
+          PY
+          "$RUNNER_TEMP/wre-py311-native/bin/python" -m pip install --no-index --no-deps --no-cache-dir --require-hashes \
+            -r "$RUNNER_TEMP/py311-exact-wheels.txt"
+          "$RUNNER_TEMP/wre-py311-native/bin/python" -m pip check
+          "$RUNNER_TEMP/wre-py311-native/bin/python" - <<'PY'
+          import importlib.metadata as metadata
+          import json
+          import os
+          import sys
+          from pathlib import Path
+          import numpy
+          import torch
+          from PIL import __version__ as pillow_version
+
+          record = json.loads(Path(os.environ["RUNNER_TEMP"], "py311-locked-manifest.json").read_text())
+          assert sys.version.startswith("3.11.14")
+          assert all(metadata.version(x["name"]) == x["version"] for x in record["packages"])
+          assert len(record["packages"]) == 76
+          assert pillow_version == "13.0.0"
+          assert numpy.__version__ == "1.26.4"
+          assert torch.__version__ == "2.4.0+cu124"
+          assert torch.version.cuda == "12.4"
+          assert not torch.cuda.is_available()
+          print("Exact 76-wheel Python3.11/Torch/Pillow environment imports on CPU")
+          PY
+
+      - name: Fetch upstream source commits and verify git tree identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEBIAN_FRONTEND=noninteractive apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git ca-certificates libgl1 libglib2.0-0
+          root="$RUNNER_TEMP/py311-selected-upstreams"
+          mkdir -p "$root"
+          fetch_exact() {
+            name="$1"; remote="$2"; rev="$3"; tree="$4"
+            git init -q "$root/$name"
+            git -C "$root/$name" remote add origin "$remote"
+            git -C "$root/$name" fetch --quiet --depth 1 origin "$rev"
+            git -C "$root/$name" checkout -q --detach FETCH_HEAD
+            test "$(git -C "$root/$name" rev-parse HEAD)" = "$rev"
+            if test "$tree" != "-"; then
+              test "$(git -C "$root/$name" rev-parse HEAD^{tree})" = "$tree"
+            fi
+          }
+          fetch_exact gsplat https://github.com/nerfstudio-project/gsplat.git "$GSPLAT_REVISION" "$GSPLAT_TREE"
+          fetch_exact ssim https://github.com/rahul-goel/fused-ssim.git "$SSIM_REVISION" "$SSIM_TREE"
+          fetch_exact nerfview https://github.com/nerfstudio-project/nerfview.git "$NERFVIEW_REVISION" "$NERFVIEW_TREE"
+          fetch_exact scene-manager https://github.com/rmbrualla/pycolmap.git "$SCENE_MANAGER_REVISION" "-"
+          test "$(git -C "$root/gsplat" ls-tree HEAD gsplat/cuda/csrc/third_party/glm | awk '{print $3}')" = "$GLM_REVISION"
+          git -C "$root/gsplat" submodule update --init --depth 1 -- gsplat/cuda/csrc/third_party/glm
+          test "$(git -C "$root/gsplat/gsplat/cuda/csrc/third_party/glm" rev-parse HEAD)" = "$GLM_REVISION"
+          test "$(git -C "$root/gsplat/gsplat/cuda/csrc/third_party/glm" rev-parse HEAD^{tree})" = "$GLM_TREE"
+          echo "PY311_SOURCES=$root" >> "$GITHUB_ENV"
+
+      - name: Actually build gsplat and fused-ssim CUDA extensions on CPU runner for Python 3.11
+        shell: bash
+        run: |
+          set -euo pipefail
+          export BUILD_NO_CUDA=0
+          "$CANDIDATE_PYTHON" -m pip install --no-deps --no-build-isolation --no-cache-dir "$PY311_SOURCES/ssim"
+          "$CANDIDATE_PYTHON" -m pip install --no-deps --no-build-isolation --no-cache-dir "$PY311_SOURCES/gsplat"
+          "$CANDIDATE_PYTHON" -m pip install --no-deps --no-build-isolation --no-cache-dir "$PY311_SOURCES/nerfview"
+          "$CANDIDATE_PYTHON" -m pip install --no-deps --no-build-isolation --no-cache-dir "$PY311_SOURCES/scene-manager"
+
+      - name: Import selected native extensions and trainer in exact Python 3.11 interpreter
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$CANDIDATE_PYTHON" -I - <<'PY'
+          import hashlib
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          root = Path(os.environ["PY311_SOURCES"])
+          sys.path.insert(0, str(root / "gsplat" / "examples"))
+          import torch
+          import gsplat
+          from gsplat.cuda._backend import _C
+          from fused_ssim import fused_ssim
+          import fused_ssim_cuda
+          from nerfview import CameraState
+          import pycolmap
+          from pycolmap import SceneManager
+          from datasets.colmap import Dataset, Parser
+          from simple_trainer import Config, main
+          if torch.__version__ != "2.4.0+cu124" or torch.version.cuda != "12.4":
+              raise SystemExit("changed Torch ABI")
+          if torch.cuda.is_available():
+              raise SystemExit("no-GPU native import was not CPU-hosted")
+          if gsplat.__version__ != "1.5.3" or _C is None or not callable(fused_ssim):
+              raise SystemExit("real native extensions are not importable")
+          if not all(x is not None for x in (CameraState, SceneManager, Dataset, Parser, Config, main)):
+              raise SystemExit("trainer source closure is not importable")
+          native = [Path(_C.__file__).resolve(), Path(fused_ssim_cuda.__file__).resolve()]
+          if not all(x.is_file() and x.suffix == ".so" for x in native):
+              raise SystemExit("native extension binaries missing")
+          manifest = Path(os.environ["RUNNER_TEMP"], "py311-locked-manifest.json").read_bytes()
+          evidence = {
+              "evidence_kind": "experimental_py311_cpu_hosted_cuda_native_import",
+              "source_revision_gsplat": os.environ["GSPLAT_REVISION"],
+              "source_revision_fused_ssim": os.environ["SSIM_REVISION"],
+              "manifest_sha256": hashlib.sha256(manifest).hexdigest(),
+              "python": sys.version.split()[0],
+              "torch": torch.__version__,
+              "cuda_compiled": torch.version.cuda,
+              "native_files_sha256": {
+                  x.name: hashlib.sha256(x.read_bytes()).hexdigest() for x in native
+              },
+              "gpu_execution_evidence": False,
+              "actual_training_evidence": False,
+              "approved_runtime": False,
+              "checkpoint_license_approved": False,
+          }
+          Path("gsplat-py311-native-evidence.json").write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + "\n"
+          )
+          print("REAL Python3.11 gsplat+fused-ssim native imports; NO GPU training")
+          PY
+
+      - name: Retain experimental Python 3.11 native build/import proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v2l18-3-gsplat-py311-native-import
+          path: gsplat-py311-native-evidence.json
+          if-no-files-found: warn
+          retention-days: 30
