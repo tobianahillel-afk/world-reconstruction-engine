@@ -878,3 +878,248 @@ jobs:
           path: gsplat-py311-cpu-import-evidence.json
           if-no-files-found: warn
           retention-days: 30
+
+  # SECURITY REMEDIATION FEASIBILITY: a new PyTorch ABI lane, not a second
+  # appearance solver, approved production runtime or CUDA kernel execution.
+  # The authoritative upstream CUDA 12.6 pair is torch 2.14.0 / vision 0.29.0.
+  # This intentionally does NOT replace the approved/experimental 3.10/3.11
+  # closure, its mandatory fail-closed scans, or the existing WRE adapter.
+  modern-torch-cu126-cpu-feasibility:
+    name: experimental-py311-torch214-cu126-full-closure-security-cpu
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    permissions:
+      contents: read
+    env:
+      TARGET_PYTHON: "3.11.14"
+      TORCH_RELEASE: "2.14.0"
+      VISION_RELEASE: "0.29.0"
+      CUDA_RELEASE: "12.6"
+      PYTORCH_INDEX: https://download.pytorch.org/whl/cu126
+    steps:
+      - name: Checkout canonical V2L18.3 scope without credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned uv and Python 3.11.14
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.13"
+          python-version: "3.11.14"
+          enable-cache: false
+
+      - name: Resolve patched-family Torch CUDA 12.6 and full WRE trainer wheel closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv venv --seed --python "$TARGET_PYTHON" "$RUNNER_TEMP/wre-torch214"
+          echo "CANDIDATE_PYTHON=$RUNNER_TEMP/wre-torch214/bin/python" >> "$GITHUB_ENV"
+          "$RUNNER_TEMP/wre-torch214/bin/python" -m pip install \
+            --disable-pip-version-check --no-deps "pip==25.3"
+          "$RUNNER_TEMP/wre-torch214/bin/python" -m pip install \
+            --dry-run --ignore-installed --only-binary=:all: \
+            --report "$RUNNER_TEMP/wre-torch214-pip-report.json" \
+            --extra-index-url "$PYTORCH_INDEX" \
+            "torch==2.14.0+cu126" "torchvision==0.29.0+cu126" \
+            "numpy==1.26.4" "scipy==1.15.3" "opencv-python==4.11.0.86" \
+            "Pillow==13.0.0" "imageio==2.38.0" "scikit-learn==1.7.2" \
+            "tqdm==4.70.1" "tyro==1.0.16" "viser==1.1.1" \
+            "splines==0.3.3" "PyYAML==6.0.3" "matplotlib==3.10.9" \
+            "tensorboard==2.21.0" "torchmetrics[image]==1.9.0" \
+            "ninja==1.13.2" "jaxtyping==0.3.7" "rich==14.3.4" \
+            "typing-extensions==4.16.0" "setuptools==84.0.0" \
+            "wheel==0.48.0"
+
+      - name: Bind every candidate wheel to its source HTTPS URL and SHA-256
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$CANDIDATE_PYTHON" - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          from pathlib import Path
+          from urllib.parse import unquote, urlsplit
+
+          source = Path(os.environ["RUNNER_TEMP"], "wre-torch214-pip-report.json")
+          report = json.loads(source.read_text(encoding="utf-8"))
+          packages = {}
+          whitelist = {
+              "files.pythonhosted.org", "download.pytorch.org",
+              "download-r2.pytorch.org", "pypi.nvidia.com",
+          }
+          for item in report["install"]:
+              meta = item["metadata"]
+              name, version = meta["name"], meta["version"]
+              canonical = re.sub(r"[-_.]+", "-", name).lower()
+              url = item["download_info"]["url"]
+              parsed = urlsplit(url)
+              archive = item["download_info"].get("archive_info") or {}
+              digest = (archive.get("hashes") or {}).get("sha256")
+              if digest is None and str(archive.get("hash", "")).startswith("sha256="):
+                  digest = archive["hash"].removeprefix("sha256=")
+              filename = unquote(parsed.path.rsplit("/", 1)[-1])
+              if (canonical in packages
+                  or not re.fullmatch(r"[a-zA-Z0-9_.-]+", name)
+                  or not re.fullmatch(r"[0-9a-f]{64}", str(digest))
+                  or parsed.scheme != "https" or parsed.hostname not in whitelist
+                  or parsed.username or parsed.password or parsed.query or parsed.fragment
+                  or not filename.endswith(".whl")):
+                  raise SystemExit(f"unverified wheel identity: {name}=={version}")
+              if canonical in {"torch", "torchvision"} and not filename.startswith(
+                  name.lower() + "-"
+              ):
+                  raise SystemExit("PyTorch index returned an unexpected wheel")
+              packages[canonical] = {
+                  "name": name, "version": version, "url": url,
+                  "sha256": digest, "filename": filename,
+                  "license_metadata_present": bool(
+                      meta.get("license_expression") or meta.get("license")
+                      or any(str(x).startswith("License ::") for x in meta.get("classifier", []))
+                  ),
+              }
+          targets = {"torch": "2.14.0+cu126", "torchvision": "0.29.0+cu126",
+                     "pillow": "13.0.0", "numpy": "1.26.4"}
+          for name, version in targets.items():
+              if packages.get(name, {}).get("version") != version:
+                  raise SystemExit(f"CUDA 12.6 security candidate ABI mismatch: {name}")
+          if len(packages) < 65 or not all(
+              packages[x]["license_metadata_present"] for x in packages
+          ):
+              raise SystemExit("missing mandatory transitive wheels or metadata")
+          ordered = [packages[k] for k in sorted(packages)]
+          root = Path(os.environ["GITHUB_WORKSPACE"])
+          evidence = {
+              "evidence_kind": "unapproved_pytorch214_cuda126_wheel_resolution_only",
+              "selected_torch": "2.14.0+cu126",
+              "selected_torchvision": "0.29.0+cu126",
+              "selected_pillow": "13.0.0",
+              "python": "3.11.14",
+              "cuda_abi": "12.6",
+              "original_pip_report_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+              "packages": ordered,
+              "gpu_execution_evidence": False,
+              "native_gsplat_build_evidence": False,
+              "independent_license_approval": False,
+              "checkpoint_approval": False,
+              "runtime_approved": False,
+          }
+          (root / "wre-py311-torch214-candidate.json").write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + "\n"
+          )
+          # PyPI advisories do not understand '+cu126'; public versions are
+          # scanned separately, but a green result cannot attest CUDA binaries.
+          advisory = []
+          install = []
+          for p in ordered:
+              v = p["version"]
+              if p["name"].lower().replace("_", "-") in {"torch", "torchvision"}:
+                  v = v.split("+", 1)[0]
+              if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.+!-]*", v):
+                  raise SystemExit("unverifiable wheel version in proposed closure")
+              advisory.append(f'{p["name"]}=={v}')
+              install.append(f'{p["name"]} @ {p["url"]}#sha256={p["sha256"]}')
+          (root / "wre-py311-torch214-advisory-input.txt").write_text(
+              "\n".join(advisory) + "\n"
+          )
+          (root / "wre-py311-torch214-exact-wheels.txt").write_text(
+              "\n".join(install) + "\n"
+          )
+          print(f"Experimental modern CUDA 12.6 closure: {len(ordered)} exact wheels")
+          PY
+
+      - name: Fail-closed PyPI public-version advisory scan for entire candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          uvx --python "$TARGET_PYTHON" --from "pip-audit==2.10.1" pip-audit \
+            --no-deps --disable-pip --vulnerability-service pypi --format json \
+            --requirement "$GITHUB_WORKSPACE/wre-py311-torch214-advisory-input.txt" \
+            --output "$GITHUB_WORKSPACE/wre-py311-torch214-advisories.json"
+          "$CANDIDATE_PYTHON" - <<'PY'
+          import json
+          import re
+          from pathlib import Path
+
+          root = Path.cwd()
+          proposed = json.loads((root / "wre-py311-torch214-candidate.json").read_text())
+          scanned = json.loads((root / "wre-py311-torch214-advisories.json").read_text())
+          canonical = lambda s: re.sub(r"[-_.]+", "-", s).lower()
+          expected = {
+              canonical(x["name"]): x["version"].split("+", 1)[0]
+              for x in proposed["packages"]
+          }
+          got = {canonical(x["name"]): x for x in scanned["dependencies"]}
+          if len(got) != len(expected) or set(got) != set(expected):
+              raise SystemExit("public PyPI scan incomplete for proposed closure")
+          for name, obj in got.items():
+              if (obj.get("skip_reason") or obj.get("version") != expected[name]
+                  or obj.get("vulns") is None or obj["vulns"]):
+                  raise SystemExit(f"unverified or vulnerable public dependency: {name}")
+          print(f"{len(got)} public dependency versions scanned without reported advisories")
+          print("CUDA-local binary source/license vulnerabilities are NOT proven absent")
+          PY
+
+      - name: Install all hash-pinned candidate wheels and test real CPU imports
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$CANDIDATE_PYTHON" -m pip install --no-index --no-deps --no-cache-dir \
+            --require-hashes -r "$GITHUB_WORKSPACE/wre-py311-torch214-exact-wheels.txt"
+          "$CANDIDATE_PYTHON" -m pip check
+          "$CANDIDATE_PYTHON" - <<'PY'
+          import importlib.metadata as md
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          evidence = json.loads(Path("wre-py311-torch214-candidate.json").read_text())
+          if not sys.version.startswith("3.11.14"):
+              raise SystemExit("wrong candidate Python interpreter")
+          for package in evidence["packages"]:
+              if md.version(package["name"]) != package["version"]:
+                  raise SystemExit(f"installed version drift: {package['name']}")
+          import torch
+          import torchvision
+          import numpy
+          from PIL import __version__ as pillow_version
+          if (torch.__version__, torchvision.__version__, pillow_version) != (
+              "2.14.0+cu126", "0.29.0+cu126", "13.0.0"
+          ):
+              raise SystemExit("unexpected current PyTorch CPU import runtime")
+          if torch.version.cuda != "12.6" or torch.cuda.is_available():
+              raise SystemExit("CUDA ABI mismatch or unexpected accelerator access")
+          if (torch.tensor([2, 5], dtype=torch.float32) * 2).tolist() != [4.0, 10.0]:
+              raise SystemExit("PyTorch 2.14 real CPU tensor calculation failed")
+          evidence.update({
+              "evidence_kind": "experimental_torch214_cuda126_cpu_import_only",
+              "actual_cpu_import": True,
+              "actual_cpu_tensor_operation": True,
+              "torch_import_version": torch.__version__,
+              "torchvision_import_version": torchvision.__version__,
+              "numpy_import_version": numpy.__version__,
+              "pillow_import_version": pillow_version,
+              "native_gsplat_build_evidence": False,
+              "gpu_execution_evidence": False,
+              "runtime_approved": False,
+          })
+          Path("wre-py311-torch214-cpu-proof.json").write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + "\n"
+          )
+          print("Real Python3.11/Torch2.14/CUDA12.6 CPU import passed; no GPU used")
+          PY
+
+      - name: Retain modern PyTorch resolution, vulnerability and CPU evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v2l18-3-torch214-cu126-security-cpu-candidate
+          path: |
+            wre-py311-torch214-candidate.json
+            wre-py311-torch214-advisories.json
+            wre-py311-torch214-cpu-proof.json
+          if-no-files-found: warn
+          retention-days: 30
