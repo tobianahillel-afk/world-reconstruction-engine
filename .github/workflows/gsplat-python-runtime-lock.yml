@@ -588,7 +588,7 @@ jobs:
       # Scan the *candidate* 76 package versions. These names and versions
       # come from the immutable resolver artifact, NOT the old Python3.10 lock.
       # Security findings or scanner unavailability are mandatory failures.
-      - name: Audit Python 3.11 candidate 76 resolved wheel versions
+      - name: Audit Python 3.11 wheel advisories and separately verify skipped CUDA versions
         if: always() && matrix.flavor == 'py311-pillow13-probe'
         shell: bash
         run: |
@@ -626,17 +626,111 @@ jobs:
               "\n".join(sorted(versions, key=str.lower)) + "\n", encoding="utf-8"
           )
           PY
+          # A green pip-audit exit is NOT 76/76 coverage: the PyPI advisory
+          # service skips the CUDA-local torch/torchvision wheels (+cu124).
+          # Inspect its JSON, then independently query the corresponding
+          # upstream public PyPI release versions. This is advisory coverage
+          # for upstream versions only; CUDA wheel binaries, sources, weights,
+          # licenses and GitHub SBOM require their own independent reviews.
+          printf 'torch==2.4.0\ntorchvision==0.19.0\n' \
+            > "$RUNNER_TEMP/gsplat-py311-public-upstream-versions.txt"
+          set +e
           uvx --python "$TARGET_PYTHON_REQUEST" --from "pip-audit==2.10.1" pip-audit \
             --no-deps --disable-pip --vulnerability-service pypi --format json \
             --requirement "$RUNNER_TEMP/gsplat-py311-advisory-versions.txt" \
             --output "$GITHUB_WORKSPACE/wre-gsplat-py311-advisories.json"
+          exact_rc=$?
+          uvx --python "$TARGET_PYTHON_REQUEST" --from "pip-audit==2.10.1" pip-audit \
+            --no-deps --disable-pip --vulnerability-service pypi --format json \
+            --requirement "$RUNNER_TEMP/gsplat-py311-public-upstream-versions.txt" \
+            --output "$GITHUB_WORKSPACE/wre-gsplat-py311-public-upstream-advisories.json"
+          upstream_rc=$?
+          set -e
+          # Scanner/network/vulnerability failures must never be suppressed.
+          if test "$exact_rc" -ne 0 || test "$upstream_rc" -ne 0; then
+            echo "::error::One or more mandatory PyPI vulnerability audits failed."
+            exit 1
+          fi
+          "$RESOLVER_PYTHON" - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          source = Path(os.environ["RUNNER_TEMP"], "gsplat-python-runtime-lock.json")
+          pinned = json.loads(source.read_text(encoding="utf-8"))
+          workspace = Path(os.environ["GITHUB_WORKSPACE"])
+          primary = json.loads(
+              (workspace / "wre-gsplat-py311-advisories.json").read_text(encoding="utf-8")
+          )
+          upstream = json.loads(
+              (workspace / "wre-gsplat-py311-public-upstream-advisories.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          canonical = lambda name: re.sub(r"[-_.]+", "-", name).lower()
+          wheel_names = {canonical(p["name"]): p["version"] for p in pinned["packages"]}
+          if len(wheel_names) != 76:
+              raise SystemExit("not exactly 76 distinct candidate wheels")
+          audited = {canonical(p["name"]): p for p in primary["dependencies"]}
+          if len(audited) != 76 or set(audited) != set(wheel_names):
+              raise SystemExit("PyPI advisory report is missing locked candidate identities")
+          skipped = {}
+          scanned = 0
+          for name, entry in audited.items():
+              if entry.get("skip_reason"):
+                  skipped[name] = str(entry["skip_reason"])
+                  continue
+              if entry.get("version") != wheel_names[name] or entry.get("vulns") is None:
+                  raise SystemExit(f"unverified advisory entry for {name}")
+              if entry["vulns"]:
+                  raise SystemExit(f"vulnerabilities detected in {name}")
+              scanned += 1
+          # Do not allow new/unknown packages to be silently skipped.
+          if (scanned != 74 or set(skipped) != {"torch", "torchvision"}
+              or wheel_names["torch"] != "2.4.0+cu124"
+              or wheel_names["torchvision"] != "0.19.0+cu124"):
+              raise SystemExit(f"unexpected unscanned CUDA/PyPI package set: {skipped}")
+          upstream_expected = {"torch": "2.4.0", "torchvision": "0.19.0"}
+          reviewed = {canonical(p["name"]): p for p in upstream["dependencies"]}
+          if len(reviewed) != 2 or set(reviewed) != set(upstream_expected):
+              raise SystemExit("normalized upstream advisory coverage is incomplete")
+          for name, version in upstream_expected.items():
+              entry = reviewed[name]
+              if (entry.get("version") != version or entry.get("skip_reason")
+                  or entry.get("vulns") is None or entry["vulns"]):
+                  raise SystemExit(f"upstream PyPI advisory coverage failed: {name}")
+          coverage = {
+              "evidence_kind": "pypi_advisory_coverage_not_binary_or_license_approval",
+              "candidate_locked_wheels": 76,
+              "exact_cuda_wheel_advisory_entries_audited": 74,
+              "cuda_local_version_entries_skipped": sorted(skipped),
+              "public_upstream_release_versions_audited": upstream_expected,
+              "pypi_advisory_vulnerabilities_in_audited_versions": 0,
+              "cuda_binary_native_closure_security_approved": False,
+              "third_party_license_review_approved": False,
+              "native_receipt_approved": False,
+              "checkpoint_license_approved": False,
+              "github_dependency_review_executed": False,
+              "gpu_training_executed": False,
+              "runtime_approved": False,
+          }
+          (workspace / "wre-gsplat-py311-advisory-coverage.json").write_text(
+              json.dumps(coverage, sort_keys=True, indent=2) + "\n", encoding="utf-8"
+          )
+          print("PyPI advice: 74 exact versions + 2 publicly indexed upstream")
+          print("CUDA binary/source advisories and license gates remain independently pending")
+          PY
 
       - name: Retain Python 3.11 candidate vulnerability scan evidence
         if: always() && matrix.flavor == 'py311-pillow13-probe'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: v2l18-3-gsplat-py311-pillow13-advisories
-          path: wre-gsplat-py311-advisories.json
+          path: |
+            wre-gsplat-py311-advisories.json
+            wre-gsplat-py311-public-upstream-advisories.json
+            wre-gsplat-py311-advisory-coverage.json
           if-no-files-found: warn
           retention-days: 30
 
