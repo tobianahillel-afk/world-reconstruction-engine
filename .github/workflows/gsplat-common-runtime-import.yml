@@ -1235,7 +1235,19 @@ jobs:
               "User-Agent": "WRE-Pinned-Py311-Native-Probe",
               "X-GitHub-Api-Version": "2022-11-28",
           })
-          with urllib.request.urlopen(req, timeout=180) as response:
+          # The artifact REST endpoint redirects to a signed download URL.
+          # Never forward the repository bearer token to that other host.
+          class TokenStrippingRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, request, fp, code, msg, headers, newurl):
+                  target = urlsplit(newurl)
+                  if target.scheme != "https" or target.username or target.password:
+                      raise SystemExit("insecure GitHub artifact redirect refused")
+                  return urllib.request.Request(
+                      newurl, headers={"User-Agent": "WRE-Pinned-Py311-Native-Probe"}
+                  )
+
+          opener = urllib.request.build_opener(TokenStrippingRedirect)
+          with opener.open(req, timeout=180) as response:
               blob = response.read(2 * 1024 * 1024 + 1)
           if len(blob) > 2 * 1024 * 1024:
               raise SystemExit("candidate artifact exceeds bound")
