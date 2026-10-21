@@ -5,96 +5,39 @@ roadmap_version: '2.0'
 phase: implementation
 milestone: V2M3
 lot: V2L18
-active_work_item: V2L18.3
-status: in_progress
+active_work_item: V2L18.4
+status: ready
 last_completed: [V2L0.1, V2L0.2, V2L0.3, V2L1.1, V2L1.2, V2L1.3, V2L1.4, V2L1.5, V2L1.6, V2L2.1, V2L2.2, V2L2.3, V2L2.4, V2L2.5, V2L2.6, V2L3.1, V2L3.2, V2L3.3, V2L3.4, V2L3.5, V2L3.6, V2L4.1, V2L4.2, V2L4.3, V2L4.4, V2L4.5, V2L4.6, V2L5.1, V2L5.2, V2L5.3, V2L5.4, V2L5.5, V2L5.6, V2L6.1, V2L6.2, V2L6.3, V2L6.4, V2L6.5, V2L6.6, V2L7.1, V2L7.2, V2L7.3, V2L7.4, V2L7.5, V2L7.6, V2L8.1, V2L8.2, V2L8.3, V2L8.4, V2L8.5, V2L9.1, V2L9.2, V2L9.3, V2L9.4, V2L9.5, V2L10.1, V2L10.2, V2L10.3, V2L10.4, V2L10.5, V2L10.6, V2L11.1, V2L11.2, V2L11.3, V2L11.4, V2L11.5, V2L11.6, V2L12.1, V2L12.2, V2L12.3, V2L12.4, V2L12.5, V2L13.1, V2L13.2, V2L13.3, V2L13.4, V2L13.5, V2L13.6, V2L14.1, V2L14.2, V2L14.3, V2L14.4, V2L14.5, V2L14.6, V2L15.1, V2L15.2, V2L15.3, V2L15.4, V2L15.5, V2L15.6, V2L16.1, V2L16.2, V2L16.3, V2L16.4, V2L16.5, V2L16.6, V2L17.1, V2L17.2, V2L17.3, V2L17.4, V2L17.5, V2L18.1, V2L18.2]
 last_merged_pr: 192
 current_goal: >-
-  V2M3 has the reviewed V2L17 photometric evidence and the canonical AppearanceModel envelope from V2L18.1. V2L18.2 now supplies a pure
-  solver-independent static appearance candidate request result adapter Protocol and exact artifact-materialization boundary. Preserve exact
-  geometry surface observation producer frame and scale identities as static appearance moves to the first experimental baseline integration.
+  Standalone CPU evidence-evaluator NO-GO sequencing PROPOSED in PR #401,
+  distinct from the docs/23 accelerator-evidence exception: experimental gsplat
+  V2L18.3 integration remains BLOCKED, not done, not merged, not independently
+  approved; unsupported GPU kernels, learned training and GPU-dependent quality are
+  DEFERRED / UNVERIFIED. Preserve exact CPU/provenance evidence of PR #322 without
+  equating synthetic Gaussian exports or CUDA native builds to learned appearance.
+  Activate the separately justified V2L18.4 CPU evidence-admissibility/metrics
+  contract only after an independent review of this NO-GO sequencing exception
+  and its actual merge. Render scoring must establish exact retained model-to-
+  renderer/config/camera-to-output lineage or remain UNVERIFIED.
 next_action: >-
-  Continue only V2L18.3. CPU-only gsplat preflights now verify source PNG byte/pixel identities,
-  native COLMAP geometry equivalence, audited final PLY bytes and exact per-PNG V2L17 READY/COMPATIBLE
-  photometric evidence without silently applying normalization. PR #203 adds a CPU-only
-  multi-observation necessary-evidence check: after revalidating each exact source PNG and
-  V2L17 assessment, fully resolved ISO, shutter time, aperture, exposure compensation,
-  white-balance mode and color temperature must match across two or more observations.
-  Missing or differing metadata fail closed; equal capture declarations do not prove
-  equal scene radiance, tone mapping, actual overlap or camera-response calibration.
-  PR #205 adds a separate CPU-only necessary-evidence gate over the exact audited COLMAP native
-  sparse model: all selected registered source observations must form a connected graph of
-  reciprocal, valid shared Point3D/Point2D tracks with exact image-name identities. This
-  proves bounded geometric overlap only, not equal radiance, photometric calibration, view
-  quality or GPU training success.
-  The additional exact-source gate verifies ten reviewed gsplat v1.5.3 trainer
-  entrypoint/requirements/parser/helper files against
-  immutable upstream Git blob SHA-1 identities and byte lengths before any future external import.
-  This is a partial local source-byte proof only, not full source-tree, wheel, native ABI, GPU or
-  transitive-license approval. Official gsplat examples/requirements.txt requests numpy<2.0.0
-  and a pinned old rmbrualla/pycolmap fork; never silently install it in WRE or assume it is
-  interchangeable with WRE's PyCOLMAP 4.2.0 environment. PR #206 adds a separate offline source-byte
-  gate for the exact MIT rmbrualla/pycolmap SceneManager reader commit cc7ea4b7301720ac29287dbe450952511b32125e:
-  nine reviewed package/metadata/license files are Git-blob pinned, while unexpected package files
-  and symlinks fail closed. PR #207 now adds a separate CPU-only real native-model
-  compatibility fixture: exact PyCOLMAP 4.2.0 reconstructs 12 registered images and 477
-  points; the unchanged reviewed SceneManager fork, isolated under Python 3.12 NumPy 1.26.4
-  and SciPy 1.16.2, reads camera models intrinsics poses image names 2D links 3D RGB/error
-  and reciprocal tracks identically, with audited native binary hashes unchanged. The old
-  fork fails to import under NumPy 2.5.3 because np.uint64(-1) raises OverflowError,
-  so do not put the two PyCOLMAP readers in one runtime. This is one real fixture only,
-  not universal compatibility or trainer GPU approval. PR #209 adds a separate CPU-only,
-  source-byte-bound cross-observation pixel diagnostic: after exact V2L17 metadata checks
-  and reciprocal COLMAP 3D track support, it decodes the actual original sRGB PNG pixels
-  at common tracks and retains per-observation-pair raw sRGB-channel differences and exact
-  PNG identities. This is descriptive observation evidence only, not a color/radiance
-  calibration, threshold-based quality gate, camera-response solution or GPU training proof.
-  PR #210 adds a separate private staging gate: reverify exact original PNG hashes
-  and all three solver-native COLMAP binary files, copy the unmodified bytes into a
-  fresh gsplat-compatible images/ and sparse/0/ tree, verify SHA-256 and length of
-  every staged file, and publish only after a complete successful copy. Source
-  overlap, symlinks, missing native files, tampering and partial workspaces fail
-  closed without modifying caller data. This is CPU-only input staging, not a
-  trained appearance model or GPU/runtime approval. PR #211 independently revalidates the
-  complete private staged tree and original source hashes just before external execution.
-  PR #212 now assembles a real already-produced, validated degree-3 PLY into the canonical
-  AppearanceModel and ArtifactMaterializationMetadata with exact source ancestry, producer
-  configuration, source geometry, frame and scale. This is a retained-output contract test
-  on synthetic fixture bytes, not an observed GPU training run, calibrated radiance or a
-  shipping approval. The output assembly is exported through wre.reconstruction.
-  PR #219 initially pinned the exact 75-wheel external Python/Torch resolver-only
-  closure for CPython 3.10.21, torch 2.4.0+cu124, torchvision 0.19.0+cu124 and
-  NumPy 1.26.4. Exact trainer-import review later found that the pinned nerfview
-  source eagerly imports splines and splines.quaternion despite omitting splines
-  from its own pyproject metadata. The runtime lock therefore now contains 76 exact
-  wheels by adding only splines 0.3.3 (MIT; wheel SHA-256
-  47b68f370b17c68d9ebe24fc6525532f61d5796bb655c3b9e7e8a76d2518ff09)
-  while preserving every previous wheel identity.
-  PR #220 proves a digest-pinned CUDA 12.4.131/GCC 11.4.0 toolchain can compile one
-  CUDA C++17 object on a CPU-hosted runner; this is not a native solver build or GPU
-  execution. PR #221 now installs 27 exact reviewed Torch/build wheel artifacts with
-  SHA-256 checks, verifies all seven pinned fused-ssim source files and successfully
-  builds/imports fused_ssim_cuda under that CUDA toolkit with no GPU. Two successful
-  builds have different resulting binary hashes, so bit-identical binary reproducibility
-  is not proven. PR #222 now independently installs 33 exact reviewed Torch/build wheel
-  artifacts, verifies the immutable gsplat v1.5.3 full tree and sole GLM submodule, then
-  compiles and imports the real gsplat CUDA rasterizer extension on the CPU-hosted CUDA
-  12.4.131 toolchain. The retained csrc.so is 15,928,040 bytes with SHA-256
-  ba8864f8a63f8b9f3f96e9e0d754895f90dbe0e6dbc0e8627cc9c1cd71b814ee; GPU execution,
-  rasterizer kernel execution and appearance training remain false, and binary
-  reproducibility remains unverified. The next separate non-GPU gate is the complete
-  offline trainer import/ABI closure using the corrected exact 76-wheel Python lock,
-  gsplat rasterizer, fused-ssim, nerfview and legacy SceneManager boundaries without
-  remote fetch or GPU execution. After that, complete source/model redistribution review
-  and independently supported shared-scene photometric suitability beyond matching
-  capture-setting metadata. Only after those non-GPU gates should the retained private
-  fixture run on supported GPU hardware, with real training evidence bound to the produced
-  PLY and canonical AppearanceModel plus actual ArtifactMaterializationMetadata behind
-  V2L18.2.
-  Preserve caller geometry, local frame, scale, original pixel bytes and source lineage.
-  Keep unsupported hardware DEFERRED/UNVERIFIED. No default route, held-out scoring, router
-  promotion or V2L18.4 implementation.
-blockers: []
+  V2L18.4 READY ONLY ON THIS UNMERGED PROPOSAL BRANCH: after independent review
+  and merge, implement bounded CPU-held-out evidence validation and
+  appearance/geometry/motion metric calculations using the frozen V2L18.2
+  solver-independent contracts and already retained WRE metric primitives.
+  Reject any supplied render lacking independent retained model/producer/config/
+  camera/output-digest derivation, with no invented score or claim. Never render
+  or train a model, infer synthetic benchmark quality, enable gsplat,
+  issue default promotion, or complete V2L18 lot while V2L18.3 remains blocked.
+  Separately, repo owner/independent reviewer must clear native runtime identities,
+  LPIPS/checkpoint and transitive redistribution licensing and an actually executed
+  dependency-vulnerability scan before the experimental gsplat PR #322 can close.
+  The original long-form implementation history remains in PR #322 and immutable Git.
+blockers:
+  - "V2L18.3 R1 native dependency trust: PR #322 unresolved review thread PRRT_kwDOUauyh86txA3g; independently approve exact 76-wheel, native-extension, transitive-license and LPIPS receipt before enabling any CUDA runtime."
+  - "V2L18.3 repository security: GitHub Dependency Graph SBOM HTTP 404; the dependency-review check can be globally green while Review dependency changes is skipped. Actual scan or officially reviewed equivalent still absent."
+  - "V2L18.3 release governance: PR #322 remains unmerged, non-GPU release gates and independent PR approval incomplete. Under explicitly reviewed CPU-first Option A roadmap migration, V2L18.4 only may become ready without implying V2L18.3 done. V2L18 lot review and default promotion remain forbidden until V2L18.3 and V2L18.6 are actually done."
+  - "Unavailable local GPU: only actual GPU kernel execution, learned gsplat training and accelerator-dependent appearance quality are DEFERRED / UNVERIFIED under docs/23; CPU geometry/held-out input validation and accurate CPU metrics remain mandatory for the independent V2L18.4 evaluation path."
 architecture:
   product_blueprint: docs/01_PRODUCT.md
   architecture_blueprint: docs/02_ARCHITECTURE.md
@@ -117,4 +60,4 @@ reviews:
 quality:
   fast_ci_required: true
   known_regressions: 0
-updated_at: '2026-10-11'
+updated_at: '2026-10-21'

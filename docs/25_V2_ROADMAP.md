@@ -193,10 +193,10 @@ Purpose: create one common language for gates, escalation and comparison.
 
 - `V2L18.1` — canonical `AppearanceModel` contract distinct from surface.
 - `V2L18.2` — Gaussian/radiance adapter capability contract.
-- `V2L18.3` — refresh the current shortlist, then integrate one approved static appearance baseline.
-- `V2L18.4` — held-out render + geometry disagreement metrics plus camera-path motion/scale stability metrics where the representation can exhibit aliasing, shimmer, popping or unstable view-dependent behavior.
+- `V2L18.3` — refresh the current shortlist, then integrate one approved static appearance baseline. **Option A (no available GPU): currently BLOCKED**, not done, until its independent non-GPU native/LPIPS/licensing/security and review gates are actually satisfied; gsplat remains experimental and not default, its real GPU training/quality is `DEFERRED / UNVERIFIED`.
+- `V2L18.4` — **PROPOSED standalone NO-GO sequencing exception, not a docs/23 accelerator-evidence waiver**: the CPU-only evidence-admissibility/metric evaluator is a separate work item using already completed V2L18.2/V2L17/V2L16 contracts. Its readiness must be independently reviewed and the proposal merged before any V2L18.4 implementation. It neither depends on nor executes V2L18.3, which is blocked on non-GPU gates as well as unavailable GPU evidence; it cannot replace an approved appearance baseline. Held-out appearance scores require a retained trustworthy chain from exact AppearanceModel artifact through named renderer/version/configuration and camera to exact render bytes, not caller-declared matching IDs. Without that chain, only evidence-admissibility or separate trustworthy geometry checks are permitted; appearance/motion scores remain UNVERIFIED. Renderer/trainer development, default promotion and V2L18 lot completion remain out of scope.
 - `V2L18.5` — in-the-wild exposure/distractor specialist adapter boundary.
-- `V2L18.6` — appearance quality/resource-efficiency/motion-stability benchmark, relevant execution-profile evidence and default candidate review.
+- `V2L18.6` — appearance quality/resource-efficiency/motion-stability benchmark, relevant execution-profile evidence and default candidate review. Must retain a hard dependency on completed V2L18.3; no V2L18 review or default promotion while that baseline remains blocked.
 
 ### V2L19 — Materials and environment
 
