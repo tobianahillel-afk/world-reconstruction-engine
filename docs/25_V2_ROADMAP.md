@@ -193,10 +193,10 @@ Purpose: create one common language for gates, escalation and comparison.
 
 - `V2L18.1` — canonical `AppearanceModel` contract distinct from surface.
 - `V2L18.2` — Gaussian/radiance adapter capability contract.
-- `V2L18.3` — refresh the current shortlist, then integrate one approved static appearance baseline.
-- `V2L18.4` — held-out render + geometry disagreement metrics plus camera-path motion/scale stability metrics where the representation can exhibit aliasing, shimmer, popping or unstable view-dependent behavior.
+- `V2L18.3` — refresh the current shortlist, then integrate one approved static appearance baseline. **Option A (no available GPU): currently BLOCKED**, not done, until its independent non-GPU native/LPIPS/licensing/security and review gates are actually satisfied; gsplat remains experimental and not default, its real GPU training/quality is `DEFERRED / UNVERIFIED`.
+- `V2L18.4` — under the explicit CPU-first roadmap exception, a self-contained CPU metric/evidence evaluator can start from the already completed V2L18.2/V2L17/V2L16 contracts without depending on finished V2L18.3. It evaluates only independently supplied verified held-out and camera-path measurements, never invents trained renders or benchmark quality, and retains unknown appearance results as UNVERIFIED. Its evaluation contract covers held-out render + geometry disagreement + camera-path motion/scale stability; new renderer/trainer integration is out of scope. This parallel preparation does not close V2L18.3.
 - `V2L18.5` — in-the-wild exposure/distractor specialist adapter boundary.
-- `V2L18.6` — appearance quality/resource-efficiency/motion-stability benchmark, relevant execution-profile evidence and default candidate review.
+- `V2L18.6` — appearance quality/resource-efficiency/motion-stability benchmark, relevant execution-profile evidence and default candidate review. Must retain a hard dependency on completed V2L18.3; no V2L18 review or default promotion while that baseline remains blocked.
 
 ### V2L19 — Materials and environment
 

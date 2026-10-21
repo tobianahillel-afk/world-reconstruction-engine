@@ -536,7 +536,7 @@ work_items:
   - id: V2L18.3
     lot: V2L18
     title: First approved static appearance baseline
-    status: in_progress
+    status: blocked
     objective: Select and integrate only one evidence-approved static appearance baseline behind the V2L18.2 StaticAppearanceCandidateAdapter boundary using explicit reviewed source GeometrySolutionCandidate and photometrically interpretable source observations. Materialize one complete AppearanceModel with exact output-file provenance, without making its particular Gaussian radiance or neural method a core WRE type or a default scene route.
     allowed_scope:
       - src/wre/reconstruction/static_appearance_baseline.py
@@ -608,7 +608,7 @@ work_items:
       - 'V2L18.3 accelerator exception under docs/23_ENGINEERING_EXECUTION.md (Option A): when no supported GPU is available, record native GPU kernel execution, real learned-Gaussian training and accelerator-dependent appearance quality as DEFERRED / UNVERIFIED, not successful or failed. Retain gsplat as experimental non-default with its exact source and future GPU execution lane; CPU native compilation, real CPU COLMAP/SfM, mocked subprocesses and synthetic export cannot substitute for learned GPU appearance or quality evidence.'
       - No-GPU deferral is NOT a waiver for mandatory CPU-verifiable semantics, source and output provenance, independent approved runtime/wheel/native-extension attestation, direct/transitive license and LPIPS redistribution review, authentic dependency vulnerability scanning, applicable green CI or the required independent V2L18.3 PR review. The V2L18 lot review is due after V2L18.6, not as a prerequisite to activating V2L18.4. In particular a successful dependency-review workflow whose actual dependency-scan step is skipped does not satisfy this gate. Keep the work item in_progress if any such gate is still missing, even when optional GPU proof is deferred.
       - Keep surface independent and optional. Absence of an explicit SurfaceModel is never filled with a fabricated physical mesh or inferred collision proxy from the appearance representation.
-      - At completion mark V2L18.3 done retain the static_appearance component implementing and activate V2L18.4 with a complete executable held-out-render and camera-motion/geometry-disagreement metrics contract. Do not implement V2L18.4 in the same PR.
+      - 'CPU-first Option A migration: V2L18.3 stays BLOCKED (never done) while its exact native trust, LPIPS, SCA, licenses and independent review remain missing. V2L18.4 may independently prepare and exercise CPU-only evidence/metric evaluation after V2L18.2, without executing or accepting V2L18.3, and without using synthetic output as scientific benchmark evidence. When the pending gates are truly satisfied, close V2L18.3 in a separate reviewed transition. V2L18 lot acceptance, default promotion and dependent V2L18.6 remain blocked until both V2L18.3 and V2L18.5 are done. No V2L18.4 code in the V2L18.3 PR.'
     tests:
       - candidate refresh and exact selected upstream source license dependency registry consistency regression
       - optional dependency import isolation and unsupported runtime hardware fail-closed regression
@@ -621,9 +621,77 @@ work_items:
       - representative small-fixture actual baseline execution with explicit supported hardware evidence where available and deferred status otherwise
       - no candidate ranking held-out quality scoring motion-stability scoring router or V2L18.4 behavior regression
       - full fast CI CodeQL and applicable exact external integration workflows
-  - {id: V2L18.4, lot: V2L18, title: Held out render geometry motion scale stability metrics, status: planned, depends_on: [V2L18.3]}
+  - id: V2L18.4
+    lot: V2L18
+    title: Held out render geometry motion scale stability metrics
+    status: ready
+    objective: >-
+      Implement a bounded, deterministic CPU-only evaluation of independently supplied
+      and verified held-out visual samples, geometry correspondence and ordered camera-path
+      observations under the frozen V2L18.2 appearance boundary. This item evaluates
+      existing observations; it does NOT render or train a new appearance baseline.
+      When trustworthy render evidence is missing, leave render-quality claims UNVERIFIED.
+    allowed_scope:
+      - src/wre/reconstruction/static_appearance_evaluation.py
+      - focused exports in src/wre/reconstruction/__init__.py
+      - tests/test_static_appearance_evaluation.py
+      - focused lifecycle handoff in PROJECT_STATE.yaml registry/components.yaml and registry/work-items/v2m3.yaml only after exact-HEAD green evidence
+    out_of_scope:
+      - changing AppearanceModel GeometrySolutionCandidate MetricVector SourcePhotometryMetadata ArtifactMaterializationMetadata or existing geometry contracts
+      - invoking gsplat CUDA Torch external trainers downloading or constructing a checkpoint or importing GPU frameworks in mandatory CI
+      - generating fake reference pixels rendering held-out images building a renderer or constructing invented camera trajectories for acceptance evidence
+      - evaluating untrusted synthetic fixtures as real photorealistic held-out quality or claiming GPU performance learned 3D/4D appearance
+      - fixing or approving V2L18.3 native runtime provenance LPIPS and dependency-scan gates by silence or substitution
+      - selecting ranking merging routing or promoting an appearance solver V2L18.5 V2L18.6 or MasterScene/runtime/viewer behavior
+      - inferring camera scale frame alignment color transforms radiance calibration or physical surface from visually similar observations
+    depends_on: [V2L18.2, V2L17.5, V2L16.6]
+    read_before:
+      - docs/00_START_HERE.md
+      - AGENTS.md
+      - docs/02_ARCHITECTURE.md
+      - docs/03_PIPELINE.md
+      - docs/14_TECHNOLOGY_SELECTION.md
+      - docs/23_ENGINEERING_EXECUTION.md
+      - docs/24_SYSTEM_INVARIANTS.md
+      - docs/25_V2_ROADMAP.md
+      - docs/26_V2_PRODUCT_ARCHITECTURE_FREEZE.md
+      - registry/work-items/v2m3.yaml
+      - PROJECT_STATE.yaml
+      - registry/components.yaml
+      - src/wre/domain/appearance.py
+      - src/wre/domain/metrics.py
+      - src/wre/domain/benchmarks.py
+      - src/wre/reconstruction/static_appearance_candidate.py
+      - src/wre/reconstruction/geometry_solution_comparison.py
+      - src/wre/domain/geometry_solutions.py
+      - src/wre/domain/camera_solutions.py
+      - tests/test_metrics.py
+      - tests/test_appearance.py
+      - tests/test_static_appearance_candidate.py
+    reuse:
+      - Reuse existing solver-independent MetricDescriptor MetricVector and benchmark identity types without defining another quality taxonomy.
+      - Reuse existing AppearanceModel source ancestry and GeometrySolutionCandidate local-frame and scale semantics without modifying these types.
+      - A CPU metric evaluator consumes explicitly supplied verified visual/depth/camera samples; no static-appearance solver or GPU runtime is a build/test dependency.
+      - Retain native gsplat experimental/opt-in V2L18.3 as BLOCKED with exact evidence and unresolved license/trust gates; no change to scientific candidate ranking.
+    acceptance:
+      - Define a small, typed immutable evaluation input binding an existing canonical AppearanceModel and source geometry to independently verified held-out reference and supplied render sample identities, exact byte digests dimensions color interpretation and ordered camera-path metadata.
+      - Validate source observation exclusion from training and prove sample/reference source provenance and artifact identity; ambiguous overlap missing byte identity synthetic/generated reference or unsupported color evidence must never count toward scientific appearance quality.
+      - Compute deterministic CPU held-out pixel-error metrics only when explicit compatible verified reference/render pixels exist; reject shape/color mismatches non-finite output unreviewed normalization or fabricated input rather than inventing PSNR/SSIM.
+      - Compute geometry disagreement only for explicitly linked same-frame same-scale reference measurements, preserving UNRESOLVED scale semantics and failing closed on unsupported projection or alignment.
+      - Compute or retain camera-path temporal/motion and scale-change stability metrics only when ordered, validated actual evaluated render samples and camera-path evidence are provided; do not confuse static synthetic math fixtures with observed motion stability.
+      - Represent missing held-out render/camera-path/GPU-dependent appearance evidence explicitly as UNVERIFIED rather than zero failed or passed metrics; no winner or default promotion and no fabricated benchmark record.
+      - Preserve ordered source/reconstruction/metric identities and deterministic numeric tolerances across repeated CPU evaluation; no mutation of canonical geometry appearance or source evidence.
+      - Keep required fast CI CPU-only and CodeQL green on the exact final SHA. At handoff mark V2L18.4 done only for metrics objectively verified within this contract; V2L18.3 remains blocked, and V2L18.6 cannot close without it.
+    tests:
+      - exact candidate source observation membership held-out disjointness and immutable digest provenance positive and adversarial negative cases
+      - CPU deterministic held-out pixel metric reference values and rejection for invalid dimensions colors missing files NaN Inf clipping and unsupported interpretation
+      - independent geometric disagreement frame and scale compatibility including unresolved-scale and invalid projection cases
+      - ordered camera-path movement and stability measurement with negative time order wrong-frame missing render and insufficient sample failures
+      - no evidence or synthetic-only input yields UNVERIFIED not scored success failure or produced photorealistic benchmark
+      - no GPU imports downloaded models camera modification route promotion default changes or V2L18.3 acceptance claims
+      - fast CI CodeQL and focused CPU regression suite
   - {id: V2L18.5, lot: V2L18, title: In the wild appearance specialist boundary, status: planned, depends_on: [V2L18.4]}
-  - {id: V2L18.6, lot: V2L18, title: Appearance quality resource motion stability execution profile benchmark, status: planned, depends_on: [V2L18.5]}
+  - {id: V2L18.6, lot: V2L18, title: Appearance quality resource motion stability execution profile benchmark, status: planned, depends_on: [V2L18.5, V2L18.3]}
   - {id: V2L19.1, lot: V2L19, title: EnvironmentModel sky horizon contract, status: planned, depends_on: [V2L18.6]}
   - {id: V2L19.2, lot: V2L19, title: Baseline environment representation, status: planned, depends_on: [V2L19.1]}
   - {id: V2L19.3, lot: V2L19, title: MaterialModel contract, status: planned, depends_on: [V2L19.2]}
