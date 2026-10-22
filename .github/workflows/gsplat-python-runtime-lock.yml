@@ -148,7 +148,6 @@ jobs:
             "splines==0.3.3"
             "PyYAML==6.0.3"
             "matplotlib==3.10.9"
-            "python-dateutil==2.9.0.post0"
             "tensorboard==2.21.0"
             "torchmetrics[image]==1.9.0"
             "ninja==1.13.2"
@@ -158,6 +157,10 @@ jobs:
             "setuptools==84.0.0"
             "wheel==0.48.0"
           )
+          if test "$TARGET_PYTHON_REQUEST" = "3.11.14"; then
+            test ! -s "$constraints"
+            printf "python-dateutil==2.9.0.post0\\n" > "$constraints"
+          fi
           if test -s "$constraints"; then
             args+=(--constraint "$constraints")
           fi
