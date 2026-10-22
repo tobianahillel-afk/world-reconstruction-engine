@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import ast
 import hashlib
+import os
+import shutil
 import struct
+import sys
 import zlib
 from dataclasses import FrozenInstanceError, replace
 from datetime import UTC, datetime
@@ -108,11 +111,15 @@ from wre.reconstruction.static_appearance_baseline import (
     GsplatStaticAppearancePreflightSource,
     GsplatStaticAppearanceTrainingProfile,
     assemble_verified_gsplat_static_appearance_result,
+    build_gsplat_reference_trainer_path_overrides,
     inspect_gsplat_static_appearance_shared_track_pixels,
     materialize_verified_gsplat_ply,
     preflight_gsplat_static_appearance_inputs,
+    reconstruct_gsplat_static_appearance,
+    run_gsplat_reference_training,
     stage_verified_gsplat_static_appearance_dataset,
     verify_gsplat_reference_pycolmap_sources,
+    verify_gsplat_reference_trainer_config_fields,
     verify_gsplat_static_appearance_matching_capture_metadata,
     verify_gsplat_static_appearance_native_geometry,
     verify_gsplat_static_appearance_reference_sources,
@@ -120,7 +127,11 @@ from wre.reconstruction.static_appearance_baseline import (
     verify_gsplat_static_appearance_source_photometry,
     verify_gsplat_static_appearance_staged_dataset,
 )
-from wre.reconstruction.static_appearance_candidate import StaticAppearanceCandidateRequest
+from wre.reconstruction.static_appearance_candidate import (
+    StaticAppearanceCandidateAdapter,
+    StaticAppearanceCandidateRequest,
+    StaticAppearanceCandidateResult,
+)
 
 
 def _digest(data: bytes) -> Sha256Digest:
@@ -154,6 +165,49 @@ def _reviewed_source_fixture(
     return root, data
 
 
+def test_gsplat_concrete_adapter_implements_v2l18_2_protocol(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The public specialist must accept one canonical request without a GPU import."""
+    context: dict[str, object] = {}
+    expected = cast(StaticAppearanceCandidateResult, object())
+
+    def fake_reconstruct(**kwargs: object) -> StaticAppearanceCandidateResult:
+        context.update(kwargs)
+        return expected
+
+    monkeypatch.setattr(baseline_module, "reconstruct_gsplat_static_appearance", fake_reconstruct)
+    adapter: StaticAppearanceCandidateAdapter = baseline_module.GsplatStaticAppearanceAdapter(
+        source=cast(baseline_module.GsplatStaticAppearancePreflightSource, object()),
+        assessments=(),
+        dataset_root=tmp_path / "dataset",
+        profile=baseline_module.GsplatStaticAppearanceTrainingProfile(max_steps=20),
+        features=cast(ColmapFeatureExtractionResult, object()),
+        expected_environment=cast(ColmapEnvironmentIdentity, object()),
+        source_root=tmp_path / "exact-upstream",
+        python_executable=tmp_path / "external-python",
+        output_root=tmp_path / "private-output",
+        artifact_ref=cast(ArtifactRef, object()),
+        producer=cast(ArtifactProducerIdentity, object()),
+        cuda_device_index=0,
+        timeout_seconds=60,
+        lpips_alexnet_weights=tmp_path / "alexnet.pth",
+        lpips_alexnet_sha256="a" * 64,
+    )
+    request = cast(StaticAppearanceCandidateRequest, object())
+    assert adapter.derive_candidate(request) is expected
+    assert context["request"] is request
+    assert context["source"] is not None
+    assert context["assessments"] == ()
+    assert context["profile"] == adapter.profile
+    assert context["features"] is adapter.features
+    assert context["expected_environment"] is adapter.expected_environment
+    assert context["output_root"] == tmp_path / "private-output"
+    assert context["lpips_alexnet_weights"] == tmp_path / "alexnet.pth"
+    assert context["lpips_alexnet_sha256"] == "a" * 64
+    assert context["timeout_seconds"] == 60
+
+
 def test_gsplat_reference_source_git_pins_are_the_reviewed_upstream_identity() -> None:
     assert GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION == ("937e29912570c372bed6747a5c9bf85fed877bae")
     assert GSPLAT_STATIC_APPEARANCE_SOURCE_TREE == ("90c3f0b2352e6d2725bcba1ef0407168f922c0fa")
@@ -177,6 +231,27 @@ def test_gsplat_reference_source_git_pins_are_the_reviewed_upstream_identity() -
     )
 
 
+@pytest.mark.parametrize("tampered", (False, True))
+def test_only_verified_trainer_python_is_staged_for_execution(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, tampered: bool
+) -> None:
+    root, data = _reviewed_source_fixture(tmp_path, monkeypatch)
+    (root / "examples" / "viser.py").write_text("raise RuntimeError('injected')", encoding="utf-8")
+    private = tmp_path / "private"
+    private.mkdir()
+    if tampered:
+        (root / "examples" / "simple_trainer.py").write_bytes(b"unreviewed replacement")
+        with pytest.raises(GsplatStaticAppearancePreflightError, match="source changed"):
+            baseline_module._stage_verified_gsplat_trainer_imports(root, private)
+    else:
+        import_root = baseline_module._stage_verified_gsplat_trainer_imports(root, private)
+        assert (import_root / "simple_trainer.py").read_bytes() == data[
+            "examples/simple_trainer.py"
+        ]
+        assert not (import_root / "viser.py").exists()
+        assert sorted(path.name for path in import_root.glob("*.py")) == ["simple_trainer.py"]
+
+
 def test_gsplat_reference_source_gate_verifies_exact_bytes_without_import(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -188,6 +263,294 @@ def test_gsplat_reference_source_gate_verifies_exact_bytes_without_import(
         assert entry.byte_length == len(payload)
         assert entry.sha256 == _digest(payload)
     assert result == verify_gsplat_static_appearance_reference_sources(root)
+
+
+def _plausible_gsplat_runtime_tree(tmp_path: Path) -> Path:
+    """Only path-level fixture: not audited COLMAP bytes or a decodable PNG."""
+    staged = tmp_path / "staged-colmap"
+    (staged / "images").mkdir(parents=True)
+    (staged / "sparse" / "0").mkdir(parents=True)
+    (staged / "images" / "frame.png").write_bytes(b"synthetic image")
+    for name in ("cameras.bin", "images.bin", "points3D.bin"):
+        (staged / "sparse" / "0" / name).write_bytes(b"synthetic model")
+    return staged
+
+
+def test_gsplat_trainer_config_uses_explicit_isolated_paths(tmp_path: Path) -> None:
+    staged = _plausible_gsplat_runtime_tree(tmp_path)
+    output = tmp_path / "private-results"
+    profile = GsplatStaticAppearanceTrainingProfile(max_steps=20)
+    expected_identity = profile.configuration_sha256
+
+    overrides = build_gsplat_reference_trainer_path_overrides(
+        profile=profile, dataset_root=staged, output_root=output
+    )
+    assert overrides["data_dir"] == str(staged)
+    assert overrides["result_dir"] == str(output)
+    stable = {
+        key: value for key, value in overrides.items() if key not in ("data_dir", "result_dir")
+    }
+    assert stable == profile.reference_overrides()
+    assert overrides["ply_steps"] == [20]
+    assert profile.configuration_sha256 == expected_identity
+    assert not output.exists()
+
+
+@pytest.mark.parametrize(
+    "invalid_case",
+    ("relative", "existing", "overlap", "missing_images", "missing_colmap", "symlink"),
+)
+def test_gsplat_trainer_config_rejects_unsafe_runtime_paths(
+    tmp_path: Path, invalid_case: str
+) -> None:
+    staged = _plausible_gsplat_runtime_tree(tmp_path)
+    destination = tmp_path / "results"
+    if invalid_case == "relative":
+        destination = Path("results")
+    elif invalid_case == "existing":
+        destination.mkdir()
+    elif invalid_case == "overlap":
+        destination = staged / "new-results"
+    elif invalid_case == "missing_images":
+        (staged / "images" / "frame.png").unlink()
+        (staged / "images").rmdir()
+    elif invalid_case == "missing_colmap":
+        for name in ("cameras.bin", "images.bin", "points3D.bin"):
+            (staged / "sparse" / "0" / name).unlink()
+        (staged / "sparse" / "0").rmdir()
+    elif invalid_case == "symlink":
+        destination.symlink_to(staged, target_is_directory=True)
+
+    with pytest.raises(GsplatStaticAppearancePreflightError):
+        build_gsplat_reference_trainer_path_overrides(
+            profile=GsplatStaticAppearanceTrainingProfile(),
+            dataset_root=staged,
+            output_root=destination,
+        )
+
+
+@pytest.mark.parametrize(
+    ("missing", "expected_message"),
+    (
+        ("cameras.bin", "real COLMAP binary model files"),
+        ("images.bin", "real COLMAP binary model files"),
+        ("points3D.bin", "real COLMAP binary model files"),
+        ("frame.png", "regular PNG image"),
+    ),
+)
+def test_gsplat_trainer_config_rejects_missing_runtime_dataset_files(
+    tmp_path: Path, missing: str, expected_message: str
+) -> None:
+    staged = _plausible_gsplat_runtime_tree(tmp_path)
+    target = (
+        staged / "images" / missing
+        if missing.endswith(".png")
+        else staged / "sparse" / "0" / missing
+    )
+    target.unlink()
+    with pytest.raises(GsplatStaticAppearancePreflightError, match=expected_message):
+        build_gsplat_reference_trainer_path_overrides(
+            profile=GsplatStaticAppearanceTrainingProfile(),
+            dataset_root=staged,
+            output_root=tmp_path / "results",
+        )
+
+
+@pytest.mark.parametrize("linked", ("cameras.bin", "frame.png"))
+def test_gsplat_trainer_config_rejects_symlinked_runtime_dataset_files(
+    tmp_path: Path, linked: str
+) -> None:
+    staged = _plausible_gsplat_runtime_tree(tmp_path)
+    target = (
+        staged / "images" / linked if linked.endswith(".png") else staged / "sparse" / "0" / linked
+    )
+    real_file = tmp_path / "other-file"
+    target.rename(real_file)
+    target.symlink_to(real_file)
+    assert target.is_file() and target.is_symlink()
+    expected_message = "regular PNG image" if linked.endswith(".png") else "real COLMAP"
+    with pytest.raises(GsplatStaticAppearancePreflightError, match=expected_message):
+        build_gsplat_reference_trainer_path_overrides(
+            profile=GsplatStaticAppearanceTrainingProfile(),
+            dataset_root=staged,
+            output_root=tmp_path / "results",
+        )
+
+
+@pytest.mark.parametrize("alias_part", ("images", "sparse", "sparse/0"))
+def test_gsplat_trainer_config_rejects_symlinked_colmap_subdirectories(
+    tmp_path: Path, alias_part: str
+) -> None:
+    staged = tmp_path / "staged-colmap"
+    (staged / "images").mkdir(parents=True)
+    (staged / "sparse" / "0").mkdir(parents=True)
+    linked = staged.joinpath(*alias_part.split("/"))
+    original = tmp_path / "real-subdirectory"
+    linked.rename(original)
+    linked.symlink_to(original, target_is_directory=True)
+    assert linked.is_dir()  # A plain is_dir check would follow and accept the alias.
+    assert linked.is_symlink()
+
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="real staged images"):
+        build_gsplat_reference_trainer_path_overrides(
+            profile=GsplatStaticAppearanceTrainingProfile(),
+            dataset_root=staged,
+            output_root=tmp_path / "results",
+        )
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    (
+        "none",
+        "missing_field",
+        "missing_dataclass",
+        "missing_colmap",
+        "missing_fused_ssim",
+        "missing_gsplat",
+        "missing_nerfview",
+        "missing_torch",
+    ),
+)
+def test_pinned_gsplat_trainer_config_fields_without_runtime_import(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mutation: str
+) -> None:
+    # A synthetic *repinned fixture*, not a claim of actual upstream execution.
+    root, data = _reviewed_source_fixture(tmp_path, monkeypatch)
+    profile = GsplatStaticAppearanceTrainingProfile(max_steps=20)
+    overrides = sorted(profile.reference_overrides())
+    fields = [name for name in overrides if mutation != "missing_field" or name != "save_ply"]
+    imports = (
+        ("import torch", "missing_torch"),
+        ("from datasets.colmap import Dataset, Parser", "missing_colmap"),
+        ("from fused_ssim import fused_ssim", "missing_fused_ssim"),
+        ("from gsplat import export_splats", "missing_gsplat"),
+        ("from gsplat.rendering import rasterization", "missing_gsplat"),
+        ("from gsplat_viewer import GsplatViewer", "missing_nerfview"),
+        ("from nerfview import CameraState", "missing_nerfview"),
+    )
+    source = "".join(line + "\n" for line, omission in imports if mutation != omission)
+    decorator = "" if mutation == "missing_dataclass" else "@dataclass\n"
+    source += decorator + "class Config:\n"
+    source += "".join(f"    {name}: object = None\n" for name in fields)
+    payload = source.encode("ascii")
+    data["examples/simple_trainer.py"] = payload
+    (root / "examples/simple_trainer.py").write_bytes(payload)
+    monkeypatch.setattr(
+        baseline_module,
+        "_GSPLAT_REFERENCE_SOURCE_FILES",
+        tuple(
+            (path, len(content), baseline_module._git_blob_sha1(content))
+            for path, content in sorted(data.items())
+        ),
+    )
+
+    if mutation == "none":
+        assert verify_gsplat_reference_trainer_config_fields(root, profile) == tuple(overrides)
+    else:
+        message = "Config" if mutation in {"missing_field", "missing_dataclass"} else "import"
+        with pytest.raises(GsplatStaticAppearancePreflightError, match=message):
+            verify_gsplat_reference_trainer_config_fields(root, profile)
+
+
+def test_pinned_gsplat_config_gate_rejects_modified_source_after_pin(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, _data = _reviewed_source_fixture(tmp_path, monkeypatch)
+    source = root / "examples/simple_trainer.py"
+    # Replacing bytes without updating the source pins must fail *before*
+    # reading schema claims from an altered trainer.
+    source.write_bytes(b"print('other!!')\n")
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="Git blob differs"):
+        verify_gsplat_reference_trainer_config_fields(root, GsplatStaticAppearanceTrainingProfile())
+
+
+@pytest.mark.parametrize("registry_mutation", ("missing", "duplicate"))
+def test_gsplat_config_gate_rejects_unreviewed_trainer_pin_registry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, registry_mutation: str
+) -> None:
+    # All on-disk bytes are valid and individually pinned. Fail only because
+    # the source registry omits or duplicates the trainer Config identity.
+    root, data = _reviewed_source_fixture(tmp_path, monkeypatch)
+    profile = GsplatStaticAppearanceTrainingProfile(max_steps=20)
+    payload = (
+        "@dataclass\nclass Config:\n"
+        + "".join(f"    {name}: object = None\n" for name in profile.reference_overrides())
+    ).encode("ascii")
+    trainer_name = "examples/simple_trainer.py"
+    (root / trainer_name).write_bytes(payload)
+    data[trainer_name] = payload
+    pinned = [
+        (name, len(blob), baseline_module._git_blob_sha1(blob))
+        for name, blob in sorted(data.items())
+        if registry_mutation != "missing" or name != trainer_name
+    ]
+    if registry_mutation == "duplicate":
+        pinned.append((trainer_name, len(payload), baseline_module._git_blob_sha1(payload)))
+    monkeypatch.setattr(baseline_module, "_GSPLAT_REFERENCE_SOURCE_FILES", tuple(pinned))
+
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="exactly one pinned"):
+        verify_gsplat_reference_trainer_config_fields(root, profile)
+
+
+def test_gsplat_reference_source_gate_rejects_unlink_during_read(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, _data = _reviewed_source_fixture(tmp_path, monkeypatch)
+    target = root / "examples/simple_trainer.py"
+    original_read_bytes = Path.read_bytes
+    removed = False
+
+    def unlink_before_read(path: Path) -> bytes:
+        nonlocal removed
+        if path == target and not removed:
+            target.unlink()
+            removed = True
+        return original_read_bytes(path)
+
+    monkeypatch.setattr(Path, "read_bytes", unlink_before_read)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="disappeared during"):
+        verify_gsplat_static_appearance_reference_sources(root)
+    assert removed
+    assert not target.exists()
+
+
+def test_gsplat_config_gate_rejects_unlink_after_source_verification(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, data = _reviewed_source_fixture(tmp_path, monkeypatch)
+    profile = GsplatStaticAppearanceTrainingProfile(max_steps=20)
+    payload = (
+        "@dataclass\nclass Config:\n"
+        + "".join(f"    {field}: object = None\n" for field in profile.reference_overrides())
+    ).encode("ascii")
+    target = root / "examples/simple_trainer.py"
+    target.write_bytes(payload)
+    data["examples/simple_trainer.py"] = payload
+    monkeypatch.setattr(
+        baseline_module,
+        "_GSPLAT_REFERENCE_SOURCE_FILES",
+        tuple(
+            (path, len(blob), baseline_module._git_blob_sha1(blob))
+            for path, blob in sorted(data.items())
+        ),
+    )
+    original_read_bytes = Path.read_bytes
+    reads = 0
+
+    def unlink_before_second_read(path: Path) -> bytes:
+        nonlocal reads
+        if path == target:
+            reads += 1
+            if reads == 2:
+                target.unlink()
+        return original_read_bytes(path)
+
+    monkeypatch.setattr(Path, "read_bytes", unlink_before_second_read)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="during Config schema"):
+        verify_gsplat_reference_trainer_config_fields(root, profile)
+    assert reads == 2
+    assert not target.exists()
 
 
 def test_gsplat_reference_source_gate_rejects_same_size_tampering(
@@ -554,19 +917,22 @@ def test_preflight_has_no_trainer_execution_or_optional_framework_import() -> No
             imported.add(node.module.split(".")[0])
     assert imported <= {
         "__future__",
+        "ast",
         "dataclasses",
         "hashlib",
         "json",
         "math",
+        "os",
         "pathlib",
         "shutil",
         "struct",
+        "subprocess",
         "tempfile",
         "typing",
         "wre",
         "zlib",
     }
-    assert not {"torch", "gsplat", "numpy", "subprocess", "pycolmap"} & imported
+    assert not {"torch", "gsplat", "numpy", "pycolmap"} & imported
 
 
 def test_safe_training_profile_disables_unsafe_upstream_defaults() -> None:
@@ -690,6 +1056,1037 @@ def _gsplat_output(
     (output / profile.expected_ply_relative_path).write_bytes(data)
     ref = ArtifactRef(ArtifactId("appearance:gsplat:fixture"), APPEARANCE_MODEL_ARTIFACT_KIND)
     return output, profile, ref
+
+
+def _stub_reference_trainer_track_gate(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Only CPU trainer orchestration tests stub the separately tested COLMAP gate."""
+    monkeypatch.setattr(baseline_module, "_load_pycolmap", lambda: object())
+    monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_shared_scene_tracks",
+        lambda *_args, **_kwargs: (),
+    )
+
+
+def test_reference_runner_rejects_missing_photometry_before_any_cuda(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A verified COLMAP source without V2L17 evidence must not reach CUDA."""
+    request, source, staged, output, profile, ref, producer = _retained_gsplat_fixture(tmp_path)
+    python_executable = tmp_path / "external-python"
+    python_executable.write_bytes(b"stub")
+    previous = (output / profile.expected_ply_relative_path).read_bytes()
+    monkeypatch.setattr(
+        baseline_module.subprocess,
+        "run",
+        lambda *_a, **_kw: pytest.fail("missing V2L17 evidence reached external trainer"),
+    )
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="photometric assessment"):
+        run_gsplat_reference_training(
+            request=request,
+            source=source,
+            assessments=(),
+            staged=staged,
+            profile=profile,
+            features=cast(ColmapFeatureExtractionResult, object()),
+            expected_environment=cast(ColmapEnvironmentIdentity, object()),
+            source_root=tmp_path,
+            python_executable=python_executable,
+            output_root=output,
+            artifact_ref=ref,
+            producer=producer,
+            cuda_device_index=0,
+            timeout_seconds=30,
+        )
+    assert (output / profile.expected_ply_relative_path).read_bytes() == previous
+    assert not (output / "wre-reference-training.log").exists()
+
+
+def test_reference_runner_accepts_real_two_view_capture_evidence_before_native_gate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Real V2L17 identity and capture evidence pass; CUDA is never launched."""
+    request, source = _two_view_parts(tmp_path)
+    assessments = _matching_shared_track_photometry(source)
+    profile = GsplatStaticAppearanceTrainingProfile(max_steps=20)
+    producer = ArtifactProducerIdentity(
+        producer=ProducerRef(
+            implementation="gsplat.examples.simple_trainer",
+            version="1.5.3",
+            revision=GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION,
+        ),
+        configuration=ConfigurationIdentity(sha256=profile.configuration_sha256),
+        model=ModelIdentity(
+            name="gsplat",
+            version="1.5.3",
+            revision=GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION,
+        ),
+    )
+    python_executable = tmp_path / "external-python"
+    python_executable.write_bytes(b"stub")
+    output = tmp_path / "no-gpu-output"
+
+    def reached_native_gate(*_args: Any, **_kwargs: Any) -> None:
+        raise GsplatStaticAppearancePreflightError("native-validation-reached")
+
+    monkeypatch.setattr(
+        baseline_module, "verify_gsplat_static_appearance_native_geometry", reached_native_gate
+    )
+    monkeypatch.setattr(baseline_module, "_load_pycolmap", lambda: object())
+    monkeypatch.setattr(
+        baseline_module.subprocess,
+        "run",
+        lambda *_a, **_kw: pytest.fail("unverified CUDA trainer started"),
+    )
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="native-validation-reached"):
+        run_gsplat_reference_training(
+            request=request,
+            source=source,
+            assessments=assessments,
+            staged=cast(baseline_module.GsplatStaticAppearanceStagedDataset, object()),
+            profile=profile,
+            features=cast(ColmapFeatureExtractionResult, object()),
+            expected_environment=cast(ColmapEnvironmentIdentity, object()),
+            source_root=tmp_path,
+            python_executable=python_executable,
+            output_root=output,
+            artifact_ref=ArtifactRef(
+                ArtifactId("appearance:gsplat:photo-evidence"), APPEARANCE_MODEL_ARTIFACT_KIND
+            ),
+            producer=producer,
+            cuda_device_index=0,
+            timeout_seconds=30,
+        )
+    assert not output.exists()
+
+
+def test_reference_trainer_refuses_disconnected_native_tracks_before_cuda(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Real shared-track gate rejects disconnected images before a GPU launch."""
+    request, source = _two_view_parts(tmp_path)
+    assessments = _matching_shared_track_photometry(source)
+    features, env = _native_feature_evidence(tmp_path)
+    profile = GsplatStaticAppearanceTrainingProfile(max_steps=20)
+    producer = ArtifactProducerIdentity(
+        producer=ProducerRef(
+            implementation="gsplat.examples.simple_trainer",
+            version="1.5.3",
+            revision=GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION,
+        ),
+        configuration=ConfigurationIdentity(sha256=profile.configuration_sha256),
+        model=ModelIdentity(
+            name="gsplat",
+            version="1.5.3",
+            revision=GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION,
+        ),
+    )
+    python = tmp_path / "external-python"
+    python.write_bytes(b"fake interpreter")
+    output = tmp_path / "must-not-be-created"
+    monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_native_geometry",
+        lambda *_args, **_kwargs: None,
+    )
+    monkeypatch.setattr(
+        baseline_module,
+        "_load_pycolmap",
+        lambda: _shared_track_fixture(track_image_ids=(1,)),
+    )
+    monkeypatch.setattr(
+        baseline_module.subprocess,
+        "run",
+        lambda *_args, **_kwargs: pytest.fail("disconnected scene launched CUDA trainer"),
+    )
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="do not connect"):
+        run_gsplat_reference_training(
+            request=request,
+            source=source,
+            assessments=assessments,
+            staged=cast(baseline_module.GsplatStaticAppearanceStagedDataset, object()),
+            profile=profile,
+            features=features,
+            expected_environment=env,
+            source_root=tmp_path,
+            python_executable=python,
+            output_root=output,
+            artifact_ref=ArtifactRef(
+                ArtifactId("appearance:gsplat:disconnected"),
+                APPEARANCE_MODEL_ARTIFACT_KIND,
+            ),
+            producer=producer,
+            cuda_device_index=0,
+            timeout_seconds=30,
+        )
+    assert not output.exists()
+
+
+def test_external_gsplat_training_is_exposed_by_public_reconstruction_package() -> None:
+    from wre import reconstruction
+
+    assert reconstruction.run_gsplat_reference_training is run_gsplat_reference_training
+    assert "run_gsplat_reference_training" in reconstruction.__all__
+    assert "run_gsplat_reference_training" in baseline_module.__all__
+
+
+def test_one_call_gsplat_reconstruction_stages_real_files_and_returns_candidate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Real CPU staging + file hashing + output assembly, substituted GPU trainer."""
+    # This test isolates trainer orchestration; V2L17 evidence has separate real tests.
+    monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_matching_capture_metadata",
+        lambda *_args: (),
+    )
+    request, source, staged, output, profile, ref, producer = _retained_gsplat_fixture(tmp_path)
+    shutil.rmtree(staged.dataset_root)
+    shutil.rmtree(output)
+    interpreter = tmp_path / "external-python"
+    interpreter.write_bytes(b"stub external interpreter")
+    reference, _ = _reviewed_source_fixture(tmp_path, monkeypatch)
+    monkeypatch.setattr(
+        baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
+    )
+    subprocess_calls: list[dict[str, Any]] = []
+
+    def fake_trainer(_command: list[str], **kwargs: Any) -> SimpleNamespace:
+        subprocess_calls.append(kwargs)
+        input_root = Path(baseline_module.json.loads(kwargs["input"])["data_dir"])
+        assert input_root == staged.dataset_root
+        for item in staged.entries:
+            assert (input_root / item.relative_path).is_file()
+        (output / "ply").mkdir()
+        (output / profile.expected_ply_relative_path).write_bytes(_gsplat_ply(vertices=2))
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(baseline_module.subprocess, "run", fake_trainer)
+    _stub_reference_trainer_track_gate(monkeypatch)
+    lpips = tmp_path / "synthetic-offline-alexnet.pth"
+    lpips.write_bytes(b"test-only-not-actual-weights")
+    lpips_sha = hashlib.sha256(lpips.read_bytes()).hexdigest()
+    receipt = tmp_path / "one-call-stub-runtime-receipt.json"
+    receipt.write_bytes(b"test-only native receipt for subprocess stub")
+    receipt_sha = hashlib.sha256(receipt.read_bytes()).hexdigest()
+    monkeypatch.setattr(
+        baseline_module, "_GSPLAT_APPROVED_NATIVE_RECEIPT_SHA256", frozenset({receipt_sha})
+    )
+    monkeypatch.setattr(
+        baseline_module, "_GSPLAT_APPROVED_LPIPS_ALEXNET_SHA256", frozenset({lpips_sha})
+    )
+    result = reconstruct_gsplat_static_appearance(
+        request=request,
+        source=source,
+        assessments=(),
+        dataset_root=staged.dataset_root,
+        profile=profile,
+        features=cast(ColmapFeatureExtractionResult, object()),
+        expected_environment=cast(ColmapEnvironmentIdentity, object()),
+        source_root=reference,
+        python_executable=interpreter,
+        output_root=output,
+        artifact_ref=ref,
+        producer=producer,
+        cuda_device_index=0,
+        timeout_seconds=30,
+        lpips_alexnet_weights=lpips,
+        lpips_alexnet_sha256=lpips_sha,
+        runtime_manifest_path=receipt,
+        approved_runtime_manifest_sha256=receipt_sha,
+    )
+    assert len(subprocess_calls) == 1
+    assert result.request is request
+    assert result.candidate.source_geometry is request.source_geometry
+    assert result.candidate.artifact_ref == ref
+    assert result.candidate.producer == producer
+    assert result.materialization.entries[0].sha256 == _digest(_gsplat_ply(vertices=2))
+    assert (staged.dataset_root / "sparse" / "0" / "cameras.bin").is_file()
+    assert (output / "wre-reference-training.log").is_file()
+
+
+def test_one_call_gsplat_reconstruction_does_not_stage_false_producer(
+    tmp_path: Path,
+) -> None:
+    request, source, staged, _output, profile, ref, producer = _retained_gsplat_fixture(tmp_path)
+    shutil.rmtree(staged.dataset_root)
+    invalid_producer = replace(
+        producer, configuration=ConfigurationIdentity(sha256=_digest(b"invalid"))
+    )
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="configuration differs"):
+        reconstruct_gsplat_static_appearance(
+            request=request,
+            source=source,
+            assessments=(),
+            dataset_root=staged.dataset_root,
+            profile=profile,
+            features=cast(ColmapFeatureExtractionResult, object()),
+            expected_environment=cast(ColmapEnvironmentIdentity, object()),
+            source_root=tmp_path,
+            python_executable=tmp_path / "no-interpreter",
+            output_root=tmp_path / "no-output",
+            artifact_ref=ref,
+            producer=invalid_producer,
+            cuda_device_index=0,
+            timeout_seconds=30,
+        )
+    assert not staged.dataset_root.exists()
+
+
+@pytest.mark.parametrize(
+    ("manifest_bytes", "approved_sha256", "message"),
+    (
+        (None, None, "requires an approved external runtime manifest"),
+        (b"{}", "0" * 64, "manifest digest differs"),
+    ),
+)
+def test_external_trainer_child_rejects_unapproved_runtime_before_import(
+    tmp_path: Path,
+    manifest_bytes: bytes | None,
+    approved_sha256: str | None,
+    message: str,
+) -> None:
+    """Real isolated Python subprocess; MUST reject before importing CUDA packages."""
+    child = baseline_module._GSPLAT_TRAINER_CHILD
+    ast.parse(child, feature_version=(3, 10))
+    receipt = tmp_path / "native-runtime.json"
+    if manifest_bytes is not None:
+        receipt.write_bytes(manifest_bytes)
+    completed = baseline_module.subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-S",
+            "-c",
+            child,
+            str(tmp_path),
+            str(receipt) if manifest_bytes is not None else "",
+            approved_sha256 or "",
+        ],
+        input=b"{}",
+        capture_output=True,
+        timeout=20,
+        check=False,
+    )
+    assert completed.returncode != 0
+    assert message.encode() in completed.stderr
+    assert b"ModuleNotFoundError: No module named 'torch'" not in completed.stderr
+
+
+def test_external_trainer_rejects_self_hash_receipt_without_repo_approval(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A caller-chosen SHA of its own binaries is NOT an independent trust root."""
+    request, source, staged, output, profile, ref, producer = _retained_gsplat_fixture(tmp_path)
+    (output / profile.expected_ply_relative_path).unlink()
+    (output / "ply").rmdir()
+    output.rmdir()
+    source_root, _ = _reviewed_source_fixture(tmp_path, monkeypatch)
+    interpreter = tmp_path / "unreviewed-python"
+    interpreter.write_bytes(b"stub")
+    weights = tmp_path / "offline-alexnet.pth"
+    weights.write_bytes(b"test-only-weights")
+    receipt = tmp_path / "self-asserted-native-files.json"
+    receipt.write_bytes(b'{"source_revisions": "caller-claimed"}')
+    monkeypatch.setattr(
+        baseline_module,
+        "_GSPLAT_APPROVED_LPIPS_ALEXNET_SHA256",
+        frozenset({hashlib.sha256(weights.read_bytes()).hexdigest()}),
+    )
+    unapproved_digest = hashlib.sha256(receipt.read_bytes()).hexdigest()
+    monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_matching_capture_metadata",
+        lambda *_: (),
+    )
+    monkeypatch.setattr(
+        baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
+    )
+    _stub_reference_trainer_track_gate(monkeypatch)
+    monkeypatch.setattr(
+        baseline_module.subprocess,
+        "run",
+        lambda *_a, **_kw: pytest.fail("unapproved native runtime was executed"),
+    )
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="WRE trust root"):
+        run_gsplat_reference_training(
+            request=request,
+            source=source,
+            assessments=(),
+            staged=staged,
+            profile=profile,
+            features=cast(ColmapFeatureExtractionResult, object()),
+            expected_environment=cast(ColmapEnvironmentIdentity, object()),
+            source_root=source_root,
+            python_executable=interpreter,
+            output_root=output,
+            artifact_ref=ref,
+            producer=producer,
+            cuda_device_index=0,
+            timeout_seconds=15,
+            lpips_alexnet_weights=weights,
+            lpips_alexnet_sha256=hashlib.sha256(weights.read_bytes()).hexdigest(),
+            runtime_manifest_path=receipt,
+            approved_runtime_manifest_sha256=unapproved_digest,
+        )
+    assert not output.exists()
+
+
+def test_external_trainer_rejects_self_hashed_lpips_even_with_approved_native_receipt(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Matching caller SHA cannot authorize unreviewed deserializable weights."""
+    request, source, staged, output, profile, ref, producer = _retained_gsplat_fixture(tmp_path)
+    (output / profile.expected_ply_relative_path).unlink()
+    (output / "ply").rmdir()
+    output.rmdir()
+    source_root, _ = _reviewed_source_fixture(tmp_path, monkeypatch)
+    interpreter = tmp_path / "external-python"
+    interpreter.write_bytes(b"test interpreter")
+    weights = tmp_path / "self-asserted-alexnet.pth"
+    weights.write_bytes(b"caller-supplied-unreviewed-weights")
+    self_hash = hashlib.sha256(weights.read_bytes()).hexdigest()
+    receipt = tmp_path / "independently-reviewed-native-receipt.json"
+    receipt.write_bytes(b"test-only native receipt")
+    receipt_sha = hashlib.sha256(receipt.read_bytes()).hexdigest()
+    monkeypatch.setattr(
+        baseline_module, "_GSPLAT_APPROVED_NATIVE_RECEIPT_SHA256", frozenset({receipt_sha})
+    )
+    monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_matching_capture_metadata",
+        lambda *_: (),
+    )
+    monkeypatch.setattr(
+        baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
+    )
+    _stub_reference_trainer_track_gate(monkeypatch)
+    monkeypatch.setattr(
+        baseline_module.subprocess,
+        "run",
+        lambda *_a, **_kw: pytest.fail("unapproved LPIPS launched native process"),
+    )
+    assert not baseline_module._GSPLAT_APPROVED_LPIPS_ALEXNET_SHA256
+    with pytest.raises(
+        GsplatStaticAppearancePreflightError, match="independently approved WRE digest"
+    ):
+        run_gsplat_reference_training(
+            request=request,
+            source=source,
+            assessments=(),
+            staged=staged,
+            profile=profile,
+            features=cast(ColmapFeatureExtractionResult, object()),
+            expected_environment=cast(ColmapEnvironmentIdentity, object()),
+            source_root=source_root,
+            python_executable=interpreter,
+            output_root=output,
+            artifact_ref=ref,
+            producer=producer,
+            cuda_device_index=0,
+            timeout_seconds=15,
+            lpips_alexnet_weights=weights,
+            lpips_alexnet_sha256=self_hash,
+            runtime_manifest_path=receipt,
+            approved_runtime_manifest_sha256=receipt_sha,
+        )
+    assert not output.exists()
+
+
+def test_external_gsplat_runner_builds_complete_canonical_candidate_with_process_stub(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Real staging/PLY/candidate assembly; substituted CUDA process only."""
+    # This test isolates trainer orchestration; V2L17 evidence has separate real tests.
+    monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_matching_capture_metadata",
+        lambda *_args: (),
+    )
+    request, source, staged, output, profile, artifact_ref, producer = _retained_gsplat_fixture(
+        tmp_path
+    )
+    (output / profile.expected_ply_relative_path).unlink()
+    (output / "ply").rmdir()
+    output.rmdir()
+    source_root, _ = _reviewed_source_fixture(tmp_path, monkeypatch)
+    runtime = tmp_path / "external-python"
+    runtime.write_bytes(b"stub: external runtime explicitly provided")
+    weights = tmp_path / "trusted-local-alexnet.pth"
+    weights.write_bytes(b"offline-test-weights-only-not-a-real-pytorch-state-dict")
+    weight_digest = hashlib.sha256(weights.read_bytes()).hexdigest()
+    # Simulated receipt only tests argument wiring. Real child separately
+    # validates an independently approved runtime receipt before Torch import.
+    receipt = tmp_path / "synthetic-native-receipt.json"
+    receipt.write_text('{"test_only": true}')
+    receipt_digest = hashlib.sha256(receipt.read_bytes()).hexdigest()
+    # Test-only trust approval; production WRE has NO approved native receipts.
+    monkeypatch.setattr(
+        baseline_module, "_GSPLAT_APPROVED_NATIVE_RECEIPT_SHA256", frozenset({receipt_digest})
+    )
+    monkeypatch.setattr(
+        baseline_module, "_GSPLAT_APPROVED_LPIPS_ALEXNET_SHA256", frozenset({weight_digest})
+    )
+    monkeypatch.setattr(
+        baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
+    )
+    calls: list[tuple[list[str], dict[str, Any]]] = []
+
+    def fake_cuda_process(command: list[str], **kwargs: Any) -> SimpleNamespace:
+        calls.append((command, kwargs))
+        (output / "ply").mkdir()
+        (output / profile.expected_ply_relative_path).write_bytes(_gsplat_ply(vertices=2))
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(baseline_module.subprocess, "run", fake_cuda_process)
+    _stub_reference_trainer_track_gate(monkeypatch)
+    result = run_gsplat_reference_training(
+        request=request,
+        source=source,
+        assessments=(),
+        staged=staged,
+        profile=profile,
+        features=cast(ColmapFeatureExtractionResult, object()),
+        expected_environment=cast(ColmapEnvironmentIdentity, object()),
+        source_root=source_root,
+        python_executable=runtime,
+        output_root=output,
+        artifact_ref=artifact_ref,
+        producer=producer,
+        cuda_device_index=2,
+        timeout_seconds=30,
+        lpips_alexnet_weights=weights,
+        lpips_alexnet_sha256=weight_digest,
+        runtime_manifest_path=receipt,
+        approved_runtime_manifest_sha256=receipt_digest,
+    )
+    assert len(calls) == 1
+    command, kwargs = calls[0]
+    assert command[:4] == [str(runtime), "-I", "-S", "-c"]
+    assert "from simple_trainer import Config, main" in command[4]
+    private_imports = output / "wre-pinned-examples"
+    assert command[5] == str(private_imports)
+    assert command[6] == str(receipt)
+    assert command[7] == receipt_digest
+    assert kwargs["cwd"] == private_imports
+    assert (private_imports / "simple_trainer.py").read_bytes() == (
+        source_root / "examples" / "simple_trainer.py"
+    ).read_bytes()
+    assert kwargs["env"]["CUDA_VISIBLE_DEVICES"] == "2"
+    assert kwargs["env"]["PIP_NO_INDEX"] == "1"
+    assert kwargs["env"]["TORCH_HOME"] == str(output / "torch-cache")
+    copied_weights = output / "torch-cache" / "hub" / "checkpoints" / "alexnet-owt-7be5be79.pth"
+    assert copied_weights.read_bytes() == weights.read_bytes()
+    assert hashlib.sha256(copied_weights.read_bytes()).hexdigest() == weight_digest
+    assert "WRE_PRIVATE_CI_TOKEN" not in kwargs["env"]
+    assert kwargs["timeout"] == 30
+    assert kwargs["stderr"] == baseline_module.subprocess.STDOUT
+    runtime_config = baseline_module.json.loads(kwargs["input"])
+    assert runtime_config["data_dir"] == str(staged.dataset_root)
+    assert runtime_config["result_dir"] == str(output)
+    assert runtime_config["save_ply"] is True
+    assert runtime_config["disable_viewer"] is True
+    assert runtime_config["pose_opt"] is False
+    assert runtime_config["max_steps"] == 20
+    assert result.request is request
+    assert result.candidate.source_geometry is request.source_geometry
+    assert result.candidate.producer is producer
+    assert result.candidate.artifact_ref == artifact_ref
+    assert result.materialization.entries[0].relative_path == "ply/point_cloud_19.ply"
+    assert result.materialization.entries[0].sha256 == _digest(_gsplat_ply(vertices=2))
+    assert (output / "wre-reference-training.log").exists()
+
+
+@pytest.mark.parametrize("source_root_name", ("image_root", "native_model_root"))
+def test_reference_trainer_rejects_output_inside_original_sources(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, source_root_name: str
+) -> None:
+    """Never let the external trainer create results under immutable inputs."""
+    monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_matching_capture_metadata",
+        lambda *_args: (),
+    )
+    request, source, staged, _old_output, profile, artifact_ref, producer = (
+        _retained_gsplat_fixture(tmp_path)
+    )
+    source_root, _ = _reviewed_source_fixture(tmp_path, monkeypatch)
+    interpreter = tmp_path / "external-python"
+    interpreter.write_bytes(b"stub")
+    protected_root = getattr(source, source_root_name)
+    output = protected_root / "training-results"
+    image_before = source.images[0].source_path.read_bytes()
+    native_before = (source.native_model_root / "0" / "cameras.bin").read_bytes()
+    monkeypatch.setattr(
+        baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
+    )
+    _stub_reference_trainer_track_gate(monkeypatch)
+    monkeypatch.setattr(
+        baseline_module.subprocess,
+        "run",
+        lambda *_args, **_kwargs: pytest.fail("overlapping output launched trainer"),
+    )
+    with pytest.raises(
+        GsplatStaticAppearancePreflightError, match="original image or native-model"
+    ):
+        run_gsplat_reference_training(
+            request=request,
+            source=source,
+            assessments=(),
+            staged=staged,
+            profile=profile,
+            features=cast(ColmapFeatureExtractionResult, object()),
+            expected_environment=cast(ColmapEnvironmentIdentity, object()),
+            source_root=source_root,
+            python_executable=interpreter,
+            output_root=output,
+            artifact_ref=artifact_ref,
+            producer=producer,
+            cuda_device_index=0,
+            timeout_seconds=30,
+        )
+    assert not output.exists()
+    assert source.images[0].source_path.read_bytes() == image_before
+    assert (source.native_model_root / "0" / "cameras.bin").read_bytes() == native_before
+
+
+def test_reference_trainer_rejects_output_within_pinned_source_checkout(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An external trainer must never write into its pinned source checkout."""
+    monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_matching_capture_metadata",
+        lambda *_args: (),
+    )
+    request, source, staged, _old_output, profile, artifact_ref, producer = (
+        _retained_gsplat_fixture(tmp_path)
+    )
+    checkout = tmp_path / "reviewed-upstream"
+    (checkout / "examples").mkdir(parents=True)
+    output = checkout / "training-results"
+    interpreter = tmp_path / "external-python"
+    interpreter.write_bytes(b"stub")
+    monkeypatch.setattr(
+        baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
+    )
+    _stub_reference_trainer_track_gate(monkeypatch)
+    monkeypatch.setattr(
+        baseline_module.subprocess,
+        "run",
+        lambda *_args, **_kwargs: pytest.fail("overlapping output launched external trainer"),
+    )
+    with pytest.raises(GsplatStaticAppearancePreflightError, match=r"overlaps.*checkout"):
+        run_gsplat_reference_training(
+            request=request,
+            source=source,
+            assessments=(),
+            staged=staged,
+            profile=profile,
+            features=cast(ColmapFeatureExtractionResult, object()),
+            expected_environment=cast(ColmapEnvironmentIdentity, object()),
+            source_root=checkout,
+            python_executable=interpreter,
+            output_root=output,
+            artifact_ref=artifact_ref,
+            producer=producer,
+            cuda_device_index=0,
+            timeout_seconds=30,
+        )
+    assert not output.exists()
+    assert (checkout / "examples").is_dir()
+
+
+@pytest.mark.parametrize("invalid", ("mismatch", "missing_hash", "missing_file", "missing_both"))
+def test_external_gsplat_runner_rejects_untrusted_lpips_cache_before_process(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, invalid: str
+) -> None:
+    # This test isolates trainer orchestration; V2L17 evidence has separate real tests.
+    monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_matching_capture_metadata",
+        lambda *_args: (),
+    )
+    request, source, staged, output, profile, artifact_ref, producer = _retained_gsplat_fixture(
+        tmp_path
+    )
+    (output / profile.expected_ply_relative_path).unlink()
+    (output / "ply").rmdir()
+    output.rmdir()
+    reference, _ = _reviewed_source_fixture(tmp_path, monkeypatch)
+    interpreter = tmp_path / "external-python"
+    interpreter.write_bytes(b"stub")
+    weight_file = tmp_path / "alexnet.pth"
+    weight_file.write_bytes(b"synthetic-fixture-not-valid-weights")
+    expected = hashlib.sha256(weight_file.read_bytes()).hexdigest()
+    if invalid == "mismatch":
+        expected = "0" * 64
+    if invalid == "missing_hash":
+        expected = None
+    if invalid == "missing_file":
+        weight_file.unlink()
+    provided_weights: Path | None = weight_file
+    if invalid == "missing_both":
+        provided_weights = None
+        expected = None
+    monkeypatch.setattr(
+        baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
+    )
+    _stub_reference_trainer_track_gate(monkeypatch)
+    monkeypatch.setattr(
+        baseline_module.subprocess,
+        "run",
+        lambda *_a, **_kw: pytest.fail("untrusted LPIPS weights launched CUDA subprocess"),
+    )
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="LPIPS"):
+        run_gsplat_reference_training(
+            request=request,
+            source=source,
+            assessments=(),
+            staged=staged,
+            profile=profile,
+            features=cast(ColmapFeatureExtractionResult, object()),
+            expected_environment=cast(ColmapEnvironmentIdentity, object()),
+            source_root=reference,
+            python_executable=interpreter,
+            output_root=output,
+            artifact_ref=artifact_ref,
+            producer=producer,
+            cuda_device_index=0,
+            timeout_seconds=30,
+            lpips_alexnet_weights=provided_weights,
+            lpips_alexnet_sha256=expected,
+        )
+    # Bad or unavailable LPIPS weights must not reserve the private output
+    # directory: a valid retry with the same path must remain possible.
+    assert not output.exists()
+
+
+@pytest.mark.skipif(os.name != "posix", reason="smoke executable uses POSIX shebang")
+@pytest.mark.parametrize(
+    (
+        "runtime_version",
+        "visible_cuda",
+        "torch_version",
+        "cuda_version",
+        "numpy_version",
+        "should_run",
+    ),
+    (
+        ("1.5.3", True, "2.4.0+cu124", "12.4", "1.26.4", True),
+        # Modern Py311/CUDA 12.6 native build is CPU-proven, but still
+        # requires an independently approved receipt and LPIPS checkpoint.
+        ("1.5.3", True, "2.14.0+cu126", "12.6", "1.26.4", True),
+        ("1.5.3", False, "2.14.0+cu126", "12.6", "1.26.4", False),
+        ("1.5.3", True, "2.14.0+cu126", "12.4", "1.26.4", False),
+        ("1.5.3", True, "2.4.0+cu124", "12.6", "1.26.4", False),
+        ("1.5.3", True, "2.14.0+cu126", "12.6", "2.5.3", False),
+        ("0.9.0", True, "2.4.0+cu124", "12.4", "1.26.4", False),
+        ("1.5.3", False, "2.4.0+cu124", "12.4", "1.26.4", False),
+        ("1.5.3", True, "2.5.0+cu124", "12.4", "1.26.4", False),
+        ("1.5.3", True, "2.4.0+cu124", "12.1", "1.26.4", False),
+        ("1.5.3", True, "2.4.0+cu124", "12.4", "2.5.3", False),
+    ),
+)
+def test_reference_trainer_child_enforces_runtime_version_and_cuda(
+    tmp_path: Path,
+    runtime_version: str,
+    visible_cuda: bool,
+    torch_version: str,
+    cuda_version: str,
+    numpy_version: str,
+    should_run: bool,
+) -> None:
+    """Real CPU subprocess checks exact runtime pins using synthetic modules.
+
+    PyTorch, NumPy, CUDA kernels, and real training are NOT executed here.
+    """
+    # This synthetic-version test exercises the separate Torch/CUDA version
+    # contract. The real child is tested independently for mandatory manifest
+    # rejection and by the native CI with an actual signed-off file receipt.
+    child = baseline_module._GSPLAT_TRAINER_CHILD
+    guard_start = child.index("# An external Python executable is NOT a trusted dependency")
+    guard_end = child.index("\nimport torch\nimport numpy\n", guard_start)
+    version_only_child = child[:guard_start] + child[guard_end:]
+    script = (
+        "import sys, types\n"
+        "torch = types.ModuleType('torch')\n"
+        f"torch.__version__ = {torch_version!r}\n"
+        f"torch.version = types.SimpleNamespace(cuda={cuda_version!r})\n"
+        f"torch.cuda = types.SimpleNamespace(is_available=lambda: {visible_cuda!r}, "
+        f"device_count=lambda: {1 if visible_cuda else 0})\n"
+        "torch.hub = types.SimpleNamespace(download_url_to_file=lambda *a, **kw: None)\n"
+        "sys.modules['torch'] = torch\n"
+        "numpy = types.ModuleType('numpy')\n"
+        f"numpy.__version__ = {numpy_version!r}\n"
+        "sys.modules['numpy'] = numpy\n"
+        "gsplat = types.ModuleType('gsplat')\n"
+        f"gsplat.__version__ = {runtime_version!r}\n"
+        "sys.modules['gsplat'] = gsplat\n"
+        "trainer = types.ModuleType('simple_trainer')\n"
+        "trainer.Config = lambda **kw: kw\n"
+        "trainer.main = lambda *a: print('runner-stub-executed')\n"
+        "sys.modules['simple_trainer'] = trainer\n"
+        f"exec({version_only_child!r})\n"
+    )
+    completed = baseline_module.subprocess.run(
+        [sys.executable, "-I", "-c", script, str(tmp_path)],
+        input=b"{}",
+        capture_output=True,
+        timeout=10,
+        check=False,
+    )
+    if should_run:
+        assert completed.returncode == 0, completed.stderr.decode("utf-8")
+        assert b"runner-stub-executed" in completed.stdout
+    else:
+        assert completed.returncode != 0
+        assert b"runner-stub-executed" not in completed.stdout
+        assert (
+            b"runtime version differs" in completed.stderr
+            or b"requires exactly one visible CUDA GPU" in completed.stderr
+            or b"requires pinned Torch/CUDA/NumPy runtime" in completed.stderr
+        )
+
+
+def test_external_gsplat_runner_spawns_real_process_and_assembles_appearance(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """CPU-only OS-process smoke: child emulates trainer output, NOT CUDA."""
+    # This test isolates trainer orchestration; V2L17 evidence has separate real tests.
+    monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_matching_capture_metadata",
+        lambda *_args: (),
+    )
+    request, source, staged, output, profile, artifact_ref, producer = _retained_gsplat_fixture(
+        tmp_path
+    )
+    (output / profile.expected_ply_relative_path).unlink()
+    (output / "ply").rmdir()
+    output.rmdir()
+    source_root, _ = _reviewed_source_fixture(tmp_path, monkeypatch)
+    runtime = tmp_path / "fake-external-python"
+    # A real external child must never inherit unrelated GitHub/cloud secrets.
+    monkeypatch.setenv("WRE_PRIVATE_CI_TOKEN", "do-not-leak-to-native-trainer")
+    runtime.with_name("smoke-reference.ply").write_bytes(_gsplat_ply(vertices=2))
+    runtime.write_text(
+        f"#!{sys.executable}\n"
+        "import json\n"
+        "import os\n"
+        "assert 'WRE_PRIVATE_CI_TOKEN' not in os.environ\n"
+        "from pathlib import Path\n"
+        "import sys\n"
+        "assert sys.argv[1:4] == ['-I', '-S', '-c']\n"
+        "assert 'from simple_trainer import Config, main' in sys.argv[4]\n"
+        "assert 'torch.hub.download_url_to_file = reject_implicit_download' in sys.argv[4]\n"
+        "cfg = json.load(sys.stdin)\n"
+        "assert cfg['max_steps'] == 20\n"
+        "assert cfg['save_ply'] is True\n"
+        "assert cfg['disable_viewer'] is True\n"
+        "assert cfg['data_dir']\n"
+        "target = Path(cfg['result_dir']) / 'ply' / 'point_cloud_19.ply'\n"
+        "target.parent.mkdir()\n"
+        "target.write_bytes(Path(__file__).with_name('smoke-reference.ply').read_bytes())\n"
+        "print('CPU subprocess smoke: fixture emitted, no CUDA training')\n",
+        encoding="utf-8",
+    )
+    runtime.chmod(0o700)
+    monkeypatch.setattr(
+        baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
+    )
+    _stub_reference_trainer_track_gate(monkeypatch)
+    lpips = tmp_path / "synthetic-offline-alexnet.pth"
+    lpips.write_bytes(b"test-only-not-actual-weights")
+    lpips_sha = hashlib.sha256(lpips.read_bytes()).hexdigest()
+    receipt = tmp_path / "test-native-runtime-receipt.json"
+    receipt.write_bytes(b"test-only: unapproved native metadata")
+    receipt_sha = hashlib.sha256(receipt.read_bytes()).hexdigest()
+    monkeypatch.setattr(
+        baseline_module, "_GSPLAT_APPROVED_NATIVE_RECEIPT_SHA256", frozenset({receipt_sha})
+    )
+    monkeypatch.setattr(
+        baseline_module, "_GSPLAT_APPROVED_LPIPS_ALEXNET_SHA256", frozenset({lpips_sha})
+    )
+    result = run_gsplat_reference_training(
+        request=request,
+        source=source,
+        assessments=(),
+        staged=staged,
+        profile=profile,
+        features=cast(ColmapFeatureExtractionResult, object()),
+        expected_environment=cast(ColmapEnvironmentIdentity, object()),
+        source_root=source_root,
+        python_executable=runtime,
+        output_root=output,
+        artifact_ref=artifact_ref,
+        producer=producer,
+        cuda_device_index=0,
+        timeout_seconds=15,
+        lpips_alexnet_weights=lpips,
+        lpips_alexnet_sha256=lpips_sha,
+        runtime_manifest_path=receipt,
+        approved_runtime_manifest_sha256=receipt_sha,
+    )
+    assert result.candidate.artifact_ref == artifact_ref
+    assert result.candidate.source_geometry is request.source_geometry
+    assert result.materialization.entries[0].sha256 == _digest(_gsplat_ply(vertices=2))
+    assert b"CPU subprocess smoke" in (output / "wre-reference-training.log").read_bytes()
+
+
+def test_real_trainer_refuses_foreign_native_geometry_before_cuda_launch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Geometry mismatch is a material blocker, not a synthetic GPU pass."""
+    # This test isolates trainer orchestration; V2L17 evidence has separate real tests.
+    monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_matching_capture_metadata",
+        lambda *_args: (),
+    )
+    request, source, staged, output, profile, ref, producer = _retained_gsplat_fixture(tmp_path)
+    interpreter = tmp_path / "external-python"
+    interpreter.write_bytes(b"stub")
+    previous = (output / profile.expected_ply_relative_path).read_bytes()
+    validated = False
+
+    def reject_foreign_geometry(*_args: Any, **_kwargs: Any) -> None:
+        nonlocal validated
+        validated = True
+        raise GsplatStaticAppearancePreflightError(
+            "native COLMAP camera poses, calibration, points, frame or scale disagree"
+        )
+
+    def must_not_train(*_args: Any, **_kwargs: Any) -> None:
+        raise AssertionError("CUDA training must not start on mismatched geometry")
+
+    monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_native_geometry",
+        reject_foreign_geometry,
+    )
+    monkeypatch.setattr(baseline_module, "_load_pycolmap", lambda: object())
+    monkeypatch.setattr(baseline_module.subprocess, "run", must_not_train)
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="native COLMAP camera poses"):
+        run_gsplat_reference_training(
+            request=request,
+            source=source,
+            assessments=(),
+            staged=staged,
+            profile=profile,
+            features=cast(ColmapFeatureExtractionResult, object()),
+            expected_environment=cast(ColmapEnvironmentIdentity, object()),
+            source_root=tmp_path,
+            python_executable=interpreter,
+            output_root=output,
+            artifact_ref=ref,
+            producer=producer,
+            cuda_device_index=0,
+            timeout_seconds=30,
+        )
+    assert validated
+    assert (output / profile.expected_ply_relative_path).read_bytes() == previous
+    assert not (output / "wre-reference-training.log").exists()
+
+
+@pytest.mark.parametrize("mutation", ("missing_revision", "wrong_configuration"))
+def test_external_gsplat_runner_rejects_false_producer_before_gpu_start(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mutation: str
+) -> None:
+    request, source, staged, output, profile, ref, producer = _retained_gsplat_fixture(tmp_path)
+    if mutation == "missing_revision":
+        producer = replace(producer, producer=replace(producer.producer, revision=None))
+    else:
+        producer = replace(
+            producer, configuration=ConfigurationIdentity(sha256=Sha256Digest("0" * 64))
+        )
+    monkeypatch.setattr(
+        baseline_module.subprocess,
+        "run",
+        lambda *_args, **_kwargs: pytest.fail("invalid producer launched external GPU trainer"),
+    )
+    previous_ply = (output / profile.expected_ply_relative_path).read_bytes()
+    with pytest.raises(GsplatStaticAppearancePreflightError, match="producer"):
+        run_gsplat_reference_training(
+            request=request,
+            source=source,
+            assessments=(),
+            staged=staged,
+            profile=profile,
+            features=cast(ColmapFeatureExtractionResult, object()),
+            expected_environment=cast(ColmapEnvironmentIdentity, object()),
+            source_root=tmp_path / "does-not-exist",
+            python_executable=tmp_path / "does-not-exist-python",
+            output_root=output,
+            artifact_ref=ref,
+            producer=producer,
+            cuda_device_index=0,
+            timeout_seconds=30,
+        )
+    assert (output / profile.expected_ply_relative_path).read_bytes() == previous_ply
+    assert not (output / "wre-reference-training.log").exists()
+
+
+@pytest.mark.parametrize("return_code", (1, 0))
+def test_external_gsplat_runner_rejects_failure_or_missing_output(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, return_code: int
+) -> None:
+    # This test isolates trainer orchestration; V2L17 evidence has separate real tests.
+    monkeypatch.setattr(
+        baseline_module,
+        "verify_gsplat_static_appearance_matching_capture_metadata",
+        lambda *_args: (),
+    )
+    request, source, staged, output, profile, ref, producer = _retained_gsplat_fixture(tmp_path)
+    (output / profile.expected_ply_relative_path).unlink()
+    (output / "ply").rmdir()
+    output.rmdir()
+    source_root, _ = _reviewed_source_fixture(tmp_path, monkeypatch)
+    runtime = tmp_path / "external-python"
+    runtime.write_bytes(b"stub")
+    monkeypatch.setattr(
+        baseline_module, "verify_gsplat_reference_trainer_config_fields", lambda *_: ()
+    )
+    monkeypatch.setattr(
+        baseline_module.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(returncode=return_code),
+    )
+    _stub_reference_trainer_track_gate(monkeypatch)
+    lpips = tmp_path / "synthetic-offline-alexnet.pth"
+    lpips.write_bytes(b"test-only-not-actual-weights")
+    lpips_sha = hashlib.sha256(lpips.read_bytes()).hexdigest()
+    receipt = tmp_path / "test-runtime-receipt.json"
+    receipt.write_bytes(b"stubbed native runtime for failure coverage")
+    receipt_sha = hashlib.sha256(receipt.read_bytes()).hexdigest()
+    monkeypatch.setattr(
+        baseline_module, "_GSPLAT_APPROVED_NATIVE_RECEIPT_SHA256", frozenset({receipt_sha})
+    )
+    monkeypatch.setattr(
+        baseline_module, "_GSPLAT_APPROVED_LPIPS_ALEXNET_SHA256", frozenset({lpips_sha})
+    )
+    with pytest.raises(GsplatStaticAppearancePreflightError):
+        run_gsplat_reference_training(
+            request=request,
+            source=source,
+            assessments=(),
+            staged=staged,
+            profile=profile,
+            features=cast(ColmapFeatureExtractionResult, object()),
+            expected_environment=cast(ColmapEnvironmentIdentity, object()),
+            source_root=source_root,
+            python_executable=runtime,
+            output_root=output,
+            artifact_ref=ref,
+            producer=producer,
+            cuda_device_index=0,
+            timeout_seconds=30,
+            lpips_alexnet_weights=lpips,
+            lpips_alexnet_sha256=lpips_sha,
+            runtime_manifest_path=receipt,
+            approved_runtime_manifest_sha256=receipt_sha,
+        )
+    assert (output / "wre-reference-training.log").exists()
 
 
 def test_gsplat_ply_materialization_hashes_real_output_and_retains_path(tmp_path: Path) -> None:
@@ -822,7 +2219,7 @@ def test_gsplat_ply_materialization_has_no_optional_training_import() -> None:
             imported.update(item.name.split(".")[0] for item in node.names)
         elif isinstance(node, ast.ImportFrom) and node.module:
             imported.add(node.module.split(".")[0])
-    assert not {"torch", "gsplat", "numpy", "subprocess", "pycolmap", "PIL"} & imported
+    assert not {"torch", "gsplat", "numpy", "pycolmap", "PIL"} & imported
 
 
 def _native_feature_evidence(

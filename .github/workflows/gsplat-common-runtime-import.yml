@@ -1,0 +1,1423 @@
+name: gsplat-common-runtime-import
+
+# One exact Python/Torch/CUDA environment for the pinned trainer's *eager imports*.
+# CPU-hosted CUDA toolkit only: no GPU kernels, reconstruction, or training.
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/gsplat-common-runtime-import.yml"
+      - "registry/dependencies.yaml"
+      - "src/wre/reconstruction/static_appearance_baseline.py"
+      - "tests/test_static_appearance_baseline.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  combined-native-import:
+    name: pinned-trainer-eager-import-one-native-environment-no-gpu
+    runs-on: ubuntu-24.04
+    container:
+      image: nvidia/cuda@sha256:da6791294b0b04d7e65d87b7451d6f2390b4d36225ab0701ee7dfec5769829f5
+    timeout-minutes: 120
+    env:
+      CUDA_HOME: /usr/local/cuda
+      TORCH_CUDA_ARCH_LIST: "7.5"
+      MAX_JOBS: "1"
+      PYTHONPATH: ""
+      GSPLAT_REVISION: 937e29912570c372bed6747a5c9bf85fed877bae
+      GSPLAT_TREE: 90c3f0b2352e6d2725bcba1ef0407168f922c0fa
+      GLM_REVISION: 33b4a621a697a305bc3a7610d290677b96beb181
+      GLM_TREE: e57f342f0fb63852d65e0da2090528fdca9b0117
+      SSIM_REVISION: 328dc9836f513d00c4b5bc38fe30478b4435cbb5
+      SSIM_TREE: ac5f1d8fe5d519f9c44b220d235bf1f198463da7
+      NERFVIEW_REVISION: 4538024fe0d15fd1a0e4d760f3695fc44ca72787
+      NERFVIEW_TREE: e333400e39605978a3d1f9cf6d73ddf577a8c8e3
+      SCENE_MANAGER_REVISION: cc7ea4b7301720ac29287dbe450952511b32125e
+
+    steps:
+      - name: Checkout exact WRE dependency registry
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned uv and Python 3.10.21
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.13"
+          python-version: "3.10.21"
+          enable-cache: false
+
+      - name: Create one native environment and hash-pinned wheel manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$CUDA_HOME/bin/nvcc"
+          "$CUDA_HOME/bin/nvcc" --version | grep 'release 12.4,'
+          uv venv --seed --python 3.10.21 "$RUNNER_TEMP/gsplat-common-venv"
+          echo "COMMON_PYTHON=$RUNNER_TEMP/gsplat-common-venv/bin/python" >> "$GITHUB_ENV"
+          uv run --no-project --with "pyyaml==6.0.2" python - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+          from urllib.parse import urlsplit
+          import yaml
+
+          record = yaml.safe_load(Path("registry/dependencies.yaml").read_text())[
+              "dependencies"
+          ]["gsplat_static_appearance"]["runtime_python_lock"]
+          assert record["target"]["python"] == "3.10.21"
+          assert record["target"]["torch_cuda"] == "12.4"
+          assert record["gpu_execution_evidence"] is False
+          wheels = record["packages"]
+          assert len(wheels) == 76
+          assert next(x for x in wheels if x["name"] == "torch")["version"] == "2.4.0+cu124"
+          lines = []
+          audit_versions = []
+          for item in sorted(wheels, key=lambda entry: entry["name"].lower()):
+              url, digest = item["url"], item["sha256"]
+              parts = urlsplit(url)
+              assert parts.scheme == "https" and not parts.fragment
+              assert re.fullmatch("[0-9a-f]{64}", digest)
+              lines.append(f'{item["name"]} @ {url}#sha256={digest}')
+              audit_versions.append(f'{item["name"]}=={item["version"]}')
+          (Path(os.environ["RUNNER_TEMP"]) / "common-locked-wheels.txt").write_text(
+              "\n".join(lines) + "\n", encoding="utf-8"
+          )
+          (Path(os.environ["RUNNER_TEMP"]) / "common-locked-advisories.txt").write_text(
+              "\n".join(audit_versions) + "\n", encoding="utf-8"
+          )
+          print(f"One common environment requires {len(wheels)} pinned wheels")
+          PY
+
+      - name: Install all 76 reviewed wheels without resolving new dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$COMMON_PYTHON" -m pip install --no-index --no-deps --no-cache-dir \
+            --require-hashes -r "$RUNNER_TEMP/common-locked-wheels.txt"
+          "$COMMON_PYTHON" -m pip check
+          "$COMMON_PYTHON" - <<'PY'
+          import sys
+          import numpy
+          import torch
+          assert sys.version.startswith("3.10.21")
+          assert numpy.__version__ == "1.26.4"
+          assert torch.__version__ == "2.4.0+cu124"
+          assert torch.version.cuda == "12.4"
+          assert not torch.cuda.is_available()
+          print("Exact Python/Torch/CUDA wheel ABI loaded, GPU unavailable")
+          PY
+
+      - name: Install git for immutable upstream source checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          apt-get update -qq
+          # The pinned opencv-python wheel needs both libGL.so.1 and
+          # libgthread-2.0.so.0 when the real COLMAP reader imports cv2.
+          # Neither is included in the minimal Ubuntu 22.04 CUDA container.
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            git ca-certificates libgl1 libglib2.0-0
+          ldconfig -p | grep -F 'libGL.so.1'
+          ldconfig -p | grep -F 'libgthread-2.0.so.0'
+
+      - name: Materialize exact gsplat, fused-ssim, nerfview and legacy COLMAP sources
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/wre-common-upstream"
+          mkdir -p "$root"
+          fetch_exact() {
+            name="$1"; remote="$2"; revision="$3"; tree="$4"
+            git init -q "$root/$name"
+            git -C "$root/$name" remote add origin "$remote"
+            git -C "$root/$name" fetch --quiet --depth=1 origin "$revision"
+            git -C "$root/$name" checkout --quiet --detach FETCH_HEAD
+            test "$(git -C "$root/$name" rev-parse HEAD)" = "$revision"
+            if test "$tree" != "-"; then
+              test "$(git -C "$root/$name" rev-parse HEAD^{tree})" = "$tree"
+            fi
+          }
+          fetch_exact gsplat https://github.com/nerfstudio-project/gsplat.git \
+            "$GSPLAT_REVISION" "$GSPLAT_TREE"
+          fetch_exact ssim https://github.com/rahul-goel/fused-ssim.git \
+            "$SSIM_REVISION" "$SSIM_TREE"
+          fetch_exact nerfview https://github.com/nerfstudio-project/nerfview.git \
+            "$NERFVIEW_REVISION" "$NERFVIEW_TREE"
+          fetch_exact scene-manager https://github.com/rmbrualla/pycolmap.git \
+            "$SCENE_MANAGER_REVISION" "-"
+          test "$(git -C "$root/gsplat" ls-tree HEAD gsplat/cuda/csrc/third_party/glm | awk '{print $3}')" = "$GLM_REVISION"
+          git -C "$root/gsplat" submodule update --init --depth 1 -- gsplat/cuda/csrc/third_party/glm
+          glm="$root/gsplat/gsplat/cuda/csrc/third_party/glm"
+          test "$(git -C "$glm" rev-parse HEAD)" = "$GLM_REVISION"
+          test "$(git -C "$glm" rev-parse HEAD^{tree})" = "$GLM_TREE"
+          echo "COMMON_SOURCES=$root" >> "$GITHUB_ENV"
+
+      - name: Build BOTH upstream CUDA extensions into the SAME Python interpreter
+        shell: bash
+        run: |
+          set -euo pipefail
+          export BUILD_NO_CUDA=0
+          "$COMMON_PYTHON" -m pip install --no-deps --no-build-isolation --no-cache-dir \
+            "$COMMON_SOURCES/ssim"
+          "$COMMON_PYTHON" -m pip install --no-deps --no-build-isolation --no-cache-dir \
+            "$COMMON_SOURCES/gsplat"
+          # Install the exact selected nerfview checkout into site-packages.
+          # The -I child in PR #234 does not insert this repo onto sys.path.
+          "$COMMON_PYTHON" -m pip install --no-deps --no-build-isolation --no-cache-dir \
+            "$COMMON_SOURCES/nerfview"
+          # Same interpreter as PR #234's isolated child: install the exact
+          # historical SceneManager package rather than patching sys.path.
+          "$COMMON_PYTHON" -m pip install --no-deps --no-build-isolation --no-cache-dir \
+            "$COMMON_SOURCES/scene-manager"
+
+      - name: Actually import trainer, native extensions, viewer and COLMAP together
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$COMMON_PYTHON" -I - <<'PY'
+          import os
+          import sys
+          from pathlib import Path
+
+          root = Path(os.environ["COMMON_SOURCES"])
+          # Match the actual isolated trainer child (single source import root).
+          sys.path.insert(0, str(root / "gsplat" / "examples"))
+          import torch
+          import gsplat
+          from gsplat.cuda._backend import _C
+          from fused_ssim import fused_ssim
+          from nerfview import CameraState
+          import pycolmap
+          from pycolmap import SceneManager
+          from datasets.colmap import Dataset, Parser
+          from simple_trainer import Config, main
+
+          assert gsplat.__version__ == "1.5.3"
+          assert torch.__version__ == "2.4.0+cu124"
+          assert not torch.cuda.is_available(), "CPU-hosted gate must not claim GPU"
+          assert _C is not None and callable(fused_ssim)
+          assert all(obj is not None for obj in (CameraState, SceneManager, Dataset, Parser, main))
+          assert Path(pycolmap.__file__).resolve().is_relative_to(Path(sys.prefix).resolve())
+          cfg = Config()
+          assert cfg.camera_model == "pinhole"
+          print("ALL selected trainer native/viewer/COLMAP modules imported together.")
+          print("No CUDA kernel, training, reconstruction, or GPU was executed.")
+          PY
+
+      # Execute WRE's exact optional trainer child against the true selected
+      # interpreter, not a mocked subprocess. This runner has no GPU; the
+      # production child MUST refuse before it can train or emit a Gaussian.
+      - name: Run actual WRE trainer child and verify CPU-hosted CUDA refusal
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$COMMON_PYTHON" -I - <<'PY'
+          import ast
+          import os
+          import subprocess
+          from pathlib import Path
+
+          source = Path("src/wre/reconstruction/static_appearance_baseline.py")
+          assignments = [
+              statement for statement in ast.parse(source.read_text()).body
+              if isinstance(statement, ast.Assign)
+              and any(
+                  isinstance(target, ast.Name)
+                  and target.id == "_GSPLAT_TRAINER_CHILD"
+                  for target in statement.targets
+              )
+          ]
+          assert len(assignments) == 1
+          child = ast.literal_eval(assignments[0].value)
+          assert isinstance(child, str)
+          assert "from simple_trainer import Config, main" in child
+
+          source_examples = Path(os.environ["COMMON_SOURCES"]) / "gsplat" / "examples"
+          assert source_examples.is_dir()
+          environment = {
+              key: os.environ[key] for key in ("PATH", "HOME", "LD_LIBRARY_PATH")
+              if key in os.environ
+          }
+          environment.update({
+              "CUDA_VISIBLE_DEVICES": "",
+              "PYTHONNOUSERSITE": "1",
+              "PIP_NO_INDEX": "1",
+          })
+          completed = subprocess.run(
+              [
+                  os.environ["COMMON_PYTHON"], "-I", "-c",
+                  child, str(source_examples),
+              ],
+              input=b"{}",
+              capture_output=True,
+              cwd=source_examples,
+              env=environment,
+              timeout=120,
+              check=False,
+          )
+          assert completed.returncode != 0, "CPU environment unexpectedly executed trainer"
+          assert (
+              b"gsplat requires an approved external runtime manifest digest"
+              in completed.stderr
+          ), completed.stderr.decode(errors="replace")[-4000:]
+          print("Real pinned WRE trainer child rejected missing approved native manifest.")
+          print("No Torch import, GPU kernel or Gaussian training ran.")
+          PY
+
+      - name: Record real imported Python and native-extension file hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$COMMON_PYTHON" -I - <<'PY'
+          import hashlib
+          import importlib
+          import json
+          import os
+          import sys
+          import sysconfig
+          from pathlib import Path
+
+          environment = Path(sys.prefix).resolve()
+          packages = Path(sysconfig.get_path("purelib")).resolve(strict=True)
+          if not packages.is_relative_to(environment):
+              raise RuntimeError("Native receipt site-packages is outside the pinned environment")
+          files = {}
+          modules = ("torch", "torchvision", "numpy", "gsplat", "fused_ssim", "fused_ssim_cuda", "nerfview", "pycolmap")
+          for name in modules:
+              module = importlib.import_module(name)
+              location = getattr(module, "__file__", None)
+              if not location:
+                  raise RuntimeError(f"Native manifest lacks module origin: {name}")
+              origin = Path(location).resolve(strict=True)
+              if not origin.is_relative_to(packages):
+                  raise RuntimeError(f"Native module is outside pinned site-packages: {name}")
+
+          # The approved receipt must bind EVERY importable Python/native file,
+          # including otherwise unlisted transitive modules and top-level .so
+          # modules. An exact digest for eight root packages is insufficient.
+          for item in packages.rglob("*"):
+              # A symlinked directory can hide executable files from rglob.
+              # Record no implicit link escapes, including extensionless links.
+              if item.is_symlink():
+                  raise RuntimeError("Native receipt contains symbolic-link paths")
+              if not (item.suffix.lower() in (".py", ".pyc", ".so", ".pyd", ".dylib", ".dll")
+                      or ".so." in item.name):
+                  continue
+              if not item.is_file():
+                  raise RuntimeError("Native receipt contains missing importable files")
+              relative = item.relative_to(environment).as_posix()
+              digest = hashlib.sha256()
+              with item.open("rb") as data:
+                  for chunk in iter(lambda: data.read(1024 * 1024), b""):
+                      digest.update(chunk)
+              files[relative] = digest.hexdigest()
+
+          evidence = {
+              "schema": "wre.gsplat.common_runtime_native_files.v1",
+              "python": ".".join(map(str, sys.version_info[:3])),
+              "gpu_executed": False,
+              "source_revisions": {
+                  "gsplat": os.environ["GSPLAT_REVISION"],
+                  "fused_ssim": os.environ["SSIM_REVISION"],
+                  "nerfview": os.environ["NERFVIEW_REVISION"],
+              },
+              "modules": list(modules),
+              "files": [{"path": key, "sha256": files[key]} for key in sorted(files)],
+          }
+          target = Path(os.environ["RUNNER_TEMP"]) / "gsplat-common-runtime-native-files.json"
+          target.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
+          assert files and any(name.endswith(".so") for name in files)
+          print(f"Recorded {len(files)} REAL installed module/native-file SHA-256 identities.")
+          print("No CUDA device, kernel or training was executed.")
+          PY
+
+      - name: Verify approved native receipt before CUDA execution on CPU-only host
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The pinned CUDA container has no bare `python` on PATH; the
+          # exact CPython 3.10.21 interpreter is provisioned by setup-uv.
+          "$COMMON_PYTHON" - <<'PY'
+          import ast
+          import hashlib
+          import os
+          import subprocess
+          from pathlib import Path
+
+          source = Path("src/wre/reconstruction/static_appearance_baseline.py")
+          assignments = [
+              statement for statement in ast.parse(source.read_text()).body
+              if isinstance(statement, ast.Assign)
+              and any(
+                  isinstance(target, ast.Name)
+                  and target.id == "_GSPLAT_TRAINER_CHILD"
+                  for target in statement.targets
+              )
+          ]
+          child = ast.literal_eval(assignments[0].value)
+          manifest = Path(os.environ["RUNNER_TEMP"]) / "gsplat-common-runtime-native-files.json"
+          expected_sha256 = hashlib.sha256(manifest.read_bytes()).hexdigest()
+          examples = Path(os.environ["COMMON_SOURCES"]) / "gsplat" / "examples"
+          environment = {
+              key: os.environ[key] for key in ("PATH", "HOME", "LD_LIBRARY_PATH")
+              if key in os.environ
+          }
+          environment.update({
+              "CUDA_VISIBLE_DEVICES": "",
+              "PYTHONNOUSERSITE": "1",
+              "PIP_NO_INDEX": "1",
+          })
+          completed = subprocess.run(
+              [os.environ["COMMON_PYTHON"], "-I", "-S", "-c", child,
+               str(examples), str(manifest), expected_sha256],
+              input=b"{}",
+              capture_output=True,
+              cwd=examples,
+              env=environment,
+              timeout=120,
+              check=False,
+          )
+          assert completed.returncode != 0, "CPU environment unexpectedly executed trainer"
+          assert b"gsplat reference training requires exactly one visible CUDA GPU" in completed.stderr, (
+              completed.stderr.decode(errors="replace")[-4000:]
+          )
+          print("Approved live native manifest hashes and imports matched; no CUDA device available.")
+          # Python -I alone still executes site-packages *.pth before the
+          # receipt guard. Prove that risk, then prove -I -S suppresses it
+          # without breaking the exact native import/GPU refusal path.
+          import importlib.util
+          torch_spec = importlib.util.find_spec("torch")
+          assert torch_spec is not None and torch_spec.origin is not None
+          startup_pth = Path(torch_spec.origin).parent.parent / "wre_unapproved_startup.pth"
+          marker = Path(os.environ["RUNNER_TEMP"]) / "wre-pth-startup-marker"
+          assert not startup_pth.exists()
+          assert not marker.exists()
+          try:
+              startup_pth.write_text(
+                  f"import pathlib; pathlib.Path({str(marker)!r}).write_text('injected')\n"
+              )
+              vulnerable = subprocess.run(
+                  [os.environ["COMMON_PYTHON"], "-I", "-c", "pass"],
+                  capture_output=True, env=environment, timeout=120, check=False,
+              )
+              assert vulnerable.returncode == 0, vulnerable.stderr.decode(errors="replace")
+              assert marker.exists(), "The control must prove -I executes the injected .pth"
+              marker.unlink()
+              hardened = subprocess.run(
+                  [os.environ["COMMON_PYTHON"], "-I", "-S", "-c", child,
+                   str(examples), str(manifest), expected_sha256],
+                  input=b"{}", capture_output=True, cwd=examples, env=environment,
+                  timeout=120, check=False,
+              )
+              assert hardened.returncode != 0
+              assert b"gsplat reference training requires exactly one visible CUDA GPU" in hardened.stderr, (
+                  hardened.stderr.decode(errors="replace")[-4000:]
+              )
+              assert not marker.exists(), "The -S child must not execute startup .pth code"
+          finally:
+              startup_pth.unlink(missing_ok=True)
+              marker.unlink(missing_ok=True)
+          print("Unsafe .pth startup demonstrated with -I; hardened -I -S did not execute it.")
+          # Negative control: a NEW importable Python file under a reviewed
+          # package is untrusted even if all previously listed hashes match.
+          # An entrypoint-only or .so-only receipt would incorrectly accept it.
+          import importlib.util
+          torch_spec = importlib.util.find_spec("torch")
+          assert torch_spec is not None and torch_spec.origin is not None
+          rogue = Path(torch_spec.origin).parent / "wre_unapproved_trainer_import.py"
+          assert not rogue.exists()
+          try:
+              rogue.write_text("raise RuntimeError('unapproved python executed')\n")
+              rejected = subprocess.run(
+                  [os.environ["COMMON_PYTHON"], "-I", "-S", "-c", child,
+                   str(examples), str(manifest), expected_sha256],
+                  input=b"{}",
+                  capture_output=True,
+                  cwd=examples,
+                  env=environment,
+                  timeout=120,
+                  check=False,
+              )
+              assert rejected.returncode != 0
+              assert b"unapproved importable package files" in rejected.stderr, (
+                  rejected.stderr.decode(errors="replace")[-4000:]
+              )
+              assert b"unapproved python executed" not in rejected.stderr
+          finally:
+              rogue.unlink(missing_ok=True)
+          print("Tampered native package with an added Python file: rejected before CUDA.")
+          # A top-level module outside the eight named roots is also reachable
+          # through sys.path; it must not escape the same approved closure.
+          rogue = Path(torch_spec.origin).parent.parent / "wre_unapproved_transitive.py"
+          assert not rogue.exists()
+          try:
+              rogue.write_text("raise RuntimeError('unapproved transitive code executed')\n")
+              rejected = subprocess.run(
+                  [os.environ["COMMON_PYTHON"], "-I", "-S", "-c", child,
+                   str(examples), str(manifest), expected_sha256],
+                  input=b"{}", capture_output=True, cwd=examples, env=environment,
+                  timeout=120, check=False,
+              )
+              assert rejected.returncode != 0
+              assert b"unapproved importable package files" in rejected.stderr, (
+                  rejected.stderr.decode(errors="replace")[-4000:]
+              )
+              assert b"unapproved transitive code executed" not in rejected.stderr
+          finally:
+              rogue.unlink(missing_ok=True)
+          print("Unreviewed TOP-LEVEL transitive module: rejected before third-party imports.")
+          # Source-free .pyc is an executable import target. Hashing .py alone
+          # does not attest such code; a new .pyc MUST invalidate the receipt.
+          import importlib.util
+          import marshal
+          import tempfile
+          packages = Path(torch_spec.origin).parent.parent
+          bytecode = packages / "wre_unapproved_bytecode.pyc"
+          marker = Path(os.environ["RUNNER_TEMP"]) / "wre-unapproved-pyc-marker"
+          assert not bytecode.exists() and not marker.exists()
+          code = compile(
+              f"from pathlib import Path; Path({str(marker)!r}).write_text('executed')",
+              "<unapproved-bytecode>", "exec",
+          )
+          try:
+              bytecode.write_bytes(
+                  importlib.util.MAGIC_NUMBER + b"\x00" * 12 + marshal.dumps(code)
+              )
+              rejected = subprocess.run(
+                  [os.environ["COMMON_PYTHON"], "-I", "-S", "-c", child,
+                   str(examples), str(manifest), expected_sha256],
+                  input=b"{}", capture_output=True, cwd=examples, env=environment,
+                  timeout=120, check=False,
+              )
+              assert rejected.returncode != 0
+              assert b"unapproved importable package files" in rejected.stderr, (
+                  rejected.stderr.decode(errors="replace")[-4000:]
+              )
+              assert not marker.exists(), "Unapproved bytecode must not execute"
+          finally:
+              bytecode.unlink(missing_ok=True)
+              marker.unlink(missing_ok=True)
+          print("Unapproved importable source-free BYTECODE: rejected before import.")
+          # A symlinked directory is normally skipped by Path.rglob and can
+          # expose unapproved executable package files via sys.path imports.
+          with tempfile.TemporaryDirectory(
+              prefix="wre-native-symlink-", dir=os.environ["RUNNER_TEMP"]
+          ) as private:
+              external = Path(private) / "unreviewed"
+              external.mkdir()
+              (external / "__init__.py").write_text(
+                  "raise RuntimeError('unapproved linked module executed')\n"
+              )
+              linked = packages / "wre_unapproved_linked_package"
+              assert not linked.exists() and not linked.is_symlink()
+              try:
+                  linked.symlink_to(external, target_is_directory=True)
+                  rejected = subprocess.run(
+                      [os.environ["COMMON_PYTHON"], "-I", "-S", "-c", child,
+                       str(examples), str(manifest), expected_sha256],
+                      input=b"{}", capture_output=True, cwd=examples, env=environment,
+                      timeout=120, check=False,
+                  )
+                  assert rejected.returncode != 0
+                  assert b"unapproved symbolic-link paths" in rejected.stderr, (
+                      rejected.stderr.decode(errors="replace")[-4000:]
+                  )
+                  assert b"unapproved linked module executed" not in rejected.stderr
+              finally:
+                  linked.unlink(missing_ok=True)
+          print("Extensionless symlinked PACKAGE DIRECTORY: rejected before import.")
+          print("No GPU kernel, Gaussian optimizer or training executed.")
+          PY
+
+      - name: Decode actual COLMAP records and RGB camera tensors with pinned reader
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$COMMON_PYTHON" -I - <<'PY'
+          import os
+          import struct
+          import sys
+          from pathlib import Path
+
+          import numpy as np
+          from PIL import Image
+
+          # Exercise the exact COLMAP reader imported by simple_trainer.py.
+          source = Path(os.environ["COMMON_SOURCES"]) / "gsplat" / "examples"
+          sys.path.insert(0, str(source))
+          from datasets.colmap import Dataset, Parser
+          from pycolmap import SceneManager
+
+          root = Path(os.environ["RUNNER_TEMP"]) / "gsplat-colmap-decode-smoke"
+          model = root / "sparse" / "0"
+          images = root / "images"
+          model.mkdir(parents=True)
+          images.mkdir()
+
+          # Minimal COLMAP binary scene: 3 registered views, one real shared
+          # track, 8x8 RGB PNGs and a nonzero baseline between camera poses.
+          (model / "cameras.bin").write_bytes(
+              struct.pack("<QIiQQ4d", 1, 1, 1, 8, 8, 8., 8., 4., 4.)
+          )
+          binary_images = bytearray(struct.pack("<Q", 3))
+          for image_id, tx in ((1, 0.), (2, -0.2), (3, 0.2)):
+              name = f"view-{image_id:02d}.png"
+              binary_images.extend(
+                  struct.pack("<I4d3dI", image_id, 1., 0., 0., 0., tx, 0., 0., 1)
+              )
+              binary_images.extend(name.encode() + b"\x00")
+              binary_images.extend(struct.pack("<QddQ", 1, 4., 4., 1))
+              rgb = np.zeros((8, 8, 3), dtype=np.uint8)
+              rgb[..., 0] = 32 * image_id
+              rgb[..., 1] = 48
+              rgb[..., 2] = 144
+              Image.fromarray(rgb, "RGB").save(images / name)
+          (model / "images.bin").write_bytes(binary_images)
+          (model / "points3D.bin").write_bytes(
+              struct.pack(
+                  "<QQ3d3BdQ6I", 1, 1, 0., 0., 2., 200, 100, 50, 0.1, 3,
+                  1, 0, 2, 0, 3, 0,
+              )
+          )
+
+          native = SceneManager(str(model))
+          native.load_cameras()
+          native.load_images()
+          native.load_points3D()
+          assert len(native.cameras) == 1
+          assert len(native.images) == 3
+          assert native.points3D.shape == (1, 3)
+
+          parser = Parser(data_dir=str(root), factor=1, normalize=False, test_every=3)
+          train = Dataset(parser, split="train")
+          validation = Dataset(parser, split="val")
+          assert len(train) == 2 and len(validation) == 1
+          assert parser.points.shape == (1, 3)
+          assert parser.camtoworlds.shape == (3, 4, 4)
+          assert float(parser.scene_scale) > 0
+          for sample in (train[0], train[1], validation[0]):
+              assert sample["image"].shape == (8, 8, 3)
+              assert sample["K"].shape == (3, 3)
+              assert sample["camtoworld"].shape == (4, 4)
+              assert sample["image"].isfinite().all().item()
+              assert sample["camtoworld"].isfinite().all().item()
+          assert train[0]["image"][0, 0, 0].item() == 64.
+          assert validation[0]["image"][0, 0, 0].item() == 32.
+          print("Pinned SceneManager, Parser and Dataset decoded binary COLMAP "
+                "camera poses, shared 3D track and RGB into real CPU tensors.")
+          print("Controlled synthetic scene only; no real-world reconstruction "
+                "or GPU training was executed.")
+          PY
+
+      # This is an actual upstream CPU exporter, not a hand-written PLY fixture.
+      # It does not execute a CUDA kernel or optimize Gaussian parameters.
+      - name: Export real pinned gsplat Gaussian bytes using CPU tensors
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$COMMON_PYTHON" -I - <<'PY'
+          import os
+          import struct
+          from pathlib import Path
+
+          import torch
+          from gsplat import export_splats
+
+          assert not torch.cuda.is_available()
+          assert torch.__version__ == "2.4.0+cu124"
+          root = Path(os.environ["RUNNER_TEMP"]) / "wre-upstream-exporter-smoke"
+          (root / "ply").mkdir(parents=True, exist_ok=False)
+          output = root / "ply" / "point_cloud_0.ply"
+          produced = export_splats(
+              means=torch.tensor([[0.0, 0.0, 2.0], [0.4, 0.2, 2.4]]),
+              scales=torch.zeros((2, 3), dtype=torch.float32),
+              quats=torch.tensor([[1., 0., 0., 0.], [1., 0., 0., 0.]]),
+              opacities=torch.tensor([0.0, 0.5], dtype=torch.float32),
+              sh0=torch.tensor([[[0.2, 0.1, 0.3]], [[0.1, 0.3, 0.2]]]),
+              shN=torch.zeros((2, 15, 3), dtype=torch.float32),
+              format="ply",
+              save_to=str(output),
+          )
+          assert isinstance(produced, bytes)
+          assert output.read_bytes() == produced
+          assert b"element vertex 2\n" in produced
+          # The same real upstream exporter also writes a viewer-compatible
+          # binary Gaussian .splat (XYZ, scale, RGBA, normalized quaternion).
+          # No handwritten conversion or simulated native package is involved.
+          splat_path = root / "point_cloud_0.splat"
+          splat_data = export_splats(
+              means=torch.tensor([[0.0, 0.0, 2.0], [0.4, 0.2, 2.4]]),
+              scales=torch.zeros((2, 3), dtype=torch.float32),
+              quats=torch.tensor([[1., 0., 0., 0.], [1., 0., 0., 0.]]),
+              opacities=torch.tensor([0.0, 0.5], dtype=torch.float32),
+              sh0=torch.tensor([[[0.2, 0.1, 0.3]], [[0.1, 0.3, 0.2]]]),
+              shN=torch.zeros((2, 15, 3), dtype=torch.float32),
+              format="splat",
+              save_to=str(splat_path),
+          )
+          assert isinstance(splat_data, bytes)
+          assert splat_path.read_bytes() == splat_data
+          assert len(splat_data) == 2 * 32  # Native splat: 32 bytes/vertex.
+          # Upstream sorts centers by Morton order; never assume original
+          # input tensor order is retained in the portable .splat bytes.
+          assert {splat_data[i:i + 12] for i in (0, 32)} == {
+              struct.pack("<3f", 0.0, 0.0, 2.0),
+              struct.pack("<3f", 0.4, 0.2, 2.4),
+          }
+          for i in (0, 32):
+              assert splat_data[i + 12:i + 24] == struct.pack("<3f", 1.0, 1.0, 1.0)
+          print(f"Actual pinned gsplat.export_splats CPU emitted {len(produced)} PLY bytes")
+          print(f"Actual pinned gsplat.export_splats CPU emitted {len(splat_data)} .splat bytes")
+          print("Two synthetic CPU Gaussians; no GPU run or scene reconstruction.")
+          PY
+
+      # WRE domain uses Python >=3.12 (StrEnum). gsplat's selected torch
+      # runtime is pinned to Python 3.10.21. Test their real byte-level bridge.
+      - name: Ingest true upstream PLY with canonical WRE 3.12 materializer
+        shell: bash
+        run: |
+          set -euo pipefail
+          # WRE's package import also initializes ingestion/exif.py.
+          # A bare uv-installed interpreter misses runtime exifread; install
+          # only the exact WRE production dependencies from existing uv.lock.
+          uv sync --locked --no-dev --python 3.12.12
+          export PYTHONPATH="$GITHUB_WORKSPACE/src"
+          uv run --locked --no-dev --no-sync --python 3.12.12 python - <<'PY'
+          import hashlib
+          import os
+          from pathlib import Path
+
+          from wre.domain.appearance import APPEARANCE_MODEL_ARTIFACT_KIND
+          from wre.domain.artifacts import ArtifactId, ArtifactRef
+          from wre.reconstruction.static_appearance_baseline import (
+              GsplatStaticAppearanceTrainingProfile,
+              materialize_verified_gsplat_ply,
+          )
+
+          root = Path(os.environ["RUNNER_TEMP"]) / "wre-upstream-exporter-smoke"
+          actual_ply = root / "ply" / "point_cloud_0.ply"
+          actual_bytes = actual_ply.read_bytes()
+          artifact = ArtifactRef(
+              ArtifactId("appearance:gsplat:real-upstream-cpu-export"),
+              APPEARANCE_MODEL_ARTIFACT_KIND,
+          )
+          metadata = materialize_verified_gsplat_ply(
+              artifact_ref=artifact,
+              output_root=root,
+              profile=GsplatStaticAppearanceTrainingProfile(max_steps=1),
+          )
+          assert metadata.artifact_ref == artifact
+          assert len(metadata.entries) == 1
+          entry = metadata.entries[0]
+          assert entry.relative_path == "ply/point_cloud_0.ply"
+          assert entry.byte_length == len(actual_bytes)
+          assert entry.sha256.value == hashlib.sha256(actual_bytes).hexdigest()
+          print("Canonical WRE Python 3.12 accepted the REAL gsplat CPU exporter PLY")
+          print("Cross-interpreter output hashing verified; no GPU optimization executed.")
+          PY
+
+      # The real upstream Config must accept the exact path/algorithm
+      # overrides emitted by WRE (Python 3.12), not only its own defaults.
+      # This is a genuine cross-interpreter integration test, not training.
+      - name: Construct actual pinned trainer Config from WRE overrides
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PYTHONPATH="$GITHUB_WORKSPACE/src"
+          uv run --locked --no-dev --no-sync --python 3.12.12 python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+          from wre.reconstruction.static_appearance_baseline import (
+              GsplatStaticAppearanceTrainingProfile,
+              build_gsplat_reference_trainer_path_overrides,
+          )
+
+          root = Path(os.environ["RUNNER_TEMP"])
+          profile = GsplatStaticAppearanceTrainingProfile(max_steps=1)
+          config = build_gsplat_reference_trainer_path_overrides(
+              profile=profile,
+              dataset_root=root / "gsplat-colmap-decode-smoke",
+              output_root=root / "wre-config-bridge-output",
+          )
+          assert len(config) == len(profile.reference_overrides()) + 2
+          (root / "wre-config-bridge.json").write_text(
+              json.dumps(config, sort_keys=True, allow_nan=False), encoding="utf-8"
+          )
+          print("WRE 3.12 emitted explicit reviewed Config for real COLMAP inputs")
+          PY
+          "$COMMON_PYTHON" -I - "$RUNNER_TEMP/wre-config-bridge.json" <<'PY'
+          import json
+          import os
+          import sys
+          from pathlib import Path
+          import torch
+
+          assert not torch.cuda.is_available()
+          source = Path(os.environ["COMMON_SOURCES"]) / "gsplat" / "examples"
+          sys.path.insert(0, str(source))
+          from simple_trainer import Config
+
+          overrides = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+          actual = Config(**overrides)
+          root = Path(os.environ["RUNNER_TEMP"])
+          assert actual.data_dir == str(root / "gsplat-colmap-decode-smoke")
+          assert actual.result_dir == str(root / "wre-config-bridge-output")
+          assert actual.max_steps == 1 and actual.ply_steps == [1]
+          assert actual.save_ply and actual.disable_viewer and not actual.pose_opt
+          assert not (root / "wre-config-bridge-output").exists()
+          print("REAL pinned simple_trainer.Config accepted all WRE path and solver overrides")
+          print("Same native CPU-hosted Python environment; no GPU or training executed")
+          PY
+
+      # This is the import directory used by the REAL external trainer subprocess,
+      # not the complete original upstream checkout. Its eager-import closure
+      # must work in the pinned common native environment before GPU execution.
+      - name: Import WRE private pinned trainer sources in real native interpreter
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PYTHONPATH="$GITHUB_WORKSPACE/src"
+          uv run --locked --no-dev --no-sync --python 3.12.12 python - <<'PY'
+          import os
+          from pathlib import Path
+
+          from wre.reconstruction.static_appearance_baseline import (
+              GsplatStaticAppearanceTrainingProfile,
+              _stage_verified_gsplat_trainer_imports,
+              verify_gsplat_reference_trainer_config_fields,
+          )
+
+          upstream = Path(os.environ["COMMON_SOURCES"]) / "gsplat"
+          root = Path(os.environ["RUNNER_TEMP"]) / "wre-private-trainer-import"
+          root.mkdir(mode=0o700, exist_ok=False)
+          verify_gsplat_reference_trainer_config_fields(
+              upstream, GsplatStaticAppearanceTrainingProfile(max_steps=1)
+          )
+          private = _stage_verified_gsplat_trainer_imports(upstream, root)
+          assert (private / "simple_trainer.py").is_file()
+          assert (private / "datasets" / "colmap.py").is_file()
+          assert not (private / "datasets" / "__init__.py").exists()
+          print("WRE created private import closure from verified pinned source bytes")
+          PY
+          "$COMMON_PYTHON" -I - "$RUNNER_TEMP/wre-private-trainer-import/wre-pinned-examples" <<'PY'
+          import sys
+          from pathlib import Path
+
+          import torch
+
+          assert not torch.cuda.is_available(), "This integration lane is CPU-hosted only"
+          private = Path(sys.argv[1]).resolve(strict=True)
+          sys.path.insert(0, str(private))
+          import simple_trainer
+          from datasets import colmap
+          from simple_trainer import Config, main
+
+          assert Path(simple_trainer.__file__).resolve() == private / "simple_trainer.py"
+          assert Path(colmap.__file__).resolve() == private / "datasets" / "colmap.py"
+          assert callable(main)
+          cfg = Config()
+          assert cfg.camera_model == "pinhole"
+          print("Real native trainer imports from the EXACT WRE private source closure")
+          print("No CUDA device, GPU kernels, model training or scene quality proven")
+          PY
+
+      - name: Decode a real 3-view COLMAP binary dataset with the pinned trainer (CPU)
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$COMMON_PYTHON" -I - <<'PY'
+          import os
+          import struct
+          import sys
+          import tempfile
+          from pathlib import Path
+
+          import numpy as np
+          import torch
+          from PIL import Image
+          from gsplat import export_splats
+
+          # Same -I and single source path as the real external trainer child.
+          # Reuse the private source closure verified by WRE in the prior step.
+          # Do not import from the mutable complete upstream checkout.
+          root = Path(os.environ["RUNNER_TEMP"]) / "wre-private-trainer-import"
+          private = (root / "wre-pinned-examples").resolve(strict=True)
+          sys.path.insert(0, str(private))
+          from datasets.colmap import Dataset, Parser
+          from simple_trainer import create_splats_with_optimizers
+
+          # Eight non-coplanar coloured points, observed in all three
+          # calibrated COLMAP camera views with actual projected 2D tracks.
+          dataset = Path(os.environ["RUNNER_TEMP"]) / "wre-colmap-preview-source"
+          photos, sparse = dataset / "images", dataset / "sparse" / "0"
+          photos.mkdir(parents=True)
+          sparse.mkdir(parents=True)
+          cube = [
+              (-.3, -.25, 1.6, 255, 40, 40),
+              (-.3, .25, 1.6, 40, 255, 40),
+              (.3, -.25, 1.6, 40, 40, 255),
+              (.3, .25, 1.6, 255, 255, 40),
+              (-.3, -.25, 2.4, 40, 255, 255),
+              (-.3, .25, 2.4, 255, 40, 255),
+              (.3, -.25, 2.4, 255, 160, 40),
+              (.3, .25, 2.4, 160, 100, 255),
+          ]
+          n = len(cube)
+          (sparse / "cameras.bin").write_bytes(
+              struct.pack("<Q", 1)
+              + struct.pack("<IiQQ4d", 1, 1, 64, 64, 64., 64., 32., 32.)
+          )
+          images_bin = bytearray(struct.pack("<Q", 3))
+          for image_id in range(1, 4):
+              name = f"frame-{image_id:02d}.png"
+              pixels = np.full((64, 64, 3), 12, dtype=np.uint8)
+              tx = (2 - image_id) * 0.2
+              images_bin.extend(
+                  struct.pack("<I4d3dI", image_id, 1., 0., 0., 0., tx, 0., 0., 1)
+              )
+              images_bin.extend(name.encode("ascii") + b"\x00")
+              images_bin.extend(struct.pack("<Q", n))
+              for pid, (x, y, z, r, g, b) in enumerate(cube, start=1):
+                  u, v = 64 * (x + tx) / z + 32, 64 * y / z + 32
+                  assert 0 <= u < 64 and 0 <= v < 64
+                  pixels[round(v), round(u)] = [r, g, b]
+                  images_bin.extend(struct.pack("<ddq", u, v, pid))
+              Image.fromarray(pixels, mode="RGB").save(photos / name)
+          (sparse / "images.bin").write_bytes(images_bin)
+          points = bytearray(struct.pack("<Q", n))
+          for pid, (x, y, z, r, g, b) in enumerate(cube, start=1):
+              points.extend(struct.pack("<Q3d3BdQ", pid, x, y, z, r, g, b, .01, 3))
+              for image_id in range(1, 4):
+                  points.extend(struct.pack("<II", image_id, pid - 1))
+          (sparse / "points3D.bin").write_bytes(points)
+
+          parsed = Parser(str(dataset), factor=1, normalize=False, test_every=8)
+          train = Dataset(parsed, split="train")
+          test = Dataset(parsed, split="test")
+          assert parsed.image_names == [
+              "frame-01.png", "frame-02.png", "frame-03.png"
+          ]
+          assert parsed.points.shape == (n, 3)
+          expected = np.array(cube, dtype=np.float64)
+          actual_order = np.lexsort(
+              (parsed.points[:, 2], parsed.points[:, 1], parsed.points[:, 0])
+          )
+          source_order = np.lexsort(
+              (expected[:, 2], expected[:, 1], expected[:, 0])
+          )
+          np.testing.assert_allclose(
+              parsed.points[actual_order], expected[source_order, :3], atol=1e-6
+          )
+          np.testing.assert_array_equal(
+              parsed.points_rgb[actual_order], expected[source_order, 3:]
+          )
+          assert len(train) == 2 and len(test) == 1
+          for batch in (train[0], train[1], test[0]):
+              assert isinstance(batch["image"], torch.Tensor)
+              assert batch["image"].shape == (64, 64, 3)
+              assert batch["image"].device.type == "cpu"
+              assert batch["K"].shape == (3, 3)
+              assert batch["camtoworld"].shape == (4, 4)
+              assert torch.isfinite(batch["K"]).all()
+              assert torch.isfinite(batch["camtoworld"]).all()
+          # The REAL upstream reference trainer builds its Gaussian model
+          # and six optimizer groups from the decoded native COLMAP points.
+          # device="cpu": no CUDA kernel, optimizer step or training is run.
+          assert parsed.points.shape == (n, 3)
+          assert parsed.points_rgb.shape == (n, 3)
+          torch.manual_seed(7)
+          splats, optimizers = create_splats_with_optimizers(
+              parsed, init_type="sfm", init_opacity=0.1, init_scale=1.0,
+              sh_degree=3, device="cpu", world_rank=0, world_size=1,
+          )
+          assert len(optimizers) == 6
+          assert set(optimizers) == {
+              "means", "scales", "quats", "opacities", "sh0", "shN",
+          }
+          assert all(param.device.type == "cpu" for param in splats.values())
+          assert all(torch.isfinite(param).all() for param in splats.values())
+          assert splats["means"].shape == (n, 3)
+          assert splats["scales"].shape == (n, 3)
+          assert splats["quats"].shape == (n, 4)
+          assert splats["sh0"].shape == (n, 1, 3)
+          assert splats["shN"].shape == (n, 15, 3)
+          np.testing.assert_allclose(
+              splats["means"].detach().numpy(), parsed.points, atol=1e-6
+          )
+          # The selected upstream trainer calculates its own KNN scale
+          # logits, opacity logits, SH colour parameters and quaternions.
+          assert (torch.exp(splats["scales"]) > 0).all()
+          assert torch.allclose(
+              torch.sigmoid(splats["opacities"]),
+              torch.full((n,), 0.1), atol=1e-6,
+          )
+          gaussian_names = ("means", "scales", "quats", "opacities", "sh0", "shN")
+          gaussians = {
+              name: splats[name].detach().cpu() for name in gaussian_names
+          }
+          export_root = Path(os.environ["RUNNER_TEMP"]) / "wre-colmap-derived-splats"
+          (export_root / "ply").mkdir(parents=True, exist_ok=False)
+          ply_file = export_root / "ply" / "point_cloud_0.ply"
+          splat_file = export_root / "point_cloud_0.splat"
+          ply_bytes = export_splats(**gaussians, format="ply", save_to=str(ply_file))
+          splat_bytes = export_splats(
+              **gaussians, format="splat", save_to=str(splat_file)
+          )
+          assert ply_file.read_bytes() == ply_bytes
+          assert splat_file.read_bytes() == splat_bytes
+          assert f"element vertex {n}\n".encode("ascii") in ply_bytes
+          assert b"property float f_rest_44\n" in ply_bytes
+          assert len(splat_bytes) == n * 32
+          # gsplat's binary .splat writer Morton-sorts the points.
+          # Match by decoded 3D position rather than assuming input order.
+          unmatched = set(range(n))
+          for idx in range(n):
+              splat = splat_bytes[idx * 32 : (idx + 1) * 32]
+              xyz = np.array(struct.unpack("<3f", splat[:12]))
+              options = [
+                  point_idx for point_idx in unmatched
+                  if np.allclose(parsed.points[point_idx], xyz, atol=1e-6)
+              ]
+              assert len(options) == 1
+              point_idx = options[0]
+              unmatched.remove(point_idx)
+              expected_scale = torch.exp(splats["scales"][point_idx]).detach().numpy()
+              np.testing.assert_allclose(
+                  struct.unpack("<3f", splat[12:24]), expected_scale, atol=1e-6
+              )
+              assert all(
+                  abs(actual - expected) <= 1
+                  for actual, expected in zip(splat[24:27], parsed.points_rgb[point_idx])
+              )
+              assert splat[27] == 25  # floor(sigmoid(logit(.1)) * 255)
+          assert not unmatched
+          print("Eight tracked COLMAP points initialized by REAL pinned trainer on CPU.")
+          print("Upstream KNN, colour SH, quats and optimizers used; NO TRAINING.")
+
+          print("Three REAL binary COLMAP views and 24 tracks decoded with upstream Parser/Dataset.")
+          print("CPU tensor generation verified; no CUDA kernel or training occurred.")
+          PY
+
+      - name: Materialize COLMAP-derived gsplat PLY with canonical WRE
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The pinned gsplat CUDA toolchain uses Python 3.10; WRE uses 3.12.
+          # Verify the actual generated bytes across that interpreter boundary.
+          uv sync --locked --no-dev --python 3.12.12
+          export PYTHONPATH="$GITHUB_WORKSPACE/src"
+          uv run --locked --no-dev --no-sync --python 3.12.12 python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          from wre.domain.appearance import APPEARANCE_MODEL_ARTIFACT_KIND
+          from wre.domain.artifacts import ArtifactId, ArtifactRef
+          from wre.reconstruction.static_appearance_baseline import (
+              GsplatStaticAppearanceTrainingProfile,
+              materialize_verified_gsplat_ply,
+          )
+
+          root = Path(os.environ["RUNNER_TEMP"]) / "wre-colmap-derived-splats"
+          ply = root / "ply" / "point_cloud_0.ply"
+          splat = root / "point_cloud_0.splat"
+          artifact = ArtifactRef(
+              ArtifactId("appearance:gsplat:cpu-colmap-init"),
+              APPEARANCE_MODEL_ARTIFACT_KIND,
+          )
+          metadata = materialize_verified_gsplat_ply(
+              artifact_ref=artifact,
+              output_root=root,
+              profile=GsplatStaticAppearanceTrainingProfile(max_steps=1),
+          )
+          assert metadata.artifact_ref == artifact
+          assert len(metadata.entries) == 1
+          entry = metadata.entries[0]
+          assert entry.relative_path == "ply/point_cloud_0.ply"
+          assert entry.byte_length == ply.stat().st_size
+          assert entry.sha256.value == hashlib.sha256(ply.read_bytes()).hexdigest()
+          assert splat.is_file() and splat.stat().st_size == 8 * 32
+          input_root = Path(os.environ["RUNNER_TEMP"]) / "wre-colmap-preview-source"
+          input_files = sorted((input_root / "images").glob("*.png")) + sorted(
+              (input_root / "sparse" / "0").glob("*.bin")
+          )
+          assert len(input_files) == 6
+          source_sha256 = {
+              f.relative_to(input_root).as_posix(): hashlib.sha256(f.read_bytes()).hexdigest()
+              for f in input_files
+          }
+          manifest = {
+              "input_sha256": source_sha256,
+              "registered_views": 3,
+              "tracked_points": 8,
+              "colmap_observations": 24,
+              "dataset": "synthetic COLMAP binary, 3 registered views, 8 tracked 3D points",
+              "producer": "pinned upstream gsplat 1.5.3 CPU initializer and exporter (untrained)",
+              "initialization": "simple_trainer.create_splats_with_optimizers, sfm, CPU",
+              "optimizer_groups_initialized": 6,
+              "optimizer_steps_executed": 0,
+              "gpu_training_executed": False,
+              "ply_sha256": entry.sha256.value,
+              "ply_bytes": entry.byte_length,
+              "splat_sha256": hashlib.sha256(splat.read_bytes()).hexdigest(),
+              "splat_bytes": splat.stat().st_size,
+          }
+          (root / "wre-cpu-colmap-init-manifest.json").write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          print("Actual COLMAP point/RGB -> pinned gsplat exporter -> WRE PLY materializer.")
+          print("Eight untrained 3D Gaussians: GPU training and 4D unverified.")
+          PY
+
+      # RUNNER_TEMP inside the CUDA job container does not necessarily equal
+      # the host runner.temp expression used by Node upload-artifact.
+      # Archive a single checkout-relative tree to retain the actual payload.
+      - name: Stage complete COLMAP and native exporter evidence for retention
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence="$GITHUB_WORKSPACE/wre-ci-evidence"
+          colmap="$evidence/colmap"
+          exporter="$evidence/exporter"
+          test ! -e "$evidence"
+          mkdir -p "$colmap/ply" "$colmap/images" "$colmap/sparse/0" "$exporter/ply"
+          cp "$RUNNER_TEMP/wre-colmap-derived-splats/ply/point_cloud_0.ply" "$colmap/ply/"
+          cp "$RUNNER_TEMP/wre-colmap-derived-splats/point_cloud_0.splat" "$colmap/"
+          cp "$RUNNER_TEMP/wre-colmap-derived-splats/wre-cpu-colmap-init-manifest.json" "$colmap/"
+          cp "$RUNNER_TEMP/wre-colmap-preview-source/images/"*.png "$colmap/images/"
+          cp "$RUNNER_TEMP/wre-colmap-preview-source/sparse/0/"*.bin "$colmap/sparse/0/"
+          cp "$RUNNER_TEMP/wre-upstream-exporter-smoke/ply/point_cloud_0.ply" "$exporter/ply/"
+          cp "$RUNNER_TEMP/wre-upstream-exporter-smoke/point_cloud_0.splat" "$exporter/"
+          cp "$RUNNER_TEMP/wre-config-bridge.json" "$exporter/"
+          cp "$RUNNER_TEMP/gsplat-common-runtime-native-files.json" "$exporter/"
+          # All nine source/output proof files and four bridge/runtime files
+          # must exist before an artifact upload can report success.
+          test "$(find "$colmap" -type f | wc -l)" -eq 9
+          test "$(find "$exporter" -type f | wc -l)" -eq 4
+          "$COMMON_PYTHON" - "$colmap" <<'PY'
+          import hashlib
+          import json
+          import sys
+          from pathlib import Path
+
+          root = Path(sys.argv[1])
+          manifest = json.loads((root / "wre-cpu-colmap-init-manifest.json").read_text())
+          assert len(manifest["input_sha256"]) == 6
+          for relative, expected in manifest["input_sha256"].items():
+              observed = hashlib.sha256((root / relative).read_bytes()).hexdigest()
+              assert observed == expected, relative
+          for kind, filename in (("ply", root / "ply/point_cloud_0.ply"), ("splat", root / "point_cloud_0.splat")):
+              assert hashlib.sha256(filename.read_bytes()).hexdigest() == manifest[f"{kind}_sha256"]
+              assert filename.stat().st_size == manifest[f"{kind}_bytes"]
+          assert manifest["gpu_training_executed"] is False
+          assert manifest["optimizer_steps_executed"] == 0
+          print("Retained nine verified COLMAP/gsplat files and four native bridge files; NO GPU training.")
+          PY
+
+      - name: Retain COLMAP-derived Gaussian preview and WRE hash evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wre-colmap-to-gsplat-cpu-preview
+          path: wre-ci-evidence/colmap/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Retain true exporter to WRE materialization artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wre-real-gsplat-exporter-to-materializer-cpu
+          path: wre-ci-evidence/exporter/
+          if-no-files-found: error
+          retention-days: 7
+
+      # Execute after native tests so discovered advisories do not mask CPU
+      # compatibility/contract proofs. The scan still FAILS the whole job.
+      # 'always' also preserves the audit result if an earlier native step fails.
+      # This is an independent vulnerability audit of the 76 locked wheel
+      # identities only. It does NOT replace GitHub Dependency Review/SBOM,
+      # native/CUDA closure security, checkpoint trust or license approval.
+      - name: Audit all 76 locked Python wheel versions against PyPI advisories
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(wc -l < "$RUNNER_TEMP/common-locked-advisories.txt")" -eq 76
+          uvx --python 3.10.21 --from "pip-audit==2.10.1" pip-audit \
+            --no-deps --disable-pip --vulnerability-service pypi \
+            --format json \
+            --requirement "$RUNNER_TEMP/common-locked-advisories.txt" \
+            --output "$GITHUB_WORKSPACE/wre-76-wheel-advisory-report.json"
+
+      - name: Retain 76-wheel advisory report even if vulnerabilities are found
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: wre-76-wheel-python-advisory-report
+          path: wre-76-wheel-advisory-report.json
+          if-no-files-found: warn
+          retention-days: 7
+
+  # EXPERIMENTAL proof only: this job does not change the Python 3.10
+  # reviewed runtime, its empty native/LPIPS trust roots, or shipping status.
+  # The exact SHA-bound GitHub artifact is a temporary qualification input,
+  # not a permanent approved lock. A full reviewed in-repo lock is required
+  # before choosing this Python 3.11 runtime for shipping.
+  experimental-py311-native-import:
+    name: experimental-py311-pillow13-actual-gsplat-fused-ssim-import-no-gpu
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    container:
+      image: nvidia/cuda@sha256:da6791294b0b04d7e65d87b7451d6f2390b4d36225ab0701ee7dfec5769829f5
+    env:
+      CUDA_HOME: /usr/local/cuda
+      TORCH_CUDA_ARCH_LIST: "7.5"
+      MAX_JOBS: "1"
+      PYTHONPATH: ""
+      GSPLAT_REVISION: "937e29912570c372bed6747a5c9bf85fed877bae"
+      GSPLAT_TREE: "90c3f0b2352e6d2725bcba1ef0407168f922c0fa"
+      SSIM_REVISION: "328dc9836f513d00c4b5bc38fe30478b4435cbb5"
+      SSIM_TREE: "ac5f1d8fe5d519f9c44b220d235bf1f198463da7"
+      GLM_REVISION: "33b4a621a697a305bc3a7610d290677b96beb181"
+      GLM_TREE: "e57f342f0fb63852d65e0da2090528fdca9b0117"
+      NERFVIEW_REVISION: "4538024fe0d15fd1a0e4d760f3695fc44ca72787"
+      NERFVIEW_TREE: "e333400e39605978a3d1f9cf6d73ddf577a8c8e3"
+      SCENE_MANAGER_REVISION: "cc7ea4b7301720ac29287dbe450952511b32125e"
+    steps:
+      - name: Checkout WRE to keep the branch and source identity explicit
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned Python 3.11.14 without GPU
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.13"
+          python-version: "3.11.14"
+          enable-cache: false
+
+      - name: Reconstruct pinned experimental Python 3.11 native identity overlay and install all 76 wheels
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$CUDA_HOME/bin/nvcc"
+          "$CUDA_HOME/bin/nvcc" --version | grep -F 'release 12.4,'
+          uv venv --seed --python 3.11.14 "$RUNNER_TEMP/wre-py311-native"
+          echo "CANDIDATE_PYTHON=$RUNNER_TEMP/wre-py311-native/bin/python" >> "$GITHUB_ENV"
+
+          # Use the immutable WRE repository registry, not an expiring Actions artifact.
+          # Bootstrap PyYAML is isolated from the sealed 76-wheel native environment.
+          uv run --no-project --with "pyyaml==6.0.2" python - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+          from urllib.parse import unquote, urlsplit
+
+          import yaml
+
+          entry = yaml.safe_load(
+              Path("registry/dependencies.yaml").read_text(encoding="utf-8")
+          )["dependencies"]["gsplat_static_appearance"]
+          candidate = entry["runtime_python_311_candidate"]
+          if (
+              candidate["status"] != "experimental_non_default_not_approved"
+              or candidate["evidence_kind"] != "pinned_wheel_identity_overlay_not_released_runtime"
+              or candidate["target_python"] != "3.11.14"
+              or candidate["target_cuda"] != "12.4"
+              or candidate["gpu_execution_evidence"] is not False
+              or candidate["runtime_approved"] is not False
+              or candidate["license_review"] != "pending"
+          ):
+              raise SystemExit("candidate not eligible for experimental CPU compilation")
+          base = entry[candidate["base_lock_key"]]["packages"]
+          changes = candidate["wheel_overrides"]
+          if len(base) != 76 or len(changes) != 21:
+              raise SystemExit("expected 76 base and 21 changed wheel identities")
+          def canonical(value):
+              return re.sub(r"[-_.]+", "-", value).lower()
+          by_name = {canonical(p["name"]): dict(p) for p in base}
+          if len(by_name) != 76:
+              raise SystemExit("duplicate original dependencies")
+          seen = set()
+          for item in changes:
+              key = canonical(item["name"])
+              if key not in by_name or key in seen:
+                  raise SystemExit("invalid duplicate or additional wheel")
+              seen.add(key)
+              record = by_name[key]
+              if all(record[field] == item[field] for field in ("version", "url", "sha256")):
+                  raise SystemExit("unnecessary wheel overlay entry")
+              record.update({field: item[field] for field in ("version", "url", "sha256")})
+              record["filename"] = unquote(urlsplit(item["url"]).path.rsplit("/", 1)[-1])
+          allowed_hosts = {
+              "files.pythonhosted.org",
+              "download.pytorch.org",
+              "download-r2.pytorch.org",
+              "pypi.nvidia.com",
+          }
+          wheel_lines = []
+          records = []
+          for p in sorted(by_name.values(), key=lambda p: p["name"].lower()):
+              parsed = urlsplit(p["url"])
+              if (
+                  not re.fullmatch(r"[A-Za-z0-9_.-]+", p["name"])
+                  or not re.fullmatch(r"[a-f0-9]{64}", p["sha256"])
+                  or parsed.scheme != "https"
+                  or parsed.hostname not in allowed_hosts
+                  or parsed.username or parsed.password or parsed.fragment or parsed.query
+                  or unquote(parsed.path.rsplit("/", 1)[-1]) != p["filename"]
+                  or not p["filename"].endswith(".whl")
+              ):
+                  raise SystemExit("invalid or untrusted wheel identity")
+              wheel_lines.append(f'{p["name"]} @ {p["url"]}#sha256={p["sha256"]}')
+              records.append({k: p[k] for k in ("name", "version", "url", "sha256", "filename")})
+          out = Path(os.environ["RUNNER_TEMP"])
+          (out / "py311-exact-wheels.txt").write_text("\n".join(wheel_lines) + "\n")
+          (out / "py311-locked-manifest.json").write_text(
+              json.dumps({
+                  "evidence_kind": "permanent_registry_identity_overlay_only",
+                  "target": {"python": "3.11.14", "torch_cuda": "12.4"},
+                  "packages": records,
+                  "native_extension_build_evidence": False,
+                  "gpu_execution_evidence": False,
+                  "approved_runtime": False,
+              }, sort_keys=True, indent=2) + "\n"
+          )
+          print("Exact 76 Python 3.11 artifact URLs/SHA-256 reconstructed from WRE registry")
+          PY
+          "$RUNNER_TEMP/wre-py311-native/bin/python" -m pip install --no-index --no-deps --no-cache-dir --require-hashes \
+            -r "$RUNNER_TEMP/py311-exact-wheels.txt"
+          "$RUNNER_TEMP/wre-py311-native/bin/python" -m pip check
+          "$RUNNER_TEMP/wre-py311-native/bin/python" - <<'PY'
+          import importlib.metadata as metadata
+          import json
+          import os
+          import sys
+          from pathlib import Path
+          import numpy
+          import torch
+          from PIL import __version__ as pillow_version
+
+          record = json.loads(Path(os.environ["RUNNER_TEMP"], "py311-locked-manifest.json").read_text())
+          assert sys.version.startswith("3.11.14")
+          assert all(metadata.version(x["name"]) == x["version"] for x in record["packages"])
+          assert len(record["packages"]) == 76
+          assert pillow_version == "13.0.0"
+          assert numpy.__version__ == "1.26.4"
+          assert torch.__version__ == "2.4.0+cu124"
+          assert torch.version.cuda == "12.4"
+          assert not torch.cuda.is_available()
+          print("Exact 76-wheel Python3.11/Torch/Pillow environment imports on CPU")
+          PY
+
+      - name: Fetch upstream source commits and verify git tree identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          DEBIAN_FRONTEND=noninteractive apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git ca-certificates libgl1 libglib2.0-0
+          root="$RUNNER_TEMP/py311-selected-upstreams"
+          mkdir -p "$root"
+          fetch_exact() {
+            name="$1"; remote="$2"; rev="$3"; tree="$4"
+            git init -q "$root/$name"
+            git -C "$root/$name" remote add origin "$remote"
+            git -C "$root/$name" fetch --quiet --depth 1 origin "$rev"
+            git -C "$root/$name" checkout -q --detach FETCH_HEAD
+            test "$(git -C "$root/$name" rev-parse HEAD)" = "$rev"
+            if test "$tree" != "-"; then
+              test "$(git -C "$root/$name" rev-parse HEAD^{tree})" = "$tree"
+            fi
+          }
+          fetch_exact gsplat https://github.com/nerfstudio-project/gsplat.git "$GSPLAT_REVISION" "$GSPLAT_TREE"
+          fetch_exact ssim https://github.com/rahul-goel/fused-ssim.git "$SSIM_REVISION" "$SSIM_TREE"
+          fetch_exact nerfview https://github.com/nerfstudio-project/nerfview.git "$NERFVIEW_REVISION" "$NERFVIEW_TREE"
+          fetch_exact scene-manager https://github.com/rmbrualla/pycolmap.git "$SCENE_MANAGER_REVISION" "-"
+          test "$(git -C "$root/gsplat" ls-tree HEAD gsplat/cuda/csrc/third_party/glm | awk '{print $3}')" = "$GLM_REVISION"
+          git -C "$root/gsplat" submodule update --init --depth 1 -- gsplat/cuda/csrc/third_party/glm
+          test "$(git -C "$root/gsplat/gsplat/cuda/csrc/third_party/glm" rev-parse HEAD)" = "$GLM_REVISION"
+          test "$(git -C "$root/gsplat/gsplat/cuda/csrc/third_party/glm" rev-parse HEAD^{tree})" = "$GLM_TREE"
+          echo "PY311_SOURCES=$root" >> "$GITHUB_ENV"
+
+      - name: Actually build gsplat and fused-ssim CUDA extensions on CPU runner for Python 3.11
+        shell: bash
+        run: |
+          set -euo pipefail
+          export BUILD_NO_CUDA=0
+          "$CANDIDATE_PYTHON" -m pip install --no-deps --no-build-isolation --no-cache-dir "$PY311_SOURCES/ssim"
+          "$CANDIDATE_PYTHON" -m pip install --no-deps --no-build-isolation --no-cache-dir "$PY311_SOURCES/gsplat"
+          "$CANDIDATE_PYTHON" -m pip install --no-deps --no-build-isolation --no-cache-dir "$PY311_SOURCES/nerfview"
+          "$CANDIDATE_PYTHON" -m pip install --no-deps --no-build-isolation --no-cache-dir "$PY311_SOURCES/scene-manager"
+
+      - name: Import selected native extensions and trainer in exact Python 3.11 interpreter
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$CANDIDATE_PYTHON" -I - <<'PY'
+          import hashlib
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          root = Path(os.environ["PY311_SOURCES"])
+          sys.path.insert(0, str(root / "gsplat" / "examples"))
+          import torch
+          import gsplat
+          from gsplat.cuda._backend import _C
+          from fused_ssim import fused_ssim
+          import fused_ssim_cuda
+          from nerfview import CameraState
+          import pycolmap
+          from pycolmap import SceneManager
+          from datasets.colmap import Dataset, Parser
+          from simple_trainer import Config, main
+          if torch.__version__ != "2.4.0+cu124" or torch.version.cuda != "12.4":
+              raise SystemExit("changed Torch ABI")
+          if torch.cuda.is_available():
+              raise SystemExit("no-GPU native import was not CPU-hosted")
+          if gsplat.__version__ != "1.5.3" or _C is None or not callable(fused_ssim):
+              raise SystemExit("real native extensions are not importable")
+          if not all(x is not None for x in (CameraState, SceneManager, Dataset, Parser, Config, main)):
+              raise SystemExit("trainer source closure is not importable")
+          native = [Path(_C.__file__).resolve(), Path(fused_ssim_cuda.__file__).resolve()]
+          if not all(x.is_file() and x.suffix == ".so" for x in native):
+              raise SystemExit("native extension binaries missing")
+          manifest = Path(os.environ["RUNNER_TEMP"], "py311-locked-manifest.json").read_bytes()
+          evidence = {
+              "evidence_kind": "experimental_py311_cpu_hosted_cuda_native_import",
+              "source_revision_gsplat": os.environ["GSPLAT_REVISION"],
+              "source_revision_fused_ssim": os.environ["SSIM_REVISION"],
+              "manifest_sha256": hashlib.sha256(manifest).hexdigest(),
+              "python": sys.version.split()[0],
+              "torch": torch.__version__,
+              "cuda_compiled": torch.version.cuda,
+              "native_files_sha256": {
+                  x.name: hashlib.sha256(x.read_bytes()).hexdigest() for x in native
+              },
+              "gpu_execution_evidence": False,
+              "actual_training_evidence": False,
+              "approved_runtime": False,
+              "checkpoint_license_approved": False,
+          }
+          Path("gsplat-py311-native-evidence.json").write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + "\n"
+          )
+          print("REAL Python3.11 gsplat+fused-ssim native imports; NO GPU training")
+          PY
+
+      - name: Retain experimental Python 3.11 native build/import proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v2l18-3-gsplat-py311-native-import
+          path: gsplat-py311-native-evidence.json
+          if-no-files-found: warn
+          retention-days: 30

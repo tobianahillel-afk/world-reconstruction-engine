@@ -7,11 +7,14 @@ exposure consistency, the exact external environment and real GPU execution.
 
 from __future__ import annotations
 
+import ast
 import hashlib
 import json
 import math
+import os
 import shutil
 import struct
+import subprocess
 import tempfile
 import zlib
 from dataclasses import dataclass
@@ -43,6 +46,7 @@ from wre.domain.producer_identity import ArtifactProducerIdentity
 from wre.domain.source_photometry import SourcePhotometryInterpretationStatus
 from wre.reconstruction.colmap_canonical_geometry import (
     CanonicalColmapSparseModel,
+    _load_pycolmap,
     _verified_native_model_path,
     canonicalize_colmap_sparse_model,
     colmap_sparse_model_content_identity,
@@ -289,19 +293,24 @@ def verify_gsplat_static_appearance_reference_sources(
             raise GsplatStaticAppearancePreflightError(
                 f"gsplat reference source path invalid: {relative}"
             )
-        if resolved.stat().st_size != expected_size:
+        try:
+            if resolved.stat().st_size != expected_size:
+                raise GsplatStaticAppearancePreflightError(
+                    f"gsplat reference source byte length differs: {relative}"
+                )
+            data = resolved.read_bytes()
+            if len(data) != expected_size or _git_blob_sha1(data) != expected_git_blob:
+                raise GsplatStaticAppearancePreflightError(
+                    f"gsplat reference source Git blob differs: {relative}"
+                )
+            if resolved.stat().st_size != expected_size:
+                raise GsplatStaticAppearancePreflightError(
+                    f"gsplat reference source changed during verification: {relative}"
+                )
+        except OSError as exc:
             raise GsplatStaticAppearancePreflightError(
-                f"gsplat reference source byte length differs: {relative}"
-            )
-        data = resolved.read_bytes()
-        if len(data) != expected_size or _git_blob_sha1(data) != expected_git_blob:
-            raise GsplatStaticAppearancePreflightError(
-                f"gsplat reference source Git blob differs: {relative}"
-            )
-        if resolved.stat().st_size != expected_size:
-            raise GsplatStaticAppearancePreflightError(
-                f"gsplat reference source changed during verification: {relative}"
-            )
+                f"gsplat reference source disappeared during verification: {relative}"
+            ) from exc
         entries.append(
             ArtifactMaterializationEntry(
                 relative_path=relative,
@@ -1708,6 +1717,747 @@ class GsplatStaticAppearanceTrainingProfile:
         return f"ply/point_cloud_{self.max_steps - 1}.ply"
 
 
+def build_gsplat_reference_trainer_path_overrides(
+    *,
+    profile: GsplatStaticAppearanceTrainingProfile,
+    dataset_root: Path,
+    output_root: Path,
+) -> dict[str, object]:
+    """Bind the exact trainer to explicit private input/output paths, without running it.
+
+    The pinned Config defaults point to upstream sample data/results; no future
+    runner may fall back to those paths. Source bytes must be checked separately.
+    This builder neither creates the output directory nor validates dataset bytes.
+    """
+
+    if not isinstance(profile, GsplatStaticAppearanceTrainingProfile):
+        raise TypeError("gsplat runtime profile must be GsplatStaticAppearanceTrainingProfile")
+    if not isinstance(dataset_root, Path) or not isinstance(output_root, Path):
+        raise TypeError("gsplat runtime paths must be pathlib.Path")
+    if not dataset_root.is_absolute() or not output_root.is_absolute():
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat runtime input and output paths must be absolute"
+        )
+    dataset = _safe_root(dataset_root, "gsplat runtime dataset_root")
+    staged_directories = (
+        dataset / "images",
+        dataset / "sparse",
+        dataset / "sparse" / "0",
+    )
+    if any(path.is_symlink() or not path.is_dir() for path in staged_directories):
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat runtime dataset requires real staged images and COLMAP directories"
+        )
+    # The reference COLMAP parser opens all three binary model components.
+    # A directory-only check can otherwise accept an empty staged fixture.
+    model_root = dataset / "sparse" / "0"
+    if any(
+        (model_root / name).is_symlink() or not (model_root / name).is_file()
+        for name in ("cameras.bin", "images.bin", "points3D.bin")
+    ):
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat runtime dataset lacks real COLMAP binary model files"
+        )
+    try:
+        has_png = any(
+            path.suffix.lower() == ".png" and not path.is_symlink() and path.is_file()
+            for path in (dataset / "images").iterdir()
+        )
+    except OSError as exc:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat runtime image directory could not be inspected"
+        ) from exc
+    if not has_png:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat runtime dataset has no regular PNG image"
+        )
+    if output_root.is_symlink() or output_root.exists():
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat runtime output directory must not already exist"
+        )
+    output_parent = _safe_root(output_root.parent, "gsplat runtime output parent")
+    destination = output_parent / output_root.name
+    if destination.is_relative_to(dataset) or dataset.is_relative_to(destination):
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat runtime output directory overlaps the staged dataset"
+        )
+    if destination.is_symlink() or destination.exists():
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat runtime output directory changed before configuration"
+        )
+    result = profile.reference_overrides()
+    result["data_dir"] = str(dataset)
+    result["result_dir"] = str(destination)
+    return result
+
+
+# Trust root for optional runtime releases. A receipt generated by the SAME
+# interpreter is integrity evidence, never independent approval of its code.
+# A separate, reviewed WRE change must add each approved immutable SHA-256.
+# No external CUDA runtime has been independently approved yet.
+_GSPLAT_APPROVED_NATIVE_RECEIPT_SHA256: frozenset[str] = frozenset()
+
+# Independently reviewed LPIPS/AlexNet checkpoint digests. A caller-provided
+# digest only proves byte consistency, not trusted code/weights or redistribution
+# permission. Do not populate this from an artifact produced by the same CI.
+_GSPLAT_APPROVED_LPIPS_ALEXNET_SHA256: frozenset[str] = frozenset()
+
+# The external interpreter is an explicit, caller-owned CUDA environment.
+# -I -S prevents user site/PYTHONPATH and executable .pth/sitecustomize injection;
+# only the pinned examples directory
+# is prepended in the child. The parent never imports torch or CUDA modules.
+_GSPLAT_TRAINER_CHILD = """import hashlib
+import importlib.util
+import json
+import sys
+from pathlib import Path
+
+# An external Python executable is NOT a trusted dependency identity. An
+# operator-approved SHA-256 of the native import receipt is required; validate
+# every listed installed file before importing Torch or the upstream trainer.
+if len(sys.argv) != 4 or not sys.argv[2] or len(sys.argv[3]) != 64:
+    raise RuntimeError("gsplat requires an approved external runtime manifest digest")
+receipt_path = Path(sys.argv[2])
+with receipt_path.open("rb") as stream:
+    receipt_bytes = stream.read()
+if hashlib.sha256(receipt_bytes).hexdigest() != sys.argv[3]:
+    raise RuntimeError("gsplat runtime manifest digest differs from approved receipt")
+receipt = json.loads(receipt_bytes)
+required_modules = {
+    "torch", "torchvision", "numpy", "gsplat", "fused_ssim",
+    "fused_ssim_cuda", "nerfview", "pycolmap",
+}
+if (
+    receipt.get("schema") != "wre.gsplat.common_runtime_native_files.v1"
+    or receipt.get("python") != ".".join(str(n) for n in sys.version_info[:3])
+    or set(receipt.get("modules", [])) != required_modules
+    or receipt.get("source_revisions") != {
+        "gsplat": "937e29912570c372bed6747a5c9bf85fed877bae",
+        "fused_ssim": "328dc9836f513d00c4b5bc38fe30478b4435cbb5",
+        "nerfview": "4538024fe0d15fd1a0e4d760f3695fc44ca72787",
+    }
+):
+    raise RuntimeError("gsplat external runtime manifest does not identify reviewed versions")
+files = receipt.get("files")
+if not isinstance(files, list) or len(files) < len(required_modules):
+    raise RuntimeError("gsplat runtime manifest has incomplete native file coverage")
+# Python -I alone runs site initialization and executable .pth entries
+# BEFORE this receipt guard. The launcher MUST use -I -S. Add the sole
+# explicitly located venv site-packages without invoking site.addsitedir().
+venv_bin = Path(sys.executable).parent
+if venv_bin.name not in ("bin", "Scripts"):
+    raise RuntimeError("gsplat requires a dedicated external virtual environment")
+environment = venv_bin.parent.resolve(strict=True)
+if not (environment / "pyvenv.cfg").is_file():
+    raise RuntimeError("gsplat external venv identity is missing")
+if sys.platform == "win32":
+    packages = environment / "Lib" / "site-packages"
+else:
+    packages = environment / "lib" / ("python%d.%d" % sys.version_info[:2]) / "site-packages"
+if packages.is_symlink() or not packages.is_dir():
+    raise RuntimeError("gsplat external site-packages directory is missing or redirected")
+sys.prefix = sys.exec_prefix = str(environment)
+sys.path.append(str(packages))
+verified = set()
+native_found = False
+for record in files:
+    if not isinstance(record, dict):
+        raise RuntimeError("gsplat native file record is invalid")
+    name, digest = record.get("path"), record.get("sha256")
+    if (
+        not isinstance(name, str)
+        or not name
+        or name.startswith("/")
+        or "\\\\" in name
+        or any(part in ("", ".", "..") for part in name.split("/"))
+        or not isinstance(digest, str)
+        or len(digest) != 64
+        or any(char not in "0123456789abcdef" for char in digest)
+        or name in verified
+    ):
+        raise RuntimeError("gsplat native file identity is malformed or duplicated")
+    verified.add(name)
+    path = environment.joinpath(*name.split("/"))
+    if path.is_symlink() or not path.is_file() or not path.resolve().is_relative_to(environment):
+        raise RuntimeError("gsplat installed native file is absent or outside approved runtime")
+    digest_state = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+            digest_state.update(chunk)
+    actual = digest_state.hexdigest()
+    if actual != digest:
+        raise RuntimeError("gsplat installed native file differs from approved runtime")
+    native_found |= path.suffix in (".so", ".pyd", ".dylib")
+if not native_found:
+    raise RuntimeError("gsplat approved runtime has no native-extension identity")
+# Check module entrypoints WITHOUT running their package code. The receipt
+# cannot be replaced by a version-string comparison or a caller path claim.
+for name in required_modules:
+    module = importlib.util.find_spec(name)
+    if module is None or module.origin is None:
+        raise RuntimeError("gsplat required native module is absent: " + name)
+    origin = Path(module.origin).resolve(strict=True)
+    if not origin.is_relative_to(environment):
+        raise RuntimeError("gsplat imported native module escaped approved environment")
+    if origin.relative_to(environment).as_posix() not in verified:
+        raise RuntimeError("gsplat native module entrypoint not in approved manifest")
+# A reviewed receipt must cover the WHOLE importable site-packages closure,
+# not just the eight named roots. Otherwise an extra top-level/transitive
+# dependency can execute unreviewed Python/native code after these checks.
+# Keep this scan before ALL third-party imports under -I -S.
+for installed in packages.rglob("*"):
+    # pathlib does not descend into symlinked directories; reject them
+    # explicitly, even when the link itself has no executable suffix.
+    if installed.is_symlink():
+        raise RuntimeError("gsplat runtime has unapproved symbolic-link paths")
+    if not (installed.suffix.lower() in (".py", ".pyc", ".so", ".pyd", ".dylib", ".dll")
+            or ".so." in installed.name):
+        continue
+    if not installed.is_file():
+        raise RuntimeError("gsplat runtime has unapproved importable package files")
+    relative = installed.relative_to(environment).as_posix()
+    if relative not in verified:
+        raise RuntimeError("gsplat runtime has unapproved importable package files")
+
+import torch
+import numpy
+
+# The external native extension closure is pinned separately from WRE core.
+# Refuse incompatible Torch/CUDA/NumPy combinations before importing trainer code.
+# Accept only the two ABI pairs proven by pinned CPU-hosted native builds.
+# These version checks are NOT an approval: the independently reviewed native
+# receipt and LPIPS allowlists remain mandatory and empty until signed off.
+# Do not accept arbitrary combinations of Torch builds and CUDA toolchains.
+if (
+    (torch.__version__, torch.version.cuda) not in {
+        ("2.4.0+cu124", "12.4"),
+        ("2.14.0+cu126", "12.6"),
+    }
+    or numpy.__version__ != "1.26.4"
+):
+    raise RuntimeError("gsplat reference training requires pinned Torch/CUDA/NumPy runtime")
+
+# Upstream constructs LPIPS/AlexNet even when evaluation is disabled.
+# Require pretrained weights to be provisioned in this runtime's torch cache.
+# torch.hub.load_state_dict_from_url uses this hook on cache misses.
+def reject_implicit_download(*args, **kwargs):
+    raise RuntimeError("gsplat LPIPS weights must be cached; implicit download forbidden")
+
+torch.hub.download_url_to_file = reject_implicit_download
+
+if not torch.cuda.is_available() or torch.cuda.device_count() != 1:
+    raise RuntimeError("gsplat reference training requires exactly one visible CUDA GPU")
+import gsplat
+if gsplat.__version__ != "1.5.3":
+    raise RuntimeError("gsplat runtime version differs from the pinned reference trainer")
+sys.path.insert(0, sys.argv[1])
+from simple_trainer import Config, main
+
+cfg = Config(**json.load(sys.stdin))
+main(0, 0, 1, cfg)
+"""
+
+
+def _verify_gsplat_reference_producer(
+    profile: GsplatStaticAppearanceTrainingProfile, producer: ArtifactProducerIdentity
+) -> None:
+    """Check one exact source/profile identity before training and at output assembly."""
+
+    if not isinstance(profile, GsplatStaticAppearanceTrainingProfile):
+        raise TypeError("gsplat result profile must be GsplatStaticAppearanceTrainingProfile")
+    if not isinstance(producer, ArtifactProducerIdentity):
+        raise TypeError("gsplat result producer must be ArtifactProducerIdentity")
+    if producer.configuration.sha256 != profile.configuration_sha256:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat output producer configuration differs from the reviewed training profile"
+        )
+    if (
+        producer.producer.implementation != "gsplat.examples.simple_trainer"
+        or producer.producer.version != "1.5.3"
+        or producer.producer.revision != GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION
+        or producer.model is None
+        or producer.model.name != "gsplat"
+        or producer.model.version != "1.5.3"
+        or producer.model.revision != GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION
+        or producer.checkpoint is not None
+    ):
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat output producer does not identify the exact checkpoint-free reference trainer"
+        )
+
+
+def _stage_verified_gsplat_trainer_imports(source_root: Path, private_root: Path) -> Path:
+    """Copy only reviewed trainer Python entrypoints into a fresh private import root.
+
+    A full upstream checkout may contain unrelated importable Python files. Never
+    place that mutable, unreviewed directory on the trainer subprocess sys.path.
+    This does not attest external site-packages or their native extensions.
+    """
+
+    entrypoint = private_root / "wre-pinned-examples"
+    entrypoint.mkdir(mode=0o700)
+    for relative, expected_size, expected_blob in _GSPLAT_REFERENCE_SOURCE_FILES:
+        parts = PurePosixPath(relative).parts
+        if parts[0] != "examples" or not relative.endswith(".py"):
+            continue
+        candidate = source_root.joinpath(*parts)
+        if candidate.is_symlink():
+            raise GsplatStaticAppearancePreflightError(
+                "gsplat executable trainer source cannot be a symlink"
+            )
+        try:
+            payload = candidate.read_bytes()
+            if len(payload) != expected_size or _git_blob_sha1(payload) != expected_blob:
+                raise GsplatStaticAppearancePreflightError(
+                    "gsplat executable trainer source changed after verification"
+                )
+            destination = entrypoint.joinpath(*parts[1:])
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            destination.write_bytes(payload)
+        except OSError as exc:
+            raise GsplatStaticAppearancePreflightError(
+                "gsplat executable trainer sources could not be staged"
+            ) from exc
+    return entrypoint
+
+
+def run_gsplat_reference_training(
+    *,
+    request: StaticAppearanceCandidateRequest,
+    source: GsplatStaticAppearancePreflightSource,
+    assessments: tuple[PhotometricCompatibilityAssessment, ...],
+    staged: GsplatStaticAppearanceStagedDataset,
+    profile: GsplatStaticAppearanceTrainingProfile,
+    features: ColmapFeatureExtractionResult,
+    expected_environment: ColmapEnvironmentIdentity,
+    source_root: Path,
+    python_executable: Path,
+    output_root: Path,
+    artifact_ref: ArtifactRef,
+    producer: ArtifactProducerIdentity,
+    cuda_device_index: int,
+    timeout_seconds: int,
+    lpips_alexnet_weights: Path | None = None,
+    lpips_alexnet_sha256: str | None = None,
+    runtime_manifest_path: Path | None = None,
+    approved_runtime_manifest_sha256: str | None = None,
+) -> StaticAppearanceCandidateResult:
+    """Run the exact reference trainer on an EXPLICIT external CUDA environment.
+
+    This optional runtime path never loads torch in WRE itself. It verifies the
+    source checkout and full staged input first, launches the upstream Config
+    and main in one non-shell subprocess, then assembles the actual produced
+    PLY bytes into one canonical appearance candidate with source ancestry.
+    The caller must provision/pin a compatible Python/Torch/CUDA environment;
+    CPU-only CI exercises orchestration only, not GPU execution or training.
+    V2L17 assessments are mandatory; matched settings alone do not prove
+    scene-radiance equivalence or held-out rendering quality.
+    """
+
+    _verify_gsplat_reference_producer(profile, producer)
+    # Training consumes the original sRGB PNGs: require V2L17 identity
+    # and matching multi-view capture evidence before any CUDA process.
+    verify_gsplat_static_appearance_matching_capture_metadata(request, source, assessments)
+    if type(cuda_device_index) is not int or cuda_device_index < 0:
+        raise ValueError("gsplat CUDA device index must be a nonnegative integer")
+    if type(timeout_seconds) is not int or timeout_seconds <= 0:
+        raise ValueError("gsplat training timeout_seconds must be positive")
+    if not isinstance(python_executable, Path) or not python_executable.is_absolute():
+        raise TypeError("gsplat runtime requires an absolute external Python executable path")
+    if not python_executable.is_file():
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat external Python executable does not exist"
+        )
+    # gsplat trains on the exact native COLMAP poses/points, not on an
+    # independently refined WRE frame. Reject mismatches before CUDA launch.
+    # Require connected reciprocal Point3D tracks before allocating CUDA time.
+    # This existing gate ALSO verifies exact native camera/geometry identity.
+    verify_gsplat_static_appearance_shared_scene_tracks(
+        request,
+        source,
+        assessments,
+        features=features,
+        expected_environment=expected_environment,
+        module=_load_pycolmap(),
+    )
+    verify_gsplat_static_appearance_staged_dataset(request, source, staged)
+    source_directory = _safe_root(source_root, "gsplat pinned reference checkout")
+    verify_gsplat_reference_trainer_config_fields(source_directory, profile)
+    overrides = build_gsplat_reference_trainer_path_overrides(
+        profile=profile, dataset_root=staged.dataset_root, output_root=output_root
+    )
+    # The external trainer writes its result_dir. Keep the reviewed pinned
+    # checkout immutable, including its examples and dependency source trees.
+    if Path(str(overrides["result_dir"])).is_relative_to(source_directory):
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat training output overlaps the pinned reference source checkout"
+        )
+    # The training process writes arbitrary files below result_dir. The staged
+    # dataset and pinned checkout are already protected; protect the original
+    # immutable source evidence too, not only its private staged copies.
+    output_destination = Path(str(overrides["result_dir"]))
+    if any(
+        output_destination.is_relative_to(_safe_root(root, "gsplat original source root"))
+        for root in (source.image_root, source.native_model_root)
+    ):
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat training output overlaps original image or native-model source evidence"
+        )
+    if not isinstance(artifact_ref, ArtifactRef):
+        raise TypeError("gsplat output artifact_ref must be ArtifactRef")
+    if artifact_ref.artifact_kind != APPEARANCE_MODEL_ARTIFACT_KIND:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat external trainer output must be an appearance artifact"
+        )
+    # The pinned upstream Runner always constructs LPIPS/AlexNet. Without an
+    # explicit offline checkpoint it cannot train; reject before creating any
+    # output or attempting to launch the CUDA interpreter.
+    if lpips_alexnet_weights is None or lpips_alexnet_sha256 is None:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat LPIPS offline weights require both a local file and SHA-256"
+        )
+    if not isinstance(lpips_alexnet_weights, Path) or not lpips_alexnet_weights.is_file():
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat LPIPS pretrained weight file is unavailable"
+        )
+    if not isinstance(lpips_alexnet_sha256, str) or (
+        len(lpips_alexnet_sha256) != 64
+        or any(char not in "0123456789abcdef" for char in lpips_alexnet_sha256)
+    ):
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat LPIPS pretrained weight digest must be lowercase SHA-256"
+        )
+    # An invalid offline checkpoint must not reserve the one-shot private
+    # output path; a corrected retry with the same path must remain possible.
+    # Check its bytes before creating anything, then verify the staged copy.
+    try:
+        with lpips_alexnet_weights.open("rb") as checked_source:
+            source_digest = hashlib.file_digest(checked_source, "sha256").hexdigest()
+    except OSError as exc:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat LPIPS pretrained weight file could not be read"
+        ) from exc
+    if source_digest != lpips_alexnet_sha256:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat LPIPS offline pretrained weight SHA-256 mismatch"
+        )
+    if source_digest not in _GSPLAT_APPROVED_LPIPS_ALEXNET_SHA256:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat LPIPS pretrained weights lack an independently approved WRE digest"
+        )
+    # The caller's digest cannot approve its own installed executable closure.
+    # Require a separate, immutable WRE-approved native receipt BEFORE we
+    # reserve an output root, stage weights, or start the external interpreter.
+    if (
+        not isinstance(runtime_manifest_path, Path)
+        or not runtime_manifest_path.is_absolute()
+        or runtime_manifest_path.is_symlink()
+        or not runtime_manifest_path.is_file()
+        or not isinstance(approved_runtime_manifest_sha256, str)
+        or approved_runtime_manifest_sha256 not in _GSPLAT_APPROVED_NATIVE_RECEIPT_SHA256
+    ):
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat runtime receipt lacks an independently approved WRE trust root"
+        )
+    # The private directory is created only after mandatory dependency inputs
+    # have passed their integrity checks.
+    output_root.mkdir(mode=0o700)
+    private_import_root = _stage_verified_gsplat_trainer_imports(source_directory, output_root)
+    torch_home = output_root / "torch-cache"
+    cache = torch_home / "hub" / "checkpoints"
+    cache.mkdir(parents=True, mode=0o700)
+    destination = cache / "alexnet-owt-7be5be79.pth"
+    try:
+        shutil.copyfile(lpips_alexnet_weights, destination)
+        with destination.open("rb") as checked:
+            digest = hashlib.file_digest(checked, "sha256").hexdigest()
+    except OSError as exc:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat LPIPS offline weights could not be staged"
+        ) from exc
+    if digest != lpips_alexnet_sha256:
+        destination.unlink(missing_ok=True)
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat LPIPS offline pretrained weight SHA-256 mismatch"
+        )
+    log_path = output_root / "wre-reference-training.log"
+    # The external interpreter executes third-party native code. Never
+    # forward unrelated credentials (e.g. CI tokens or cloud keys).
+    # Keep only the runtime paths used by Python/CUDA and temp/cache helpers.
+    runtime_environment_names = (
+        "PATH",
+        "HOME",
+        "USERPROFILE",
+        "SYSTEMROOT",
+        "WINDIR",
+        "TMP",
+        "TEMP",
+        "TMPDIR",
+        "LD_LIBRARY_PATH",
+        "DYLD_LIBRARY_PATH",
+        "CUDA_HOME",
+        "CUDA_PATH",
+        "CONDA_PREFIX",
+        "VIRTUAL_ENV",
+        "XDG_CACHE_HOME",
+        "TORCH_EXTENSIONS_DIR",
+    )
+    env = {name: os.environ[name] for name in runtime_environment_names if name in os.environ}
+    env["CUDA_VISIBLE_DEVICES"] = str(cuda_device_index)
+    if torch_home is not None:
+        env["TORCH_HOME"] = str(torch_home)
+    env["PYTHONNOUSERSITE"] = "1"
+    env["PIP_NO_INDEX"] = "1"
+    try:
+        with log_path.open("xb") as log:
+            completed = subprocess.run(
+                [
+                    str(python_executable),
+                    "-I",
+                    "-S",
+                    "-c",
+                    _GSPLAT_TRAINER_CHILD,
+                    str(private_import_root),
+                    str(runtime_manifest_path) if runtime_manifest_path is not None else "",
+                    approved_runtime_manifest_sha256 or "",
+                ],
+                input=json.dumps(overrides, allow_nan=False).encode("utf-8"),
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                cwd=private_import_root,
+                env=env,
+                timeout=timeout_seconds,
+                check=False,
+            )
+    except subprocess.TimeoutExpired as exc:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat reference training timed out; inspect the private training log"
+        ) from exc
+    except OSError as exc:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat external Python process could not be launched"
+        ) from exc
+    if completed.returncode != 0:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat reference training failed; inspect the private training log"
+        )
+    return assemble_verified_gsplat_static_appearance_result(
+        request=request,
+        source=source,
+        staged=staged,
+        artifact_ref=artifact_ref,
+        output_root=output_root,
+        profile=profile,
+        producer=producer,
+    )
+
+
+def reconstruct_gsplat_static_appearance(
+    *,
+    request: StaticAppearanceCandidateRequest,
+    source: GsplatStaticAppearancePreflightSource,
+    assessments: tuple[PhotometricCompatibilityAssessment, ...],
+    dataset_root: Path,
+    profile: GsplatStaticAppearanceTrainingProfile,
+    features: ColmapFeatureExtractionResult,
+    expected_environment: ColmapEnvironmentIdentity,
+    source_root: Path,
+    python_executable: Path,
+    output_root: Path,
+    artifact_ref: ArtifactRef,
+    producer: ArtifactProducerIdentity,
+    cuda_device_index: int,
+    timeout_seconds: int,
+    lpips_alexnet_weights: Path | None = None,
+    lpips_alexnet_sha256: str | None = None,
+    runtime_manifest_path: Path | None = None,
+    approved_runtime_manifest_sha256: str | None = None,
+) -> StaticAppearanceCandidateResult:
+    """Stage real COLMAP/PNG files, execute the selected trainer, retain its 3D PLY.
+
+    The only GPU operation is in the caller-supplied external environment. The
+    WRE process stages/verifies exact file bytes and returns a canonical result;
+    a CPU-only test may emulate the trainer but is not evidence of GPU training.
+    """
+
+    _verify_gsplat_reference_producer(profile, producer)
+    if not isinstance(dataset_root, Path) or not dataset_root.is_absolute():
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat complete reconstruction requires an absolute private dataset path"
+        )
+    staged = stage_verified_gsplat_static_appearance_dataset(
+        request, source, dataset_root=dataset_root
+    )
+    return run_gsplat_reference_training(
+        request=request,
+        source=source,
+        assessments=assessments,
+        staged=staged,
+        profile=profile,
+        features=features,
+        expected_environment=expected_environment,
+        source_root=source_root,
+        python_executable=python_executable,
+        output_root=output_root,
+        artifact_ref=artifact_ref,
+        producer=producer,
+        cuda_device_index=cuda_device_index,
+        timeout_seconds=timeout_seconds,
+        lpips_alexnet_weights=lpips_alexnet_weights,
+        lpips_alexnet_sha256=lpips_alexnet_sha256,
+        runtime_manifest_path=runtime_manifest_path,
+        approved_runtime_manifest_sha256=approved_runtime_manifest_sha256,
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class GsplatStaticAppearanceAdapter:
+    """One configured V2L18.2 specialist; no implicit runtime or GPU fallback.
+
+    The caller supplies the reviewed source, native COLMAP evidence, private
+    workspaces and the explicit optional CUDA environment. Every request goes
+    through the existing complete stage -> trainer -> canonical result path.
+    """
+
+    source: GsplatStaticAppearancePreflightSource
+    assessments: tuple[PhotometricCompatibilityAssessment, ...]
+    dataset_root: Path
+    profile: GsplatStaticAppearanceTrainingProfile
+    features: ColmapFeatureExtractionResult
+    expected_environment: ColmapEnvironmentIdentity
+    source_root: Path
+    python_executable: Path
+    output_root: Path
+    artifact_ref: ArtifactRef
+    producer: ArtifactProducerIdentity
+    cuda_device_index: int
+    timeout_seconds: int
+    lpips_alexnet_weights: Path
+    lpips_alexnet_sha256: str
+    runtime_manifest_path: Path | None = None
+    approved_runtime_manifest_sha256: str | None = None
+
+    def derive_candidate(
+        self, request: StaticAppearanceCandidateRequest
+    ) -> StaticAppearanceCandidateResult:
+        """Implement the existing solver-independent adapter boundary."""
+        return reconstruct_gsplat_static_appearance(
+            request=request,
+            source=self.source,
+            assessments=self.assessments,
+            dataset_root=self.dataset_root,
+            profile=self.profile,
+            features=self.features,
+            expected_environment=self.expected_environment,
+            source_root=self.source_root,
+            python_executable=self.python_executable,
+            output_root=self.output_root,
+            artifact_ref=self.artifact_ref,
+            producer=self.producer,
+            cuda_device_index=self.cuda_device_index,
+            timeout_seconds=self.timeout_seconds,
+            lpips_alexnet_weights=self.lpips_alexnet_weights,
+            lpips_alexnet_sha256=self.lpips_alexnet_sha256,
+            runtime_manifest_path=self.runtime_manifest_path,
+            approved_runtime_manifest_sha256=self.approved_runtime_manifest_sha256,
+        )
+
+
+def verify_gsplat_reference_trainer_config_fields(
+    source_root: Path,
+    profile: GsplatStaticAppearanceTrainingProfile,
+) -> tuple[str, ...]:
+    """Check actual pinned trainer Config fields without importing or running it.
+
+    This is a source-schema gate, not an ABI, CUDA or training execution check.
+    It prevents a future external runner from silently dropping a misspelled
+    WRE override when constructing the exact reference trainer's Config.
+    """
+
+    if not isinstance(source_root, Path):
+        raise TypeError("gsplat trainer source_root must be pathlib.Path")
+    if not isinstance(profile, GsplatStaticAppearanceTrainingProfile):
+        raise TypeError("gsplat training profile must be GsplatStaticAppearanceTrainingProfile")
+    verify_gsplat_static_appearance_reference_sources(source_root)
+    source_file = (
+        _safe_root(source_root, "gsplat trainer source_root") / "examples/simple_trainer.py"
+    )
+    try:
+        payload = source_file.read_bytes()
+    except OSError as exc:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat trainer source disappeared during Config schema verification"
+        ) from exc
+    trainer_pins = [
+        (size, blob)
+        for path, size, blob in _GSPLAT_REFERENCE_SOURCE_FILES
+        if path == "examples/simple_trainer.py"
+    ]
+    if len(trainer_pins) != 1:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat trainer source registry must contain exactly one pinned Config source"
+        )
+    pinned_size, pinned_blob = trainer_pins[0]
+    if len(payload) != pinned_size or _git_blob_sha1(payload) != pinned_blob:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat trainer source changed before Config schema verification"
+        )
+    try:
+        parsed = ast.parse(payload, filename="examples/simple_trainer.py")
+    except (SyntaxError, ValueError) as exc:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat trainer has an invalid Config source"
+        ) from exc
+    configs = [
+        node for node in parsed.body if isinstance(node, ast.ClassDef) and node.name == "Config"
+    ]
+    if len(configs) != 1 or not any(
+        isinstance(dec, ast.Name) and dec.id == "dataclass" for dec in configs[0].decorator_list
+    ):
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat trainer does not declare the expected dataclass Config"
+        )
+    # An exact source pin is not an installed environment: also check the
+    # trainer's declared direct integration edges before a future repin.
+    required_imports = {
+        "datasets.colmap": {"Parser", "Dataset"},
+        "fused_ssim": {"fused_ssim"},
+        "gsplat": {"export_splats"},
+        "gsplat.rendering": {"rasterization"},
+        "gsplat_viewer": {"GsplatViewer"},
+        "nerfview": {"CameraState"},
+    }
+    imported: dict[str, set[str]] = {}
+    for node in parsed.body:
+        if isinstance(node, ast.ImportFrom) and node.level == 0 and node.module is not None:
+            imported.setdefault(node.module, set()).update(alias.name for alias in node.names)
+    if any(
+        not required <= imported.get(module, set()) for module, required in required_imports.items()
+    ):
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat trainer is missing reviewed direct integration imports"
+        )
+    if not any(
+        isinstance(node, ast.Import) and any(alias.name == "torch" for alias in node.names)
+        for node in parsed.body
+    ):
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat trainer is missing the reviewed PyTorch import"
+        )
+
+    fields = {
+        node.target.id
+        for node in configs[0].body
+        if isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name)
+    }
+    overrides = set(profile.reference_overrides())
+    if not overrides <= fields:
+        raise GsplatStaticAppearancePreflightError(
+            "gsplat trainer Config lacks reviewed WRE override fields"
+        )
+    return tuple(sorted(overrides))
+
+
 _MAX_GSPLAT_PLY_HEADER_BYTES = 16 * 1024
 _MAX_GSPLAT_PLY_PROPERTIES = 256
 _MAX_GSPLAT_PLY_VERTICES = 100_000_000
@@ -1890,28 +2640,7 @@ def assemble_verified_gsplat_static_appearance_result(
         raise TypeError("gsplat result request must be StaticAppearanceCandidateRequest")
     if not isinstance(profile, GsplatStaticAppearanceTrainingProfile):
         raise TypeError("gsplat result profile must be GsplatStaticAppearanceTrainingProfile")
-    if not isinstance(producer, ArtifactProducerIdentity):
-        raise TypeError("gsplat result producer must be ArtifactProducerIdentity")
-    if producer.configuration.sha256 != profile.configuration_sha256:
-        raise GsplatStaticAppearancePreflightError(
-            "gsplat output producer configuration differs from the reviewed training profile"
-        )
-    if (
-        producer.producer.implementation != "gsplat.examples.simple_trainer"
-        or producer.producer.version != "1.5.3"
-        or (
-            producer.producer.revision is not None
-            and producer.producer.revision != GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION
-        )
-        or producer.model is None
-        or producer.model.name != "gsplat"
-        or producer.model.version != "1.5.3"
-        or producer.model.revision != GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION
-        or producer.checkpoint is not None
-    ):
-        raise GsplatStaticAppearancePreflightError(
-            "gsplat output producer does not identify the exact checkpoint-free reference trainer"
-        )
+    _verify_gsplat_reference_producer(profile, producer)
     if request.output_representation.value != GSPLAT_STATIC_APPEARANCE_REPRESENTATION:
         raise GsplatStaticAppearancePreflightError(
             "gsplat output representation differs from the reviewed PLY payload"
@@ -1953,6 +2682,7 @@ __all__ = [
     "GSPLAT_STATIC_APPEARANCE_SOURCE_REVISION",
     "GSPLAT_STATIC_APPEARANCE_SOURCE_TREE",
     "GSPLAT_STATIC_APPEARANCE_TRAINER_GIT_BLOB",
+    "GsplatStaticAppearanceAdapter",
     "GsplatStaticAppearancePreflightError",
     "GsplatStaticAppearancePreflightEvidence",
     "GsplatStaticAppearancePreflightSource",
@@ -1965,6 +2695,8 @@ __all__ = [
     "inspect_gsplat_static_appearance_shared_track_pixels",
     "materialize_verified_gsplat_ply",
     "preflight_gsplat_static_appearance_inputs",
+    "reconstruct_gsplat_static_appearance",
+    "run_gsplat_reference_training",
     "stage_verified_gsplat_static_appearance_dataset",
     "verify_gsplat_reference_pycolmap_sources",
     "verify_gsplat_static_appearance_matching_capture_metadata",

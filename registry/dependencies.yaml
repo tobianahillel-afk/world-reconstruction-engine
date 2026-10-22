@@ -946,6 +946,112 @@ dependencies:
     reference_pycolmap_crossread_points3d: 477
     reference_entrypoint_file_count: 10
     reference_entrypoint_verification: local_exact_git_blob_preflight_only
+    # V2L18.3 experimental non-default CPU-qualified Python 3.11 identity overlay.
+    # Built from 76 old names, 55 unchanged artifact identities and these 21
+    # exact altered wheels; NOT a reviewed redistribution or trained GPU runtime.
+    # Origin GitHub Actions artifact 12379162173, manifest SHA-256
+    # fb5affbcc826476d73bdf3aeb229244f7627bc2bf5b27544aa1c64348dd03bb5.
+    runtime_python_311_candidate:
+      status: experimental_non_default_not_approved
+      evidence_kind: pinned_wheel_identity_overlay_not_released_runtime
+      base_lock_key: runtime_python_lock
+      target_python: "3.11.14"
+      target_cuda: "12.4"
+      package_count: 76
+      changed_wheel_count: 21
+      source_manifest_sha256: "fb5affbcc826476d73bdf3aeb229244f7627bc2bf5b27544aa1c64348dd03bb5"
+      source_artifact_id: 12379162173
+      native_cpu_run_id: 39673163691
+      license_review: pending
+      native_receipt_approval: pending
+      checkpoint_approval: pending
+      gpu_execution_evidence: false
+      runtime_approved: false
+      wheel_overrides:
+        - name: "charset-normalizer"
+          version: "3.5.2"
+          sha256: "211d5a3eb6af8f513b8d4ca19a8c1b7accab1b5f0d3175f9826b03c1a920dc1f"
+          url: "https://files.pythonhosted.org/packages/e4/ed/cf505d3011ffceb12c2067a7a5d3cfe92b875d4d44bb0ff0d69375e2c184/charset_normalizer-3.5.2-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl"
+        - name: "contourpy"
+          version: "1.3.3"
+          sha256: "51e79c1f7470158e838808d4a996fa9bac72c498e93d8ebe5119bc1e6becb0db"
+          url: "https://files.pythonhosted.org/packages/5f/4b/6157f24ca425b89fe2eb7e7be642375711ab671135be21e6faa100f7448c/contourpy-1.3.3-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl"
+        - name: "filelock"
+          version: "4.2.4"
+          sha256: "301241438c57936ef93f4243a94f2559022268bfcf9b375a9a72eb0f8db8358e"
+          url: "https://files.pythonhosted.org/packages/e0/1b/5e74289a1878e666bb4b65fe5805a04cafcac2aa5f519ef1ead67ef91c56/filelock-4.2.4-py3-none-any.whl"
+        - name: "fonttools"
+          version: "4.67.0"
+          sha256: "59f44309ce78851c9621ee88e3f667ca3fbcc89dc0e8641336be3f12ba06bfd4"
+          url: "https://files.pythonhosted.org/packages/b3/74/6117d6bec5736133fffd5cc4500426ddd43c761df9b380c796cd2268c069/fonttools-4.67.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl"
+        - name: "grpcio"
+          version: "1.84.0"
+          sha256: "bd8ea8eb3817b226057cc1c0e7ec4b378dcda52043b972b6ff12b1152178967d"
+          url: "https://files.pythonhosted.org/packages/e2/b7/14a9413cb7d4b2e782b4f79c81a918610caedf55138ab5916f5fdd4b002f/grpcio-1.84.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl"
+        - name: "kiwisolver"
+          version: "1.5.1"
+          sha256: "95a02752aa032eef4aed01cda6d9b687c669bd0396bf4519eef8bba22a286720"
+          url: "https://files.pythonhosted.org/packages/89/00/05c2d0369ac322d22d5c05f84b5c4a6856fa6207fbae42869108a28f0383/kiwisolver-1.5.1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl"
+        - name: "Markdown"
+          version: "3.11.2"
+          sha256: "f80390747a2a0ff2ba54da074ce4f862f72a6685f608cd2637b646a6d83993f5"
+          url: "https://files.pythonhosted.org/packages/fe/66/bcab3b677b71ad286b4e607e3427499537c76e13ad2e22584ba7a7d9882c/markdown-3.11.2-py3-none-any.whl"
+        - name: "MarkupSafe"
+          version: "3.0.4"
+          sha256: "6da83a088f8ef93b2d483a8232a4dbf4d69d3d8496b568a03c56becac43e1808"
+          url: "https://files.pythonhosted.org/packages/81/a5/a513b76c139a3915b43404324e55c0b7979ae4f0d39eb6f075b0282e90a8/markupsafe-3.0.4-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl"
+        - name: "matplotlib"
+          version: "3.10.9"
+          sha256: "8e436d155fa8a3399dc62683f8f5d0e2e50d25d0144a73edd73f82eec8f4abfb"
+          url: "https://files.pythonhosted.org/packages/79/db/e28c1b83e3680740aa78925f5fb2ae4d16207207419ad75ea9fe604f8676/matplotlib-3.10.9-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl"
+        - name: "msgspec"
+          version: "0.22.0"
+          sha256: "a6db3806b3b76ca78064255eac6fa101a8a64fe6f698d80fbaf81fdfa21217d4"
+          url: "https://files.pythonhosted.org/packages/7b/e6/16ddb09185d79dc00177994cf0bdb1cd8e5cc44a1d1bfba61bdda5f382cb/msgspec-0.22.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl"
+        - name: "networkx"
+          version: "3.6.1"
+          sha256: "d47fbf302e7d9cbbb9e2555a0d267983d2aa476bac30e90dfbe5669bd57f3762"
+          url: "https://files.pythonhosted.org/packages/9e/c9/b2622292ea83fbb4ec318f5b9ab867d0a28ab43c5717bb85b0a5f6b3b0a4/networkx-3.6.1-py3-none-any.whl"
+        - name: "numpy"
+          version: "1.26.4"
+          sha256: "666dbfb6ec68962c033a450943ded891bed2d54e6755e35e5835d63f4f6931d5"
+          url: "https://files.pythonhosted.org/packages/3a/d0/edc009c27b406c4f9cbc79274d6e46d634d139075492ad055e3d68445925/numpy-1.26.4-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
+        - name: "pillow"
+          version: "13.0.0"
+          sha256: "a625df9a2a5597fa5e5266e01aefc82604bb85d291e3547981e863560d75da6c"
+          url: "https://files.pythonhosted.org/packages/36/46/f509b74787f40ce0627501089d630b2c741b63b244c1f40b640b3b01e181/pillow-13.0.0-cp311-cp311-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl"
+        - name: "PyYAML"
+          version: "6.0.3"
+          sha256: "b8bb0864c5a28024fac8a632c443c87c5aa6f215c0b126c449ae1a150412f31d"
+          url: "https://files.pythonhosted.org/packages/71/60/917329f640924b18ff085ab889a11c763e0b573da888e8404ff486657602/pyyaml-6.0.3-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl"
+        - name: "scikit-learn"
+          version: "1.7.2"
+          sha256: "89877e19a80c7b11a2891a27c21c4894fb18e2c2e077815bcade10d34287b20d"
+          url: "https://files.pythonhosted.org/packages/ef/0e/97dbca66347b8cf0ea8b529e6bb9367e337ba2e8be0ef5c1a545232abfde/scikit_learn-1.7.2-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl"
+        - name: "scipy"
+          version: "1.15.3"
+          sha256: "39cb9c62e471b1bb3750066ecc3a3f3052b37751c7c3dfd0fd7e48900ed52982"
+          url: "https://files.pythonhosted.org/packages/bd/37/89f19c8c05505d0601ed5650156e50eb881ae3918786c8fd7262b4ee66d3/scipy-1.15.3-cp311-cp311-manylinux_2_17_x86_64.manylinux2014_x86_64.whl"
+        - name: "torch"
+          version: "2.4.0+cu124"
+          sha256: "81397ff1c84a3f2c666d2627144ecac268665325726267e092a80113385ad3e8"
+          url: "https://download-r2.pytorch.org/whl/cu124/torch-2.4.0%2Bcu124-cp311-cp311-linux_x86_64.whl"
+        - name: "torchvision"
+          version: "0.19.0+cu124"
+          sha256: "3a877d3eb44f0e89e3442d5242e7e49a9755e709eee327b4629af0078a479023"
+          url: "https://download-r2.pytorch.org/whl/cu124/torchvision-0.19.0%2Bcu124-cp311-cp311-linux_x86_64.whl"
+        - name: "triton"
+          version: "3.0.0"
+          sha256: "5ce8520437c602fb633f1324cc3871c47bee3b67acf9756c1a66309b60e3216c"
+          url: "https://download-r2.pytorch.org/whl/triton-3.0.0-1-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl"
+        - name: "websockets"
+          version: "16.1.1"
+          sha256: "da4ca1a9d72f9030b3146b8d7022719a9f3d478f61efe6f7dd51d243f61c51b2"
+          url: "https://files.pythonhosted.org/packages/33/d9/162321f63c7eed558e9e1798ed7a1e34a4f6dab51f35419e4ed7a4907979/websockets-16.1.1-cp311-cp311-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl"
+        - name: "zstandard"
+          version: "0.25.0"
+          sha256: "9300d02ea7c6506f00e627e287e0492a5eb0371ec1670ae852fefffa6164b072"
+          url: "https://files.pythonhosted.org/packages/bb/1f/e9cfd801a3f9190bf3e759c422bbfd2247db9d7f3d54a56ecde70137791a/zstandard-0.25.0-cp311-cp311-manylinux2014_x86_64.manylinux_2_17_x86_64.whl"
     runtime_python_lock:
         evidence_kind: "pip_dependency_resolution_only"
         gpu_execution_evidence: false
@@ -968,7 +1074,7 @@ dependencies:
             url: "https://files.pythonhosted.org/packages/b3/7d/01e62f59e4166af1be6238d9f2b7f3453630c51b8044b412d05b5606532a/absl_py-2.5.1-py3-none-any.whl"
             version: "2.5.1"
           - direct: false
-            filename: "certifi-2026.7.22-py3-none-any.whl"
+            filename: "certifi-2026.10.19-py3-none-any.whl"
             legacy_license: "MPL-2.0"
             legacy_license_byte_length: 7
             legacy_license_sha256: "09962c1dc23fac80a0e5a88b2eb7051b74a6443a568ca2a045a4ec2fb82aeee5"
@@ -979,10 +1085,10 @@ dependencies:
             requested: false
             requires_dist: []
             requires_python: ">=3.7"
-            sha256: "62f22742b58a1a33014a2b6b706588a8d7e2a88ae7bd1a6ebe8c992928483775"
+            sha256: "42d35340cc5b9ba78e818ddbff0c5b1c2b779de448a340fd1b989f5fa8670e1b"
             sha256_source: "pip_report"
-            url: "https://files.pythonhosted.org/packages/0b/a7/71ac2cff56fec219ed242bb11b8efb69fcc4bec75db06fb7bfe35de520e6/certifi-2026.7.22-py3-none-any.whl"
-            version: "2026.7.22"
+            url: "https://files.pythonhosted.org/packages/c4/51/29046e48f693c54e5b7412216d447a1d8362c9653148d98c02cdf65fa733/certifi-2026.10.19-py3-none-any.whl"
+            version: "2026.10.19"
           - direct: false
             filename: "charset_normalizer-3.5.2-cp310-cp310-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl"
             legacy_license: "MIT"

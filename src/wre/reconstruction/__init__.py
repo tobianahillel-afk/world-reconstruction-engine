@@ -360,7 +360,10 @@ from wre.reconstruction.open3d_surface import (
     inspect_open3d_surface_environment,
 )
 from wre.reconstruction.static_appearance_baseline import (
+    GsplatStaticAppearanceAdapter,
     assemble_verified_gsplat_static_appearance_result,
+    reconstruct_gsplat_static_appearance,
+    run_gsplat_reference_training,
     verify_gsplat_fused_ssim_reference_sources,
     verify_gsplat_nerfview_reference_sources,
 )
@@ -649,6 +652,7 @@ __all__ = [
     "GeometryRefinementResult",
     "GeometrySolutionCandidate",
     "GeometrySolutionPair",
+    "GsplatStaticAppearanceAdapter",
     "HybridSurfaceCandidateAdapter",
     "HybridSurfaceCandidateRequest",
     "HybridSurfaceCandidateResult",
@@ -713,6 +717,8 @@ __all__ = [
     "publish_colmap_pair_matches",
     "reconstruct_colmap_globally",
     "reconstruct_colmap_incrementally",
+    "reconstruct_gsplat_static_appearance",
+    "run_gsplat_reference_training",
     "verify_colmap_geometry",
     "verify_gsplat_fused_ssim_reference_sources",
     "verify_gsplat_nerfview_reference_sources",

@@ -327,6 +327,32 @@ entries:
     failure_signals: []
     metric_names: []
     resume_mode: unsupported
+  - adapter_id: gsplat.static_appearance_reference
+    capability:
+      name: appearance.static.experimental_reference
+      input_kinds: [geometry.solution, image.observation]
+      output_kinds: [appearance.model]
+    producer:
+      implementation: gsplat.examples.simple_trainer
+      version: 1.5.3
+      revision: 937e29912570c372bed6747a5c9bf85fed877bae
+    dependency_refs: [gsplat_static_appearance]
+    model:
+      name: gsplat
+      version: 1.5.3
+      revision: 937e29912570c372bed6747a5c9bf85fed877bae
+    checkpoint: null
+    artifact_key_hardware_policy: required
+    license:
+      direct: Apache-2.0
+      review: pending
+      transitive_notes: "gsplat's Apache-2.0 source is pinned; fused-ssim, nerfview, legacy SceneManager, the CUDA/Torch native closure and optional LPIPS/AlexNet weights retain separate license and redistribution checks."
+      redistribution_notes: "WRE executes the reviewed upstream trainer only in a caller-provided isolated external environment; no source, model or pretrained LPIPS weights are bundled or downloaded by this experimental adapter."
+    shipping_status: experimental
+    reproducibility_notes: "V2L18.3 binds exact source GeometrySolutionCandidate, V2L17 photometric evidence and staged PNG/native COLMAP inputs to an explicit single-GPU gsplat v1.5.3 reference trainer profile. The opt-in process produces an audited PLY, canonical AppearanceModel and SHA-256 ArtifactMaterializationMetadata. CPU mocks and real native CPU-hosted compilation/import do not prove CUDA kernel execution, trained appearance or quality; supported-GPU training remains DEFERRED/UNVERIFIED. This is non-default."
+    failure_signals: [dependency_unavailable, environment_incompatible, source_identity_mismatch]
+    metric_names: []
+    resume_mode: unsupported
   - adapter_id: open3d.depth_tsdf_surface
     capability:
       name: geometry.surface.depth_fusion

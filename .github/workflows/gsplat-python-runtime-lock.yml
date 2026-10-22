@@ -21,12 +21,29 @@ concurrency:
 
 jobs:
   resolve:
-    name: linux-x86_64-py310-torch24-cu124-resolution-only
+    name: linux-x86_64-${{ matrix.flavor }}-torch24-cu124-resolution-only
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The original exact lock verification remains mandatory.
+          - flavor: py310-pillow12-committed
+            target_python: "3.10.21"
+            pillow_version: "12.3.0"
+            committed_lock: true
+            artifact_name: v2l18-3-gsplat-python-runtime-lock
+          # Exploratory candidate; NO approved runtime or GPU claim.
+          - flavor: py311-pillow13-probe
+            target_python: "3.11.14"
+            pillow_version: "13.0.0"
+            committed_lock: false
+            artifact_name: v2l18-3-gsplat-python311-pillow13-probe
+    timeout-minutes: 55
     env:
       LOCK_KEY: runtime_python_lock
-      TARGET_PYTHON_REQUEST: "3.10.21"
+      TARGET_PYTHON_REQUEST: ${{ matrix.target_python }}
+      PILLOW_VERSION: ${{ matrix.pillow_version }}
       PIP_VERSION: "25.3"
       PYTORCH_INDEX: https://download.pytorch.org/whl/cu124
 
@@ -40,7 +57,7 @@ jobs:
         uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
         with:
           version: "0.12.13"
-          python-version: "3.10.21"
+          python-version: ${{ matrix.target_python }}
           enable-cache: false
 
       - name: Prepare exact pip resolver
@@ -57,6 +74,7 @@ jobs:
           ldd --version | head -n 1
 
       - name: Build optional exact constraints from reviewed registry lock
+        if: matrix.committed_lock
         shell: bash
         run: |
           set -euo pipefail
@@ -121,7 +139,7 @@ jobs:
             "numpy==1.26.4"
             "scipy==1.15.3"
             "opencv-python==4.11.0.86"
-            "Pillow==12.3.0"
+            "Pillow==$PILLOW_VERSION"
             "imageio==2.38.0"
             "scikit-learn==1.7.2"
             "tqdm==4.70.1"
@@ -139,6 +157,10 @@ jobs:
             "setuptools==84.0.0"
             "wheel==0.48.0"
           )
+          if test "$TARGET_PYTHON_REQUEST" = "3.11.14"; then
+            test ! -s "$constraints"
+            printf "python-dateutil==2.9.0.post0\\n" > "$constraints"
+          fi
           if test -s "$constraints"; then
             args+=(--constraint "$constraints")
           fi
@@ -346,6 +368,7 @@ jobs:
           PY
 
       - name: Verify committed registry lock or expose bootstrap result
+        if: matrix.committed_lock
         shell: bash
         run: |
           set -euo pipefail
@@ -389,10 +412,1542 @@ jobs:
           fi
           echo "Committed gsplat Python runtime lock matches exact regeneration."
 
+
+      - name: Verify exact Python 3.11 candidate wheels against durable registry overlay
+        if: matrix.flavor == 'py311-pillow13-probe'
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run --no-project --with "pyyaml==6.0.2" python - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          import yaml
+
+          entry = yaml.safe_load(
+              Path("registry/dependencies.yaml").read_text(encoding="utf-8")
+          )["dependencies"]["gsplat_static_appearance"]
+          candidate = entry["runtime_python_311_candidate"]
+          old = entry[candidate["base_lock_key"]]["packages"]
+          got = json.loads(
+              (Path(os.environ["RUNNER_TEMP"]) / "gsplat-python-runtime-lock.json").read_text()
+          )
+          if (
+              candidate["status"] != "experimental_non_default_not_approved"
+              or candidate["evidence_kind"] != "pinned_wheel_identity_overlay_not_released_runtime"
+              or candidate["target_python"] != got["target"]["python"]
+          ):
+              raise SystemExit("invalid experimental candidate")
+          if candidate["target_python"] != "3.11.14":
+              raise SystemExit("unexpected candidate interpreter")
+          if candidate["target_cuda"] != got["target"]["torch_cuda"] != "12.4":
+              raise SystemExit("unexpected candidate CUDA ABI")
+          if len(old) != 76 or len(got["packages"]) != 76 or len(candidate["wheel_overrides"]) != 21:
+              raise SystemExit("wrong number of exact pinned wheels")
+          if candidate["gpu_execution_evidence"] is not False or candidate["runtime_approved"] is not False:
+              raise SystemExit("candidate authority must remain unapproved")
+          if candidate["license_review"] != "pending":
+              raise SystemExit("license approval must not be auto-attested")
+          def canonical(value):
+              return re.sub(r"[-_.]+", "-", value).lower()
+          def identities(packs):
+              out = {}
+              for package in packs:
+                  key = canonical(package["name"])
+                  if key in out or not re.fullmatch(r"[a-f0-9]{64}", package["sha256"]):
+                      raise SystemExit("duplicate/missing SHA-256")
+                  out[key] = tuple(package[k] for k in ("version", "url", "sha256"))
+              return out
+          expected = identities(old)
+          delta = identities(candidate["wheel_overrides"])
+          if not set(delta).issubset(expected):
+              raise SystemExit("overlay introduced a new dependency")
+          if any(expected[k] == v for k, v in delta.items()):
+              raise SystemExit("redundant/malformed candidate wheel override")
+          expected.update(delta)
+          actual = identities(got["packages"])
+          if actual != expected:
+              mismatch = sorted(k for k in expected if expected.get(k) != actual.get(k))
+              raise SystemExit(f"candidate 76-wheel artifact drift: {mismatch}")
+          print("Registry pinned 76/76 Python 3.11 wheel names/versions/URLs/SHA-256")
+          print("This is not native/GPU execution, license review or approved runtime")
+          PY
+
+      - name: Validate Python 3.11 + Pillow 13 candidate identity (resolution ONLY)
+        if: matrix.flavor == 'py311-pillow13-probe'
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RESOLVER_PYTHON" - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          report = json.loads(
+              (Path(os.environ["RUNNER_TEMP"]) / "gsplat-python-runtime-lock.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          if report["evidence_kind"] != "pip_dependency_resolution_only":
+              raise SystemExit("probe cannot claim training or native execution")
+          if report["target"]["python"] != "3.11.14":
+              raise SystemExit("probe resolved wrong Python runtime")
+          if any(report[key] is not False for key in (
+              "runtime_execution_evidence",
+              "gpu_execution_evidence",
+              "native_extension_build_evidence",
+          )):
+              raise SystemExit("probe must remain resolution-only")
+          packages = {item["name"].lower().replace("_", "-"): item
+                      for item in report["packages"]}
+          expected = {"pillow": "13.0.0", "torch": "2.4.0+cu124",
+                      "torchvision": "0.19.0+cu124", "numpy": "1.26.4"}
+          for name, version in expected.items():
+              if packages.get(name, {}).get("version") != version:
+                  raise SystemExit(f"probe has incompatible {name} version")
+          print(f"CPU-only Python 3.11 Pillow 13 candidate resolved "
+                f"{len(packages)} immutable wheels; not an approved runtime")
+          PY
+
       - name: Retain machine-readable resolver evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: v2l18-3-gsplat-python-runtime-lock
+          name: ${{ matrix.artifact_name }}
           path: ${{ runner.temp }}/gsplat-python-runtime-lock.json
           if-no-files-found: error
+          retention-days: 30
+
+      # This is a real CPython/Pillow CPU import and image round-trip check.
+      # It is NOT a gsplat/CUDA/native-extension or full 76-wheel execution.
+      - name: Exercise SHA-pinned Pillow 13 real CPU PNG decode
+        if: matrix.flavor == 'py311-pillow13-probe'
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RESOLVER_PYTHON" - <<'PY'
+          import json
+          import os
+          import re
+          import subprocess
+          from pathlib import Path
+          from urllib.parse import urlsplit
+
+          lock = json.loads(
+              (Path(os.environ["RUNNER_TEMP"]) / "gsplat-python-runtime-lock.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          pillow = next((p for p in lock["packages"] if p["name"].lower() == "pillow"), None)
+          if pillow is None or pillow["version"] != "13.0.0":
+              raise SystemExit("missing exactly resolved Pillow 13.0.0")
+          url = pillow["url"]
+          digest = pillow["sha256"]
+          if (
+              urlsplit(url).scheme != "https"
+              or urlsplit(url).hostname != "files.pythonhosted.org"
+              or not re.fullmatch(r"[0-9a-f]{64}", digest)
+          ):
+              raise SystemExit("unverified or untrusted Pillow wheel identity")
+          subprocess.run(
+              [os.sys.executable, "-m", "pip", "install", "--disable-pip-version-check",
+               "--no-deps", "--no-index", f"{url}#sha256={digest}"],
+              check=True,
+          )
+          PY
+          "$RESOLVER_PYTHON" - <<'PY'
+          import io
+          import struct
+          import zlib
+
+          from PIL import Image, ImageFile, __version__
+
+          if __version__ != "13.0.0" or ImageFile.LOAD_TRUNCATED_IMAGES:
+              raise SystemExit("unexpected Pillow version or unsafe truncated-image mode")
+
+          def chunk(tag: bytes, data: bytes) -> bytes:
+              return (
+                  struct.pack("!I", len(data)) + tag + data
+                  + struct.pack("!I", zlib.crc32(tag + data) & 0xffffffff)
+              )
+
+          # Independent 2x1 RGB8 PNG source, not generated with Pillow itself.
+          pixels = bytes((2, 4, 6, 10, 20, 30))
+          png = (
+              b"\x89PNG\r\n\x1a\n"
+              + chunk(b"IHDR", struct.pack("!IIBBBBB", 2, 1, 8, 2, 0, 0, 0))
+              + chunk(b"IDAT", zlib.compress(b"\x00" + pixels))
+              + chunk(b"IEND", b"")
+          )
+          with Image.open(io.BytesIO(png)) as decoded:
+              if decoded.format != "PNG" or decoded.mode != "RGB" or decoded.size != (2, 1):
+                  raise SystemExit("wrong PNG identity or RGB8 dimensions")
+              decoded.load()
+              if decoded.tobytes() != pixels:
+                  raise SystemExit("real Pillow 13 PNG decoded pixels incorrectly")
+          print("CPU Pillow 13.0.0: exact SHA-pinned wheel imported; real PNG decoded to exact RGB8 bytes")
+          PY
+
+      # Scan the *candidate* 76 package versions. These names and versions
+      # come from the immutable resolver artifact, NOT the old Python3.10 lock.
+      # Security findings or scanner unavailability are mandatory failures.
+      - name: Audit Python 3.11 wheel advisories and separately verify skipped CUDA versions
+        if: always() && matrix.flavor == 'py311-pillow13-probe'
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RESOLVER_PYTHON" - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          lock = json.loads(
+              (Path(os.environ["RUNNER_TEMP"]) / "gsplat-python-runtime-lock.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          if lock["target"]["python"] != "3.11.14":
+              raise SystemExit("refusing scan of unexpected Python environment")
+          packages = lock["packages"]
+          if len(packages) != 76:
+              raise SystemExit("candidate dependency count not 76")
+          seen = set()
+          versions = []
+          for package in packages:
+              name, version = package["name"], package["version"]
+              key = re.sub(r"[-_.]+", "-", name).lower()
+              if (
+                  not re.fullmatch(r"[A-Za-z0-9_.-]+", name)
+                  or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.+!-]*", version)
+                  or key in seen
+              ):
+                  raise SystemExit("duplicate or malformed candidate package identity")
+              seen.add(key)
+              versions.append(f"{name}=={version}")
+          Path(os.environ["RUNNER_TEMP"], "gsplat-py311-advisory-versions.txt").write_text(
+              "\n".join(sorted(versions, key=str.lower)) + "\n", encoding="utf-8"
+          )
+          PY
+          # A green pip-audit exit is NOT 76/76 coverage: the PyPI advisory
+          # service skips the CUDA-local torch/torchvision wheels (+cu124).
+          # Inspect its JSON, then independently query the corresponding
+          # upstream public PyPI release versions. This is advisory coverage
+          # for upstream versions only; CUDA wheel binaries, sources, weights,
+          # licenses and GitHub SBOM require their own independent reviews.
+          printf 'torch==2.4.0\ntorchvision==0.19.0\n' \
+            > "$RUNNER_TEMP/gsplat-py311-public-upstream-versions.txt"
+          set +e
+          uvx --python "$TARGET_PYTHON_REQUEST" --from "pip-audit==2.10.1" pip-audit \
+            --no-deps --disable-pip --vulnerability-service pypi --format json \
+            --requirement "$RUNNER_TEMP/gsplat-py311-advisory-versions.txt" \
+            --output "$GITHUB_WORKSPACE/wre-gsplat-py311-advisories.json"
+          exact_rc=$?
+          uvx --python "$TARGET_PYTHON_REQUEST" --from "pip-audit==2.10.1" pip-audit \
+            --no-deps --disable-pip --vulnerability-service pypi --format json \
+            --requirement "$RUNNER_TEMP/gsplat-py311-public-upstream-versions.txt" \
+            --output "$GITHUB_WORKSPACE/wre-gsplat-py311-public-upstream-advisories.json"
+          upstream_rc=$?
+          set -e
+          # Scanner/network/vulnerability failures must never be suppressed.
+          if test "$exact_rc" -ne 0 || test "$upstream_rc" -ne 0; then
+            echo "::error::One or more mandatory PyPI vulnerability audits failed."
+            exit 1
+          fi
+          "$RESOLVER_PYTHON" - <<'PY'
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          source = Path(os.environ["RUNNER_TEMP"], "gsplat-python-runtime-lock.json")
+          pinned = json.loads(source.read_text(encoding="utf-8"))
+          workspace = Path(os.environ["GITHUB_WORKSPACE"])
+          primary = json.loads(
+              (workspace / "wre-gsplat-py311-advisories.json").read_text(encoding="utf-8")
+          )
+          upstream = json.loads(
+              (workspace / "wre-gsplat-py311-public-upstream-advisories.json").read_text(
+                  encoding="utf-8"
+              )
+          )
+          canonical = lambda name: re.sub(r"[-_.]+", "-", name).lower()
+          wheel_names = {canonical(p["name"]): p["version"] for p in pinned["packages"]}
+          if len(wheel_names) != 76:
+              raise SystemExit("not exactly 76 distinct candidate wheels")
+          audited = {canonical(p["name"]): p for p in primary["dependencies"]}
+          if len(audited) != 76 or set(audited) != set(wheel_names):
+              raise SystemExit("PyPI advisory report is missing locked candidate identities")
+          skipped = {}
+          scanned = 0
+          for name, entry in audited.items():
+              if entry.get("skip_reason"):
+                  skipped[name] = str(entry["skip_reason"])
+                  continue
+              if entry.get("version") != wheel_names[name] or entry.get("vulns") is None:
+                  raise SystemExit(f"unverified advisory entry for {name}")
+              if entry["vulns"]:
+                  raise SystemExit(f"vulnerabilities detected in {name}")
+              scanned += 1
+          # Do not allow new/unknown packages to be silently skipped.
+          if (scanned != 74 or set(skipped) != {"torch", "torchvision"}
+              or wheel_names["torch"] != "2.4.0+cu124"
+              or wheel_names["torchvision"] != "0.19.0+cu124"):
+              raise SystemExit(f"unexpected unscanned CUDA/PyPI package set: {skipped}")
+          upstream_expected = {"torch": "2.4.0", "torchvision": "0.19.0"}
+          reviewed = {canonical(p["name"]): p for p in upstream["dependencies"]}
+          if len(reviewed) != 2 or set(reviewed) != set(upstream_expected):
+              raise SystemExit("normalized upstream advisory coverage is incomplete")
+          for name, version in upstream_expected.items():
+              entry = reviewed[name]
+              if (entry.get("version") != version or entry.get("skip_reason")
+                  or entry.get("vulns") is None or entry["vulns"]):
+                  raise SystemExit(f"upstream PyPI advisory coverage failed: {name}")
+          coverage = {
+              "evidence_kind": "pypi_advisory_coverage_not_binary_or_license_approval",
+              "candidate_locked_wheels": 76,
+              "exact_cuda_wheel_advisory_entries_audited": 74,
+              "cuda_local_version_entries_skipped": sorted(skipped),
+              "public_upstream_release_versions_audited": upstream_expected,
+              "pypi_advisory_vulnerabilities_in_audited_versions": 0,
+              "cuda_binary_native_closure_security_approved": False,
+              "third_party_license_review_approved": False,
+              "native_receipt_approved": False,
+              "checkpoint_license_approved": False,
+              "github_dependency_review_executed": False,
+              "gpu_training_executed": False,
+              "runtime_approved": False,
+          }
+          (workspace / "wre-gsplat-py311-advisory-coverage.json").write_text(
+              json.dumps(coverage, sort_keys=True, indent=2) + "\n", encoding="utf-8"
+          )
+          print("PyPI advice: 74 exact versions + 2 publicly indexed upstream")
+          print("CUDA binary/source advisories and license gates remain independently pending")
+          PY
+
+      - name: Retain Python 3.11 candidate vulnerability scan evidence
+        if: always() && matrix.flavor == 'py311-pillow13-probe'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v2l18-3-gsplat-py311-pillow13-advisories
+          path: |
+            wre-gsplat-py311-advisories.json
+            wre-gsplat-py311-public-upstream-advisories.json
+            wre-gsplat-py311-advisory-coverage.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      # A separate proof AFTER resolver/SCA. Never promotes this candidate
+      # into the committed Python 3.10 lock or approved native trust root.
+      - name: Install all 76 SHA-pinned Python 3.11 wheels and import CPU libraries
+        if: matrix.flavor == 'py311-pillow13-probe'
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RESOLVER_PYTHON" - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          from pathlib import Path
+          from urllib.parse import unquote, urlsplit
+
+          root = Path(os.environ["RUNNER_TEMP"])
+          manifest = root / "gsplat-python-runtime-lock.json"
+          data = manifest.read_bytes()
+          lock = json.loads(data)
+          if lock["evidence_kind"] != "pip_dependency_resolution_only":
+              raise SystemExit("expected immutable resolver evidence")
+          if lock["target"]["python"] != "3.11.14":
+              raise SystemExit("unexpected candidate interpreter")
+          if lock["target"]["torch_cuda"] != "12.4":
+              raise SystemExit("unexpected CUDA ABI target")
+          if any(lock[field] is not False for field in (
+              "gpu_execution_evidence",
+              "native_extension_build_evidence",
+              "runtime_execution_evidence",
+          )):
+              raise SystemExit("resolver incorrectly reports execution evidence")
+          packages = lock["packages"]
+          if len(packages) != 76:
+              raise SystemExit("expected exactly 76 resolved wheels")
+          seen = set()
+          entries = []
+          allowed_hosts = {
+              "files.pythonhosted.org",
+              "download.pytorch.org",
+              "download-r2.pytorch.org",
+              "pypi.nvidia.com",
+          }
+          for package in sorted(packages, key=lambda p: p["name"].lower()):
+              name, url, digest = package["name"], package["url"], package["sha256"]
+              canonical = re.sub(r"[-_.]+", "-", name).lower()
+              parts = urlsplit(url)
+              if (
+                  not re.fullmatch(r"[A-Za-z0-9_.-]+", name)
+                  or canonical in seen
+                  or parts.scheme != "https"
+                  or parts.hostname not in allowed_hosts
+                  or parts.username is not None or parts.password is not None
+                  or parts.query or parts.fragment
+                  or unquote(parts.path.rsplit("/", 1)[-1]) != package["filename"]
+                  or not package["filename"].endswith(".whl")
+                  or not re.fullmatch(r"[a-f0-9]{64}", digest)
+              ):
+                  raise SystemExit("non-canonical or unexpected candidate wheel")
+              seen.add(canonical)
+              entries.append(f"{name} @ {url}#sha256={digest}")
+          (root / "gsplat-py311-candidate-76-wheels.txt").write_text(
+              "\n".join(entries) + "\n", encoding="utf-8"
+          )
+          (root / "gsplat-py311-candidate-manifest.sha256").write_text(
+              hashlib.sha256(data).hexdigest() + "\n", encoding="ascii"
+          )
+          print("Prepared 76 HTTPS artifact identities with individually checked hashes")
+          PY
+          "$RESOLVER_PYTHON" -m pip install --no-index --no-deps --no-cache-dir \
+            --require-hashes -r "$RUNNER_TEMP/gsplat-py311-candidate-76-wheels.txt"
+          "$RESOLVER_PYTHON" -m pip check
+          "$RESOLVER_PYTHON" - <<'PY'
+          import hashlib
+          import importlib.metadata as metadata
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          manifest = Path(os.environ["RUNNER_TEMP"], "gsplat-python-runtime-lock.json")
+          data = manifest.read_bytes()
+          lock = json.loads(data)
+          if not sys.version.startswith("3.11.14"):
+              raise SystemExit("wrong executable for Python 3.11 wheel test")
+          actual = {}
+          for package in lock["packages"]:
+              name, expected = package["name"], package["version"]
+              version = metadata.version(name)
+              if version != expected:
+                  raise SystemExit(f"installed {name}: {version} != {expected}")
+              actual[name] = version
+
+          import numpy
+          import scipy
+          import cv2
+          import imageio
+          from PIL import __version__ as pillow_version
+          import torch
+          import torchvision
+
+          if (pillow_version, numpy.__version__, torch.__version__, torchvision.__version__) != (
+              "13.0.0", "1.26.4", "2.4.0+cu124", "0.19.0+cu124"
+          ):
+              raise SystemExit("CPU Python 3.11 Python/Torch/image ABI mismatch")
+          if torch.version.cuda != "12.4" or torch.cuda.is_available():
+              raise SystemExit("wrong Torch CUDA build or unexpected GPU availability")
+          if (torch.tensor([2.0, 4.0]) * 3).tolist() != [6.0, 12.0]:
+              raise SystemExit("real CPU PyTorch tensor operation failed")
+          evidence = {
+              "evidence_kind": "experimental_python311_pillow13_installed_wheels_cpu_import",
+              "manifest_sha256": hashlib.sha256(data).hexdigest(),
+              "python_version": sys.version.split()[0],
+              "wheel_count": len(actual),
+              "installed_versions_match_exact_manifest": True,
+              "pillow": pillow_version,
+              "numpy": numpy.__version__,
+              "scipy": scipy.__version__,
+              "opencv": cv2.__version__,
+              "imageio": imageio.__version__,
+              "torch": torch.__version__,
+              "torchvision": torchvision.__version__,
+              "torch_compiled_cuda": torch.version.cuda,
+              "cpu_tensor_operation_passed": True,
+              "gpu_execution_evidence": False,
+              "native_extension_build_evidence": False,
+              "gsplat_trainer_execution_evidence": False,
+              "checkpoint_approval": False,
+              "reviewed_redistribution_approval": False,
+          }
+          Path("gsplat-py311-cpu-import-evidence.json").write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          print("76/76 exact wheel versions installed, CPU Torch and image imports exercised")
+          print("This evidence is NOT native gsplat training, GPU execution or license approval")
+          PY
+
+      - name: Retain Python 3.11 installed-wheel CPU import evidence
+        if: always() && matrix.flavor == 'py311-pillow13-probe'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v2l18-3-gsplat-py311-installed-wheel-cpu
+          path: gsplat-py311-cpu-import-evidence.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  # SECURITY REMEDIATION FEASIBILITY: a new PyTorch ABI lane, not a second
+  # appearance solver, approved production runtime or CUDA kernel execution.
+  # The authoritative upstream CUDA 12.6 pair is torch 2.14.0 / vision 0.29.0.
+  # This intentionally does NOT replace the approved/experimental 3.10/3.11
+  # closure, its mandatory fail-closed scans, or the existing WRE adapter.
+  modern-torch-cu126-cpu-feasibility:
+    name: experimental-py311-torch214-cu126-full-closure-security-cpu
+    runs-on: ubuntu-24.04
+    timeout-minutes: 55
+    permissions:
+      contents: read
+    env:
+      TARGET_PYTHON: "3.11.14"
+      TORCH_RELEASE: "2.14.0"
+      VISION_RELEASE: "0.29.0"
+      CUDA_RELEASE: "12.6"
+      PYTORCH_INDEX: https://download.pytorch.org/whl/cu126
+    steps:
+      - name: Checkout canonical V2L18.3 scope without credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install pinned uv and Python 3.11.14
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.13"
+          python-version: "3.11.14"
+          enable-cache: false
+
+      - name: Resolve patched-family Torch CUDA 12.6 and full WRE trainer wheel closure
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv venv --seed --python "$TARGET_PYTHON" "$RUNNER_TEMP/wre-torch214"
+          echo "CANDIDATE_PYTHON=$RUNNER_TEMP/wre-torch214/bin/python" >> "$GITHUB_ENV"
+          "$RUNNER_TEMP/wre-torch214/bin/python" -m pip install \
+            --disable-pip-version-check --no-deps "pip==25.3"
+          # Request PyPI's exact Jinja2 3.1.6 wheel rather than a
+          # secondary-index mirror with incomplete wheel identity metadata.
+          "$RUNNER_TEMP/wre-torch214/bin/python" -m pip install \
+            --dry-run --ignore-installed --only-binary=:all: \
+            --report "$RUNNER_TEMP/wre-torch214-pip-report.json" \
+            --extra-index-url "$PYTORCH_INDEX" \
+            "torch==2.14.0+cu126" "torchvision==0.29.0+cu126" \
+            "numpy==1.26.4" "scipy==1.15.3" "opencv-python==4.11.0.86" \
+            "Pillow==13.0.0" "imageio==2.38.0" "scikit-learn==1.7.2" \
+            "tqdm==4.70.1" "tyro==1.0.16" "viser==1.1.1" \
+            "splines==0.3.3" "PyYAML==6.0.3" "matplotlib==3.10.9" \
+            "python-dateutil==2.9.0.post0" \
+            "tensorboard==2.21.0" "torchmetrics[image]==1.9.0" \
+            "ninja==1.13.2" "jaxtyping==0.3.7" "rich==14.3.4" \
+            "typing-extensions==4.16.0" "setuptools==84.0.0" \
+            "wheel==0.48.0" \
+            "https://files.pythonhosted.org/packages/62/a1/3d680cbfd5f4b8f15abc1d571870c5fc3e594bb582bc3b64ea099db13e56/jinja2-3.1.6-py3-none-any.whl#sha256=85ece4451f492d0c13c5dd7c13a64681a86afae63a5f347908daf103ce6d2f67"
+
+      - name: Bind every candidate wheel to its source HTTPS URL and SHA-256
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$CANDIDATE_PYTHON" - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          from pathlib import Path
+          from urllib.parse import unquote, urlsplit
+
+          source = Path(os.environ["RUNNER_TEMP"], "wre-torch214-pip-report.json")
+          report = json.loads(source.read_text(encoding="utf-8"))
+          packages = {}
+          whitelist = {
+              "files.pythonhosted.org", "download.pytorch.org",
+              "download-r2.pytorch.org", "pypi.nvidia.com",
+          }
+          for item in report["install"]:
+              meta = item["metadata"]
+              name, version = meta["name"], meta["version"]
+              canonical = re.sub(r"[-_.]+", "-", name).lower()
+              url = item["download_info"]["url"]
+              parsed = urlsplit(url)
+              archive = item["download_info"].get("archive_info") or {}
+              digest = (archive.get("hashes") or {}).get("sha256")
+              if digest is None and str(archive.get("hash", "")).startswith("sha256="):
+                  digest = archive["hash"].removeprefix("sha256=")
+              filename = unquote(parsed.path.rsplit("/", 1)[-1])
+              if (canonical in packages
+                  or not re.fullmatch(r"[a-zA-Z0-9_.-]+", name)
+                  or not re.fullmatch(r"[0-9a-f]{64}", str(digest))
+                  or parsed.scheme != "https" or parsed.hostname not in whitelist
+                  or parsed.username or parsed.password or parsed.query or parsed.fragment
+                  or not filename.endswith(".whl")):
+                  raise SystemExit(f"unverified wheel identity: {name}=={version}")
+              if canonical in {"torch", "torchvision"} and not filename.startswith(
+                  name.lower() + "-"
+              ):
+                  raise SystemExit("PyTorch index returned an unexpected wheel")
+              packages[canonical] = {
+                  "name": name, "version": version, "url": url,
+                  "sha256": digest, "filename": filename,
+                  "license_metadata_present": bool(
+                      meta.get("license_expression") or meta.get("license")
+                      or any(str(x).startswith("License ::") for x in meta.get("classifier", []))
+                  ),
+              }
+          targets = {"torch": "2.14.0+cu126", "torchvision": "0.29.0+cu126",
+                     "pillow": "13.0.0", "numpy": "1.26.4"}
+          for name, version in targets.items():
+              if packages.get(name, {}).get("version") != version:
+                  raise SystemExit(f"CUDA 12.6 security candidate ABI mismatch: {name}")
+          if len(packages) < 65:
+              raise SystemExit("missing mandatory transitive wheels")
+          # Missing wheel metadata is NOT license approval. Keep the full
+          # candidate closure for fail-closed advisory scanning, then verify
+          # exact upstream publisher evidence BEFORE installing any wheels.
+          missing_license_metadata = sorted(
+              key for key, value in packages.items()
+              if not value["license_metadata_present"]
+          )
+          ordered = [packages[k] for k in sorted(packages)]
+          root = Path(os.environ["GITHUB_WORKSPACE"])
+          evidence = {
+              "evidence_kind": "unapproved_pytorch214_cuda126_wheel_resolution_only",
+              "selected_torch": "2.14.0+cu126",
+              "selected_torchvision": "0.29.0+cu126",
+              "selected_pillow": "13.0.0",
+              "python": "3.11.14",
+              "cuda_abi": "12.6",
+              "original_pip_report_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+              "packages": ordered,
+              "missing_wheel_license_metadata": missing_license_metadata,
+              "publisher_license_identity_verified": False,
+              "gpu_execution_evidence": False,
+              "native_gsplat_build_evidence": False,
+              "independent_license_approval": False,
+              "checkpoint_approval": False,
+              "runtime_approved": False,
+          }
+          (root / "wre-py311-torch214-candidate.json").write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + "\n"
+          )
+          # PyPI advisories do not understand '+cu126'; public versions are
+          # scanned separately, but a green result cannot attest CUDA binaries.
+          advisory = []
+          install = []
+          for p in ordered:
+              v = p["version"]
+              if p["name"].lower().replace("_", "-") in {"torch", "torchvision"}:
+                  v = v.split("+", 1)[0]
+              if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.+!-]*", v):
+                  raise SystemExit("unverifiable wheel version in proposed closure")
+              advisory.append(f'{p["name"]}=={v}')
+              install.append(f'{p["name"]} @ {p["url"]}#sha256={p["sha256"]}')
+          (root / "wre-py311-torch214-advisory-input.txt").write_text(
+              "\n".join(advisory) + "\n"
+          )
+          (root / "wre-py311-torch214-exact-wheels.txt").write_text(
+              "\n".join(install) + "\n"
+          )
+          print(f"Experimental modern CUDA 12.6 closure: {len(ordered)} exact wheels")
+          PY
+
+      - name: Fail-closed PyPI public-version advisory scan for entire candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          uvx --python "$TARGET_PYTHON" --from "pip-audit==2.10.1" pip-audit \
+            --no-deps --disable-pip --vulnerability-service pypi --format json \
+            --requirement "$GITHUB_WORKSPACE/wre-py311-torch214-advisory-input.txt" \
+            --output "$GITHUB_WORKSPACE/wre-py311-torch214-advisories.json"
+          "$CANDIDATE_PYTHON" - <<'PY'
+          import json
+          import re
+          from pathlib import Path
+
+          root = Path.cwd()
+          proposed = json.loads((root / "wre-py311-torch214-candidate.json").read_text())
+          scanned = json.loads((root / "wre-py311-torch214-advisories.json").read_text())
+          canonical = lambda s: re.sub(r"[-_.]+", "-", s).lower()
+          expected = {
+              canonical(x["name"]): x["version"].split("+", 1)[0]
+              for x in proposed["packages"]
+          }
+          got = {canonical(x["name"]): x for x in scanned["dependencies"]}
+          if len(got) != len(expected) or set(got) != set(expected):
+              raise SystemExit("public PyPI scan incomplete for proposed closure")
+          for name, obj in got.items():
+              if (obj.get("skip_reason") or obj.get("version") != expected[name]
+                  or obj.get("vulns") is None or obj["vulns"]):
+                  raise SystemExit(f"unverified or vulnerable public dependency: {name}")
+          print(f"{len(got)} public dependency versions scanned without reported advisories")
+          print("CUDA-local binary source/license vulnerabilities are NOT proven absent")
+          PY
+
+
+      - name: Verify exact NVIDIA CUDA toolkit publisher identity and preserve license review gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$CANDIDATE_PYTHON" - <<'PY'
+          import json
+          import urllib.request
+          from pathlib import Path
+          from urllib.parse import urlsplit
+
+          path = Path("wre-py311-torch214-candidate.json")
+          evidence = json.loads(path.read_text(encoding="utf-8"))
+          gaps = evidence["missing_wheel_license_metadata"]
+          # Only this exact NVIDIA wheel is eligible for supplementary
+          # official publisher identity evidence. Other missing licenses
+          # remain hard failures. This is NEVER redistribution approval.
+          if gaps != ["cuda-toolkit"]:
+              raise SystemExit(f"unreviewed wheel license-metadata gaps: {gaps}")
+          matches = [p for p in evidence["packages"]
+                     if p["name"].lower().replace("_", "-") == "cuda-toolkit"]
+          if len(matches) != 1:
+              raise SystemExit("missing or duplicate CUDA toolkit wheel")
+          toolkit = matches[0]
+          expected_sha = "79d8605baeb6c2f695761e0efb54bc62dbc3c9e32eb0742df7669c07befaa8f7"
+          expected_filename = "cuda_toolkit-12.6.3-py2.py3-none-any.whl"
+          if (
+              toolkit["version"] != "12.6.3"
+              or toolkit["filename"] != expected_filename
+              or toolkit["sha256"] != expected_sha
+              or toolkit["url"] != "https://pypi.nvidia.com/cuda-toolkit/" + expected_filename
+              or toolkit["license_metadata_present"]
+          ):
+              raise SystemExit("candidate NVIDIA CUDA toolkit artifact changed")
+          url = "https://pypi.org/pypi/cuda-toolkit/12.6.3/json"
+          request = urllib.request.Request(
+              url, headers={"Accept": "application/json",
+                            "User-Agent": "WRE-CUDA-Toolkit-12.6.3-Publisher-Evidence"},
+          )
+          with urllib.request.urlopen(request, timeout=30) as response:
+              if response.geturl() != url:
+                  raise SystemExit("official PyPI metadata redirect unexpected")
+              payload = response.read(2 * 1024 * 1024 + 1)
+          if len(payload) > 2 * 1024 * 1024:
+              raise SystemExit("publisher metadata exceeds safe bound")
+          published = json.loads(payload)
+          info = published["info"]
+          if (
+              info["name"].lower().replace("_", "-") != "cuda-toolkit"
+              or info["version"] != "12.6.3"
+          ):
+              raise SystemExit("official CUDA publisher identity differs")
+          releases = [
+              release for release in published["urls"]
+              if release["filename"] == expected_filename
+              and release["digests"]["sha256"] == expected_sha
+          ]
+          if len(releases) != 1:
+              raise SystemExit("PyPI cannot attest exact CUDA toolkit wheel bytes")
+          if urlsplit(toolkit["url"]).hostname != "pypi.nvidia.com":
+              raise SystemExit("candidate wheel is not sourced from NVIDIA index")
+          # PyPI validates the exact bytes; the NVIDIA index URL is kept
+          # separately. CUDA 12.6.3 SDK EULA requires independent human
+          # review of scope and distribution permissions, not inferred from
+          # an empty wheel metadata License field.
+          eula = "https://docs.nvidia.com/cuda/archive/12.6.3/eula/index.html"
+          publisher = {
+              "kind": "exact_vendor_wheel_identity_and_license_terms_reference_only",
+              "pypi_release_identity": url,
+              "nvidia_wheel_url": toolkit["url"],
+              "version": "12.6.3",
+              "filename": expected_filename,
+              "wheel_sha256": expected_sha,
+              "declared_pypi_author_not_owner_attestation": info.get("author") or None,
+              "declared_pypi_author_email_not_owner_attestation": info.get("author_email") or None,
+              "official_pypi_wheel_hash_verified": True,
+              "separately_verified_publisher_account_owner": False,
+              "license_terms_reference_for_independent_review": eula,
+              "package_wheel_license_metadata_missing": True,
+              "nvidia_eula_review_completed": False,
+              "license_redistribution_approved": False,
+              "native_sources_audited": False,
+          }
+          Path("wre-py311-torch214-publisher-license-evidence.json").write_text(
+              json.dumps(publisher, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          evidence["publisher_license_identity_verified"] = False
+          evidence["exact_upstream_wheel_release_identity_verified"] = True
+          if (
+              evidence["independent_license_approval"] is not False
+              or evidence["runtime_approved"] is not False
+              or evidence["checkpoint_approval"] is not False
+          ):
+              raise SystemExit("independent approval was not granted")
+          path.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
+          print("CUDA toolkit 12.6.3 exact wheel hash matched official PyPI release")
+          print("PyPI author fields are optional metadata, NOT authenticated owner or license")
+          print("Vendor EULA retained for independent review; redistribution is NOT approved")
+          PY
+
+      - name: Install all hash-pinned candidate wheels and test real CPU imports
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$CANDIDATE_PYTHON" -m pip install --no-index --no-deps --no-cache-dir \
+            --require-hashes -r "$GITHUB_WORKSPACE/wre-py311-torch214-exact-wheels.txt"
+          "$CANDIDATE_PYTHON" -m pip check
+          "$CANDIDATE_PYTHON" - <<'PY'
+          import importlib.metadata as md
+          import json
+          import os
+          import sys
+          from pathlib import Path
+
+          evidence = json.loads(Path("wre-py311-torch214-candidate.json").read_text())
+          if not sys.version.startswith("3.11.14"):
+              raise SystemExit("wrong candidate Python interpreter")
+          for package in evidence["packages"]:
+              if md.version(package["name"]) != package["version"]:
+                  raise SystemExit(f"installed version drift: {package['name']}")
+          import torch
+          import torchvision
+          import numpy
+          from PIL import __version__ as pillow_version
+          if (torch.__version__, torchvision.__version__, pillow_version) != (
+              "2.14.0+cu126", "0.29.0+cu126", "13.0.0"
+          ):
+              raise SystemExit("unexpected current PyTorch CPU import runtime")
+          if torch.version.cuda != "12.6" or torch.cuda.is_available():
+              raise SystemExit("CUDA ABI mismatch or unexpected accelerator access")
+          if (torch.tensor([2, 5], dtype=torch.float32) * 2).tolist() != [4.0, 10.0]:
+              raise SystemExit("PyTorch 2.14 real CPU tensor calculation failed")
+          evidence.update({
+              "evidence_kind": "experimental_torch214_cuda126_cpu_import_only",
+              "actual_cpu_import": True,
+              "actual_cpu_tensor_operation": True,
+              "torch_import_version": torch.__version__,
+              "torchvision_import_version": torchvision.__version__,
+              "numpy_import_version": numpy.__version__,
+              "pillow_import_version": pillow_version,
+              "native_gsplat_build_evidence": False,
+              "gpu_execution_evidence": False,
+              "runtime_approved": False,
+          })
+          Path("wre-py311-torch214-cpu-proof.json").write_text(
+              json.dumps(evidence, indent=2, sort_keys=True) + "\n"
+          )
+          print("Real Python3.11/Torch2.14/CUDA12.6 CPU import passed; no GPU used")
+          PY
+
+      - name: Retain modern PyTorch resolution, vulnerability and CPU evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v2l18-3-torch214-cu126-security-cpu-candidate
+          path: |
+            wre-py311-torch214-candidate.json
+            wre-py311-torch214-advisories.json
+            wre-py311-torch214-publisher-license-evidence.json
+            wre-py311-torch214-cpu-proof.json
+          if-no-files-found: warn
+          retention-days: 30
+
+  # Experimental compatibility evidence only. Depends on the exact same-run
+  # modern Torch 2.14 resolver/SCA/publisher-evidence job, and consumes its
+  # immutable workflow artifact. No checkpoint or runtime is approved here.
+  modern-torch-cu126-native-cpu-compat:
+    name: experimental-py311-torch214-cu126-actual-gsplat-fused-ssim-native-no-gpu
+    needs: modern-torch-cu126-cpu-feasibility
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    container:
+      # NVIDIA CUDA 12.6.3 development SDK, pinned multiarch Docker index.
+      image: nvidia/cuda@sha256:392c0df7b577ecae17a17f6ba7f2009c217bb4422f8431c053ae9af61a8c148a
+    env:
+      CUDA_HOME: /usr/local/cuda
+      TORCH_CUDA_ARCH_LIST: "7.5"
+      MAX_JOBS: "1"
+      PYTHONPATH: ""
+      GSPLAT_REVISION: "937e29912570c372bed6747a5c9bf85fed877bae"
+      GSPLAT_TREE: "90c3f0b2352e6d2725bcba1ef0407168f922c0fa"
+      SSIM_REVISION: "328dc9836f513d00c4b5bc38fe30478b4435cbb5"
+      SSIM_TREE: "ac5f1d8fe5d519f9c44b220d235bf1f198463da7"
+      GLM_REVISION: "33b4a621a697a305bc3a7610d290677b96beb181"
+      GLM_TREE: "e57f342f0fb63852d65e0da2090528fdca9b0117"
+      NERFVIEW_REVISION: "4538024fe0d15fd1a0e4d760f3695fc44ca72787"
+      NERFVIEW_TREE: "e333400e39605978a3d1f9cf6d73ddf577a8c8e3"
+      SCENE_MANAGER_REVISION: "cc7ea4b7301720ac29287dbe450952511b32125e"
+    steps:
+      - name: Checkout canonical V2L18.3 work item without credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Download same-run audited Torch 2.14 wheel and license evidence
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: v2l18-3-torch214-cu126-security-cpu-candidate
+          path: modern-candidate
+
+      - name: Install pinned Python 3.11 and essential CUDA build tools
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          version: "0.12.13"
+          python-version: "3.11.14"
+          enable-cache: false
+
+      - name: Install audited modern Torch CUDA 12.6 wheels on a CPU runner
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x "$CUDA_HOME/bin/nvcc"
+          "$CUDA_HOME/bin/nvcc" --version | grep -F 'release 12.6,'
+          DEBIAN_FRONTEND=noninteractive apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            git ca-certificates build-essential libgl1 libglib2.0-0
+          uv venv --seed --python 3.11.14 "$RUNNER_TEMP/wre-modern-native"
+          echo "MODERN_PYTHON=$RUNNER_TEMP/wre-modern-native/bin/python" >> "$GITHUB_ENV"
+          "$RUNNER_TEMP/wre-modern-native/bin/python" - <<'PY'
+          import json
+          import re
+          from pathlib import Path
+          from urllib.parse import unquote, urlsplit
+
+          root = Path("modern-candidate")
+          expected = {
+              "wre-py311-torch214-candidate.json",
+              "wre-py311-torch214-advisories.json",
+              "wre-py311-torch214-publisher-license-evidence.json",
+              "wre-py311-torch214-cpu-proof.json",
+          }
+          if {p.name for p in root.iterdir()} != expected:
+              raise SystemExit("missing or additional candidate proof files")
+          candidate = json.loads((root / "wre-py311-torch214-candidate.json").read_text())
+          audit = json.loads((root / "wre-py311-torch214-advisories.json").read_text())
+          publisher = json.loads((root / "wre-py311-torch214-publisher-license-evidence.json").read_text())
+          proof = json.loads((root / "wre-py311-torch214-cpu-proof.json").read_text())
+          if (candidate["evidence_kind"] != "unapproved_pytorch214_cuda126_wheel_resolution_only"
+              or candidate["selected_torch"] != "2.14.0+cu126"
+              or candidate["selected_torchvision"] != "0.29.0+cu126"
+              or candidate["selected_pillow"] != "13.0.0"
+              or candidate["python"] != "3.11.14"
+              or candidate["cuda_abi"] != "12.6"
+              or candidate["independent_license_approval"] is not False
+              or candidate["runtime_approved"] is not False
+              or candidate["checkpoint_approval"] is not False
+              or candidate["gpu_execution_evidence"] is not False
+              or candidate["native_gsplat_build_evidence"] is not False
+              or candidate["exact_upstream_wheel_release_identity_verified"] is not True
+              or candidate["publisher_license_identity_verified"] is not False
+              or candidate["missing_wheel_license_metadata"] != ["cuda-toolkit"]):
+              raise SystemExit("incorrect candidate runtime identity or approval claim")
+          if (publisher["wheel_sha256"] != "79d8605baeb6c2f695761e0efb54bc62dbc3c9e32eb0742df7669c07befaa8f7"
+              or publisher["nvidia_eula_review_completed"] is not False
+              or publisher["license_redistribution_approved"] is not False
+              or publisher["official_pypi_wheel_hash_verified"] is not True):
+              raise SystemExit("unreviewed NVIDIA toolkit metadata")
+          def canonical(value):
+              return re.sub(r"[-_.]+", "-", value).lower()
+          packages = candidate["packages"]
+          if len(packages) != 82:
+              raise SystemExit("expected 82 exact candidate dependency wheels")
+          identities = {}
+          allowed = {"files.pythonhosted.org", "download.pytorch.org",
+                     "download-r2.pytorch.org", "pypi.nvidia.com"}
+          for item in packages:
+              name = canonical(item["name"])
+              uri = urlsplit(item["url"])
+              if (name in identities
+                  or not re.fullmatch(r"[a-zA-Z0-9_.-]+", item["name"])
+                  or not re.fullmatch(r"[0-9a-f]{64}", item["sha256"])
+                  or uri.scheme != "https" or uri.hostname not in allowed
+                  or uri.username or uri.password or uri.query or uri.fragment
+                  or unquote(uri.path.rsplit("/", 1)[-1]) != item["filename"]
+                  or not item["filename"].endswith(".whl")):
+                  raise SystemExit("invalid candidate wheel identity")
+              identities[name] = item
+          audited = {canonical(p["name"]): p for p in audit["dependencies"]}
+          if set(audited) != set(identities):
+              raise SystemExit("not all pinned versions were independently scanned")
+          for name, item in audited.items():
+              public = identities[name]["version"].split("+", 1)[0]
+              if item.get("version") != public or item.get("skip_reason") or item.get("vulns") is None or item["vulns"]:
+                  raise SystemExit("security finding or missing advisory coverage for " + name)
+          if proof.get("gpu_execution_evidence") is True:
+              raise SystemExit("GPU evidence must remain unverified")
+          output = Path("modern-wheels-exact.txt")
+          output.write_text("".join(
+              f'{p["name"]} @ {p["url"]}#sha256={p["sha256"]}\n'
+              for p in sorted(packages, key=lambda p: canonical(p["name"]))
+          ))
+          print("82 exact candidate wheels, same-run advisory scan and unapproved license status verified")
+          PY
+          "$RUNNER_TEMP/wre-modern-native/bin/python" -m pip install --no-index --no-deps \
+            --no-cache-dir --require-hashes -r modern-wheels-exact.txt
+          "$RUNNER_TEMP/wre-modern-native/bin/python" -m pip check
+          "$RUNNER_TEMP/wre-modern-native/bin/python" - <<'PY'
+          import json
+          import importlib.metadata as md
+          import torch
+          from PIL import __version__ as pillow
+          from pathlib import Path
+
+          entries = json.loads(Path("modern-candidate/wre-py311-torch214-candidate.json").read_text())["packages"]
+          if any(md.version(p["name"]) != p["version"] for p in entries):
+              raise SystemExit("installed environment does not match 82 pinned wheels")
+          if (torch.__version__ != "2.14.0+cu126" or torch.version.cuda != "12.6"
+              or pillow != "13.0.0" or torch.cuda.is_available()):
+              raise SystemExit("modern pinned CPU/native ABI mismatch")
+          if (torch.tensor([3.0, 5.0]) * 2).tolist() != [6.0, 10.0]:
+              raise SystemExit("real CPU Torch operation failed")
+          print("Real Torch 2.14 CUDA12.6 CPU execution, no CUDA kernel execution")
+          PY
+
+      - name: Fetch pinned gsplat and fused-ssim source trees
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/wre-modern-upstreams"
+          mkdir -p "$root"
+          fetch_exact() {
+            name="$1"; remote="$2"; rev="$3"; tree="$4"
+            git init -q "$root/$name"
+            git -C "$root/$name" remote add origin "$remote"
+            git -C "$root/$name" fetch --quiet --depth 1 origin "$rev"
+            git -C "$root/$name" checkout -q --detach FETCH_HEAD
+            test "$(git -C "$root/$name" rev-parse HEAD)" = "$rev"
+            test "$(git -C "$root/$name" rev-parse HEAD^{tree})" = "$tree"
+          }
+          fetch_exact gsplat https://github.com/nerfstudio-project/gsplat.git "$GSPLAT_REVISION" "$GSPLAT_TREE"
+          fetch_exact ssim https://github.com/rahul-goel/fused-ssim.git "$SSIM_REVISION" "$SSIM_TREE"
+          fetch_exact nerfview https://github.com/nerfstudio-project/nerfview.git "$NERFVIEW_REVISION" "$NERFVIEW_TREE"
+          git init -q "$root/scene-manager"
+          git -C "$root/scene-manager" remote add origin https://github.com/rmbrualla/pycolmap.git
+          git -C "$root/scene-manager" fetch --quiet --depth 1 origin "$SCENE_MANAGER_REVISION"
+          git -C "$root/scene-manager" checkout -q --detach FETCH_HEAD
+          test "$(git -C "$root/scene-manager" rev-parse HEAD)" = "$SCENE_MANAGER_REVISION"
+          git -C "$root/gsplat" submodule update --init --depth 1 -- gsplat/cuda/csrc/third_party/glm
+          test "$(git -C "$root/gsplat/gsplat/cuda/csrc/third_party/glm" rev-parse HEAD)" = "$GLM_REVISION"
+          test "$(git -C "$root/gsplat/gsplat/cuda/csrc/third_party/glm" rev-parse HEAD^{tree})" = "$GLM_TREE"
+          echo "MODERN_SOURCES=$root" >> "$GITHUB_ENV"
+
+      # Torch 2.14 public headers use C++20 (std::strong_ordering/operator<=>).
+      # Exact upstream gsplat v1.5.3 hardcodes nvcc -std=c++17. After verifying
+      # git HEAD, tree and original setup.py blob, perform ONE narrowly scoped
+      # source modification for this experimental ABI proof. It is NOT the
+      # pristine upstream build, a reviewed fork or an approved shipping model.
+      - name: Apply experimental C++20 compatibility overlay to pinned gsplat source
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$MODERN_SOURCES/gsplat"
+          test "$(git -C "$root" rev-parse HEAD)" = "$GSPLAT_REVISION"
+          test "$(git -C "$root" rev-parse HEAD^{tree})" = "$GSPLAT_TREE"
+          test "$(git -C "$root" hash-object setup.py)" = "f152008e5f35604b38e0ec6c98e8e17c525c1bcb"
+          "$MODERN_PYTHON" - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          path = Path(os.environ["MODERN_SOURCES"]) / "gsplat" / "setup.py"
+          original = path.read_bytes()
+          old = b'"-std=c++17"'
+          new = b'"-std=c++20"'
+          if original.count(old) != 1 or original.count(new):
+              raise SystemExit("unreviewed or missing upstream nvcc standard flag")
+          modified = original.replace(old, new)
+          if modified.count(new) != 1 or modified.replace(new, old) != original:
+              raise SystemExit("compatibility overlay changes unexpected upstream bytes")
+          path.write_bytes(modified)
+          evidence = {
+              "evidence_kind": "experimental_exact_pinned_upstream_source_delta_cxx20",
+              "source_repository": "nerfstudio-project/gsplat",
+              "source_commit": os.environ["GSPLAT_REVISION"],
+              "source_tree_before_overlay": os.environ["GSPLAT_TREE"],
+              "source_path": "setup.py",
+              "exact_change": "one nvcc -std=c++17 flag to -std=c++20",
+              "source_sha256_before": hashlib.sha256(original).hexdigest(),
+              "source_sha256_after": hashlib.sha256(modified).hexdigest(),
+              "modified_upstream_source": True,
+              "upstream_unmodified_binary_claim": False,
+              "runtime_approved": False,
+              "redistribution_approved": False,
+              "gpu_execution_evidence": False,
+              "training_execution_evidence": False,
+          }
+          Path("wre-py311-torch214-cxx20-overlay.json").write_text(
+              json.dumps(evidence, sort_keys=True, indent=2) + "\n"
+          )
+          print("One exact source patch only: gsplat setup.py nvcc C++17 -> C++20")
+          print("No GPU/training or redistribution approval inferred")
+          PY
+          test "$(git -C "$root" diff --name-only)" = "setup.py"
+          git -C "$root" diff --check
+
+      - name: Compile real gsplat and fused-ssim CUDA native extensions under Torch 2.14
+        shell: bash
+        run: |
+          set -euo pipefail
+          export BUILD_NO_CUDA=0
+          "$MODERN_PYTHON" -m pip install --no-deps --no-build-isolation --no-cache-dir "$MODERN_SOURCES/ssim"
+          "$MODERN_PYTHON" -m pip install --no-deps --no-build-isolation --no-cache-dir "$MODERN_SOURCES/gsplat"
+          "$MODERN_PYTHON" -m pip install --no-deps --no-build-isolation --no-cache-dir "$MODERN_SOURCES/nerfview"
+          "$MODERN_PYTHON" -m pip install --no-deps --no-build-isolation --no-cache-dir "$MODERN_SOURCES/scene-manager"
+          "$MODERN_PYTHON" -I - <<'PY'
+          import hashlib
+          import json
+          import os
+          import sys
+          from pathlib import Path
+          import torch
+          import gsplat
+          from gsplat.cuda._backend import _C
+          import fused_ssim_cuda
+          from fused_ssim import fused_ssim
+
+          if (torch.__version__ != "2.14.0+cu126" or torch.version.cuda != "12.6"
+              or torch.cuda.is_available() or _C is None or not callable(fused_ssim)):
+              raise SystemExit("real native imports do not match CPU-hosted ABI")
+          native = [Path(_C.__file__).resolve(), Path(fused_ssim_cuda.__file__).resolve()]
+          if not all(p.is_file() and p.suffix == ".so" for p in native):
+              raise SystemExit("missing true compiled binary extension")
+          report = {
+              "evidence_kind": "experimental_modern_py311_torch214_cu126_cpu_hosted_native_build",
+              "python": sys.version.split()[0],
+              "torch": torch.__version__,
+              "cuda_compiled": torch.version.cuda,
+              "gsplat_source_sha": os.environ["GSPLAT_REVISION"],
+              "fused_ssim_source_sha": os.environ["SSIM_REVISION"],
+              "real_compiled_binary_sha256": {
+                  p.name: hashlib.sha256(p.read_bytes()).hexdigest() for p in native
+              },
+              "gpu_execution_evidence": False,
+              "training_execution_evidence": False,
+              "runtime_approved": False,
+              "native_receipt_approved": False,
+              "checkpoint_license_approved": False,
+              "redistribution_approved": False,
+          }
+          Path("wre-py311-torch214-native-compat.json").write_text(
+              json.dumps(report, indent=2, sort_keys=True) + "\n"
+          )
+          print("Torch2.14/CUDA12.6 real gsplat and fused-ssim native CPU-hosted imports")
+          PY
+
+      # The narrowly patched setup.py is a BUILD input only. Retain its true
+      # SHA-bound binary provenance, then restore the pristine reviewed checkout
+      # before WRE stages the original immutable trainer entrypoints.
+      - name: Restore exact upstream source after audited C++20 native build
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$MODERN_SOURCES/gsplat"
+          test "$(git -C "$root" rev-parse HEAD)" = "$GSPLAT_REVISION"
+          test "$(git -C "$root" rev-parse HEAD^{tree})" = "$GSPLAT_TREE"
+          test "$(git -C "$root" diff --name-only)" = "setup.py"
+          "$MODERN_PYTHON" - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          source = Path(os.environ["MODERN_SOURCES"]) / "gsplat" / "setup.py"
+          overlay = json.loads(Path("wre-py311-torch214-cxx20-overlay.json").read_text())
+          native = json.loads(Path("wre-py311-torch214-native-compat.json").read_text())
+          if (overlay["source_commit"] != os.environ["GSPLAT_REVISION"]
+              or overlay["source_tree_before_overlay"] != os.environ["GSPLAT_TREE"]
+              or overlay["source_path"] != "setup.py"
+              or overlay["modified_upstream_source"] is not True
+              or overlay["upstream_unmodified_binary_claim"] is not False
+              or overlay["runtime_approved"] is not False
+              or native["gsplat_source_sha"] != os.environ["GSPLAT_REVISION"]
+              or native["evidence_kind"] != "experimental_modern_py311_torch214_cu126_cpu_hosted_native_build"
+              or native["runtime_approved"] is not False
+              or native["gpu_execution_evidence"] is not False
+              or len(native["real_compiled_binary_sha256"]) != 2
+              or any(not re.fullmatch(r"[0-9a-f]{64}", d) for d in native["real_compiled_binary_sha256"].values())):
+              raise SystemExit("native build and C++20 overlay evidence do not agree")
+          patched = source.read_bytes()
+          if (hashlib.sha256(patched).hexdigest() != overlay["source_sha256_after"]
+              or patched.count(b'"-std=c++20"') != 1
+              or patched.count(b'"-std=c++17"')):
+              raise SystemExit("unreviewed modified compiler input before restoration")
+          original = patched.replace(b'"-std=c++20"', b'"-std=c++17"')
+          if hashlib.sha256(original).hexdigest() != overlay["source_sha256_before"]:
+              raise SystemExit("restored upstream source differs from recorded original")
+          source.write_bytes(original)
+          report = {
+              "evidence_kind": "experimental_native_cxx20_build_then_pristine_source_restoration",
+              "original_source_sha256": overlay["source_sha256_before"],
+              "compiled_from_modified_setup_sha256": overlay["source_sha256_after"],
+              "compiled_native_binary_sha256": native["real_compiled_binary_sha256"],
+              "restored_pristine_upstream_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+              "built_from_modified_upstream_source": True,
+              "reviewed_trainer_sources_restored": True,
+              "native_runtime_approved": False,
+              "gpu_execution_evidence": False,
+              "training_execution_evidence": False,
+              "redistribution_approved": False,
+          }
+          Path("wre-py311-torch214-source-restoration.json").write_text(
+              json.dumps(report, indent=2, sort_keys=True) + "\n"
+          )
+          print("Compiled derived CUDA binaries retained; pristine upstream checkout restored for WRE source gate")
+          PY
+          test "$(git -C "$root" hash-object setup.py)" = "f152008e5f35604b38e0ec6c98e8e17c525c1bcb"
+          git -C "$root" diff --exit-code -- setup.py
+          test -z "$(git -C "$root" diff --name-only)"
+
+      - name: Validate WRE isolated pinned trainer source imports under Torch 2.14
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PYTHONPATH="$GITHUB_WORKSPACE/src"
+          uv sync --locked --no-dev --python 3.12.12
+          uv run --locked --no-dev --no-sync --python 3.12.12 python - <<'PY'
+          import os
+          from pathlib import Path
+
+          from wre.reconstruction.static_appearance_baseline import (
+              GsplatStaticAppearanceTrainingProfile,
+              _stage_verified_gsplat_trainer_imports,
+              verify_gsplat_reference_trainer_config_fields,
+          )
+
+          upstream = Path(os.environ["MODERN_SOURCES"]) / "gsplat"
+          root = Path(os.environ["RUNNER_TEMP"]) / "wre-modern-private-trainer-import"
+          root.mkdir(mode=0o700, exist_ok=False)
+          verify_gsplat_reference_trainer_config_fields(
+              upstream, GsplatStaticAppearanceTrainingProfile(max_steps=1)
+          )
+          private = _stage_verified_gsplat_trainer_imports(upstream, root)
+          assert (private / "simple_trainer.py").is_file()
+          assert (private / "datasets" / "colmap.py").is_file()
+          assert not (private / "datasets" / "__init__.py").exists()
+          print("WRE created private import closure from verified pinned source bytes")
+          PY
+          "$MODERN_PYTHON" -I - "$RUNNER_TEMP/wre-modern-private-trainer-import/wre-pinned-examples" <<'PY'
+          import sys
+          from pathlib import Path
+
+          import torch
+
+          assert not torch.cuda.is_available(), "This integration lane is CPU-hosted only"
+          private = Path(sys.argv[1]).resolve(strict=True)
+          sys.path.insert(0, str(private))
+          import simple_trainer
+          from datasets import colmap
+          from simple_trainer import Config, main
+
+          assert Path(simple_trainer.__file__).resolve() == private / "simple_trainer.py"
+          assert Path(colmap.__file__).resolve() == private / "datasets" / "colmap.py"
+          assert callable(main)
+          cfg = Config()
+          assert cfg.camera_model == "pinhole"
+          print("Real native trainer imports from the EXACT WRE private source closure")
+          print("No CUDA device, GPU kernels, model training or scene quality proven")
+          PY
+
+      - name: Decode 3 real COLMAP-format views and initialize Torch 2.14 Gaussians on CPU
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$MODERN_PYTHON" -I - <<'PY'
+          import os
+          import struct
+          import sys
+          import tempfile
+          from pathlib import Path
+
+          import numpy as np
+          import torch
+          from PIL import Image
+          from gsplat import export_splats
+
+          # Same -I and single source path as the real external trainer child.
+          # Reuse the private source closure verified by WRE in the prior step.
+          # Do not import from the mutable complete upstream checkout.
+          root = Path(os.environ["RUNNER_TEMP"]) / "wre-modern-private-trainer-import"
+          private = (root / "wre-pinned-examples").resolve(strict=True)
+          sys.path.insert(0, str(private))
+          from datasets.colmap import Dataset, Parser
+          from simple_trainer import create_splats_with_optimizers
+
+          # Eight non-coplanar coloured points, observed in all three
+          # calibrated COLMAP camera views with actual projected 2D tracks.
+          dataset = Path(os.environ["RUNNER_TEMP"]) / "wre-modern-colmap-preview-source"
+          photos, sparse = dataset / "images", dataset / "sparse" / "0"
+          photos.mkdir(parents=True)
+          sparse.mkdir(parents=True)
+          cube = [
+              (-.3, -.25, 1.6, 255, 40, 40),
+              (-.3, .25, 1.6, 40, 255, 40),
+              (.3, -.25, 1.6, 40, 40, 255),
+              (.3, .25, 1.6, 255, 255, 40),
+              (-.3, -.25, 2.4, 40, 255, 255),
+              (-.3, .25, 2.4, 255, 40, 255),
+              (.3, -.25, 2.4, 255, 160, 40),
+              (.3, .25, 2.4, 160, 100, 255),
+          ]
+          n = len(cube)
+          (sparse / "cameras.bin").write_bytes(
+              struct.pack("<Q", 1)
+              + struct.pack("<IiQQ4d", 1, 1, 64, 64, 64., 64., 32., 32.)
+          )
+          images_bin = bytearray(struct.pack("<Q", 3))
+          for image_id in range(1, 4):
+              name = f"frame-{image_id:02d}.png"
+              pixels = np.full((64, 64, 3), 12, dtype=np.uint8)
+              tx = (2 - image_id) * 0.2
+              images_bin.extend(
+                  struct.pack("<I4d3dI", image_id, 1., 0., 0., 0., tx, 0., 0., 1)
+              )
+              images_bin.extend(name.encode("ascii") + b"\x00")
+              images_bin.extend(struct.pack("<Q", n))
+              for pid, (x, y, z, r, g, b) in enumerate(cube, start=1):
+                  u, v = 64 * (x + tx) / z + 32, 64 * y / z + 32
+                  assert 0 <= u < 64 and 0 <= v < 64
+                  pixels[round(v), round(u)] = [r, g, b]
+                  images_bin.extend(struct.pack("<ddq", u, v, pid))
+              Image.fromarray(pixels).save(photos / name)
+          (sparse / "images.bin").write_bytes(images_bin)
+          points = bytearray(struct.pack("<Q", n))
+          for pid, (x, y, z, r, g, b) in enumerate(cube, start=1):
+              points.extend(struct.pack("<Q3d3BdQ", pid, x, y, z, r, g, b, .01, 3))
+              for image_id in range(1, 4):
+                  points.extend(struct.pack("<II", image_id, pid - 1))
+          (sparse / "points3D.bin").write_bytes(points)
+
+          parsed = Parser(str(dataset), factor=1, normalize=False, test_every=8)
+          train = Dataset(parsed, split="train")
+          test = Dataset(parsed, split="test")
+          assert parsed.image_names == [
+              "frame-01.png", "frame-02.png", "frame-03.png"
+          ]
+          assert parsed.points.shape == (n, 3)
+          expected = np.array(cube, dtype=np.float64)
+          actual_order = np.lexsort(
+              (parsed.points[:, 2], parsed.points[:, 1], parsed.points[:, 0])
+          )
+          source_order = np.lexsort(
+              (expected[:, 2], expected[:, 1], expected[:, 0])
+          )
+          np.testing.assert_allclose(
+              parsed.points[actual_order], expected[source_order, :3], atol=1e-6
+          )
+          np.testing.assert_array_equal(
+              parsed.points_rgb[actual_order], expected[source_order, 3:]
+          )
+          assert len(train) == 2 and len(test) == 1
+          for batch in (train[0], train[1], test[0]):
+              assert isinstance(batch["image"], torch.Tensor)
+              assert batch["image"].shape == (64, 64, 3)
+              assert batch["image"].device.type == "cpu"
+              assert batch["K"].shape == (3, 3)
+              assert batch["camtoworld"].shape == (4, 4)
+              assert torch.isfinite(batch["K"]).all()
+              assert torch.isfinite(batch["camtoworld"]).all()
+          # The REAL upstream reference trainer builds its Gaussian model
+          # and six optimizer groups from the decoded native COLMAP points.
+          # device="cpu": no CUDA kernel, optimizer step or training is run.
+          assert parsed.points.shape == (n, 3)
+          assert parsed.points_rgb.shape == (n, 3)
+          torch.manual_seed(7)
+          splats, optimizers = create_splats_with_optimizers(
+              parsed, init_type="sfm", init_opacity=0.1, init_scale=1.0,
+              sh_degree=3, device="cpu", world_rank=0, world_size=1,
+          )
+          assert len(optimizers) == 6
+          assert set(optimizers) == {
+              "means", "scales", "quats", "opacities", "sh0", "shN",
+          }
+          assert all(param.device.type == "cpu" for param in splats.values())
+          assert all(torch.isfinite(param).all() for param in splats.values())
+          assert splats["means"].shape == (n, 3)
+          assert splats["scales"].shape == (n, 3)
+          assert splats["quats"].shape == (n, 4)
+          assert splats["sh0"].shape == (n, 1, 3)
+          assert splats["shN"].shape == (n, 15, 3)
+          np.testing.assert_allclose(
+              splats["means"].detach().numpy(), parsed.points, atol=1e-6
+          )
+          # The selected upstream trainer calculates its own KNN scale
+          # logits, opacity logits, SH colour parameters and quaternions.
+          assert (torch.exp(splats["scales"]) > 0).all()
+          assert torch.allclose(
+              torch.sigmoid(splats["opacities"]),
+              torch.full((n,), 0.1), atol=1e-6,
+          )
+          gaussian_names = ("means", "scales", "quats", "opacities", "sh0", "shN")
+          gaussians = {
+              name: splats[name].detach().cpu() for name in gaussian_names
+          }
+          export_root = Path(os.environ["RUNNER_TEMP"]) / "wre-modern-colmap-derived-splats"
+          (export_root / "ply").mkdir(parents=True, exist_ok=False)
+          ply_file = export_root / "ply" / "point_cloud_0.ply"
+          splat_file = export_root / "point_cloud_0.splat"
+          ply_bytes = export_splats(**gaussians, format="ply", save_to=str(ply_file))
+          splat_bytes = export_splats(
+              **gaussians, format="splat", save_to=str(splat_file)
+          )
+          assert ply_file.read_bytes() == ply_bytes
+          assert splat_file.read_bytes() == splat_bytes
+          assert f"element vertex {n}\n".encode("ascii") in ply_bytes
+          assert b"property float f_rest_44\n" in ply_bytes
+          assert len(splat_bytes) == n * 32
+          # gsplat's binary .splat writer Morton-sorts the points.
+          # Match by decoded 3D position rather than assuming input order.
+          unmatched = set(range(n))
+          for idx in range(n):
+              splat = splat_bytes[idx * 32 : (idx + 1) * 32]
+              xyz = np.array(struct.unpack("<3f", splat[:12]))
+              options = [
+                  point_idx for point_idx in unmatched
+                  if np.allclose(parsed.points[point_idx], xyz, atol=1e-6)
+              ]
+              assert len(options) == 1
+              point_idx = options[0]
+              unmatched.remove(point_idx)
+              expected_scale = torch.exp(splats["scales"][point_idx]).detach().numpy()
+              np.testing.assert_allclose(
+                  struct.unpack("<3f", splat[12:24]), expected_scale, atol=1e-6
+              )
+              assert all(
+                  abs(actual - expected) <= 1
+                  for actual, expected in zip(splat[24:27], parsed.points_rgb[point_idx])
+              )
+              assert splat[27] == 25  # floor(sigmoid(logit(.1)) * 255)
+          assert not unmatched
+          print("Eight tracked COLMAP points initialized by REAL pinned trainer on CPU.")
+          print("Upstream KNN, colour SH, quats and optimizers used; NO TRAINING.")
+
+          print("Three REAL binary COLMAP views and 24 tracks decoded with upstream Parser/Dataset.")
+          print("CPU tensor generation verified; no CUDA kernel or training occurred.")
+          PY
+
+      - name: Materialize modern CPU-initialized COLMAP PLY with canonical WRE
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Modern Torch2.14 native Python3.11 and WRE Python3.12 share verified output bytes.
+          # Verify the actual generated bytes across that interpreter boundary.
+          uv sync --locked --no-dev --python 3.12.12
+          export PYTHONPATH="$GITHUB_WORKSPACE/src"
+          uv run --locked --no-dev --no-sync --python 3.12.12 python - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          from wre.domain.appearance import APPEARANCE_MODEL_ARTIFACT_KIND
+          from wre.domain.artifacts import ArtifactId, ArtifactRef
+          from wre.reconstruction.static_appearance_baseline import (
+              GsplatStaticAppearanceTrainingProfile,
+              materialize_verified_gsplat_ply,
+          )
+
+          root = Path(os.environ["RUNNER_TEMP"]) / "wre-modern-colmap-derived-splats"
+          ply = root / "ply" / "point_cloud_0.ply"
+          splat = root / "point_cloud_0.splat"
+          artifact = ArtifactRef(
+              ArtifactId("appearance:gsplat:cpu-colmap-init"),
+              APPEARANCE_MODEL_ARTIFACT_KIND,
+          )
+          metadata = materialize_verified_gsplat_ply(
+              artifact_ref=artifact,
+              output_root=root,
+              profile=GsplatStaticAppearanceTrainingProfile(max_steps=1),
+          )
+          assert metadata.artifact_ref == artifact
+          assert len(metadata.entries) == 1
+          entry = metadata.entries[0]
+          assert entry.relative_path == "ply/point_cloud_0.ply"
+          assert entry.byte_length == ply.stat().st_size
+          assert entry.sha256.value == hashlib.sha256(ply.read_bytes()).hexdigest()
+          assert splat.is_file() and splat.stat().st_size == 8 * 32
+          input_root = Path(os.environ["RUNNER_TEMP"]) / "wre-modern-colmap-preview-source"
+          input_files = sorted((input_root / "images").glob("*.png")) + sorted(
+              (input_root / "sparse" / "0").glob("*.bin")
+          )
+          assert len(input_files) == 6
+          source_sha256 = {
+              f.relative_to(input_root).as_posix(): hashlib.sha256(f.read_bytes()).hexdigest()
+              for f in input_files
+          }
+          manifest = {
+              "input_sha256": source_sha256,
+              "registered_views": 3,
+              "tracked_points": 8,
+              "colmap_observations": 24,
+              "dataset": "synthetic COLMAP binary, 3 registered views, 8 tracked 3D points",
+              "producer": "pinned upstream gsplat 1.5.3 CPU initializer and exporter (untrained)",
+              "initialization": "simple_trainer.create_splats_with_optimizers, sfm, CPU",
+              "optimizer_groups_initialized": 6,
+              "optimizer_steps_executed": 0,
+              "gpu_training_executed": False,
+              "ply_sha256": entry.sha256.value,
+              "ply_bytes": entry.byte_length,
+              "splat_sha256": hashlib.sha256(splat.read_bytes()).hexdigest(),
+              "splat_bytes": splat.stat().st_size,
+          }
+          (root / "wre-cpu-colmap-init-manifest.json").write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+          print("Actual COLMAP point/RGB -> pinned gsplat exporter -> WRE PLY materializer.")
+          print("Eight untrained 3D Gaussians: GPU training and 4D unverified.")
+          PY
+
+      - name: Verify modern three-view COLMAP materialization and retain exact payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          output="$GITHUB_WORKSPACE/wre-modern-colmap-proof"
+          test ! -e "$output"
+          mkdir -p "$output/ply" "$output/images" "$output/sparse/0"
+          source="$RUNNER_TEMP/wre-modern-colmap-preview-source"
+          generated="$RUNNER_TEMP/wre-modern-colmap-derived-splats"
+          cp "$generated/ply/point_cloud_0.ply" "$output/ply/"
+          cp "$generated/point_cloud_0.splat" "$output/"
+          cp "$generated/wre-cpu-colmap-init-manifest.json" "$output/"
+          cp "$source/images/"*.png "$output/images/"
+          cp "$source/sparse/0/"*.bin "$output/sparse/0/"
+          "$MODERN_PYTHON" - <<'PY'
+          import hashlib
+          import json
+          from pathlib import Path
+
+          root = Path("wre-modern-colmap-proof")
+          manifest = json.loads((root / "wre-cpu-colmap-init-manifest.json").read_text())
+          if (manifest["registered_views"], manifest["tracked_points"], manifest["colmap_observations"]) != (3, 8, 24):
+              raise SystemExit("unexpected registered cameras or point track count")
+          if manifest["optimizer_steps_executed"] != 0 or manifest["gpu_training_executed"] is not False:
+              raise SystemExit("untrained preview falsely claims CUDA training")
+          if len(manifest["input_sha256"]) != 6:
+              raise SystemExit("missing original COLMAP source files")
+          for relative, digest in manifest["input_sha256"].items():
+              file = root / relative
+              if file.is_symlink() or not file.is_file() or hashlib.sha256(file.read_bytes()).hexdigest() != digest:
+                  raise SystemExit("COLMAP input source identity mismatch")
+          for kind, name in (("ply", "ply/point_cloud_0.ply"), ("splat", "point_cloud_0.splat")):
+              file = root / name
+              if (file.is_symlink() or not file.is_file() or file.stat().st_size != manifest[kind + "_bytes"]
+                  or hashlib.sha256(file.read_bytes()).hexdigest() != manifest[kind + "_sha256"]):
+                  raise SystemExit("WRE Gaussian output exact identity mismatch")
+          if len([file for file in root.rglob("*") if file.is_file()]) != 9:
+              raise SystemExit("unexpected missing or injected WRE source/output files")
+          print("COLMAP three-view/tracks -> upstream Torch2.14 CPU initializer -> PLY/.splat -> WRE metadata SHA verified")
+          print("NO GPU training, learned quality, accepted license, or production promotion claimed")
+          PY
+
+      - name: Archive modern Torch 2.14 COLMAP-WRE CPU output
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v2l18-3-modern-torch214-colmap-to-wre-cpu
+          path: wre-modern-colmap-proof/
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Preserve exact modern CUDA native compatibility evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: v2l18-3-modern-torch214-cuda126-native-compat
+          path: |
+            wre-py311-torch214-native-compat.json
+            wre-py311-torch214-cxx20-overlay.json
+            wre-py311-torch214-source-restoration.json
+          if-no-files-found: warn
           retention-days: 30
