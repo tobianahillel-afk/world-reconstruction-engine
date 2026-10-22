@@ -1526,6 +1526,71 @@ jobs:
           print("Torch2.14/CUDA12.6 real gsplat and fused-ssim native CPU-hosted imports")
           PY
 
+      # The narrowly patched setup.py is a BUILD input only. Retain its true
+      # SHA-bound binary provenance, then restore the pristine reviewed checkout
+      # before WRE stages the original immutable trainer entrypoints.
+      - name: Restore exact upstream source after audited C++20 native build
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$MODERN_SOURCES/gsplat"
+          test "$(git -C "$root" rev-parse HEAD)" = "$GSPLAT_REVISION"
+          test "$(git -C "$root" rev-parse HEAD^{tree})" = "$GSPLAT_TREE"
+          test "$(git -C "$root" diff --name-only)" = "setup.py"
+          "$MODERN_PYTHON" - <<'PY'
+          import hashlib
+          import json
+          import os
+          import re
+          from pathlib import Path
+
+          source = Path(os.environ["MODERN_SOURCES"]) / "gsplat" / "setup.py"
+          overlay = json.loads(Path("wre-py311-torch214-cxx20-overlay.json").read_text())
+          native = json.loads(Path("wre-py311-torch214-native-compat.json").read_text())
+          if (overlay["source_commit"] != os.environ["GSPLAT_REVISION"]
+              or overlay["source_tree_before_overlay"] != os.environ["GSPLAT_TREE"]
+              or overlay["source_path"] != "setup.py"
+              or overlay["modified_upstream_source"] is not True
+              or overlay["upstream_unmodified_binary_claim"] is not False
+              or overlay["runtime_approved"] is not False
+              or native["gsplat_source_sha"] != os.environ["GSPLAT_REVISION"]
+              or native["evidence_kind"] != "experimental_modern_py311_torch214_cu126_cpu_hosted_native_build"
+              or native["runtime_approved"] is not False
+              or native["gpu_execution_evidence"] is not False
+              or len(native["real_compiled_binary_sha256"]) != 2
+              or any(not re.fullmatch(r"[0-9a-f]{64}", d) for d in native["real_compiled_binary_sha256"].values())):
+              raise SystemExit("native build and C++20 overlay evidence do not agree")
+          patched = source.read_bytes()
+          if (hashlib.sha256(patched).hexdigest() != overlay["source_sha256_after"]
+              or patched.count(b'"-std=c++20"') != 1
+              or patched.count(b'"-std=c++17"')):
+              raise SystemExit("unreviewed modified compiler input before restoration")
+          original = patched.replace(b'"-std=c++20"', b'"-std=c++17"')
+          if hashlib.sha256(original).hexdigest() != overlay["source_sha256_before"]:
+              raise SystemExit("restored upstream source differs from recorded original")
+          source.write_bytes(original)
+          report = {
+              "evidence_kind": "experimental_native_cxx20_build_then_pristine_source_restoration",
+              "original_source_sha256": overlay["source_sha256_before"],
+              "compiled_from_modified_setup_sha256": overlay["source_sha256_after"],
+              "compiled_native_binary_sha256": native["real_compiled_binary_sha256"],
+              "restored_pristine_upstream_sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+              "built_from_modified_upstream_source": True,
+              "reviewed_trainer_sources_restored": True,
+              "native_runtime_approved": False,
+              "gpu_execution_evidence": False,
+              "training_execution_evidence": False,
+              "redistribution_approved": False,
+          }
+          Path("wre-py311-torch214-source-restoration.json").write_text(
+              json.dumps(report, indent=2, sort_keys=True) + "\n"
+          )
+          print("Compiled derived CUDA binaries retained; pristine upstream checkout restored for WRE source gate")
+          PY
+          test "$(git -C "$root" hash-object setup.py)" = "f152008e5f35604b38e0ec6c98e8e17c525c1bcb"
+          git -C "$root" diff --exit-code -- setup.py
+          test -z "$(git -C "$root" diff --name-only)"
+
       - name: Validate WRE isolated pinned trainer source imports under Torch 2.14
         shell: bash
         run: |
@@ -1883,5 +1948,6 @@ jobs:
           path: |
             wre-py311-torch214-native-compat.json
             wre-py311-torch214-cxx20-overlay.json
+            wre-py311-torch214-source-restoration.json
           if-no-files-found: warn
           retention-days: 30
