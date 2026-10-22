@@ -1924,9 +1924,15 @@ import numpy
 
 # The external native extension closure is pinned separately from WRE core.
 # Refuse incompatible Torch/CUDA/NumPy combinations before importing trainer code.
+# Accept only the two ABI pairs proven by pinned CPU-hosted native builds.
+# These version checks are NOT an approval: the independently reviewed native
+# receipt and LPIPS allowlists remain mandatory and empty until signed off.
+# Do not accept arbitrary combinations of Torch builds and CUDA toolchains.
 if (
-    torch.__version__ != "2.4.0+cu124"
-    or torch.version.cuda != "12.4"
+    (torch.__version__, torch.version.cuda) not in {
+        ("2.4.0+cu124", "12.4"),
+        ("2.14.0+cu126", "12.6"),
+    }
     or numpy.__version__ != "1.26.4"
 ):
     raise RuntimeError("gsplat reference training requires pinned Torch/CUDA/NumPy runtime")
