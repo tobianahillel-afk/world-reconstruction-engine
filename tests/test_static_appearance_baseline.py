@@ -1774,6 +1774,13 @@ def test_external_gsplat_runner_rejects_untrusted_lpips_cache_before_process(
     ),
     (
         ("1.5.3", True, "2.4.0+cu124", "12.4", "1.26.4", True),
+        # Modern Py311/CUDA 12.6 native build is CPU-proven, but still
+        # requires an independently approved receipt and LPIPS checkpoint.
+        ("1.5.3", True, "2.14.0+cu126", "12.6", "1.26.4", True),
+        ("1.5.3", False, "2.14.0+cu126", "12.6", "1.26.4", False),
+        ("1.5.3", True, "2.14.0+cu126", "12.4", "1.26.4", False),
+        ("1.5.3", True, "2.4.0+cu124", "12.6", "1.26.4", False),
+        ("1.5.3", True, "2.14.0+cu126", "12.6", "2.5.3", False),
         ("0.9.0", True, "2.4.0+cu124", "12.4", "1.26.4", False),
         ("1.5.3", False, "2.4.0+cu124", "12.4", "1.26.4", False),
         ("1.5.3", True, "2.5.0+cu124", "12.4", "1.26.4", False),
